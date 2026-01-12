@@ -1,0 +1,229 @@
+scalar Date
+
+interface BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+}
+
+# ============ User & Authentication ============
+
+type User implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  email: String!
+  firstName: String!
+  lastName: String!
+  emailAccounts: [EmailAccount!]!
+  smtpProfiles: [SmtpProfile!]!
+}
+
+input SignUpInput {
+  email: String!
+  password: String!
+  firstName: String!
+  lastName: String!
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+# ============ Email Accounts (IMAP/POP) ============
+
+enum EmailAccountType {
+  IMAP
+  POP3
+}
+
+type EmailAccount implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  userId: String!
+  name: String!
+  email: String!
+  host: String!
+  port: Int!
+  accountType: EmailAccountType!
+  useSsl: Boolean!
+  lastSyncedAt: Date
+}
+
+input CreateEmailAccountInput {
+  name: String!
+  email: String!
+  host: String!
+  port: Int!
+  username: String!
+  password: String!
+  accountType: EmailAccountType!
+  useSsl: Boolean!
+}
+
+input UpdateEmailAccountInput {
+  id: String!
+  name: String
+  host: String
+  port: Int
+  username: String
+  password: String
+  useSsl: Boolean
+}
+
+# ============ SMTP Profiles ============
+
+type SmtpProfile implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  userId: String!
+  name: String!
+  email: String!
+  host: String!
+  port: Int!
+  useSsl: Boolean!
+  isDefault: Boolean!
+}
+
+input CreateSmtpProfileInput {
+  name: String!
+  email: String!
+  host: String!
+  port: Int!
+  username: String!
+  password: String!
+  useSsl: Boolean!
+  isDefault: Boolean
+}
+
+input UpdateSmtpProfileInput {
+  id: String!
+  name: String
+  host: String
+  port: Int
+  username: String
+  password: String
+  useSsl: Boolean
+  isDefault: Boolean
+}
+
+# ============ Emails ============
+
+enum EmailFolder {
+  INBOX
+  SENT
+  DRAFTS
+  TRASH
+  SPAM
+  ARCHIVE
+}
+
+type Email implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  emailAccountId: String!
+  emailAccount: EmailAccount
+  messageId: String!
+  folder: EmailFolder!
+  fromAddress: String!
+  fromName: String
+  toAddresses: [String!]!
+  ccAddresses: [String!]
+  bccAddresses: [String!]
+  subject: String!
+  textBody: String
+  htmlBody: String
+  receivedAt: Date!
+  isRead: Boolean!
+  isStarred: Boolean!
+  inReplyTo: String
+  references: [String!]
+}
+
+input GetEmailsInput {
+  emailAccountId: String
+  folder: EmailFolder
+  limit: Int
+  offset: Int
+  isRead: Boolean
+  isStarred: Boolean
+}
+
+input GetEmailInput {
+  id: String!
+}
+
+input ComposeEmailInput {
+  smtpProfileId: String!
+  toAddresses: [String!]!
+  ccAddresses: [String!]
+  bccAddresses: [String!]
+  subject: String!
+  textBody: String
+  htmlBody: String
+  inReplyTo: String
+}
+
+input UpdateEmailInput {
+  id: String!
+  isRead: Boolean
+  isStarred: Boolean
+  folder: EmailFolder
+}
+
+input SyncEmailAccountInput {
+  emailAccountId: String!
+}
+
+# ============ Queries ============
+
+type Query {
+  # Auth
+  me: User
+
+  # Email Accounts
+  getEmailAccounts: [EmailAccount!]!
+  getEmailAccount(id: String!): EmailAccount
+
+  # SMTP Profiles
+  getSmtpProfiles: [SmtpProfile!]!
+  getSmtpProfile(id: String!): SmtpProfile
+
+  # Emails
+  getEmails(input: GetEmailsInput!): [Email!]!
+  getEmail(input: GetEmailInput!): Email
+  getEmailCount(input: GetEmailsInput!): Int!
+}
+
+# ============ Mutations ============
+
+type Mutation {
+  # Auth
+  signUp(input: SignUpInput!): AuthPayload!
+  login(input: LoginInput!): AuthPayload!
+
+  # Email Accounts
+  createEmailAccount(input: CreateEmailAccountInput!): EmailAccount!
+  updateEmailAccount(input: UpdateEmailAccountInput!): EmailAccount!
+  deleteEmailAccount(id: String!): Boolean!
+  syncEmailAccount(input: SyncEmailAccountInput!): Boolean!
+
+  # SMTP Profiles
+  createSmtpProfile(input: CreateSmtpProfileInput!): SmtpProfile!
+  updateSmtpProfile(input: UpdateSmtpProfileInput!): SmtpProfile!
+  deleteSmtpProfile(id: String!): Boolean!
+
+  # Emails
+  sendEmail(input: ComposeEmailInput!): Email!
+  updateEmail(input: UpdateEmailInput!): Email!
+  deleteEmail(id: String!): Boolean!
+}

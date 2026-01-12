@@ -1,0 +1,52 @@
+{
+  "name": "@main/backend",
+  "version": "1.0.0",
+  "description": "Email client backend with IMAP/POP sync and SMTP sending",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "pnpm run db:start && tsc && node --watch dist/bootstrap.js",
+    "dev": "tsc --watch & node --watch dist/bootstrap.js",
+    "typecheck": "tsc --noEmit",
+    "db:setup": "docker-compose -f ../docker-compose.yml up -d",
+    "db:start": "docker-compose -f ../docker-compose.yml up -d",
+    "db:stop": "docker-compose -f ../docker-compose.yml down",
+    "stop": "docker-compose -f ../docker-compose.yml down"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.18.2",
+  "dependencies": {
+    "@apollo/server": "^5.0.0",
+    "@as-integrations/express5": "^1.1.2",
+    "@main/common": "workspace:^",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "graphql": "^16.11.0",
+    "imapflow": "^1.2.5",
+    "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "mailparser": "^3.9.1",
+    "nodemailer": "^6.9.16",
+    "pg": "^8.16.3",
+    "reflect-metadata": "^0.2.2",
+    "sequelize": "^6.37.7",
+    "sequelize-typescript": "^2.1.6",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/lodash": "^4.17.20",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^24.7.2",
+    "@types/nodemailer": "^6.4.16",
+    "tsx": "^4.20.6",
+    "typescript": "~5.9.3"
+  }
+}
