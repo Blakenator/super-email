@@ -11,11 +11,22 @@ import {
 } from '../queries';
 import { EmailFolder } from '../../../__generated__/graphql';
 
-const ITEMS_PER_PAGE = 25;
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_KEY = 'inboxPageSize';
 
 export function useInboxEmails(folder: EmailFolder) {
   const [activeAccountTab, setActiveAccountTab] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => {
+    const saved = localStorage.getItem(PAGE_SIZE_KEY);
+    return saved ? parseInt(saved, 10) : DEFAULT_PAGE_SIZE;
+  });
+
+  const handlePageSizeChange = useCallback((newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
+    localStorage.setItem(PAGE_SIZE_KEY, String(newSize));
+  }, []);
 
   // Reset page when folder or tab changes
   useEffect(() => {
@@ -30,14 +41,14 @@ export function useInboxEmails(folder: EmailFolder) {
   const emailAccountId =
     activeAccountTab === 'all' ? undefined : activeAccountTab;
 
-  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+  const offset = (currentPage - 1) * pageSize;
 
   const { data, loading, refetch } = useQuery(GET_EMAILS_QUERY, {
     variables: {
       input: {
         folder,
         emailAccountId,
-        limit: ITEMS_PER_PAGE,
+        limit: pageSize,
         offset,
       },
     },
@@ -50,14 +61,14 @@ export function useInboxEmails(folder: EmailFolder) {
   });
 
   const totalCount = countData?.getEmailCount ?? 0;
-  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   const [updateEmail] = useMutation(UPDATE_EMAIL_MUTATION, {
     refetchQueries: [
       {
         query: GET_EMAILS_QUERY,
         variables: {
-          input: { folder, emailAccountId, limit: ITEMS_PER_PAGE, offset },
+          input: { folder, emailAccountId, limit: pageSize, offset },
         },
       },
       {
@@ -79,7 +90,7 @@ export function useInboxEmails(folder: EmailFolder) {
       {
         query: GET_EMAILS_QUERY,
         variables: {
-          input: { folder, emailAccountId, limit: ITEMS_PER_PAGE, offset },
+          input: { folder, emailAccountId, limit: pageSize, offset },
         },
       },
       {
@@ -109,9 +120,9 @@ export function useInboxEmails(folder: EmailFolder) {
   );
 
   const handleMarkRead = useCallback(
-    async (emailId: string) => {
+    async (emailId: string, isRead: boolean) => {
       await updateEmail({
-        variables: { input: { id: emailId, isRead: true } },
+        variables: { input: { id: emailId, isRead } },
       });
     },
     [updateEmail],
@@ -143,10 +154,12 @@ export function useInboxEmails(folder: EmailFolder) {
     totalCount,
     totalPages,
     currentPage,
+    pageSize,
     activeAccountTab,
     showTabs,
     setCurrentPage,
     setActiveAccountTab,
+    setPageSize: handlePageSizeChange,
     handleStarToggle,
     handleMarkRead,
     handleDelete,

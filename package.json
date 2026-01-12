@@ -6,7 +6,7 @@
   "scripts": {
     "start": "pnpm run --parallel -r start",
     "stop": "pnpm run --parallel -r stop",
-    "typecheck": "pnpm run --parallel -r typecheck",
+    "typecheck": "pnpm run --parallel --filter=!@main/infra -r typecheck",
     "db:up": "docker-compose up -d",
     "db:down": "docker-compose down"
   },

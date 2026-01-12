@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-1
+  email-client-infra:dbInstanceClass: db.t3.micro
+  email-client-infra:environment: dev

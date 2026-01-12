@@ -284,7 +284,12 @@ export function Settings() {
   const [syncAllAccounts, { loading: syncingAll }] = useMutation(
     SYNC_ALL_ACCOUNTS_MUTATION,
     {
-      onCompleted: () => refetchEmailAccounts(),
+      onCompleted: async () => {
+        // Refetch to get updated isSyncing state and trigger polling
+        await refetchEmailAccounts();
+        // Start polling immediately since accounts are now syncing
+        startPolling(2000);
+      },
       onError: (err) => setError(err.message),
     },
   );

@@ -39,10 +39,25 @@ export async function startAsyncSync(emailAccount: EmailAccount): Promise<boolea
       await emailAccount.update({
         isSyncing: false,
         syncProgress: 100,
-        syncStatus: `Synced ${result.synced} emails${result.hasMore ? ' (more available)' : ''}`,
+        syncStatus: `Synced ${result.synced} emails`,
         lastSyncedAt: new Date(),
       });
       console.log(`[IMAP] Sync complete for ${emailAccount.email}: ${result.synced} synced`);
+
+      // Clear status after 10 seconds
+      setTimeout(async () => {
+        try {
+          await emailAccount.reload();
+          if (!emailAccount.isSyncing) {
+            await emailAccount.update({
+              syncProgress: null,
+              syncStatus: null,
+            });
+          }
+        } catch {
+          // Ignore errors during cleanup
+        }
+      }, 10000);
     })
     .catch(async (err) => {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -52,6 +67,20 @@ export async function startAsyncSync(emailAccount: EmailAccount): Promise<boolea
         syncStatus: `Sync failed: ${errorMsg}`,
       });
       console.error(`[IMAP] Sync failed for ${emailAccount.email}:`, err);
+
+      // Clear error status after 30 seconds
+      setTimeout(async () => {
+        try {
+          await emailAccount.reload();
+          if (!emailAccount.isSyncing) {
+            await emailAccount.update({
+              syncStatus: null,
+            });
+          }
+        } catch {
+          // Ignore errors during cleanup
+        }
+      }, 30000);
     });
 
   return true;

@@ -11,15 +11,19 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 
-const EmailItemWrapper = styled.div<{ $isUnread: boolean }>`
+const DenseRow = styled.div<{ $isUnread: boolean }>`
+  display: flex;
+  align-items: center;
   cursor: pointer;
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
+  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   background: ${(props) =>
     props.$isUnread
       ? props.theme.colors.unreadBackground
       : props.theme.colors.backgroundWhite};
   font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  gap: ${({ theme }) => theme.spacing.sm};
   position: relative;
 
   &:hover {
@@ -31,73 +35,76 @@ const EmailItemWrapper = styled.div<{ $isUnread: boolean }>`
   }
 `;
 
-const EmailMeta = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: ${({ theme }) => theme.spacing.xs};
-`;
-
-const SenderName = styled.span`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const EmailDate = styled.span`
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-weight: 400;
-`;
-
-const Subject = styled.div`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const Preview = styled.div`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 400;
-`;
-
-const StarButton = styled.span<{ $isStarred: boolean }>`
+const StarCell = styled.span<{ $isStarred: boolean }>`
   color: ${(props) =>
     props.$isStarred
       ? props.theme.colors.star
       : props.theme.colors.starInactive};
   cursor: pointer;
-  margin-right: ${({ theme }) => theme.spacing.sm};
-  font-size: 1.2rem;
+  flex-shrink: 0;
+  width: 20px;
 
   &:hover {
     color: ${({ theme }) => theme.colors.star};
   }
 `;
 
-const AccountBadge = styled(Badge)`
-  font-size: 0.7rem;
+const SenderCell = styled.span`
+  width: 180px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const SubjectCell = styled.span`
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+const PreviewCell = styled.span`
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: ${({ theme }) => theme.colors.textSecondary};
   margin-left: ${({ theme }) => theme.spacing.sm};
+`;
+
+const DateCell = styled.span`
+  width: 80px;
+  flex-shrink: 0;
+  text-align: right;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const AccountBadge = styled(Badge)`
+  font-size: 0.65rem;
+  margin-left: ${({ theme }) => theme.spacing.xs};
 `;
 
 const QuickActions = styled.div`
   position: absolute;
-  right: ${({ theme }) => theme.spacing.lg};
+  right: ${({ theme }) => theme.spacing.md};
   top: 50%;
   transform: translateY(-50%);
   display: flex;
-  gap: ${({ theme }) => theme.spacing.xs};
+  gap: 2px;
   opacity: 0;
   transition: opacity 0.15s ease;
   background: ${({ theme }) => theme.colors.backgroundWhite};
-  padding: ${({ theme }) => theme.spacing.xs};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
+  padding: 2px;
+  border-radius: 4px;
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;
 
 const ActionButton = styled(Button)`
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.15rem 0.35rem;
+  font-size: 0.65rem;
 `;
 
 interface Email {
@@ -124,7 +131,7 @@ interface Account {
   email: string;
 }
 
-interface EmailListItemProps {
+interface EmailListItemDenseProps {
   email: Email;
   account?: Account;
   showAccount: boolean;
@@ -149,7 +156,7 @@ function formatDate(dateStr: string) {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export function EmailListItem({
+export function EmailListItemDense({
   email,
   account,
   showAccount,
@@ -158,7 +165,7 @@ export function EmailListItem({
   onMarkRead,
   onReply,
   onDelete,
-}: EmailListItemProps) {
+}: EmailListItemDenseProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleStarClick = (e: React.MouseEvent) => {
@@ -188,30 +195,25 @@ export function EmailListItem({
 
   return (
     <>
-      <EmailItemWrapper
-        $isUnread={!email.isRead}
-        onClick={() => onEmailClick(email)}
-      >
-        <EmailMeta>
-          <div>
-            <StarButton $isStarred={email.isStarred} onClick={handleStarClick}>
-              <FontAwesomeIcon
-                icon={email.isStarred ? faStarSolid : faStarRegular}
-              />
-            </StarButton>
-            <SenderName>{email.fromName || email.fromAddress}</SenderName>
-            {showAccount && account && (
-              <AccountBadge bg="light" text="dark">
-                {account.name || account.email.split('@')[0]}
-              </AccountBadge>
-            )}
-          </div>
-          <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
-        </EmailMeta>
-        <Subject>{email.subject}</Subject>
-        <Preview>
-          {email.textBody?.substring(0, 100) || '(No content)'}
-        </Preview>
+      <DenseRow $isUnread={!email.isRead} onClick={() => onEmailClick(email)}>
+        <StarCell $isStarred={email.isStarred} onClick={handleStarClick}>
+          <FontAwesomeIcon
+            icon={email.isStarred ? faStarSolid : faStarRegular}
+          />
+        </StarCell>
+        <SenderCell>
+          {email.fromName || email.fromAddress}
+          {showAccount && account && (
+            <AccountBadge bg="light" text="dark">
+              {account.name.slice(0, 10)}
+            </AccountBadge>
+          )}
+        </SenderCell>
+        <SubjectCell>{email.subject}</SubjectCell>
+        <PreviewCell>
+          — {email.textBody?.substring(0, 60) || '(No content)'}
+        </PreviewCell>
+        <DateCell>{formatDate(email.receivedAt)}</DateCell>
 
         <QuickActions className="quick-actions">
           <ActionButton
@@ -239,9 +241,13 @@ export function EmailListItem({
             <FontAwesomeIcon icon={faTrash} />
           </ActionButton>
         </QuickActions>
-      </EmailItemWrapper>
+      </DenseRow>
 
-      <Modal show={showDeleteConfirm} onHide={() => setShowDeleteConfirm(false)} centered>
+      <Modal
+        show={showDeleteConfirm}
+        onHide={() => setShowDeleteConfirm(false)}
+        centered
+      >
         <Modal.Header closeButton>
           <Modal.Title>Delete Email</Modal.Title>
         </Modal.Header>
@@ -252,7 +258,10 @@ export function EmailListItem({
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)}>
+          <Button
+            variant="secondary"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
             Cancel
           </Button>
           <Button variant="danger" onClick={confirmDelete}>

@@ -1,10 +1,23 @@
 import { useState, useEffect } from 'react';
-import { Badge, Button, ButtonGroup, Tabs, Tab, Alert } from 'react-bootstrap';
+import {
+  Badge,
+  Button,
+  ButtonGroup,
+  Tabs,
+  Tab,
+  Alert,
+  ToggleButtonGroup,
+  ToggleButton,
+} from 'react-bootstrap';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router';
 import { EmailFolder } from '../../__generated__/graphql';
 import { EmailView } from './EmailView';
-import { EmailListItem, InboxPagination } from './components';
+import {
+  EmailListItem,
+  EmailListItemDense,
+  InboxPagination,
+} from './components';
 import { useInboxEmails } from './hooks';
 import { LoadingSpinner, EmptyState } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -17,7 +30,11 @@ import {
   faArchive,
   faSync,
   faEnvelopeOpen,
+  faList,
+  faBars,
 } from '@fortawesome/free-solid-svg-icons';
+
+type ViewMode = 'spacious' | 'dense';
 
 // Styled components
 const PageWrapper = styled.div`
@@ -81,6 +98,17 @@ interface InboxProps {
 export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const navigate = useNavigate();
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('inboxViewMode');
+    return (saved as ViewMode) || 'spacious';
+  });
+
+  const handleViewModeChange = (val: ViewMode) => {
+    if (val) {
+      setViewMode(val);
+      localStorage.setItem('inboxViewMode', val);
+    }
+  };
 
   const {
     emails,
@@ -90,10 +118,12 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     totalCount,
     totalPages,
     currentPage,
+    pageSize,
     activeAccountTab,
     showTabs,
     setCurrentPage,
     setActiveAccountTab,
+    setPageSize,
     handleStarToggle,
     handleMarkRead,
     handleDelete,
@@ -146,7 +176,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     }
 
     if (!email.isRead) {
-      await handleMarkRead(email.id);
+      await handleMarkRead(email.id, true);
     }
     setSelectedEmailId(email.id);
   };
@@ -209,16 +239,41 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
           {config.label}
           <Badge bg="secondary">{totalCount}</Badge>
         </PageTitle>
-        <ButtonGroup size="sm">
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <ToggleButtonGroup
+            type="radio"
+            name="viewMode"
+            value={viewMode}
+            onChange={handleViewModeChange}
+            size="sm"
+          >
+            <ToggleButton
+              id="view-spacious"
+              value="spacious"
+              variant="outline-secondary"
+              title="Spacious view"
+            >
+              <FontAwesomeIcon icon={faBars} />
+            </ToggleButton>
+            <ToggleButton
+              id="view-dense"
+              value="dense"
+              variant="outline-secondary"
+              title="Dense view"
+            >
+              <FontAwesomeIcon icon={faList} />
+            </ToggleButton>
+          </ToggleButtonGroup>
           <Button
             variant="outline-secondary"
+            size="sm"
             onClick={handleRefresh}
             disabled={syncing || loading}
           >
             <FontAwesomeIcon icon={faSync} spin={syncing} className="me-1" />
             {syncing ? 'Syncing...' : 'Refresh'}
           </Button>
-        </ButtonGroup>
+        </div>
       </PageToolbar>
 
       {showTabs && (
@@ -267,14 +322,17 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         ) : (
           emails.map((email) => {
             const account = accounts.find((a) => a.id === email.emailAccountId);
+            const ItemComponent =
+              viewMode === 'dense' ? EmailListItemDense : EmailListItem;
             return (
-              <EmailListItem
+              <ItemComponent
                 key={email.id}
                 email={email}
                 account={account}
                 showAccount={activeAccountTab === 'all'}
                 onEmailClick={handleEmailClick}
                 onStarToggle={handleStarToggle}
+                onMarkRead={handleMarkRead}
                 onReply={handleReply}
                 onDelete={handleDelete}
               />
@@ -286,7 +344,10 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       <InboxPagination
         currentPage={currentPage}
         totalPages={totalPages}
+        pageSize={pageSize}
+        totalCount={totalCount}
         onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
       />
     </PageWrapper>
   );

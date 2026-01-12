@@ -31,6 +31,7 @@ import {
   faPaperPlane,
   faSave,
   faTimes,
+  faArrowLeft,
 } from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
@@ -385,10 +386,18 @@ export function Compose() {
   return (
     <PageWrapper>
       <StickyHeader>
-        <Title>
-          <FontAwesomeIcon icon={isReply ? faReply : faPen} className="me-2" />
-          {isReply ? 'Reply' : isDraft ? 'Edit Draft' : 'Compose Email'}
-        </Title>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <Button variant="outline-secondary" size="sm" onClick={handleExit}>
+            <FontAwesomeIcon icon={faArrowLeft} />
+          </Button>
+          <Title>
+            <FontAwesomeIcon
+              icon={isReply ? faReply : faPen}
+              className="me-2"
+            />
+            {isReply ? 'Reply' : isDraft ? 'Edit Draft' : 'Compose Email'}
+          </Title>
+        </div>
         <HeaderActions>
           <Button
             variant="outline-secondary"
