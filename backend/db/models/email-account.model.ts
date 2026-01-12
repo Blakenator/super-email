@@ -7,6 +7,7 @@ import {
   Table,
 } from 'sequelize-typescript';
 import { User } from './user.model.js';
+import { SmtpProfile } from './smtp-profile.model.js';
 
 export enum EmailAccountType {
   IMAP = 'IMAP',
@@ -59,4 +60,11 @@ export class EmailAccount extends Model {
 
   @Column({ type: DataType.DATE, allowNull: true })
   declare lastSyncedAt: Date | null;
+
+  @ForeignKey(() => SmtpProfile)
+  @Column({ type: DataType.UUID, allowNull: true })
+  declare defaultSmtpProfileId: string | null;
+
+  @BelongsTo(() => SmtpProfile)
+  declare defaultSmtpProfile: SmtpProfile | null;
 }

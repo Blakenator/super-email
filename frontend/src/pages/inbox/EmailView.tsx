@@ -1,8 +1,14 @@
 import { useQuery } from '@apollo/client/react';
-import { Card, Button, Spinner, Badge } from 'react-bootstrap';
+import { Button, Spinner } from 'react-bootstrap';
 import styled from 'styled-components';
 import { GET_EMAIL_QUERY } from './queries';
 import { useNavigate } from 'react-router';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faArrowLeft,
+  faReply,
+  faTrash,
+} from '@fortawesome/free-solid-svg-icons';
 
 const Wrapper = styled.div`
   display: flex;
@@ -145,7 +151,8 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
       <Wrapper>
         <Toolbar>
           <Button variant="outline-secondary" onClick={onBack}>
-            ← Back
+            <FontAwesomeIcon icon={faArrowLeft} className="me-1" />
+            Back
           </Button>
         </Toolbar>
         <EmailContent>
@@ -159,13 +166,16 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
     <Wrapper>
       <Toolbar>
         <Button variant="outline-secondary" onClick={onBack}>
-          ← Back
+          <FontAwesomeIcon icon={faArrowLeft} className="me-1" />
+          Back
         </Button>
         <Button variant="primary" onClick={handleReply}>
-          ↩️ Reply
+          <FontAwesomeIcon icon={faReply} className="me-1" />
+          Reply
         </Button>
         <Button variant="outline-danger" onClick={onDelete}>
-          🗑️ Delete
+          <FontAwesomeIcon icon={faTrash} className="me-1" />
+          Delete
         </Button>
       </Toolbar>
 

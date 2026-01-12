@@ -18,6 +18,19 @@ import { EmailFolder } from './__generated__/graphql';
 import { useQuery } from '@apollo/client/react';
 import { GET_EMAIL_COUNT_QUERY } from './pages/inbox/queries';
 import { PageErrorBoundary } from './components/ErrorBoundary';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faInbox,
+  faStar,
+  faPaperPlane,
+  faFileAlt,
+  faTrash,
+  faCog,
+  faPen,
+  faEnvelope,
+  faSpinner,
+} from '@fortawesome/free-solid-svg-icons';
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
 const AppWrapper = styled.div`
   display: flex;
@@ -103,32 +116,52 @@ function AuthenticatedApp() {
 
   const unreadCount = unreadData?.getEmailCount ?? 0;
 
-  const navItems = [
+  const navItems: {
+    path: string;
+    label: string;
+    icon: IconDefinition;
+    folder: EmailFolder | undefined;
+    showBadge?: boolean;
+  }[] = [
     {
       path: '/inbox',
       label: 'Inbox',
-      icon: '📥',
+      icon: faInbox,
       folder: EmailFolder.Inbox,
       showBadge: true,
     },
-    { path: '/starred', label: 'Starred', icon: '⭐', folder: undefined },
-    { path: '/sent', label: 'Sent', icon: '📤', folder: EmailFolder.Sent },
+    { path: '/starred', label: 'Starred', icon: faStar, folder: undefined },
+    {
+      path: '/sent',
+      label: 'Sent',
+      icon: faPaperPlane,
+      folder: EmailFolder.Sent,
+    },
     {
       path: '/drafts',
       label: 'Drafts',
-      icon: '📝',
+      icon: faFileAlt,
       folder: EmailFolder.Drafts,
     },
-    { path: '/trash', label: 'Trash', icon: '🗑️', folder: EmailFolder.Trash },
+    {
+      path: '/trash',
+      label: 'Trash',
+      icon: faTrash,
+      folder: EmailFolder.Trash,
+    },
   ];
 
   return (
     <AppWrapper>
       <Sidebar>
-        <Logo>📧 StacksMail</Logo>
+        <Logo>
+          <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+          StacksMail
+        </Logo>
 
         <ComposeButton onClick={() => navigate('/compose')}>
-          ✏️ Compose
+          <FontAwesomeIcon icon={faPen} className="me-2" />
+          Compose
         </ComposeButton>
 
         <NavSection>
@@ -141,7 +174,9 @@ function AuthenticatedApp() {
                   $active={location.pathname === item.path}
                 >
                   <span>
-                    <NavIcon>{item.icon}</NavIcon>
+                    <NavIcon>
+                      <FontAwesomeIcon icon={item.icon} />
+                    </NavIcon>
                     {item.label}
                   </span>
                   {item.showBadge && unreadCount > 0 && (
@@ -164,7 +199,9 @@ function AuthenticatedApp() {
                 $active={location.pathname === '/settings'}
               >
                 <span>
-                  <NavIcon>⚙️</NavIcon>
+                  <NavIcon>
+                    <FontAwesomeIcon icon={faCog} />
+                  </NavIcon>
                   Settings
                 </span>
               </StyledNavLink>
@@ -219,7 +256,10 @@ function App() {
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
         }}
       >
-        <div style={{ color: 'white', fontSize: '2rem' }}>📧 Loading...</div>
+        <div style={{ color: 'white', fontSize: '2rem' }}>
+          <FontAwesomeIcon icon={faSpinner} spin className="me-2" />
+          Loading...
+        </div>
       </div>
     );
   }

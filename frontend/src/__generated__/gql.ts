@@ -23,13 +23,17 @@ type Documents = {
     "\n  query GetEmailCount($input: GetEmailsInput!) {\n    getEmailCount(input: $input)\n  }\n": typeof types.GetEmailCountDocument,
     "\n  mutation UpdateEmail($input: UpdateEmailInput!) {\n    updateEmail(input: $input) {\n      id\n      isRead\n      isStarred\n      folder\n    }\n  }\n": typeof types.UpdateEmailDocument,
     "\n  mutation DeleteEmail($id: String!) {\n    deleteEmail(id: $id)\n  }\n": typeof types.DeleteEmailDocument,
-    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n    }\n  }\n": typeof types.GetEmailAccountsDocument,
+    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n    }\n  }\n": typeof types.GetEmailAccountsDocument,
     "\n  mutation CreateEmailAccount($input: CreateEmailAccountInput!) {\n    createEmailAccount(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": typeof types.CreateEmailAccountDocument,
     "\n  mutation DeleteEmailAccount($id: String!) {\n    deleteEmailAccount(id: $id)\n  }\n": typeof types.DeleteEmailAccountDocument,
     "\n  mutation SyncEmailAccount($input: SyncEmailAccountInput!) {\n    syncEmailAccount(input: $input)\n  }\n": typeof types.SyncEmailAccountDocument,
     "\n  query GetSmtpProfilesFull {\n    getSmtpProfiles {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n": typeof types.GetSmtpProfilesFullDocument,
     "\n  mutation CreateSmtpProfile($input: CreateSmtpProfileInput!) {\n    createSmtpProfile(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": typeof types.CreateSmtpProfileDocument,
     "\n  mutation DeleteSmtpProfile($id: String!) {\n    deleteSmtpProfile(id: $id)\n  }\n": typeof types.DeleteSmtpProfileDocument,
+    "\n  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {\n    testEmailAccountConnection(input: $input) {\n      success\n      message\n    }\n  }\n": typeof types.TestEmailAccountConnectionDocument,
+    "\n  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {\n    testSmtpConnection(input: $input) {\n      success\n      message\n    }\n  }\n": typeof types.TestSmtpConnectionDocument,
+    "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n": typeof types.UpdateEmailAccountDocument,
+    "\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n": typeof types.UpdateSmtpProfileDocument,
 };
 const documents: Documents = {
     "\n  mutation SignUp($input: SignUpInput!) {\n    signUp(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n": types.SignUpDocument,
@@ -41,13 +45,17 @@ const documents: Documents = {
     "\n  query GetEmailCount($input: GetEmailsInput!) {\n    getEmailCount(input: $input)\n  }\n": types.GetEmailCountDocument,
     "\n  mutation UpdateEmail($input: UpdateEmailInput!) {\n    updateEmail(input: $input) {\n      id\n      isRead\n      isStarred\n      folder\n    }\n  }\n": types.UpdateEmailDocument,
     "\n  mutation DeleteEmail($id: String!) {\n    deleteEmail(id: $id)\n  }\n": types.DeleteEmailDocument,
-    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n    }\n  }\n": types.GetEmailAccountsDocument,
+    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n    }\n  }\n": types.GetEmailAccountsDocument,
     "\n  mutation CreateEmailAccount($input: CreateEmailAccountInput!) {\n    createEmailAccount(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": types.CreateEmailAccountDocument,
     "\n  mutation DeleteEmailAccount($id: String!) {\n    deleteEmailAccount(id: $id)\n  }\n": types.DeleteEmailAccountDocument,
     "\n  mutation SyncEmailAccount($input: SyncEmailAccountInput!) {\n    syncEmailAccount(input: $input)\n  }\n": types.SyncEmailAccountDocument,
     "\n  query GetSmtpProfilesFull {\n    getSmtpProfiles {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n": types.GetSmtpProfilesFullDocument,
     "\n  mutation CreateSmtpProfile($input: CreateSmtpProfileInput!) {\n    createSmtpProfile(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": types.CreateSmtpProfileDocument,
     "\n  mutation DeleteSmtpProfile($id: String!) {\n    deleteSmtpProfile(id: $id)\n  }\n": types.DeleteSmtpProfileDocument,
+    "\n  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {\n    testEmailAccountConnection(input: $input) {\n      success\n      message\n    }\n  }\n": types.TestEmailAccountConnectionDocument,
+    "\n  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {\n    testSmtpConnection(input: $input) {\n      success\n      message\n    }\n  }\n": types.TestSmtpConnectionDocument,
+    "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n": types.UpdateEmailAccountDocument,
+    "\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n": types.UpdateSmtpProfileDocument,
 };
 
 /**
@@ -103,7 +111,7 @@ export function gql(source: "\n  mutation DeleteEmail($id: String!) {\n    delet
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n    }\n  }\n"): (typeof documents)["\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n    }\n  }\n"];
+export function gql(source: "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n    }\n  }\n"): (typeof documents)["\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -128,6 +136,22 @@ export function gql(source: "\n  mutation CreateSmtpProfile($input: CreateSmtpPr
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "\n  mutation DeleteSmtpProfile($id: String!) {\n    deleteSmtpProfile(id: $id)\n  }\n"): (typeof documents)["\n  mutation DeleteSmtpProfile($id: String!) {\n    deleteSmtpProfile(id: $id)\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {\n    testEmailAccountConnection(input: $input) {\n      success\n      message\n    }\n  }\n"): (typeof documents)["\n  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {\n    testEmailAccountConnection(input: $input) {\n      success\n      message\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {\n    testSmtpConnection(input: $input) {\n      success\n      message\n    }\n  }\n"): (typeof documents)["\n  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {\n    testSmtpConnection(input: $input) {\n      success\n      message\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};

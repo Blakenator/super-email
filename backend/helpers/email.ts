@@ -17,19 +17,61 @@ export interface SendEmailOptions {
   references?: string[];
 }
 
-export async function sendEmail(
-  smtpProfile: SmtpProfile,
-  options: SendEmailOptions,
-): Promise<{ messageId: string }> {
-  const transporter = nodemailer.createTransport({
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Create a nodemailer transporter with correct SSL/TLS settings
+ * - Port 465: Use immediate TLS (secure: true)
+ * - Port 587/25: Use STARTTLS (secure: false)
+ */
+function createSmtpTransporter(smtpProfile: SmtpProfile) {
+  // Port 465 uses immediate TLS, other ports use STARTTLS
+  const useImmediateTls = smtpProfile.port === 465;
+
+  return nodemailer.createTransport({
     host: smtpProfile.host,
     port: smtpProfile.port,
-    secure: smtpProfile.useSsl,
+    secure: useImmediateTls,
     auth: {
       user: smtpProfile.username,
       pass: smtpProfile.password,
     },
+    // For STARTTLS ports, require TLS upgrade if useSsl is true
+    requireTLS: !useImmediateTls && smtpProfile.useSsl,
+    tls: {
+      // Allow self-signed certificates in development
+      rejectUnauthorized: process.env.NODE_ENV === 'production',
+    },
   });
+}
+
+/**
+ * Test SMTP connection without sending an email
+ */
+export async function testSmtpConnection(
+  smtpProfile: SmtpProfile,
+): Promise<TestConnectionResult> {
+  try {
+    const transporter = createSmtpTransporter(smtpProfile);
+    await transporter.verify();
+    return { success: true, message: 'SMTP connection successful' };
+  } catch (error: any) {
+    console.error('SMTP connection test failed:', error.message);
+    return {
+      success: false,
+      message: `SMTP connection failed: ${error.message}`,
+    };
+  }
+}
+
+export async function sendEmail(
+  smtpProfile: SmtpProfile,
+  options: SendEmailOptions,
+): Promise<{ messageId: string }> {
+  const transporter = createSmtpTransporter(smtpProfile);
 
   const result = await transporter.sendMail({
     from: `"${smtpProfile.name}" <${smtpProfile.email}>`,
@@ -55,7 +97,7 @@ export async function syncEmailsFromAccount(
   const emailAccount = await EmailAccount.findByPk(accountId);
 
   if (!emailAccount) {
-    return { synced: 0, errors: ['Email account not found'] };
+    return { synced: 0, skipped: 0, errors: ['Email account not found'] };
   }
 
   if (emailAccount.accountType === EmailAccountType.IMAP) {
@@ -63,8 +105,8 @@ export async function syncEmailsFromAccount(
   } else if (emailAccount.accountType === EmailAccountType.POP3) {
     // TODO: Implement POP3 sync
     console.log(`POP3 sync not yet implemented for account ${accountId}`);
-    return { synced: 0, errors: ['POP3 sync not yet implemented'] };
+    return { synced: 0, skipped: 0, errors: ['POP3 sync not yet implemented'] };
   }
 
-  return { synced: 0, errors: ['Unknown account type'] };
+  return { synced: 0, skipped: 0, errors: ['Unknown account type'] };
 }

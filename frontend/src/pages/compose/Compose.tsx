@@ -13,6 +13,13 @@ import {
 import { useNavigate, useLocation } from 'react-router';
 import styled from 'styled-components';
 import { GET_SMTP_PROFILES_QUERY, SEND_EMAIL_MUTATION } from './queries';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faReply,
+  faPen,
+  faPaperPlane,
+  faCheckCircle,
+} from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
   padding: 1.5rem;
@@ -149,7 +156,13 @@ export function Compose() {
     <PageWrapper>
       <Container>
         <Header>
-          <Title>{replyTo ? '↩️ Reply' : '✏️ Compose Email'}</Title>
+          <Title>
+            <FontAwesomeIcon
+              icon={replyTo ? faReply : faPen}
+              className="me-2"
+            />
+            {replyTo ? 'Reply' : 'Compose Email'}
+          </Title>
           <Button variant="outline-secondary" onClick={() => navigate(-1)}>
             Cancel
           </Button>
@@ -157,7 +170,8 @@ export function Compose() {
 
         {success && (
           <Alert variant="success">
-            ✅ Email sent successfully! Redirecting...
+            <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+            Email sent successfully! Redirecting...
           </Alert>
         )}
 
@@ -287,7 +301,10 @@ export function Compose() {
                       Sending...
                     </>
                   ) : (
-                    '📨 Send Email'
+                    <>
+                      <FontAwesomeIcon icon={faPaperPlane} className="me-2" />
+                      Send Email
+                    </>
                   )}
                 </Button>
               </div>

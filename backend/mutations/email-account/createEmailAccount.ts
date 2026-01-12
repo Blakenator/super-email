@@ -17,6 +17,7 @@ export const createEmailAccount = makeMutation(
       password: input.password,
       accountType: input.accountType,
       useSsl: input.useSsl,
+      defaultSmtpProfileId: input.defaultSmtpProfileId || null,
     });
 
     return emailAccount;

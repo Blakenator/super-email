@@ -14,6 +14,8 @@ import { Link, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { useAuth } from '../../contexts/AuthContext';
 import { SIGN_UP_MUTATION } from './queries';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faEnvelope } from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
   min-height: 100vh;
@@ -97,7 +99,10 @@ export function SignUp() {
       <Container>
         <SignUpCard className="mx-auto">
           <Card.Body className="p-5">
-            <Logo>📧 StacksMail</Logo>
+            <Logo>
+              <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+              StacksMail
+            </Logo>
             <Tagline>Create your account</Tagline>
 
             {error && (

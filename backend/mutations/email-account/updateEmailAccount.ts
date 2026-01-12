@@ -22,6 +22,9 @@ export const updateEmailAccount = makeMutation(
       ...(input.username !== undefined && { username: input.username }),
       ...(input.password !== undefined && { password: input.password }),
       ...(input.useSsl !== undefined && { useSsl: input.useSsl }),
+      ...(input.defaultSmtpProfileId !== undefined && {
+        defaultSmtpProfileId: input.defaultSmtpProfileId,
+      }),
     });
 
     return emailAccount;

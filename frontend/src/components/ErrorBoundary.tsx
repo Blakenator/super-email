@@ -1,6 +1,13 @@
 import { Component, type ReactNode } from 'react';
 import { Container, Card, Button, Alert } from 'react-bootstrap';
 import styled from 'styled-components';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faDizzy,
+  faSync,
+  faHome,
+  faExclamationTriangle,
+} from '@fortawesome/free-solid-svg-icons';
 
 const ErrorWrapper = styled.div`
   min-height: 100vh;
@@ -69,7 +76,9 @@ export class ErrorBoundary extends Component<Props, State> {
           <Container>
             <ErrorCard className="mx-auto">
               <Card.Body className="p-5 text-center">
-                <ErrorIcon>😵</ErrorIcon>
+                <ErrorIcon>
+                  <FontAwesomeIcon icon={faDizzy} />
+                </ErrorIcon>
                 <h2 className="mb-3">Something went wrong</h2>
                 <p className="text-muted mb-4">
                   An unexpected error occurred. Please try refreshing the page or go back to the home page.
@@ -98,10 +107,12 @@ export class ErrorBoundary extends Component<Props, State> {
                       border: 'none',
                     }}
                   >
-                    🔄 Refresh Page
+                    <FontAwesomeIcon icon={faSync} className="me-1" />
+                    Refresh Page
                   </Button>
                   <Button variant="outline-secondary" onClick={this.handleGoHome}>
-                    🏠 Go Home
+                    <FontAwesomeIcon icon={faHome} className="me-1" />
+                    Go Home
                   </Button>
                 </div>
               </Card.Body>
@@ -133,7 +144,10 @@ interface InlineErrorFallbackProps {
 export function InlineErrorFallback({ error, resetError }: InlineErrorFallbackProps) {
   return (
     <InlineErrorWrapper>
-      <h5>⚠️ This section encountered an error</h5>
+      <h5>
+        <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+        This section encountered an error
+      </h5>
       <p className="text-muted mb-3">{error.message}</p>
       <Button variant="warning" size="sm" onClick={resetError}>
         Try Again

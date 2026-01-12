@@ -22,9 +22,29 @@ import {
   GET_SMTP_PROFILES_FULL_QUERY,
   CREATE_SMTP_PROFILE_MUTATION,
   DELETE_SMTP_PROFILE_MUTATION,
+  TEST_EMAIL_ACCOUNT_CONNECTION_MUTATION,
+  TEST_SMTP_CONNECTION_MUTATION,
+  UPDATE_EMAIL_ACCOUNT_MUTATION,
+  UPDATE_SMTP_PROFILE_MUTATION,
 } from './queries';
 import { EmailAccountType } from '../../__generated__/graphql';
 import { useAuth } from '../../contexts/AuthContext';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faCog,
+  faInbox,
+  faPaperPlane,
+  faSignOutAlt,
+  faPlus,
+  faSync,
+  faTrash,
+  faPlug,
+  faCheckCircle,
+  faTimesCircle,
+  faCircle,
+  faSave,
+  faEdit,
+} from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
   padding: 1.5rem;
@@ -76,11 +96,105 @@ const Avatar = styled.div`
   font-weight: 600;
 `;
 
+const ProgressStepList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+`;
+
+const ProgressStep = styled.div<{
+  $status: 'pending' | 'active' | 'success' | 'error';
+}>`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: ${(props) => {
+    switch (props.$status) {
+      case 'active':
+        return '#e3f2fd';
+      case 'success':
+        return '#e8f5e9';
+      case 'error':
+        return '#ffebee';
+      default:
+        return '#f5f5f5';
+    }
+  }};
+  transition: all 0.3s ease;
+`;
+
+const StepIcon = styled.div<{
+  $status: 'pending' | 'active' | 'success' | 'error';
+}>`
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: ${(props) => {
+    switch (props.$status) {
+      case 'active':
+        return '#1976d2';
+      case 'success':
+        return '#2e7d32';
+      case 'error':
+        return '#c62828';
+      default:
+        return '#9e9e9e';
+    }
+  }};
+`;
+
+const StepContent = styled.div`
+  flex: 1;
+`;
+
+const StepTitle = styled.div`
+  font-weight: 600;
+  font-size: 0.95rem;
+`;
+
+const StepSubtitle = styled.div`
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.25rem;
+`;
+
+type SaveStep = {
+  id: string;
+  title: string;
+  status: 'pending' | 'active' | 'success' | 'error';
+  message?: string;
+};
+
 export function Settings() {
   const { user, logout } = useAuth();
   const [showEmailAccountModal, setShowEmailAccountModal] = useState(false);
   const [showSmtpProfileModal, setShowSmtpProfileModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [connectionTested, setConnectionTested] = useState(false);
+
+  // Progress modal state
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const [progressType, setProgressType] = useState<'email' | 'smtp'>('email');
+  const [saveSteps, setSaveSteps] = useState<SaveStep[]>([]);
+
+  // Edit mode state
+  const [editingEmailAccountId, setEditingEmailAccountId] = useState<
+    string | null
+  >(null);
+  const [editingSmtpProfileId, setEditingSmtpProfileId] = useState<
+    string | null
+  >(null);
 
   // Email Account form state
   const [emailAccountForm, setEmailAccountForm] = useState({
@@ -92,6 +206,7 @@ export function Settings() {
     password: '',
     accountType: EmailAccountType.Imap,
     useSsl: true,
+    defaultSmtpProfileId: '' as string | null,
   });
 
   // SMTP Profile form state
@@ -157,6 +272,23 @@ export function Settings() {
     onError: (err) => setError(err.message),
   });
 
+  const [testEmailAccountConnection, { loading: testingEmailAccount }] =
+    useMutation(TEST_EMAIL_ACCOUNT_CONNECTION_MUTATION);
+
+  const [testSmtpConnection, { loading: testingSmtp }] = useMutation(
+    TEST_SMTP_CONNECTION_MUTATION,
+  );
+
+  const [updateEmailAccount] = useMutation(UPDATE_EMAIL_ACCOUNT_MUTATION, {
+    onCompleted: () => refetchEmailAccounts(),
+    onError: (err) => setError(err.message),
+  });
+
+  const [updateSmtpProfile] = useMutation(UPDATE_SMTP_PROFILE_MUTATION, {
+    onCompleted: () => refetchSmtpProfiles(),
+    onError: (err) => setError(err.message),
+  });
+
   const resetEmailAccountForm = () => {
     setEmailAccountForm({
       name: '',
@@ -167,7 +299,11 @@ export function Settings() {
       password: '',
       accountType: EmailAccountType.Imap,
       useSsl: true,
+      defaultSmtpProfileId: null,
     });
+    setEditingEmailAccountId(null);
+    setTestResult(null);
+    setConnectionTested(false);
   };
 
   const resetSmtpProfileForm = () => {
@@ -181,18 +317,371 @@ export function Settings() {
       useSsl: true,
       isDefault: false,
     });
+    setEditingSmtpProfileId(null);
+    setTestResult(null);
+    setConnectionTested(false);
   };
 
-  const handleCreateEmailAccount = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    createEmailAccount({ variables: { input: emailAccountForm } });
+  const handleEditEmailAccount = (accountId: string) => {
+    const account = emailAccounts.find((a) => a.id === accountId);
+    if (account) {
+      setEmailAccountForm({
+        name: account.name,
+        email: account.email,
+        host: account.host,
+        port: account.port,
+        username: '', // Don't populate - user must re-enter for security
+        password: '', // Don't populate - user must re-enter for security
+        accountType: account.accountType as EmailAccountType,
+        useSsl: account.useSsl,
+        defaultSmtpProfileId: account.defaultSmtpProfileId || null,
+      });
+      setEditingEmailAccountId(accountId);
+      setShowEmailAccountModal(true);
+    }
   };
 
-  const handleCreateSmtpProfile = (e: React.FormEvent) => {
+  const handleEditSmtpProfile = (profileId: string) => {
+    const profile = smtpProfiles.find((p) => p.id === profileId);
+    if (profile) {
+      setSmtpProfileForm({
+        name: profile.name,
+        email: profile.email,
+        host: profile.host,
+        port: profile.port,
+        username: '', // Don't populate - user must re-enter for security
+        password: '', // Don't populate - user must re-enter for security
+        useSsl: profile.useSsl,
+        isDefault: profile.isDefault,
+      });
+      setEditingSmtpProfileId(profileId);
+      setShowSmtpProfileModal(true);
+    }
+  };
+
+  const handleTestEmailAccountConnection = async () => {
+    setError(null);
+    setTestResult(null);
+    try {
+      const result = await testEmailAccountConnection({
+        variables: {
+          input: {
+            host: emailAccountForm.host,
+            port: emailAccountForm.port,
+            username: emailAccountForm.username,
+            password: emailAccountForm.password,
+            accountType: emailAccountForm.accountType,
+            useSsl: emailAccountForm.useSsl,
+          },
+        },
+      });
+      const testRes = result.data?.testEmailAccountConnection;
+      if (testRes) {
+        setTestResult(testRes);
+        setConnectionTested(testRes.success);
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, message: err.message });
+    }
+  };
+
+  const handleTestSmtpConnection = async () => {
+    setError(null);
+    setTestResult(null);
+    try {
+      const result = await testSmtpConnection({
+        variables: {
+          input: {
+            host: smtpProfileForm.host,
+            port: smtpProfileForm.port,
+            username: smtpProfileForm.username,
+            password: smtpProfileForm.password,
+            useSsl: smtpProfileForm.useSsl,
+          },
+        },
+      });
+      const testRes = result.data?.testSmtpConnection;
+      if (testRes) {
+        setTestResult(testRes);
+        setConnectionTested(testRes.success);
+      }
+    } catch (err: any) {
+      setTestResult({ success: false, message: err.message });
+    }
+  };
+
+  const handleSaveEmailAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    createSmtpProfile({ variables: { input: smtpProfileForm } });
+    setShowEmailAccountModal(false);
+    setProgressType('email');
+
+    const isEditing = !!editingEmailAccountId;
+    const needsConnectionTest =
+      emailAccountForm.username && emailAccountForm.password;
+
+    const steps: SaveStep[] = needsConnectionTest
+      ? [
+          { id: 'test', title: 'Testing connection', status: 'pending' },
+          {
+            id: 'save',
+            title: isEditing ? 'Updating account' : 'Saving account',
+            status: 'pending',
+          },
+        ]
+      : [
+          {
+            id: 'save',
+            title: isEditing ? 'Updating account' : 'Saving account',
+            status: 'pending',
+          },
+        ];
+    setSaveSteps(steps);
+    setShowProgressModal(true);
+
+    try {
+      // Step 1: Test connection (only if credentials provided)
+      if (needsConnectionTest) {
+        setSaveSteps((prev) =>
+          prev.map((s) => (s.id === 'test' ? { ...s, status: 'active' } : s)),
+        );
+
+        const testResult = await testEmailAccountConnection({
+          variables: {
+            input: {
+              host: emailAccountForm.host,
+              port: emailAccountForm.port,
+              username: emailAccountForm.username,
+              password: emailAccountForm.password,
+              accountType: emailAccountForm.accountType,
+              useSsl: emailAccountForm.useSsl,
+            },
+          },
+        });
+
+        const testRes = testResult.data?.testEmailAccountConnection;
+        if (!testRes?.success) {
+          setSaveSteps((prev) =>
+            prev.map((s) =>
+              s.id === 'test'
+                ? {
+                    ...s,
+                    status: 'error',
+                    message: testRes?.message || 'Connection failed',
+                  }
+                : s,
+            ),
+          );
+          return;
+        }
+
+        setSaveSteps((prev) =>
+          prev.map((s) =>
+            s.id === 'test'
+              ? { ...s, status: 'success', message: 'Connection successful' }
+              : s,
+          ),
+        );
+      }
+
+      // Step 2: Save/Update account
+      setSaveSteps((prev) =>
+        prev.map((s) => (s.id === 'save' ? { ...s, status: 'active' } : s)),
+      );
+
+      if (isEditing) {
+        await updateEmailAccount({
+          variables: {
+            input: {
+              id: editingEmailAccountId,
+              name: emailAccountForm.name,
+              host: emailAccountForm.host,
+              port: emailAccountForm.port,
+              useSsl: emailAccountForm.useSsl,
+              defaultSmtpProfileId: emailAccountForm.defaultSmtpProfileId,
+              ...(emailAccountForm.username && {
+                username: emailAccountForm.username,
+              }),
+              ...(emailAccountForm.password && {
+                password: emailAccountForm.password,
+              }),
+            },
+          },
+        });
+      } else {
+        await createEmailAccount({
+          variables: {
+            input: {
+              ...emailAccountForm,
+              defaultSmtpProfileId:
+                emailAccountForm.defaultSmtpProfileId || undefined,
+            },
+          },
+        });
+      }
+
+      setSaveSteps((prev) =>
+        prev.map((s) =>
+          s.id === 'save'
+            ? { ...s, status: 'success', message: 'Account saved successfully' }
+            : s,
+        ),
+      );
+
+      // Auto-close after success
+      setTimeout(() => {
+        setShowProgressModal(false);
+        resetEmailAccountForm();
+        refetchEmailAccounts();
+      }, 1500);
+    } catch (err: any) {
+      setSaveSteps((prev) =>
+        prev.map((s) =>
+          s.status === 'active'
+            ? { ...s, status: 'error', message: err.message }
+            : s,
+        ),
+      );
+    }
+  };
+
+  const handleSaveSmtpProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setShowSmtpProfileModal(false);
+    setProgressType('smtp');
+
+    const isEditing = !!editingSmtpProfileId;
+    const needsConnectionTest =
+      smtpProfileForm.username && smtpProfileForm.password;
+
+    const steps: SaveStep[] = needsConnectionTest
+      ? [
+          { id: 'test', title: 'Testing connection', status: 'pending' },
+          {
+            id: 'save',
+            title: isEditing ? 'Updating profile' : 'Saving profile',
+            status: 'pending',
+          },
+        ]
+      : [
+          {
+            id: 'save',
+            title: isEditing ? 'Updating profile' : 'Saving profile',
+            status: 'pending',
+          },
+        ];
+    setSaveSteps(steps);
+    setShowProgressModal(true);
+
+    try {
+      // Step 1: Test connection (only if credentials provided)
+      if (needsConnectionTest) {
+        setSaveSteps((prev) =>
+          prev.map((s) => (s.id === 'test' ? { ...s, status: 'active' } : s)),
+        );
+
+        const testResult = await testSmtpConnection({
+          variables: {
+            input: {
+              host: smtpProfileForm.host,
+              port: smtpProfileForm.port,
+              username: smtpProfileForm.username,
+              password: smtpProfileForm.password,
+              useSsl: smtpProfileForm.useSsl,
+            },
+          },
+        });
+
+        const testRes = testResult.data?.testSmtpConnection;
+        if (!testRes?.success) {
+          setSaveSteps((prev) =>
+            prev.map((s) =>
+              s.id === 'test'
+                ? {
+                    ...s,
+                    status: 'error',
+                    message: testRes?.message || 'Connection failed',
+                  }
+                : s,
+            ),
+          );
+          return;
+        }
+
+        setSaveSteps((prev) =>
+          prev.map((s) =>
+            s.id === 'test'
+              ? { ...s, status: 'success', message: 'Connection successful' }
+              : s,
+          ),
+        );
+      }
+
+      // Step 2: Save/Update profile
+      setSaveSteps((prev) =>
+        prev.map((s) => (s.id === 'save' ? { ...s, status: 'active' } : s)),
+      );
+
+      if (isEditing) {
+        await updateSmtpProfile({
+          variables: {
+            input: {
+              id: editingSmtpProfileId,
+              name: smtpProfileForm.name,
+              host: smtpProfileForm.host,
+              port: smtpProfileForm.port,
+              useSsl: smtpProfileForm.useSsl,
+              isDefault: smtpProfileForm.isDefault,
+              ...(smtpProfileForm.username && {
+                username: smtpProfileForm.username,
+              }),
+              ...(smtpProfileForm.password && {
+                password: smtpProfileForm.password,
+              }),
+            },
+          },
+        });
+      } else {
+        await createSmtpProfile({ variables: { input: smtpProfileForm } });
+      }
+
+      setSaveSteps((prev) =>
+        prev.map((s) =>
+          s.id === 'save'
+            ? { ...s, status: 'success', message: 'Profile saved successfully' }
+            : s,
+        ),
+      );
+
+      // Auto-close after success
+      setTimeout(() => {
+        setShowProgressModal(false);
+        resetSmtpProfileForm();
+        refetchSmtpProfiles();
+      }, 1500);
+    } catch (err: any) {
+      setSaveSteps((prev) =>
+        prev.map((s) =>
+          s.status === 'active'
+            ? { ...s, status: 'error', message: err.message }
+            : s,
+        ),
+      );
+    }
+  };
+
+  const handleCloseProgressModal = () => {
+    setShowProgressModal(false);
+    // If there was an error, reopen the form modal
+    const hasError = saveSteps.some((s) => s.status === 'error');
+    if (hasError) {
+      if (progressType === 'email') {
+        setShowEmailAccountModal(true);
+      } else {
+        setShowSmtpProfileModal(true);
+      }
+    }
   };
 
   const emailAccounts = emailAccountsData?.getEmailAccounts ?? [];
@@ -202,7 +691,10 @@ export function Settings() {
     <PageWrapper>
       <Container>
         <Header>
-          <Title>⚙️ Settings</Title>
+          <Title>
+            <FontAwesomeIcon icon={faCog} className="me-2" />
+            Settings
+          </Title>
         </Header>
 
         {error && (
@@ -228,13 +720,22 @@ export function Settings() {
               className="ms-auto"
               onClick={logout}
             >
+              <FontAwesomeIcon icon={faSignOutAlt} className="me-1" />
               Sign Out
             </Button>
           </UserInfo>
         )}
 
         <Tabs defaultActiveKey="email-accounts" className="mb-3">
-          <Tab eventKey="email-accounts" title="📥 Email Accounts (IMAP/POP)">
+          <Tab
+            eventKey="email-accounts"
+            title={
+              <>
+                <FontAwesomeIcon icon={faInbox} className="me-1" />
+                Email Accounts (IMAP/POP)
+              </>
+            }
+          >
             <SectionCard>
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-center mb-3">
@@ -244,7 +745,8 @@ export function Settings() {
                     size="sm"
                     onClick={() => setShowEmailAccountModal(true)}
                   >
-                    + Add Account
+                    <FontAwesomeIcon icon={faPlus} className="me-1" />
+                    Add Account
                   </Button>
                 </div>
 
@@ -265,6 +767,7 @@ export function Settings() {
                         <th>Email</th>
                         <th>Server</th>
                         <th>Type</th>
+                        <th>Default SMTP</th>
                         <th>Last Sync</th>
                         <th>Actions</th>
                       </tr>
@@ -289,11 +792,29 @@ export function Settings() {
                             </Badge>
                           </td>
                           <td>
+                            {account.defaultSmtpProfile ? (
+                              <Badge bg="primary">
+                                {account.defaultSmtpProfile.name}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted">—</span>
+                            )}
+                          </td>
+                          <td>
                             {account.lastSyncedAt
                               ? new Date(account.lastSyncedAt).toLocaleString()
                               : 'Never'}
                           </td>
                           <td>
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              className="me-1"
+                              onClick={() => handleEditEmailAccount(account.id)}
+                            >
+                              <FontAwesomeIcon icon={faEdit} className="me-1" />
+                              Edit
+                            </Button>
                             <Button
                               variant="outline-primary"
                               size="sm"
@@ -306,6 +827,7 @@ export function Settings() {
                                 })
                               }
                             >
+                              <FontAwesomeIcon icon={faSync} className="me-1" />
                               Sync
                             </Button>
                             <Button
@@ -317,6 +839,10 @@ export function Settings() {
                                 })
                               }
                             >
+                              <FontAwesomeIcon
+                                icon={faTrash}
+                                className="me-1"
+                              />
                               Delete
                             </Button>
                           </td>
@@ -329,7 +855,15 @@ export function Settings() {
             </SectionCard>
           </Tab>
 
-          <Tab eventKey="smtp-profiles" title="📤 SMTP Profiles">
+          <Tab
+            eventKey="smtp-profiles"
+            title={
+              <>
+                <FontAwesomeIcon icon={faPaperPlane} className="me-1" />
+                SMTP Profiles
+              </>
+            }
+          >
             <SectionCard>
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-center mb-3">
@@ -339,7 +873,8 @@ export function Settings() {
                     size="sm"
                     onClick={() => setShowSmtpProfileModal(true)}
                   >
-                    + Add Profile
+                    <FontAwesomeIcon icon={faPlus} className="me-1" />
+                    Add Profile
                   </Button>
                 </div>
 
@@ -378,6 +913,15 @@ export function Settings() {
                           </td>
                           <td>
                             <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              className="me-1"
+                              onClick={() => handleEditSmtpProfile(profile.id)}
+                            >
+                              <FontAwesomeIcon icon={faEdit} className="me-1" />
+                              Edit
+                            </Button>
+                            <Button
                               variant="outline-danger"
                               size="sm"
                               onClick={() =>
@@ -386,6 +930,10 @@ export function Settings() {
                                 })
                               }
                             >
+                              <FontAwesomeIcon
+                                icon={faTrash}
+                                className="me-1"
+                              />
                               Delete
                             </Button>
                           </td>
@@ -402,13 +950,20 @@ export function Settings() {
         {/* Email Account Modal */}
         <Modal
           show={showEmailAccountModal}
-          onHide={() => setShowEmailAccountModal(false)}
+          onHide={() => {
+            setShowEmailAccountModal(false);
+            resetEmailAccountForm();
+          }}
           size="lg"
         >
           <Modal.Header closeButton>
-            <Modal.Title>Add Email Account</Modal.Title>
+            <Modal.Title>
+              {editingEmailAccountId
+                ? 'Edit Email Account'
+                : 'Add Email Account'}
+            </Modal.Title>
           </Modal.Header>
-          <Form onSubmit={handleCreateEmailAccount}>
+          <Form onSubmit={handleSaveEmailAccount}>
             <Modal.Body>
               <Form.Group className="mb-3">
                 <Form.Label>Account Name</Form.Label>
@@ -486,10 +1041,19 @@ export function Settings() {
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Username</Form.Label>
+                <Form.Label>
+                  Username
+                  {editingEmailAccountId && (
+                    <span className="text-muted ms-2">
+                      (leave blank to keep current)
+                    </span>
+                  )}
+                </Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="you@gmail.com"
+                  placeholder={
+                    editingEmailAccountId ? '(unchanged)' : 'you@gmail.com'
+                  }
                   value={emailAccountForm.username}
                   onChange={(e) =>
                     setEmailAccountForm({
@@ -497,11 +1061,18 @@ export function Settings() {
                       username: e.target.value,
                     })
                   }
-                  required
+                  required={!editingEmailAccountId}
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Password / App Password</Form.Label>
+                <Form.Label>
+                  Password / App Password
+                  {editingEmailAccountId && (
+                    <span className="text-muted ms-2">
+                      (leave blank to keep current)
+                    </span>
+                  )}
+                </Form.Label>
                 <Form.Control
                   type="password"
                   value={emailAccountForm.password}
@@ -511,7 +1082,8 @@ export function Settings() {
                       password: e.target.value,
                     })
                   }
-                  required
+                  required={!editingEmailAccountId}
+                  placeholder={editingEmailAccountId ? '••••••••' : ''}
                 />
               </Form.Group>
               <Form.Check
@@ -524,7 +1096,31 @@ export function Settings() {
                     useSsl: e.target.checked,
                   })
                 }
+                className="mb-3"
               />
+              <Form.Group className="mb-3">
+                <Form.Label>Default SMTP Profile for Sending</Form.Label>
+                <Form.Select
+                  value={emailAccountForm.defaultSmtpProfileId || ''}
+                  onChange={(e) =>
+                    setEmailAccountForm({
+                      ...emailAccountForm,
+                      defaultSmtpProfileId: e.target.value || null,
+                    })
+                  }
+                >
+                  <option value="">-- None --</option>
+                  {smtpProfiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.name} ({profile.email})
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Text className="text-muted">
+                  Select a default SMTP profile for sending replies from this
+                  account
+                </Form.Text>
+              </Form.Group>
             </Modal.Body>
             <Modal.Footer>
               <Button
@@ -534,15 +1130,36 @@ export function Settings() {
                 Cancel
               </Button>
               <Button
-                variant="primary"
-                type="submit"
-                disabled={creatingEmailAccount}
+                variant="outline-info"
+                onClick={handleTestEmailAccountConnection}
+                disabled={
+                  testingEmailAccount ||
+                  !emailAccountForm.host ||
+                  !emailAccountForm.username ||
+                  !emailAccountForm.password
+                }
               >
-                {creatingEmailAccount ? (
+                {testingEmailAccount ? (
                   <Spinner animation="border" size="sm" />
                 ) : (
-                  'Add Account'
+                  <>
+                    <FontAwesomeIcon icon={faPlug} className="me-1" />
+                    Test Only
+                  </>
                 )}
+              </Button>
+              <Button
+                variant="primary"
+                type="submit"
+                disabled={
+                  !emailAccountForm.host ||
+                  !emailAccountForm.name ||
+                  (!editingEmailAccountId &&
+                    (!emailAccountForm.username || !emailAccountForm.password))
+                }
+              >
+                <FontAwesomeIcon icon={faSave} className="me-1" />
+                {editingEmailAccountId ? 'Save Changes' : 'Test & Save'}
               </Button>
             </Modal.Footer>
           </Form>
@@ -551,13 +1168,18 @@ export function Settings() {
         {/* SMTP Profile Modal */}
         <Modal
           show={showSmtpProfileModal}
-          onHide={() => setShowSmtpProfileModal(false)}
+          onHide={() => {
+            setShowSmtpProfileModal(false);
+            resetSmtpProfileForm();
+          }}
           size="lg"
         >
           <Modal.Header closeButton>
-            <Modal.Title>Add SMTP Profile</Modal.Title>
+            <Modal.Title>
+              {editingSmtpProfileId ? 'Edit SMTP Profile' : 'Add SMTP Profile'}
+            </Modal.Title>
           </Modal.Header>
-          <Form onSubmit={handleCreateSmtpProfile}>
+          <Form onSubmit={handleSaveSmtpProfile}>
             <Modal.Body>
               <Form.Group className="mb-3">
                 <Form.Label>Profile Name</Form.Label>
@@ -619,10 +1241,19 @@ export function Settings() {
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Username</Form.Label>
+                <Form.Label>
+                  Username
+                  {editingSmtpProfileId && (
+                    <span className="text-muted ms-2">
+                      (leave blank to keep current)
+                    </span>
+                  )}
+                </Form.Label>
                 <Form.Control
                   type="text"
-                  placeholder="you@company.com"
+                  placeholder={
+                    editingSmtpProfileId ? '(unchanged)' : 'you@company.com'
+                  }
                   value={smtpProfileForm.username}
                   onChange={(e) =>
                     setSmtpProfileForm({
@@ -630,11 +1261,18 @@ export function Settings() {
                       username: e.target.value,
                     })
                   }
-                  required
+                  required={!editingSmtpProfileId}
                 />
               </Form.Group>
               <Form.Group className="mb-3">
-                <Form.Label>Password / App Password</Form.Label>
+                <Form.Label>
+                  Password / App Password
+                  {editingSmtpProfileId && (
+                    <span className="text-muted ms-2">
+                      (leave blank to keep current)
+                    </span>
+                  )}
+                </Form.Label>
                 <Form.Control
                   type="password"
                   value={smtpProfileForm.password}
@@ -644,7 +1282,8 @@ export function Settings() {
                       password: e.target.value,
                     })
                   }
-                  required
+                  required={!editingSmtpProfileId}
+                  placeholder={editingSmtpProfileId ? '••••••••' : ''}
                 />
               </Form.Group>
               <Form.Check
@@ -679,18 +1318,100 @@ export function Settings() {
                 Cancel
               </Button>
               <Button
-                variant="primary"
-                type="submit"
-                disabled={creatingSmtpProfile}
+                variant="outline-info"
+                onClick={handleTestSmtpConnection}
+                disabled={
+                  testingSmtp ||
+                  !smtpProfileForm.host ||
+                  !smtpProfileForm.username ||
+                  !smtpProfileForm.password
+                }
               >
-                {creatingSmtpProfile ? (
+                {testingSmtp ? (
                   <Spinner animation="border" size="sm" />
                 ) : (
-                  'Add Profile'
+                  <>
+                    <FontAwesomeIcon icon={faPlug} className="me-1" />
+                    Test Only
+                  </>
                 )}
+              </Button>
+              <Button
+                variant="primary"
+                type="submit"
+                disabled={
+                  !smtpProfileForm.host ||
+                  !smtpProfileForm.name ||
+                  (!editingSmtpProfileId &&
+                    (!smtpProfileForm.username || !smtpProfileForm.password))
+                }
+              >
+                <FontAwesomeIcon icon={faSave} className="me-1" />
+                {editingSmtpProfileId ? 'Save Changes' : 'Test & Save'}
               </Button>
             </Modal.Footer>
           </Form>
+        </Modal>
+
+        {/* Progress Modal */}
+        <Modal
+          show={showProgressModal}
+          onHide={handleCloseProgressModal}
+          centered
+          backdrop="static"
+        >
+          <Modal.Header
+            closeButton={saveSteps.some(
+              (s) => s.status === 'error' || s.status === 'success',
+            )}
+          >
+            <Modal.Title>
+              {progressType === 'email'
+                ? editingEmailAccountId
+                  ? 'Updating Email Account'
+                  : 'Adding Email Account'
+                : editingSmtpProfileId
+                  ? 'Updating SMTP Profile'
+                  : 'Adding SMTP Profile'}
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <ProgressStepList>
+              {saveSteps.map((step, index) => (
+                <ProgressStep key={step.id} $status={step.status}>
+                  <StepIcon $status={step.status}>
+                    {step.status === 'pending' && (
+                      <FontAwesomeIcon icon={faCircle} />
+                    )}
+                    {step.status === 'active' && (
+                      <Spinner animation="border" size="sm" />
+                    )}
+                    {step.status === 'success' && (
+                      <FontAwesomeIcon icon={faCheckCircle} />
+                    )}
+                    {step.status === 'error' && (
+                      <FontAwesomeIcon icon={faTimesCircle} />
+                    )}
+                  </StepIcon>
+                  <StepContent>
+                    <StepTitle>
+                      Step {index + 1}: {step.title}
+                    </StepTitle>
+                    {step.message && (
+                      <StepSubtitle>{step.message}</StepSubtitle>
+                    )}
+                  </StepContent>
+                </ProgressStep>
+              ))}
+            </ProgressStepList>
+          </Modal.Body>
+          {saveSteps.some((s) => s.status === 'error') && (
+            <Modal.Footer>
+              <Button variant="secondary" onClick={handleCloseProgressModal}>
+                Go Back &amp; Fix
+              </Button>
+            </Modal.Footer>
+          )}
         </Modal>
       </Container>
     </PageWrapper>

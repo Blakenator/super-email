@@ -21,6 +21,7 @@ export const sendEmail = makeMutation(
     let emailAccount = await EmailAccount.findOne({
       where: { userId, email: smtpProfile.email },
     });
+    console.log({ emailAccount });
 
     // If no matching email account exists, we'll still send but not store
     const { messageId } = await sendEmailHelper(smtpProfile, {

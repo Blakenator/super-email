@@ -16,6 +16,19 @@ import {
 } from './queries';
 import { EmailFolder } from '../../__generated__/graphql';
 import { EmailView } from './EmailView';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faInbox,
+  faPaperPlane,
+  faFileAlt,
+  faTrash,
+  faExclamationTriangle,
+  faArchive,
+  faSync,
+  faEnvelopeOpen,
+  faStar as faStarSolid,
+} from '@fortawesome/free-solid-svg-icons';
+import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 
 const PageWrapper = styled.div`
   display: flex;
@@ -189,12 +202,45 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       <Toolbar>
         <div>
           <strong style={{ fontSize: '1.25rem' }}>
-            {folder === EmailFolder.Inbox && '📥 Inbox'}
-            {folder === EmailFolder.Sent && '📤 Sent'}
-            {folder === EmailFolder.Drafts && '📝 Drafts'}
-            {folder === EmailFolder.Trash && '🗑️ Trash'}
-            {folder === EmailFolder.Spam && '⚠️ Spam'}
-            {folder === EmailFolder.Archive && '📦 Archive'}
+            {folder === EmailFolder.Inbox && (
+              <>
+                <FontAwesomeIcon icon={faInbox} className="me-2" />
+                Inbox
+              </>
+            )}
+            {folder === EmailFolder.Sent && (
+              <>
+                <FontAwesomeIcon icon={faPaperPlane} className="me-2" />
+                Sent
+              </>
+            )}
+            {folder === EmailFolder.Drafts && (
+              <>
+                <FontAwesomeIcon icon={faFileAlt} className="me-2" />
+                Drafts
+              </>
+            )}
+            {folder === EmailFolder.Trash && (
+              <>
+                <FontAwesomeIcon icon={faTrash} className="me-2" />
+                Trash
+              </>
+            )}
+            {folder === EmailFolder.Spam && (
+              <>
+                <FontAwesomeIcon
+                  icon={faExclamationTriangle}
+                  className="me-2"
+                />
+                Spam
+              </>
+            )}
+            {folder === EmailFolder.Archive && (
+              <>
+                <FontAwesomeIcon icon={faArchive} className="me-2" />
+                Archive
+              </>
+            )}
           </strong>
           <Badge bg="secondary" className="ms-2">
             {emails.length}
@@ -202,7 +248,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         </div>
         <ButtonGroup size="sm">
           <Button variant="outline-secondary" onClick={() => refetch()}>
-            🔄 Refresh
+            <FontAwesomeIcon icon={faSync} className="me-1" />
+            Refresh
           </Button>
         </ButtonGroup>
       </Toolbar>
@@ -210,7 +257,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       <EmailListWrapper>
         {emails.length === 0 ? (
           <EmptyState>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📭</div>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
+              <FontAwesomeIcon icon={faEnvelopeOpen} />
+            </div>
             <div>No emails in this folder</div>
           </EmptyState>
         ) : (
@@ -229,7 +278,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                         handleStarToggle(e, email.id, email.isStarred)
                       }
                     >
-                      {email.isStarred ? '★' : '☆'}
+                      <FontAwesomeIcon
+                        icon={email.isStarred ? faStarSolid : faStarRegular}
+                      />
                     </StarButton>
                     <SenderName>
                       {email.fromName || email.fromAddress}

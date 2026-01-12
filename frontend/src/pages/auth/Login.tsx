@@ -5,6 +5,8 @@ import { Link, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { useAuth } from '../../contexts/AuthContext';
 import { LOGIN_MUTATION } from './queries';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faEnvelope } from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
   min-height: 100vh;
@@ -73,7 +75,10 @@ export function Login() {
       <Container>
         <LoginCard className="mx-auto">
           <Card.Body className="p-5">
-            <Logo>📧 StacksMail</Logo>
+            <Logo>
+              <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+              StacksMail
+            </Logo>
             <Tagline>Sign in to your account</Tagline>
 
             {error && (

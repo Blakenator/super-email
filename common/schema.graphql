@@ -55,6 +55,8 @@ type EmailAccount implements BaseEntityProps {
   accountType: EmailAccountType!
   useSsl: Boolean!
   lastSyncedAt: Date
+  defaultSmtpProfileId: String
+  defaultSmtpProfile: SmtpProfile
 }
 
 input CreateEmailAccountInput {
@@ -66,6 +68,7 @@ input CreateEmailAccountInput {
   password: String!
   accountType: EmailAccountType!
   useSsl: Boolean!
+  defaultSmtpProfileId: String
 }
 
 input UpdateEmailAccountInput {
@@ -76,6 +79,7 @@ input UpdateEmailAccountInput {
   username: String
   password: String
   useSsl: Boolean
+  defaultSmtpProfileId: String
 }
 
 # ============ SMTP Profiles ============
@@ -184,6 +188,30 @@ input SyncEmailAccountInput {
   emailAccountId: String!
 }
 
+# ============ Test Connection ============
+
+type TestConnectionResult {
+  success: Boolean!
+  message: String!
+}
+
+input TestEmailAccountConnectionInput {
+  host: String!
+  port: Int!
+  username: String!
+  password: String!
+  accountType: EmailAccountType!
+  useSsl: Boolean!
+}
+
+input TestSmtpConnectionInput {
+  host: String!
+  port: Int!
+  username: String!
+  password: String!
+  useSsl: Boolean!
+}
+
 # ============ Queries ============
 
 type Query {
@@ -221,6 +249,10 @@ type Mutation {
   createSmtpProfile(input: CreateSmtpProfileInput!): SmtpProfile!
   updateSmtpProfile(input: UpdateSmtpProfileInput!): SmtpProfile!
   deleteSmtpProfile(id: String!): Boolean!
+
+  # Test Connections
+  testEmailAccountConnection(input: TestEmailAccountConnectionInput!): TestConnectionResult!
+  testSmtpConnection(input: TestSmtpConnectionInput!): TestConnectionResult!
 
   # Emails
   sendEmail(input: ComposeEmailInput!): Email!

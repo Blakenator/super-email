@@ -43,6 +43,7 @@ export type ComposeEmailInput = {
 
 export type CreateEmailAccountInput = {
   accountType: EmailAccountType;
+  defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
   email: Scalars['String']['input'];
   host: Scalars['String']['input'];
   name: Scalars['String']['input'];
@@ -91,6 +92,8 @@ export type EmailAccount = BaseEntityProps & {
   __typename?: 'EmailAccount';
   accountType: EmailAccountType;
   createdAt?: Maybe<Scalars['Date']['output']>;
+  defaultSmtpProfile?: Maybe<SmtpProfile>;
+  defaultSmtpProfileId?: Maybe<Scalars['String']['output']>;
   email: Scalars['String']['output'];
   host: Scalars['String']['output'];
   id: Scalars['String']['output'];
@@ -145,6 +148,8 @@ export type Mutation = {
   sendEmail: Email;
   signUp: AuthPayload;
   syncEmailAccount: Scalars['Boolean']['output'];
+  testEmailAccountConnection: TestConnectionResult;
+  testSmtpConnection: TestConnectionResult;
   updateEmail: Email;
   updateEmailAccount: EmailAccount;
   updateSmtpProfile: SmtpProfile;
@@ -193,6 +198,16 @@ export type MutationSignUpArgs = {
 
 export type MutationSyncEmailAccountArgs = {
   input: SyncEmailAccountInput;
+};
+
+
+export type MutationTestEmailAccountConnectionArgs = {
+  input: TestEmailAccountConnectionInput;
+};
+
+
+export type MutationTestSmtpConnectionArgs = {
+  input: TestSmtpConnectionInput;
 };
 
 
@@ -272,7 +287,31 @@ export type SyncEmailAccountInput = {
   emailAccountId: Scalars['String']['input'];
 };
 
+export type TestConnectionResult = {
+  __typename?: 'TestConnectionResult';
+  message: Scalars['String']['output'];
+  success: Scalars['Boolean']['output'];
+};
+
+export type TestEmailAccountConnectionInput = {
+  accountType: EmailAccountType;
+  host: Scalars['String']['input'];
+  password: Scalars['String']['input'];
+  port: Scalars['Int']['input'];
+  useSsl: Scalars['Boolean']['input'];
+  username: Scalars['String']['input'];
+};
+
+export type TestSmtpConnectionInput = {
+  host: Scalars['String']['input'];
+  password: Scalars['String']['input'];
+  port: Scalars['Int']['input'];
+  useSsl: Scalars['Boolean']['input'];
+  username: Scalars['String']['input'];
+};
+
 export type UpdateEmailAccountInput = {
+  defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
   host?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['String']['input'];
   name?: InputMaybe<Scalars['String']['input']>;
@@ -416,6 +455,9 @@ export type ResolversTypes = ResolversObject<{
   SmtpProfile: ResolverTypeWrapper<SmtpProfile>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   SyncEmailAccountInput: SyncEmailAccountInput;
+  TestConnectionResult: ResolverTypeWrapper<TestConnectionResult>;
+  TestEmailAccountConnectionInput: TestEmailAccountConnectionInput;
+  TestSmtpConnectionInput: TestSmtpConnectionInput;
   UpdateEmailAccountInput: UpdateEmailAccountInput;
   UpdateEmailInput: UpdateEmailInput;
   UpdateSmtpProfileInput: UpdateSmtpProfileInput;
@@ -443,6 +485,9 @@ export type ResolversParentTypes = ResolversObject<{
   SmtpProfile: SmtpProfile;
   String: Scalars['String']['output'];
   SyncEmailAccountInput: SyncEmailAccountInput;
+  TestConnectionResult: TestConnectionResult;
+  TestEmailAccountConnectionInput: TestEmailAccountConnectionInput;
+  TestSmtpConnectionInput: TestSmtpConnectionInput;
   UpdateEmailAccountInput: UpdateEmailAccountInput;
   UpdateEmailInput: UpdateEmailInput;
   UpdateSmtpProfileInput: UpdateSmtpProfileInput;
@@ -489,6 +534,8 @@ export type EmailResolvers<ContextType = MyContext, ParentType extends Resolvers
 export type EmailAccountResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['EmailAccount'] = ResolversParentTypes['EmailAccount']> = ResolversObject<{
   accountType?: Resolver<ResolversTypes['EmailAccountType'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  defaultSmtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
+  defaultSmtpProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -511,6 +558,8 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   sendEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSendEmailArgs, 'input'>>;
   signUp?: Resolver<ResolversTypes['AuthPayload'], ParentType, ContextType, RequireFields<MutationSignUpArgs, 'input'>>;
   syncEmailAccount?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationSyncEmailAccountArgs, 'input'>>;
+  testEmailAccountConnection?: Resolver<ResolversTypes['TestConnectionResult'], ParentType, ContextType, RequireFields<MutationTestEmailAccountConnectionArgs, 'input'>>;
+  testSmtpConnection?: Resolver<ResolversTypes['TestConnectionResult'], ParentType, ContextType, RequireFields<MutationTestSmtpConnectionArgs, 'input'>>;
   updateEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationUpdateEmailArgs, 'input'>>;
   updateEmailAccount?: Resolver<ResolversTypes['EmailAccount'], ParentType, ContextType, RequireFields<MutationUpdateEmailAccountArgs, 'input'>>;
   updateSmtpProfile?: Resolver<ResolversTypes['SmtpProfile'], ParentType, ContextType, RequireFields<MutationUpdateSmtpProfileArgs, 'input'>>;
@@ -541,6 +590,11 @@ export type SmtpProfileResolvers<ContextType = MyContext, ParentType extends Res
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type TestConnectionResultResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['TestConnectionResult'] = ResolversParentTypes['TestConnectionResult']> = ResolversObject<{
+  message?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  success?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+}>;
+
 export type UserResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['User'] = ResolversParentTypes['User']> = ResolversObject<{
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -562,6 +616,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   SmtpProfile?: SmtpProfileResolvers<ContextType>;
+  TestConnectionResult?: TestConnectionResultResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
 }>;
 

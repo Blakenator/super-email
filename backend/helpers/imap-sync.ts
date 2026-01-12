@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export interface SyncResult {
   synced: number;
+  skipped: number;
   errors: string[];
 }
 
@@ -15,7 +16,7 @@ export interface SyncResult {
 export async function syncEmailsFromImapAccount(
   emailAccount: EmailAccount,
 ): Promise<SyncResult> {
-  const result: SyncResult = { synced: 0, errors: [] };
+  const result: SyncResult = { synced: 0, skipped: 0, errors: [] };
 
   const client = new ImapFlow({
     host: emailAccount.host,
@@ -55,7 +56,9 @@ export async function syncEmailsFromImapAccount(
     // Handle case where search returns false (no results)
     const messages = searchResult === false ? [] : searchResult;
 
-    console.log(`Found ${messages.length} messages since ${sinceDate.toISOString()}`);
+    console.log(
+      `Found ${messages.length} messages since ${sinceDate.toISOString()}`,
+    );
 
     if (messages.length === 0) {
       await client.logout();
@@ -85,10 +88,12 @@ export async function syncEmailsFromImapAccount(
           where: {
             emailAccountId: emailAccount.id,
             messageId: envelopeMessageId,
+            folder: EmailFolder.INBOX,
           },
         });
 
         if (existingEmail) {
+          result.skipped++;
           continue; // Skip already synced emails
         }
 
@@ -100,13 +105,17 @@ export async function syncEmailsFromImapAccount(
         result.synced++;
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        result.errors.push(`Failed to process message UID ${message.uid}: ${errorMsg}`);
+        result.errors.push(
+          `Failed to process message UID ${message.uid}: ${errorMsg}`,
+        );
         console.error(`Error processing message:`, err);
       }
     }
 
     await client.logout();
-    console.log(`Sync complete: ${result.synced} emails synced`);
+    console.log(
+      `Sync complete: ${result.synced} emails synced, ${result.skipped} emails skipped`,
+    );
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     result.errors.push(`IMAP connection error: ${errorMsg}`);
@@ -149,7 +158,8 @@ async function createEmailFromParsed(
     : null;
 
   // Generate a message ID if not present
-  const messageId = parsed.messageId || envelopeMessageId || `generated-${uuidv4()}`;
+  const messageId =
+    parsed.messageId || envelopeMessageId || `generated-${uuidv4()}`;
 
   const email = await Email.create({
     emailAccountId,
