@@ -15,6 +15,7 @@ import { Inbox } from './pages/inbox/Inbox';
 import { StarredInbox } from './pages/inbox/StarredInbox';
 import { Compose } from './pages/compose/Compose';
 import { Settings } from './pages/settings/Settings';
+import { Contacts } from './pages/contacts/Contacts';
 import { EmailFolder } from './__generated__/graphql';
 import { useQuery } from '@apollo/client/react';
 import { GET_EMAIL_COUNT_QUERY } from './pages/inbox/queries';
@@ -30,6 +31,7 @@ import {
   faCog,
   faPen,
   faEnvelope,
+  faAddressBook,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -196,6 +198,20 @@ function AuthenticatedApp() {
             <Nav.Item>
               <StyledNavLink
                 as={Link}
+                to="/contacts"
+                $active={location.pathname === '/contacts'}
+              >
+                <span>
+                  <NavIcon>
+                    <FontAwesomeIcon icon={faAddressBook} />
+                  </NavIcon>
+                  Contacts
+                </span>
+              </StyledNavLink>
+            </Nav.Item>
+            <Nav.Item>
+              <StyledNavLink
+                as={Link}
                 to="/settings"
                 $active={location.pathname === '/settings'}
               >
@@ -230,6 +246,7 @@ function AuthenticatedApp() {
               element={<Inbox folder={EmailFolder.Trash} />}
             />
             <Route path="/compose" element={<Compose />} />
+            <Route path="/contacts" element={<Contacts />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/inbox" replace />} />
           </Routes>

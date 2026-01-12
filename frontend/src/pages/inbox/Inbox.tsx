@@ -8,6 +8,9 @@ import {
   Alert,
   ToggleButtonGroup,
   ToggleButton,
+  Form,
+  InputGroup,
+  Dropdown,
 } from 'react-bootstrap';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router';
@@ -32,7 +35,16 @@ import {
   faEnvelopeOpen,
   faList,
   faBars,
+  faSearch,
+  faCheckSquare,
+  faStar,
+  faEnvelope,
+  faTimes,
 } from '@fortawesome/free-solid-svg-icons';
+import {
+  faSquare,
+  faCheckSquare as faCheckSquareRegular,
+} from '@fortawesome/free-regular-svg-icons';
 
 type ViewMode = 'spacious' | 'dense';
 
@@ -52,6 +64,8 @@ const PageToolbar = styled.div`
   background: ${({ theme }) => theme.colors.backgroundWhite};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   flex-shrink: 0;
+  gap: ${({ theme }) => theme.spacing.md};
+  flex-wrap: wrap;
 `;
 
 const PageTitle = styled.div`
@@ -62,11 +76,44 @@ const PageTitle = styled.div`
   font-weight: 600;
 `;
 
+const SearchWrapper = styled.div`
+  flex: 1;
+  max-width: 400px;
+`;
+
+const ToolbarActions = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.sm};
+  align-items: center;
+`;
+
 const TabsWrapper = styled.div`
   padding: 0 ${({ theme }) => theme.spacing.md};
   background: ${({ theme }) => theme.colors.backgroundWhite};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   flex-shrink: 0;
+`;
+
+const BulkActionsBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.md};
+  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.lg};
+  background: ${({ theme }) => theme.colors.primary}10;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  flex-shrink: 0;
+`;
+
+const SelectAllCheckbox = styled.div`
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: ${({ theme }) => theme.spacing.xs};
+  color: ${({ theme }) => theme.colors.primary};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primaryDark};
+  }
 `;
 
 const TrashWarning = styled(Alert)`
@@ -98,6 +145,7 @@ interface InboxProps {
 export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const navigate = useNavigate();
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('inboxViewMode');
     return (saved as ViewMode) || 'spacious';
@@ -121,19 +169,37 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     pageSize,
     activeAccountTab,
     showTabs,
+    searchQuery,
+    selectedIds,
+    allSelected,
+    someSelected,
     setCurrentPage,
     setActiveAccountTab,
     setPageSize,
+    setSearchQuery,
     handleStarToggle,
     handleMarkRead,
     handleDelete,
     handleRefresh,
+    handleSelectEmail,
+    handleSelectAll,
+    handleBulkMarkRead,
+    handleBulkStar,
+    handleBulkDelete,
   } = useInboxEmails(folder);
 
   // Reset selected email when folder or tab changes
   useEffect(() => {
     setSelectedEmailId(null);
   }, [folder, activeAccountTab]);
+
+  // Sync search input with debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchInput, setSearchQuery]);
 
   const handleEmailClick = async (email: {
     id: string;
@@ -218,6 +284,11 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     setSelectedEmailId(null);
   };
 
+  const clearSearch = () => {
+    setSearchInput('');
+    setSearchQuery('');
+  };
+
   // Show email view when an email is selected
   if (selectedEmailId) {
     return (
@@ -230,6 +301,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   }
 
   const config = FOLDER_CONFIG[folder];
+  const hasSelection = selectedIds.size > 0;
 
   return (
     <PageWrapper>
@@ -239,7 +311,26 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
           {config.label}
           <Badge bg="secondary">{totalCount}</Badge>
         </PageTitle>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+
+        <SearchWrapper>
+          <InputGroup size="sm">
+            <InputGroup.Text>
+              <FontAwesomeIcon icon={faSearch} />
+            </InputGroup.Text>
+            <Form.Control
+              placeholder="Search emails..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+            {searchInput && (
+              <Button variant="outline-secondary" onClick={clearSearch}>
+                <FontAwesomeIcon icon={faTimes} />
+              </Button>
+            )}
+          </InputGroup>
+        </SearchWrapper>
+
+        <ToolbarActions>
           <ToggleButtonGroup
             type="radio"
             name="viewMode"
@@ -273,7 +364,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             <FontAwesomeIcon icon={faSync} spin={syncing} className="me-1" />
             {syncing ? 'Syncing...' : 'Refresh'}
           </Button>
-        </div>
+        </ToolbarActions>
       </PageToolbar>
 
       {showTabs && (
@@ -295,6 +386,66 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         </TabsWrapper>
       )}
 
+      {/* Bulk Actions Bar */}
+      <BulkActionsBar>
+        <SelectAllCheckbox onClick={handleSelectAll}>
+          <FontAwesomeIcon
+            icon={
+              allSelected
+                ? faCheckSquare
+                : someSelected
+                  ? faCheckSquareRegular
+                  : faSquare
+            }
+            size="lg"
+          />
+        </SelectAllCheckbox>
+
+        {hasSelection ? (
+          <>
+            <span>{selectedIds.size} selected</span>
+            <ButtonGroup size="sm">
+              <Button
+                variant="outline-secondary"
+                onClick={() => handleBulkMarkRead(true)}
+                title="Mark as read"
+              >
+                <FontAwesomeIcon icon={faEnvelopeOpen} className="me-1" />
+                Read
+              </Button>
+              <Button
+                variant="outline-secondary"
+                onClick={() => handleBulkMarkRead(false)}
+                title="Mark as unread"
+              >
+                <FontAwesomeIcon icon={faEnvelope} className="me-1" />
+                Unread
+              </Button>
+              <Button
+                variant="outline-secondary"
+                onClick={() => handleBulkStar(true)}
+                title="Star"
+              >
+                <FontAwesomeIcon icon={faStar} className="me-1" />
+                Star
+              </Button>
+              <Button
+                variant="outline-danger"
+                onClick={handleBulkDelete}
+                title="Delete"
+              >
+                <FontAwesomeIcon icon={faTrash} className="me-1" />
+                Delete
+              </Button>
+            </ButtonGroup>
+          </>
+        ) : (
+          <span className="text-muted">
+            Select emails to perform bulk actions
+          </span>
+        )}
+      </BulkActionsBar>
+
       {folder === EmailFolder.Trash && emails.length > 0 && (
         <TrashWarning variant="warning">
           <FontAwesomeIcon icon={faTrash} className="me-2" />
@@ -305,18 +456,28 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       <EmailListContainer>
         {loading && emails.length === 0 ? (
           <LoadingSpinner
-            message={`Loading ${config.label.toLowerCase()}...`}
+            message={
+              searchQuery
+                ? 'Searching...'
+                : `Loading ${config.label.toLowerCase()}...`
+            }
           />
         ) : emails.length === 0 ? (
           <EmptyState
-            icon={faEnvelopeOpen}
-            title={`No emails in ${config.label.toLowerCase()}`}
+            icon={searchQuery ? faSearch : faEnvelopeOpen}
+            title={
+              searchQuery
+                ? 'No results found'
+                : `No emails in ${config.label.toLowerCase()}`
+            }
             description={
-              folder === EmailFolder.Inbox
-                ? 'Your inbox is empty. New emails will appear here.'
-                : folder === EmailFolder.Trash
-                  ? 'Your trash is empty.'
-                  : undefined
+              searchQuery
+                ? 'Try adjusting your search query'
+                : folder === EmailFolder.Inbox
+                  ? 'Your inbox is empty. New emails will appear here.'
+                  : folder === EmailFolder.Trash
+                    ? 'Your trash is empty.'
+                    : undefined
             }
           />
         ) : (
@@ -330,6 +491,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                 email={email}
                 account={account}
                 showAccount={activeAccountTab === 'all'}
+                isSelected={selectedIds.has(email.id)}
+                onSelect={(selected) => handleSelectEmail(email.id, selected)}
                 onEmailClick={handleEmailClick}
                 onStarToggle={handleStarToggle}
                 onMarkRead={handleMarkRead}

@@ -1,5 +1,7 @@
 // Core UI Components
 export * from './BackButton';
+export * from './ContactFormModal';
+export * from './EmailChipInput';
 export * from './EmptyState';
 export * from './ErrorBoundary';
 export * from './HtmlViewer';

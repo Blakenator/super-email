@@ -3,6 +3,7 @@ import { User } from './models/user.model.js';
 import { EmailAccount } from './models/email-account.model.js';
 import { SmtpProfile } from './models/smtp-profile.model.js';
 import { Email } from './models/email.model.js';
+import { Contact } from './models/contact.model.js';
 
 export const sequelize = new Sequelize({
   dialect: 'postgres',
@@ -11,6 +12,6 @@ export const sequelize = new Sequelize({
   password: 'password',
   host: 'localhost',
   port: 5433,
-  models: [User, EmailAccount, SmtpProfile, Email],
+  models: [User, EmailAccount, SmtpProfile, Email, Contact],
   logging: false,
 });

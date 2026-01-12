@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Modal } from 'react-bootstrap';
+import { Badge, Button, Modal, Form } from 'react-bootstrap';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -11,24 +11,42 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 
-const EmailItemWrapper = styled.div<{ $isUnread: boolean }>`
+const EmailItemWrapper = styled.div<{ $isUnread: boolean; $isSelected: boolean }>`
   cursor: pointer;
+  display: flex;
+  align-items: flex-start;
+  gap: ${({ theme }) => theme.spacing.sm};
   padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   background: ${(props) =>
-    props.$isUnread
-      ? props.theme.colors.unreadBackground
-      : props.theme.colors.backgroundWhite};
+    props.$isSelected
+      ? `${props.theme.colors.primary}15`
+      : props.$isUnread
+        ? props.theme.colors.unreadBackground
+        : props.theme.colors.backgroundWhite};
   font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
   position: relative;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.backgroundHover};
+    background: ${({ theme, $isSelected }) =>
+      $isSelected ? `${theme.colors.primary}20` : theme.colors.backgroundHover};
   }
 
   &:hover .quick-actions {
     opacity: 1;
   }
+`;
+
+const SelectionCheckbox = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding-top: 2px;
+`;
+
+const EmailContent = styled.div`
+  flex: 1;
+  min-width: 0;
 `;
 
 const EmailMeta = styled.div`
@@ -80,6 +98,12 @@ const AccountBadge = styled(Badge)`
   margin-left: ${({ theme }) => theme.spacing.sm};
 `;
 
+const ThreadBadge = styled(Badge)`
+  font-size: 0.65rem;
+  margin-left: ${({ theme }) => theme.spacing.xs};
+  background-color: ${({ theme }) => theme.colors.primary} !important;
+`;
+
 const QuickActions = styled.div`
   position: absolute;
   right: ${({ theme }) => theme.spacing.lg};
@@ -116,6 +140,8 @@ interface Email {
   ccAddresses?: string[] | null;
   bccAddresses?: string[] | null;
   inReplyTo?: string | null;
+  threadId?: string | null;
+  threadCount?: number | null;
 }
 
 interface Account {
@@ -128,6 +154,8 @@ interface EmailListItemProps {
   email: Email;
   account?: Account;
   showAccount: boolean;
+  isSelected: boolean;
+  onSelect: (selected: boolean) => void;
   onEmailClick: (email: Email) => void;
   onStarToggle: (emailId: string, isStarred: boolean) => void;
   onMarkRead: (emailId: string, isRead: boolean) => void;
@@ -153,6 +181,8 @@ export function EmailListItem({
   email,
   account,
   showAccount,
+  isSelected,
+  onSelect,
   onEmailClick,
   onStarToggle,
   onMarkRead,
@@ -190,28 +220,47 @@ export function EmailListItem({
     <>
       <EmailItemWrapper
         $isUnread={!email.isRead}
+        $isSelected={isSelected}
         onClick={() => onEmailClick(email)}
       >
-        <EmailMeta>
-          <div>
-            <StarButton $isStarred={email.isStarred} onClick={handleStarClick}>
-              <FontAwesomeIcon
-                icon={email.isStarred ? faStarSolid : faStarRegular}
-              />
-            </StarButton>
-            <SenderName>{email.fromName || email.fromAddress}</SenderName>
-            {showAccount && account && (
-              <AccountBadge bg="light" text="dark">
-                {account.name || account.email.split('@')[0]}
-              </AccountBadge>
+        <SelectionCheckbox>
+          <Form.Check
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onSelect(e.target.checked);
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </SelectionCheckbox>
+        <EmailContent>
+          <EmailMeta>
+            <div>
+              <StarButton $isStarred={email.isStarred} onClick={handleStarClick}>
+                <FontAwesomeIcon
+                  icon={email.isStarred ? faStarSolid : faStarRegular}
+                />
+              </StarButton>
+              <SenderName>{email.fromName || email.fromAddress}</SenderName>
+              {showAccount && account && (
+                <AccountBadge bg="light" text="dark">
+                  {account.name || account.email.split('@')[0]}
+                </AccountBadge>
+              )}
+            </div>
+            <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
+          </EmailMeta>
+          <Subject>
+            {email.subject}
+            {email.threadCount && email.threadCount > 1 && (
+              <ThreadBadge>{email.threadCount}</ThreadBadge>
             )}
-          </div>
-          <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
-        </EmailMeta>
-        <Subject>{email.subject}</Subject>
-        <Preview>
-          {email.textBody?.substring(0, 100) || '(No content)'}
-        </Preview>
+          </Subject>
+          <Preview>
+            {email.textBody?.substring(0, 100) || '(No content)'}
+          </Preview>
+        </EmailContent>
 
         <QuickActions className="quick-actions">
           <ActionButton

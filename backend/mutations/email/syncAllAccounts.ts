@@ -1,7 +1,7 @@
 import { makeMutation } from '../../types.js';
 import { EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
-import { syncEmailsFromAccount } from '../../helpers/email.js';
+import { startAsyncEmailSync } from '../../helpers/email.js';
 
 export const syncAllAccounts = makeMutation(
   'syncAllAccounts',
@@ -16,18 +16,16 @@ export const syncAllAccounts = makeMutation(
       return true;
     }
 
-    const results = await Promise.allSettled(
-      accounts.map(async (account) => {
-        console.log(`Syncing account: ${account.email}`);
-        const result = await syncEmailsFromAccount(account);
-        await account.update({ lastSyncedAt: new Date() });
-        return result;
-      }),
-    );
-
-    const failures = results.filter((r) => r.status === 'rejected');
-    if (failures.length > 0) {
-      console.error('Some accounts failed to sync:', failures);
+    // Start async syncs for all accounts (don't block)
+    for (const account of accounts) {
+      if (!account.syncId) {
+        console.log(`[syncAllAccounts] Starting sync for account: ${account.email}`);
+        startAsyncEmailSync(account).catch((err) => {
+          console.error(`[syncAllAccounts] Failed to start sync for ${account.email}:`, err);
+        });
+      } else {
+        console.log(`[syncAllAccounts] Account ${account.email} is already syncing`);
+      }
     }
 
     return true;

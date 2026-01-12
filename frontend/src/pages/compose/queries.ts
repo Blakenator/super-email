@@ -6,6 +6,7 @@ export const GET_SMTP_PROFILES_QUERY = gql(`
       id
       name
       email
+      alias
       isDefault
     }
   }

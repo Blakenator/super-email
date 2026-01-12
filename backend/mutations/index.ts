@@ -12,9 +12,15 @@ import { deleteSmtpProfile } from './smtp-profile/deleteSmtpProfile.js';
 import { testSmtpConnection } from './smtp-profile/testSmtpConnection.js';
 import { sendEmail } from './email/sendEmail.js';
 import { saveDraft } from './email/saveDraft.js';
-import { updateEmail } from './email/updateEmail.js';
-import { deleteEmail } from './email/deleteEmail.js';
+import { bulkUpdateEmails } from './email/bulkUpdateEmails.js';
+import { bulkDeleteEmails } from './email/bulkDeleteEmails.js';
+import { forwardEmail } from './email/forwardEmail.js';
+import { unsubscribe } from './email/unsubscribe.js';
 import { syncAllAccounts } from './email/syncAllAccounts.js';
+import { createContact } from './contact/createContact.js';
+import { updateContact } from './contact/updateContact.js';
+import { deleteContact } from './contact/deleteContact.js';
+import { createContactFromEmail } from './contact/createContactFromEmail.js';
 
 export const MutationResolvers: AllMutations = {
   signUp,
@@ -30,7 +36,13 @@ export const MutationResolvers: AllMutations = {
   testSmtpConnection,
   sendEmail,
   saveDraft,
-  updateEmail,
-  deleteEmail,
+  bulkUpdateEmails,
+  bulkDeleteEmails,
+  forwardEmail,
+  unsubscribe,
   syncAllAccounts,
+  createContact,
+  updateContact,
+  deleteContact,
+  createContactFromEmail,
 };

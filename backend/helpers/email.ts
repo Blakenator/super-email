@@ -93,49 +93,25 @@ export async function sendEmail(
 }
 
 /**
- * Sync emails from a configured email account (IMAP or POP3) - synchronous
- */
-export async function syncEmailsFromAccount(
-  emailAccount: EmailAccount,
-): Promise<SyncResult> {
-  if (emailAccount.accountType === EmailAccountType.IMAP) {
-    return syncEmailsFromImapAccount(emailAccount);
-  } else if (emailAccount.accountType === EmailAccountType.POP3) {
-    console.log(
-      `[Email] POP3 sync not yet implemented for account ${emailAccount.id}`,
-    );
-    return {
-      synced: 0,
-      skipped: 0,
-      errors: ['POP3 sync not yet implemented'],
-      hasMore: false,
-    };
-  }
-
-  return {
-    synced: 0,
-    skipped: 0,
-    errors: ['Unknown account type'],
-    hasMore: false,
-  };
-}
-
-/**
  * Start async sync - returns immediately while sync continues in background
  */
 export async function startAsyncEmailSync(
   emailAccount: EmailAccount,
-): Promise<void> {
-  if (emailAccount.isSyncing) {
+): Promise<boolean> {
+  // Check if already syncing using syncId
+  if (emailAccount.syncId) {
     console.log(`[Email] Account ${emailAccount.email} is already syncing`);
-    return;
+    return false;
   }
 
   if (emailAccount.accountType === EmailAccountType.IMAP) {
-    await startAsyncSync(emailAccount);
+    return await startAsyncSync(emailAccount);
   } else if (emailAccount.accountType === EmailAccountType.POP3) {
     await emailAccount.update({
       syncStatus: 'POP3 sync not yet implemented',
     });
+    return false;
   }
+
+  return false;
 }

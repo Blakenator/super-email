@@ -55,6 +55,27 @@ const dateScalar = new GraphQLScalarType({
   },
 });
 
+// Custom JSON scalar for arbitrary JSON data (like email headers)
+const jsonScalar = new GraphQLScalarType({
+  name: 'JSON',
+  description: 'Arbitrary JSON scalar type',
+  serialize(value) {
+    return value;
+  },
+  parseValue(value) {
+    return value;
+  },
+  parseLiteral(ast) {
+    if (ast.kind === Kind.STRING) {
+      return JSON.parse(ast.value);
+    }
+    if (ast.kind === Kind.OBJECT) {
+      return ast;
+    }
+    return null;
+  },
+});
+
 // Logging plugin for Apollo Server
 const loggingPlugin: ApolloServerPlugin<BackendContext> = {
   async requestDidStart({ request }) {
@@ -76,11 +97,30 @@ const loggingPlugin: ApolloServerPlugin<BackendContext> = {
   },
 };
 
-const resolvers: AllBackendResolvers = {
+// Import Email model for field resolvers
+import { Email } from './db/models/index.js';
+
+const resolvers = {
   Query: QueryResolvers,
   Mutation: MutationResolvers,
   Date: dateScalar,
-};
+  JSON: jsonScalar,
+  // Field resolvers for computed fields
+  EmailAccount: {
+    // Compute isSyncing from syncId presence
+    isSyncing: (parent: any) => !!parent.syncId,
+  },
+  Email: {
+    // Compute thread count - number of emails in the same thread
+    threadCount: async (parent: any) => {
+      if (!parent.threadId) return 1;
+      const count = await Email.count({
+        where: { threadId: parent.threadId },
+      });
+      return count;
+    },
+  },
+} as AllBackendResolvers;
 
 const server = new ApolloServer<BackendContext>({
   typeDefs,

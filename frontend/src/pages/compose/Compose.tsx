@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   Container,
@@ -22,8 +22,8 @@ import {
 import {
   LoadingSpinner,
   RichTextEditor,
-  HtmlViewer,
   BackButton,
+  EmailChipInput,
 } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -32,6 +32,7 @@ import {
   faPaperPlane,
   faSave,
   faTimes,
+  faShare,
 } from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
@@ -78,17 +79,6 @@ const ComposeCard = styled(Card)`
   border-radius: ${({ theme }) => theme.borderRadius.lg};
 `;
 
-const QuotedContent = styled.div`
-  margin-top: ${({ theme }) => theme.spacing.md};
-  padding: ${({ theme }) => theme.spacing.md};
-  background: ${({ theme }) => theme.colors.background};
-  border-left: 3px solid ${({ theme }) => theme.colors.primary};
-  border-radius: 0 ${({ theme }) => theme.borderRadius.md}
-    ${({ theme }) => theme.borderRadius.md} 0;
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textSecondary};
-`;
-
 const CcBccToggle = styled.span`
   color: ${({ theme }) => theme.colors.primary};
   cursor: pointer;
@@ -100,6 +90,14 @@ const CcBccToggle = styled.span`
   }
 `;
 
+interface ThreadEmailInfo {
+  from: string;
+  fromAddress: string;
+  date: string;
+  body: string;
+  htmlBody?: string;
+}
+
 interface ReplyToState {
   to: string;
   subject: string;
@@ -109,6 +107,7 @@ interface ReplyToState {
   originalFrom: string;
   originalDate: string;
   emailAccountId?: string;
+  threadEmails?: ThreadEmailInfo[]; // All emails in thread for full context
 }
 
 interface DraftState {
@@ -128,14 +127,31 @@ interface DraftState {
   inReplyTo?: string;
 }
 
+interface ForwardState {
+  originalEmailId: string;
+  subject: string;
+  originalBody?: string;
+  originalHtmlBody?: string;
+  originalFrom: string;
+  originalFromAddress: string;
+  originalDate: string;
+  originalTo?: string[];
+  originalCc?: string[] | null;
+  emailAccountId?: string;
+}
+
 export function Compose() {
   const navigate = useNavigate();
   const location = useLocation();
   const replyTo = location.state?.replyTo as ReplyToState | undefined;
   const existingDraft = location.state?.draft as DraftState | undefined;
+  const forward = location.state?.forward as ForwardState | undefined;
 
   const [emailAccountId, setEmailAccountId] = useState(
-    existingDraft?.emailAccountId || replyTo?.emailAccountId || '',
+    existingDraft?.emailAccountId ||
+      replyTo?.emailAccountId ||
+      forward?.emailAccountId ||
+      '',
   );
   const [smtpProfileId, setSmtpProfileId] = useState(
     existingDraft?.smtpProfileId || '',
@@ -146,7 +162,7 @@ export function Compose() {
   const [ccAddresses, setCcAddresses] = useState(existingDraft?.cc || '');
   const [bccAddresses, setBccAddresses] = useState(existingDraft?.bcc || '');
   const [subject, setSubject] = useState(
-    existingDraft?.subject || replyTo?.subject || '',
+    existingDraft?.subject || replyTo?.subject || forward?.subject || '',
   );
   const [htmlBody, setHtmlBody] = useState(existingDraft?.htmlBody || '');
   const [textBody, setTextBody] = useState(existingDraft?.body || '');
@@ -177,8 +193,88 @@ export function Compose() {
     );
   }, [toAddresses, ccAddresses, bccAddresses, subject, textBody]);
 
-  // Get original message info for drafts/replies
-  const originalInfo = replyTo || existingDraft;
+  // Get original message info for drafts/replies/forwards
+  const originalInfo = replyTo || existingDraft || forward;
+
+  // Build initial HTML content with quoted reply/forward at the bottom
+  const buildInitialHtml = useCallback(() => {
+    // For existing drafts, use the saved HTML
+    if (existingDraft?.htmlBody) {
+      return existingDraft.htmlBody;
+    }
+
+    // For forwards, include forwarded message in an editable blockquote
+    if (forward && !existingDraft) {
+      const quotedHtml =
+        forward.originalHtmlBody ||
+        `<p>${(forward.originalBody || '').replace(/\n/g, '<br>')}</p>`;
+
+      const dateStr = forward.originalDate
+        ? new Date(forward.originalDate).toLocaleString()
+        : '';
+
+      const originalTo = forward.originalTo?.join(', ') || '';
+      const originalCc = forward.originalCc?.join(', ') || '';
+
+      return `<p><br></p><p><br></p><blockquote style="margin: 0.5rem 0; padding: 0.5rem 1rem; border-left: 3px solid #667eea; background: #f8f9fa; color: #6c757d;">
+<p><strong>---------- Forwarded message ---------</strong></p>
+<p><strong>From:</strong> ${forward.originalFrom} &lt;${forward.originalFromAddress}&gt;</p>
+<p><strong>Date:</strong> ${dateStr}</p>
+<p><strong>Subject:</strong> ${forward.subject.replace('Fwd: ', '')}</p>
+<p><strong>To:</strong> ${originalTo}</p>
+${originalCc ? `<p><strong>Cc:</strong> ${originalCc}</p>` : ''}
+<br>
+${quotedHtml}
+</blockquote>`;
+    }
+
+    // For new replies, include quoted content at the bottom
+    if (replyTo && !existingDraft) {
+      // If we have thread emails, show all of them
+      if (replyTo.threadEmails && replyTo.threadEmails.length > 0) {
+        const threadQuotes = replyTo.threadEmails
+          .map((email) => {
+            const quotedHtml =
+              email.htmlBody ||
+              `<p>${(email.body || '').replace(/\n/g, '<br>')}</p>`;
+            const dateStr = email.date
+              ? new Date(email.date).toLocaleString()
+              : '';
+
+            return `<blockquote style="margin: 0.5rem 0; padding: 0.5rem 1rem; border-left: 3px solid #667eea; background: #f8f9fa; color: #6c757d;">
+<p><strong>On ${dateStr}, ${email.from} wrote:</strong></p>
+${quotedHtml}
+</blockquote>`;
+          })
+          .join('\n');
+
+        return `<p><br></p><p><br></p>${threadQuotes}`;
+      }
+
+      // Fallback to single email reply
+      if (replyTo.originalBody) {
+        const quotedHtml =
+          replyTo.originalHtmlBody ||
+          `<p>${replyTo.originalBody.replace(/\n/g, '<br>')}</p>`;
+
+        const dateStr = replyTo.originalDate
+          ? new Date(replyTo.originalDate).toLocaleString()
+          : '';
+
+        return `<p><br></p><p><br></p><blockquote style="margin: 0.5rem 0; padding: 0.5rem 1rem; border-left: 3px solid #667eea; background: #f8f9fa; color: #6c757d;">
+<p><strong>On ${dateStr}, ${replyTo.originalFrom} wrote:</strong></p>
+${quotedHtml}
+</blockquote>`;
+      }
+    }
+
+    return '';
+  }, [existingDraft, replyTo, forward]);
+
+  const initialEditorHtml = useMemo(
+    () => buildInitialHtml(),
+    [buildInitialHtml],
+  );
 
   const { data: accountsData, loading: accountsLoading } = useQuery(
     GET_EMAIL_ACCOUNTS_QUERY,
@@ -381,6 +477,7 @@ export function Compose() {
   const noAccounts = accounts.length === 0;
   const noProfiles = profiles.length === 0;
   const isReply = !!(replyTo || existingDraft?.inReplyTo);
+  const isForward = !!forward;
   const isDraft = !!existingDraft;
 
   return (
@@ -390,10 +487,16 @@ export function Compose() {
           <BackButton onClick={handleExit} />
           <Title>
             <FontAwesomeIcon
-              icon={isReply ? faReply : faPen}
+              icon={isReply ? faReply : isForward ? faShare : faPen}
               className="me-2"
             />
-            {isReply ? 'Reply' : isDraft ? 'Edit Draft' : 'Compose Email'}
+            {isReply
+              ? 'Reply'
+              : isForward
+                ? 'Forward'
+                : isDraft
+                  ? 'Edit Draft'
+                  : 'Compose Email'}
           </Title>
         </div>
         <HeaderActions>
@@ -495,7 +598,9 @@ export function Compose() {
                         <option value="">Select a profile...</option>
                         {profiles.map((profile) => (
                           <option key={profile.id} value={profile.id}>
-                            {profile.name} &lt;{profile.email}&gt;
+                            {profile.name}
+                            {profile.alias && ` (${profile.alias})`} &lt;
+                            {profile.email}&gt;
                             {profile.isDefault && ' (Default)'}
                           </option>
                         ))}
@@ -513,12 +618,10 @@ export function Compose() {
                       </CcBccToggle>
                     )}
                   </Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="recipient@example.com, another@example.com"
+                  <EmailChipInput
                     value={toAddresses}
-                    onChange={(e) => setToAddresses(e.target.value)}
-                    required
+                    onChange={setToAddresses}
+                    placeholder="Type email or search contacts..."
                   />
                 </Form.Group>
 
@@ -527,22 +630,20 @@ export function Compose() {
                     <Col md={6}>
                       <Form.Group className="mb-3">
                         <Form.Label>CC</Form.Label>
-                        <Form.Control
-                          type="text"
-                          placeholder="cc@example.com"
+                        <EmailChipInput
                           value={ccAddresses}
-                          onChange={(e) => setCcAddresses(e.target.value)}
+                          onChange={setCcAddresses}
+                          placeholder="CC recipients..."
                         />
                       </Form.Group>
                     </Col>
                     <Col md={6}>
                       <Form.Group className="mb-3">
                         <Form.Label>BCC</Form.Label>
-                        <Form.Control
-                          type="text"
-                          placeholder="bcc@example.com"
+                        <EmailChipInput
                           value={bccAddresses}
-                          onChange={(e) => setBccAddresses(e.target.value)}
+                          onChange={setBccAddresses}
+                          placeholder="BCC recipients..."
                         />
                       </Form.Group>
                     </Col>
@@ -563,36 +664,15 @@ export function Compose() {
                   <Form.Label>Message</Form.Label>
                   <RichTextEditor
                     onChange={handleEditorChange}
-                    placeholder="Write your message... (supports markdown: **bold**, *italic*, # headings)"
-                    initialHtml={existingDraft?.htmlBody}
+                    placeholder="Write your message..."
+                    initialHtml={initialEditorHtml}
                     autoFocus
                   />
                   <Form.Text className="text-muted">
-                    Use markdown shortcuts: **bold**, *italic*, # heading, -
-                    list
+                    Format with toolbar or markdown: **bold**, *italic*, #
+                    heading
                   </Form.Text>
                 </Form.Group>
-
-                {originalInfo?.originalBody && (
-                  <QuotedContent>
-                    <strong>
-                      On{' '}
-                      {new Date(
-                        originalInfo.originalDate || '',
-                      ).toLocaleString()}
-                      , {originalInfo.originalFrom} wrote:
-                    </strong>
-                    <div style={{ marginTop: '0.5rem' }}>
-                      {originalInfo.originalHtmlBody ? (
-                        <HtmlViewer html={originalInfo.originalHtmlBody} />
-                      ) : (
-                        <div style={{ whiteSpace: 'pre-wrap' }}>
-                          {originalInfo.originalBody}
-                        </div>
-                      )}
-                    </div>
-                  </QuotedContent>
-                )}
               </Form>
             </Card.Body>
           </ComposeCard>

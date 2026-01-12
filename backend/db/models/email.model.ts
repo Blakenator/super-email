@@ -97,4 +97,25 @@ export class Email extends Model {
 
   @Column({ type: DataType.ARRAY(DataType.TEXT), allowNull: true })
   declare references: string[] | null;
+
+  // Thread ID - the message ID of the first email in the thread
+  // Used for grouping related emails together
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare threadId: string | null;
+
+  // Store all email headers as JSON for future use
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare headers: Record<string, string | string[]> | null;
+
+  // Track if user has unsubscribed via one-click unsubscribe
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare isUnsubscribed: boolean;
+
+  // Store the unsubscribe URL if present in headers
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare unsubscribeUrl: string | null;
+
+  // Store mailto unsubscribe address if present
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare unsubscribeEmail: string | null;
 }

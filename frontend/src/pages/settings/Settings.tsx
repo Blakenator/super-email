@@ -170,6 +170,34 @@ const StepSubtitle = styled.div`
   margin-top: 0.25rem;
 `;
 
+const SyncStatusContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const SyncStatusHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const SyncStatusText = styled.span`
+  font-size: 0.8rem;
+  color: #667eea;
+  font-weight: 500;
+`;
+
+const SyncProgressBar = styled(ProgressBar)`
+  height: 8px;
+  border-radius: 4px;
+  background-color: #e0e0e0 !important;
+
+  .progress-bar {
+    border-radius: 4px;
+  }
+`;
+
 type SaveStep = {
   id: string;
   title: string;
@@ -233,7 +261,10 @@ export function Settings() {
     refetch: refetchEmailAccounts,
     startPolling,
     stopPolling,
-  } = useQuery(GET_EMAIL_ACCOUNTS_QUERY);
+  } = useQuery(GET_EMAIL_ACCOUNTS_QUERY, {
+    // Keep previous data while refetching to prevent flickering
+    notifyOnNetworkStatusChange: false,
+  });
 
   // Poll when any account is syncing
   const isSyncing = emailAccountsData?.getEmailAccounts?.some(
@@ -818,7 +849,7 @@ export function Settings() {
                   </div>
                 </div>
 
-                {emailAccountsLoading ? (
+                {emailAccountsLoading && emailAccounts.length === 0 ? (
                   <div className="text-center py-4">
                     <Spinner animation="border" size="sm" />
                   </div>
@@ -868,54 +899,52 @@ export function Settings() {
                               <span className="text-muted">—</span>
                             )}
                           </td>
-                          <td style={{ minWidth: '200px' }}>
+                          <td style={{ minWidth: '180px', maxWidth: '220px' }}>
                             {account.isSyncing ? (
-                              <div>
-                                <div className="d-flex align-items-center mb-1">
+                              <SyncStatusContainer>
+                                <SyncStatusHeader>
                                   <Spinner
                                     animation="border"
                                     size="sm"
-                                    className="me-2"
+                                    style={{ width: '14px', height: '14px' }}
                                   />
-                                  <small className="text-primary">
-                                    {(
-                                      account.syncStatus || 'Syncing...'
-                                    ).replace(/\s*\(\d+%\)\s*/, '')}
-                                  </small>
-                                </div>
-                                {account.syncProgress !== null && (
-                                  <OverlayTrigger
-                                    placement="top"
-                                    overlay={
-                                      <Tooltip>
-                                        {account.syncProgress}% complete
-                                      </Tooltip>
-                                    }
-                                  >
-                                    <ProgressBar
-                                      now={account.syncProgress}
-                                      variant="primary"
-                                      animated
-                                      style={{ height: '6px' }}
-                                    />
-                                  </OverlayTrigger>
-                                )}
-                              </div>
+                                  <SyncStatusText>Syncing...</SyncStatusText>
+                                </SyncStatusHeader>
+                                {account.syncProgress !== null &&
+                                  account.syncProgress !== undefined && (
+                                    <OverlayTrigger
+                                      placement="top"
+                                      overlay={
+                                        <Tooltip>
+                                          {account.syncProgress}% complete
+                                        </Tooltip>
+                                      }
+                                    >
+                                      <SyncProgressBar
+                                        now={account.syncProgress}
+                                        variant="primary"
+                                        animated
+                                      />
+                                    </OverlayTrigger>
+                                  )}
+                              </SyncStatusContainer>
                             ) : account.lastSyncedAt ? (
                               <div>
-                                <div>
+                                <small>
                                   {new Date(
                                     account.lastSyncedAt,
-                                  ).toLocaleString()}
-                                </div>
-                                {account.syncStatus && (
-                                  <small className="text-muted">
-                                    {account.syncStatus}
-                                  </small>
-                                )}
+                                  ).toLocaleString([], {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </small>
                               </div>
                             ) : (
-                              <span className="text-muted">Never synced</span>
+                              <span className="text-muted small">
+                                Never synced
+                              </span>
                             )}
                           </td>
                           <td>

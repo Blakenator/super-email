@@ -7,6 +7,10 @@ import { getSmtpProfile } from './smtp-profile/getSmtpProfile.js';
 import { getEmails } from './email/getEmails.js';
 import { getEmail } from './email/getEmail.js';
 import { getEmailCount } from './email/getEmailCount.js';
+import { getEmailsByThread } from './email/getEmailsByThread.js';
+import { getContacts } from './contact/getContacts.js';
+import { getContact } from './contact/getContact.js';
+import { searchContacts } from './contact/searchContacts.js';
 
 export const QueryResolvers: AllQueries = {
   me,
@@ -17,4 +21,8 @@ export const QueryResolvers: AllQueries = {
   getEmails,
   getEmail,
   getEmailCount,
+  getEmailsByThread,
+  getContacts,
+  getContact,
+  searchContacts,
 };

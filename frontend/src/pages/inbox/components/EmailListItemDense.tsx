@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Modal } from 'react-bootstrap';
+import { Badge, Button, Modal, Form } from 'react-bootstrap';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -11,28 +11,36 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 
-const DenseRow = styled.div<{ $isUnread: boolean }>`
+const DenseRow = styled.div<{ $isUnread: boolean; $isSelected: boolean }>`
   display: flex;
   align-items: center;
   cursor: pointer;
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
   background: ${(props) =>
-    props.$isUnread
-      ? props.theme.colors.unreadBackground
-      : props.theme.colors.backgroundWhite};
+    props.$isSelected
+      ? `${props.theme.colors.primary}15`
+      : props.$isUnread
+        ? props.theme.colors.unreadBackground
+        : props.theme.colors.backgroundWhite};
   font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
   font-size: ${({ theme }) => theme.fontSizes.sm};
   gap: ${({ theme }) => theme.spacing.sm};
   position: relative;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.backgroundHover};
+    background: ${({ theme, $isSelected }) =>
+      $isSelected ? `${theme.colors.primary}20` : theme.colors.backgroundHover};
   }
 
   &:hover .quick-actions {
     opacity: 1;
   }
+`;
+
+const SelectionCell = styled.div`
+  flex-shrink: 0;
+  width: 20px;
 `;
 
 const StarCell = styled.span<{ $isStarred: boolean }>`
@@ -60,6 +68,8 @@ const SenderCell = styled.span`
 
 const SubjectCell = styled.span`
   flex: 1;
+  display: flex;
+  align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -85,6 +95,13 @@ const DateCell = styled.span`
 const AccountBadge = styled(Badge)`
   font-size: 0.65rem;
   margin-left: ${({ theme }) => theme.spacing.xs};
+`;
+
+const ThreadBadge = styled(Badge)`
+  font-size: 0.55rem;
+  margin-left: ${({ theme }) => theme.spacing.xs};
+  background-color: ${({ theme }) => theme.colors.primary} !important;
+  flex-shrink: 0;
 `;
 
 const QuickActions = styled.div`
@@ -123,6 +140,8 @@ interface Email {
   ccAddresses?: string[] | null;
   bccAddresses?: string[] | null;
   inReplyTo?: string | null;
+  threadId?: string | null;
+  threadCount?: number | null;
 }
 
 interface Account {
@@ -135,6 +154,8 @@ interface EmailListItemDenseProps {
   email: Email;
   account?: Account;
   showAccount: boolean;
+  isSelected: boolean;
+  onSelect: (selected: boolean) => void;
   onEmailClick: (email: Email) => void;
   onStarToggle: (emailId: string, isStarred: boolean) => void;
   onMarkRead: (emailId: string, isRead: boolean) => void;
@@ -160,6 +181,8 @@ export function EmailListItemDense({
   email,
   account,
   showAccount,
+  isSelected,
+  onSelect,
   onEmailClick,
   onStarToggle,
   onMarkRead,
@@ -195,7 +218,22 @@ export function EmailListItemDense({
 
   return (
     <>
-      <DenseRow $isUnread={!email.isRead} onClick={() => onEmailClick(email)}>
+      <DenseRow
+        $isUnread={!email.isRead}
+        $isSelected={isSelected}
+        onClick={() => onEmailClick(email)}
+      >
+        <SelectionCell>
+          <Form.Check
+            type="checkbox"
+            checked={isSelected}
+            onChange={(e) => {
+              e.stopPropagation();
+              onSelect(e.target.checked);
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        </SelectionCell>
         <StarCell $isStarred={email.isStarred} onClick={handleStarClick}>
           <FontAwesomeIcon
             icon={email.isStarred ? faStarSolid : faStarRegular}
@@ -209,7 +247,12 @@ export function EmailListItemDense({
             </AccountBadge>
           )}
         </SenderCell>
-        <SubjectCell>{email.subject}</SubjectCell>
+        <SubjectCell>
+          {email.subject}
+          {email.threadCount && email.threadCount > 1 && (
+            <ThreadBadge>{email.threadCount}</ThreadBadge>
+          )}
+        </SubjectCell>
         <PreviewCell>
           {email.textBody?.substring(0, 60) || '(No content)'}
         </PreviewCell>

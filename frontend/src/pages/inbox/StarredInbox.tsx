@@ -4,14 +4,22 @@ import { ListGroup, Badge, Button, ButtonGroup } from 'react-bootstrap';
 import styled from 'styled-components';
 import {
   GET_STARRED_EMAILS_QUERY,
-  UPDATE_EMAIL_MUTATION,
-  DELETE_EMAIL_MUTATION,
+  BULK_UPDATE_EMAILS_MUTATION,
+  BULK_DELETE_EMAILS_MUTATION,
 } from './queries';
 import { EmailView } from './EmailView';
-import { LoadingSpinner, EmptyState, PageWrapper, PageToolbar, PageContent, PageTitle } from '../../core/components';
+import {
+  LoadingSpinner,
+  EmptyState,
+  PageWrapper,
+  PageToolbar,
+  PageContent,
+  PageTitle,
+} from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSync, faStar as faStarSolid } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
+import toast from 'react-hot-toast';
 
 const EmailItem = styled(ListGroup.Item)<{ $isUnread: boolean }>`
   cursor: pointer;
@@ -19,7 +27,9 @@ const EmailItem = styled(ListGroup.Item)<{ $isUnread: boolean }>`
   border-left: none;
   border-right: none;
   background: ${(props) =>
-    props.$isUnread ? props.theme.colors.unreadBackground : props.theme.colors.backgroundWhite};
+    props.$isUnread
+      ? props.theme.colors.unreadBackground
+      : props.theme.colors.backgroundWhite};
   font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
 
   &:hover {
@@ -76,11 +86,25 @@ export function StarredInbox() {
     variables: { input: { isStarred: true, limit: 100 } },
   });
 
-  const [updateEmail] = useMutation(UPDATE_EMAIL_MUTATION, {
-    refetchQueries: [{ query: GET_STARRED_EMAILS_QUERY, variables: { input: { isStarred: true, limit: 100 } } }],
+  const [bulkUpdateEmails] = useMutation(BULK_UPDATE_EMAILS_MUTATION, {
+    refetchQueries: [
+      {
+        query: GET_STARRED_EMAILS_QUERY,
+        variables: { input: { isStarred: true, limit: 100 } },
+      },
+    ],
   });
-  const [deleteEmail] = useMutation(DELETE_EMAIL_MUTATION, {
-    refetchQueries: [{ query: GET_STARRED_EMAILS_QUERY, variables: { input: { isStarred: true, limit: 100 } } }],
+
+  const [bulkDeleteEmails] = useMutation(BULK_DELETE_EMAILS_MUTATION, {
+    onCompleted: () => {
+      toast.success('Email moved to trash');
+    },
+    refetchQueries: [
+      {
+        query: GET_STARRED_EMAILS_QUERY,
+        variables: { input: { isStarred: true, limit: 100 } },
+      },
+    ],
   });
 
   const handleStarToggle = async (
@@ -89,15 +113,15 @@ export function StarredInbox() {
     currentlyStarred: boolean,
   ) => {
     e.stopPropagation();
-    await updateEmail({
-      variables: { input: { id: emailId, isStarred: !currentlyStarred } },
+    await bulkUpdateEmails({
+      variables: { input: { ids: [emailId], isStarred: !currentlyStarred } },
     });
   };
 
   const handleEmailClick = async (emailId: string, isRead: boolean) => {
     if (!isRead) {
-      await updateEmail({
-        variables: { input: { id: emailId, isRead: true } },
+      await bulkUpdateEmails({
+        variables: { input: { ids: [emailId], isRead: true } },
       });
     }
     setSelectedEmailId(emailId);
@@ -108,7 +132,7 @@ export function StarredInbox() {
   };
 
   const handleDelete = async (emailId: string) => {
-    await deleteEmail({ variables: { id: emailId } });
+    await bulkDeleteEmails({ variables: { ids: [emailId] } });
     setSelectedEmailId(null);
   };
 
@@ -177,15 +201,15 @@ export function StarredInbox() {
                   <div>
                     <StarButton
                       $isStarred={email.isStarred}
-                      onClick={(e) => handleStarToggle(e, email.id, email.isStarred)}
+                      onClick={(e) =>
+                        handleStarToggle(e, email.id, email.isStarred)
+                      }
                     >
                       <FontAwesomeIcon
                         icon={email.isStarred ? faStarSolid : faStarRegular}
                       />
                     </StarButton>
-                    <SenderName>
-                      {email.fromName || email.fromAddress}
-                    </SenderName>
+                    <SenderName>{email.fromName || email.fromAddress}</SenderName>
                   </div>
                   <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
                 </EmailMeta>

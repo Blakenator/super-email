@@ -12,6 +12,7 @@ const config: CodegenConfig = {
         strictScalars: true,
         scalars: {
           Date: 'Date',
+          JSON: 'Record<string, unknown>',
         },
       },
     },
@@ -25,6 +26,7 @@ const config: CodegenConfig = {
         strictScalars: true,
         scalars: {
           Date: 'string',
+          JSON: 'Record<string, unknown>',
         },
         useTypeImports: true,
       },

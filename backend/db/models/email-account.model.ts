@@ -61,8 +61,11 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare lastSyncedAt: Date | null;
 
-  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
-  declare isSyncing: boolean;
+  // Unique sync ID to prevent overlapping syncs
+  // If syncId is null, no sync is in progress
+  // If syncId is set, only that sync instance should write progress
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare syncId: string | null;
 
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare syncProgress: number | null;

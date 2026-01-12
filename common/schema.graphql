@@ -1,4 +1,5 @@
 scalar Date
+scalar JSON
 
 interface BaseEntityProps {
   id: String!
@@ -125,6 +126,44 @@ input UpdateSmtpProfileInput {
   isDefault: Boolean
 }
 
+# ============ Contacts ============
+
+type Contact implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  userId: String!
+  email: String!
+  name: String
+  firstName: String
+  lastName: String
+  company: String
+  phone: String
+  notes: String
+  isAutoCreated: Boolean!
+}
+
+input CreateContactInput {
+  email: String!
+  name: String
+  firstName: String
+  lastName: String
+  company: String
+  phone: String
+  notes: String
+}
+
+input UpdateContactInput {
+  id: String!
+  email: String
+  name: String
+  firstName: String
+  lastName: String
+  company: String
+  phone: String
+  notes: String
+}
+
 # ============ Emails ============
 
 enum EmailFolder {
@@ -160,6 +199,12 @@ type Email implements BaseEntityProps {
   isDraft: Boolean!
   inReplyTo: String
   references: [String!]
+  threadId: String
+  threadCount: Int
+  headers: JSON
+  isUnsubscribed: Boolean!
+  unsubscribeUrl: String
+  unsubscribeEmail: String
 }
 
 input GetEmailsInput {
@@ -169,6 +214,7 @@ input GetEmailsInput {
   offset: Int
   isRead: Boolean
   isStarred: Boolean
+  searchQuery: String
 }
 
 input GetEmailInput {
@@ -201,15 +247,29 @@ input SaveDraftInput {
   inReplyTo: String
 }
 
-input UpdateEmailInput {
-  id: String!
+input BulkUpdateEmailsInput {
+  ids: [String!]!
   isRead: Boolean
   isStarred: Boolean
   folder: EmailFolder
 }
 
+input ForwardEmailInput {
+  emailId: String!
+  emailAccountId: String!
+  smtpProfileId: String!
+  toAddresses: [String!]!
+  ccAddresses: [String!]
+  bccAddresses: [String!]
+  additionalText: String
+}
+
 input SyncEmailAccountInput {
   emailAccountId: String!
+}
+
+input UnsubscribeInput {
+  emailId: String!
 }
 
 # ============ Test Connection ============
@@ -254,6 +314,12 @@ type Query {
   getEmails(input: GetEmailsInput!): [Email!]!
   getEmail(input: GetEmailInput!): Email
   getEmailCount(input: GetEmailsInput!): Int!
+  getEmailsByThread(threadId: String!): [Email!]!
+
+  # Contacts
+  getContacts: [Contact!]!
+  getContact(id: String!): Contact
+  searchContacts(query: String!): [Contact!]!
 }
 
 # ============ Mutations ============
@@ -281,8 +347,16 @@ type Mutation {
   # Emails
   sendEmail(input: ComposeEmailInput!): Email!
   saveDraft(input: SaveDraftInput!): Email!
-  updateEmail(input: UpdateEmailInput!): Email!
-  deleteEmail(id: String!): Boolean!
+  bulkUpdateEmails(input: BulkUpdateEmailsInput!): [Email!]!
+  bulkDeleteEmails(ids: [String!]!): Int!
+  forwardEmail(input: ForwardEmailInput!): Email!
+  unsubscribe(input: UnsubscribeInput!): Email!
+
+  # Contacts
+  createContact(input: CreateContactInput!): Contact!
+  updateContact(input: UpdateContactInput!): Contact!
+  deleteContact(id: String!): Boolean!
+  createContactFromEmail(emailId: String!): Contact!
 
   # Sync
   syncAllAccounts: Boolean!
