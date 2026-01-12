@@ -59,7 +59,11 @@ export class Email extends Model {
   @Column({ type: DataType.ARRAY(DataType.TEXT), allowNull: true })
   declare bccAddresses: string[] | null;
 
-  @Column({ type: DataType.TEXT, allowNull: false, defaultValue: '(No Subject)' })
+  @Column({
+    type: DataType.TEXT,
+    allowNull: false,
+    defaultValue: '(No Subject)',
+  })
   declare subject: string;
 
   @Column({ type: DataType.TEXT, allowNull: true })
