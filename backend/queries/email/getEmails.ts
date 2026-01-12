@@ -26,6 +26,7 @@ export const getEmails = makeQuery(
     if (input.folder === 'INBOX' || !input.folder) {
       const now = new Date();
       const accountsNeedingSync = userAccounts.filter((account) => {
+        if (account.isSyncing) return false;
         if (!account.lastSyncedAt) return true;
         const timeSinceSync =
           now.getTime() - new Date(account.lastSyncedAt).getTime();
@@ -82,7 +83,11 @@ export const getEmails = makeQuery(
     const emails = await Email.findAll({
       where,
       include: [EmailAccount],
-      order: [['receivedAt', 'DESC']],
+      order: [
+        ['receivedAt', 'DESC'],
+        ['createdAt', 'DESC'],
+        ['id', 'ASC'],
+      ],
       limit: input.limit ?? 50,
       offset: input.offset ?? 0,
     });

@@ -5,12 +5,8 @@ import styled from 'styled-components';
 import { GET_EMAIL_QUERY } from './queries';
 import { useNavigate } from 'react-router';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faArrowLeft,
-  faReply,
-  faTrash,
-} from '@fortawesome/free-solid-svg-icons';
-import { LoadingSpinner, HtmlViewer } from '../../core/components';
+import { faReply, faTrash } from '@fortawesome/free-solid-svg-icons';
+import { LoadingSpinner, HtmlViewer, BackButton } from '../../core/components';
 
 const Wrapper = styled.div`
   display: flex;
@@ -177,10 +173,7 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
     return (
       <Wrapper>
         <Toolbar>
-          <Button variant="outline-secondary" onClick={onBack}>
-            <FontAwesomeIcon icon={faArrowLeft} className="me-1" />
-            Back
-          </Button>
+          <BackButton onClick={onBack} label="Back" />
         </Toolbar>
         <EmailContent>
           <div className="text-center text-muted">Email not found</div>
@@ -192,10 +185,7 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
   return (
     <Wrapper>
       <Toolbar>
-        <Button variant="outline-secondary" onClick={onBack}>
-          <FontAwesomeIcon icon={faArrowLeft} className="me-1" />
-          Back
-        </Button>
+        <BackButton onClick={onBack} label="Back" />
         <Button variant="primary" onClick={handleReply}>
           <FontAwesomeIcon icon={faReply} className="me-1" />
           Reply

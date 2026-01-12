@@ -23,6 +23,7 @@ import {
   LoadingSpinner,
   RichTextEditor,
   HtmlViewer,
+  BackButton,
 } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -31,7 +32,6 @@ import {
   faPaperPlane,
   faSave,
   faTimes,
-  faArrowLeft,
 } from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
@@ -387,9 +387,7 @@ export function Compose() {
     <PageWrapper>
       <StickyHeader>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Button variant="outline-secondary" size="sm" onClick={handleExit}>
-            <FontAwesomeIcon icon={faArrowLeft} />
-          </Button>
+          <BackButton onClick={handleExit} />
           <Title>
             <FontAwesomeIcon
               icon={isReply ? faReply : faPen}

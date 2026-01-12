@@ -211,7 +211,7 @@ export function EmailListItemDense({
         </SenderCell>
         <SubjectCell>{email.subject}</SubjectCell>
         <PreviewCell>
-          — {email.textBody?.substring(0, 60) || '(No content)'}
+          {email.textBody?.substring(0, 60) || '(No content)'}
         </PreviewCell>
         <DateCell>{formatDate(email.receivedAt)}</DateCell>
 

@@ -27,7 +27,6 @@
     "@lexical/react": "^0.39.0",
     "@lexical/rich-text": "^0.39.0",
     "@lexical/selection": "^0.39.0",
-    "@types/dompurify": "^3.2.0",
     "bootstrap": "^5.3.8",
     "cookie": "^1.1.1",
     "dompurify": "^3.3.1",
