@@ -4,7 +4,11 @@ import {
   EmailAccount,
   EmailAccountType,
 } from '../db/models/email-account.model.js';
-import { syncEmailsFromImapAccount, type SyncResult } from './imap-sync.js';
+import {
+  syncEmailsFromImapAccount,
+  startAsyncSync,
+  type SyncResult,
+} from './imap-sync.js';
 
 export interface SendEmailOptions {
   to: string[];
@@ -89,24 +93,49 @@ export async function sendEmail(
 }
 
 /**
- * Sync emails from a configured email account (IMAP or POP3)
+ * Sync emails from a configured email account (IMAP or POP3) - synchronous
  */
 export async function syncEmailsFromAccount(
-  accountId: string,
+  emailAccount: EmailAccount,
 ): Promise<SyncResult> {
-  const emailAccount = await EmailAccount.findByPk(accountId);
-
-  if (!emailAccount) {
-    return { synced: 0, skipped: 0, errors: ['Email account not found'] };
-  }
-
   if (emailAccount.accountType === EmailAccountType.IMAP) {
     return syncEmailsFromImapAccount(emailAccount);
   } else if (emailAccount.accountType === EmailAccountType.POP3) {
-    // TODO: Implement POP3 sync
-    console.log(`POP3 sync not yet implemented for account ${accountId}`);
-    return { synced: 0, skipped: 0, errors: ['POP3 sync not yet implemented'] };
+    console.log(
+      `[Email] POP3 sync not yet implemented for account ${emailAccount.id}`,
+    );
+    return {
+      synced: 0,
+      skipped: 0,
+      errors: ['POP3 sync not yet implemented'],
+      hasMore: false,
+    };
   }
 
-  return { synced: 0, skipped: 0, errors: ['Unknown account type'] };
+  return {
+    synced: 0,
+    skipped: 0,
+    errors: ['Unknown account type'],
+    hasMore: false,
+  };
+}
+
+/**
+ * Start async sync - returns immediately while sync continues in background
+ */
+export async function startAsyncEmailSync(
+  emailAccount: EmailAccount,
+): Promise<void> {
+  if (emailAccount.isSyncing) {
+    console.log(`[Email] Account ${emailAccount.email} is already syncing`);
+    return;
+  }
+
+  if (emailAccount.accountType === EmailAccountType.IMAP) {
+    await startAsyncSync(emailAccount);
+  } else if (emailAccount.accountType === EmailAccountType.POP3) {
+    await emailAccount.update({
+      syncStatus: 'POP3 sync not yet implemented',
+    });
+  }
 }

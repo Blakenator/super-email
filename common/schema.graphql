@@ -55,6 +55,9 @@ type EmailAccount implements BaseEntityProps {
   accountType: EmailAccountType!
   useSsl: Boolean!
   lastSyncedAt: Date
+  isSyncing: Boolean!
+  syncProgress: Int
+  syncStatus: String
   defaultSmtpProfileId: String
   defaultSmtpProfile: SmtpProfile
 }
@@ -136,6 +139,8 @@ type Email implements BaseEntityProps {
   updatedAt: Date
   emailAccountId: String!
   emailAccount: EmailAccount
+  smtpProfileId: String
+  smtpProfile: SmtpProfile
   messageId: String!
   folder: EmailFolder!
   fromAddress: String!
@@ -149,6 +154,7 @@ type Email implements BaseEntityProps {
   receivedAt: Date!
   isRead: Boolean!
   isStarred: Boolean!
+  isDraft: Boolean!
   inReplyTo: String
   references: [String!]
 }
@@ -167,11 +173,26 @@ input GetEmailInput {
 }
 
 input ComposeEmailInput {
+  emailAccountId: String!
   smtpProfileId: String!
   toAddresses: [String!]!
   ccAddresses: [String!]
   bccAddresses: [String!]
   subject: String!
+  textBody: String
+  htmlBody: String
+  inReplyTo: String
+  draftId: String
+}
+
+input SaveDraftInput {
+  id: String
+  emailAccountId: String!
+  smtpProfileId: String
+  toAddresses: [String!]
+  ccAddresses: [String!]
+  bccAddresses: [String!]
+  subject: String
   textBody: String
   htmlBody: String
   inReplyTo: String
@@ -256,6 +277,17 @@ type Mutation {
 
   # Emails
   sendEmail(input: ComposeEmailInput!): Email!
+  saveDraft(input: SaveDraftInput!): Email!
   updateEmail(input: UpdateEmailInput!): Email!
   deleteEmail(id: String!): Boolean!
+
+  # Sync
+  syncAllAccounts: Boolean!
+}
+
+# ============ Subscriptions ============
+
+type Subscription {
+  emailCreated: Email!
+  emailUpdated: Email!
 }

@@ -1,5 +1,6 @@
+import { useEffect, useCallback } from 'react';
 import { useQuery } from '@apollo/client/react';
-import { Button, Spinner } from 'react-bootstrap';
+import { Button } from 'react-bootstrap';
 import styled from 'styled-components';
 import { GET_EMAIL_QUERY } from './queries';
 import { useNavigate } from 'react-router';
@@ -9,41 +10,43 @@ import {
   faReply,
   faTrash,
 } from '@fortawesome/free-solid-svg-icons';
+import { LoadingSpinner, HtmlViewer } from '../../core/components';
 
 const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: white;
+  background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
 const Toolbar = styled.div`
   display: flex;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => theme.spacing.md};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  flex-shrink: 0;
 `;
 
 const EmailContent = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 1.5rem;
+  padding: ${({ theme }) => theme.spacing.lg};
 `;
 
 const Subject = styled.h2`
-  font-size: 1.5rem;
+  font-size: ${({ theme }) => theme.fontSizes.xl};
   font-weight: 600;
-  margin-bottom: 1rem;
-  color: var(--text-primary);
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+  color: ${({ theme }) => theme.colors.textPrimary};
 `;
 
 const MetaRow = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 1.5rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
+  margin-bottom: ${({ theme }) => theme.spacing.lg};
+  padding-bottom: ${({ theme }) => theme.spacing.md};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
 `;
 
 const SenderInfo = styled.div`
@@ -52,39 +55,39 @@ const SenderInfo = styled.div`
 `;
 
 const SenderName = styled.strong`
-  font-size: 1rem;
+  font-size: ${({ theme }) => theme.fontSizes.md};
 `;
 
 const SenderEmail = styled.span`
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
 `;
 
 const Recipients = styled.div`
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin-top: 0.25rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  margin-top: ${({ theme }) => theme.spacing.xs};
 `;
 
 const EmailDate = styled.div`
-  color: var(--text-secondary);
-  font-size: 0.9rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
   text-align: right;
 `;
 
 const Body = styled.div`
   white-space: pre-wrap;
   line-height: 1.7;
-  color: var(--text-primary);
+  color: ${({ theme }) => theme.colors.textPrimary};
 `;
 
-const HtmlBody = styled.div`
-  line-height: 1.7;
-
-  img {
-    max-width: 100%;
-    height: auto;
-  }
+const HtmlBodyContainer = styled.div`
+  max-height: calc(100vh - 300px);
+  overflow: auto;
+  border: 1px solid ${({ theme }) => theme.colors.borderLight};
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  padding: ${({ theme }) => theme.spacing.md};
+  background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
 interface EmailViewProps {
@@ -101,6 +104,33 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
   });
 
   const email = data?.getEmail;
+
+  // Handle escape key to go back
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onBack();
+      }
+    },
+    [onBack],
+  );
+
+  // Handle browser back button
+  useEffect(() => {
+    const handlePopState = () => {
+      onBack();
+    };
+
+    // Push a state so we can intercept back button
+    window.history.pushState({ emailView: true }, '');
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onBack, handleKeyDown]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -127,6 +157,7 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
             originalBody: email.textBody,
             originalFrom: email.fromName || email.fromAddress,
             originalDate: email.receivedAt,
+            emailAccountId: email.emailAccountId,
           },
         },
       });
@@ -136,12 +167,7 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
   if (loading) {
     return (
       <Wrapper>
-        <div
-          className="d-flex justify-content-center align-items-center"
-          style={{ height: '300px' }}
-        >
-          <Spinner animation="border" variant="primary" />
-        </div>
+        <LoadingSpinner message="Loading email..." />
       </Wrapper>
     );
   }
@@ -199,7 +225,9 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
         </MetaRow>
 
         {email.htmlBody ? (
-          <HtmlBody dangerouslySetInnerHTML={{ __html: email.htmlBody }} />
+          <HtmlBodyContainer>
+            <HtmlViewer html={email.htmlBody} />
+          </HtmlBodyContainer>
         ) : (
           <Body>{email.textBody || '(No content)'}</Body>
         )}

@@ -11,8 +11,10 @@ import { updateSmtpProfile } from './smtp-profile/updateSmtpProfile.js';
 import { deleteSmtpProfile } from './smtp-profile/deleteSmtpProfile.js';
 import { testSmtpConnection } from './smtp-profile/testSmtpConnection.js';
 import { sendEmail } from './email/sendEmail.js';
+import { saveDraft } from './email/saveDraft.js';
 import { updateEmail } from './email/updateEmail.js';
 import { deleteEmail } from './email/deleteEmail.js';
+import { syncAllAccounts } from './email/syncAllAccounts.js';
 
 export const MutationResolvers: AllMutations = {
   signUp,
@@ -27,6 +29,8 @@ export const MutationResolvers: AllMutations = {
   deleteSmtpProfile,
   testSmtpConnection,
   sendEmail,
+  saveDraft,
   updateEmail,
   deleteEmail,
+  syncAllAccounts,
 };

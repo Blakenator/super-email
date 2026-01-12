@@ -61,6 +61,15 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare lastSyncedAt: Date | null;
 
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare isSyncing: boolean;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare syncProgress: number | null;
+
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare syncStatus: string | null;
+
   @ForeignKey(() => SmtpProfile)
   @Column({ type: DataType.UUID, allowNull: true })
   declare defaultSmtpProfileId: string | null;

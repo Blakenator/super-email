@@ -14,21 +14,22 @@ const ErrorWrapper = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 2rem;
+  background: ${({ theme }) => theme.colors.gradient};
+  padding: ${({ theme }) => theme.spacing.xl};
 `;
 
 const ErrorCard = styled(Card)`
   max-width: 500px;
   border: none;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  border-radius: ${({ theme }) => theme.borderRadius.xl};
+  box-shadow: ${({ theme }) => theme.shadows.lg};
 `;
 
 const ErrorIcon = styled.div`
   font-size: 4rem;
   text-align: center;
-  margin-bottom: 1rem;
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+  color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
 interface Props {
@@ -81,16 +82,23 @@ export class ErrorBoundary extends Component<Props, State> {
                 </ErrorIcon>
                 <h2 className="mb-3">Something went wrong</h2>
                 <p className="text-muted mb-4">
-                  An unexpected error occurred. Please try refreshing the page or go back to the home page.
+                  An unexpected error occurred. Please try refreshing the page
+                  or go back to the home page.
                 </p>
 
-                {process.env.NODE_ENV === 'development' && this.state.error && (
+                {import.meta.env.DEV && this.state.error && (
                   <Alert variant="danger" className="text-start mb-4">
                     <strong>Error:</strong> {this.state.error.message}
                     {this.state.errorInfo && (
                       <details className="mt-2">
                         <summary>Stack trace</summary>
-                        <pre style={{ fontSize: '0.75rem', overflow: 'auto', maxHeight: '200px' }}>
+                        <pre
+                          style={{
+                            fontSize: '0.75rem',
+                            overflow: 'auto',
+                            maxHeight: '200px',
+                          }}
+                        >
                           {this.state.errorInfo.componentStack}
                         </pre>
                       </details>
@@ -99,14 +107,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 )}
 
                 <div className="d-flex gap-2 justify-content-center">
-                  <Button
-                    variant="primary"
-                    onClick={this.handleReload}
-                    style={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      border: 'none',
-                    }}
-                  >
+                  <Button variant="primary" onClick={this.handleReload}>
                     <FontAwesomeIcon icon={faSync} className="me-1" />
                     Refresh Page
                   </Button>
@@ -128,12 +129,12 @@ export class ErrorBoundary extends Component<Props, State> {
 
 // Smaller inline error boundary for scoped sections
 const InlineErrorWrapper = styled.div`
-  padding: 2rem;
+  padding: ${({ theme }) => theme.spacing.xl};
   text-align: center;
   background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 8px;
-  margin: 1rem 0;
+  border: 1px solid ${({ theme }) => theme.colors.warning};
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  margin: ${({ theme }) => theme.spacing.md} 0;
 `;
 
 interface InlineErrorFallbackProps {
@@ -141,7 +142,10 @@ interface InlineErrorFallbackProps {
   resetError: () => void;
 }
 
-export function InlineErrorFallback({ error, resetError }: InlineErrorFallbackProps) {
+export function InlineErrorFallback({
+  error,
+  resetError,
+}: InlineErrorFallbackProps) {
   return (
     <InlineErrorWrapper>
       <h5>
@@ -167,7 +171,9 @@ export class PageErrorBoundary extends Component<Props, PageErrorBoundaryState> 
     this.state = { hasError: false, error: null, errorInfo: null, key: 0 };
   }
 
-  static getDerivedStateFromError(error: Error): Partial<PageErrorBoundaryState> {
+  static getDerivedStateFromError(
+    error: Error,
+  ): Partial<PageErrorBoundaryState> {
     return { hasError: true, error };
   }
 
@@ -188,7 +194,10 @@ export class PageErrorBoundary extends Component<Props, PageErrorBoundaryState> 
   render() {
     if (this.state.hasError && this.state.error) {
       return (
-        <InlineErrorFallback error={this.state.error} resetError={this.resetError} />
+        <InlineErrorFallback
+          error={this.state.error}
+          resetError={this.resetError}
+        />
       );
     }
 

@@ -7,6 +7,7 @@ import {
   Table,
 } from 'sequelize-typescript';
 import { EmailAccount } from './email-account.model.js';
+import { SmtpProfile } from './smtp-profile.model.js';
 
 export enum EmailFolder {
   INBOX = 'INBOX',
@@ -33,6 +34,13 @@ export class Email extends Model {
 
   @BelongsTo(() => EmailAccount)
   declare emailAccount: EmailAccount;
+
+  @ForeignKey(() => SmtpProfile)
+  @Column({ type: DataType.UUID, allowNull: true })
+  declare smtpProfileId: string | null;
+
+  @BelongsTo(() => SmtpProfile)
+  declare smtpProfile: SmtpProfile | null;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare messageId: string;
@@ -80,6 +88,9 @@ export class Email extends Model {
 
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare isStarred: boolean;
+
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare isDraft: boolean;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare inReplyTo: string | null;

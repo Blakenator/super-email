@@ -12,12 +12,14 @@ import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/auth/Login';
 import { SignUp } from './pages/auth/SignUp';
 import { Inbox } from './pages/inbox/Inbox';
+import { StarredInbox } from './pages/inbox/StarredInbox';
 import { Compose } from './pages/compose/Compose';
 import { Settings } from './pages/settings/Settings';
 import { EmailFolder } from './__generated__/graphql';
 import { useQuery } from '@apollo/client/react';
 import { GET_EMAIL_COUNT_QUERY } from './pages/inbox/queries';
-import { PageErrorBoundary } from './components/ErrorBoundary';
+import { PageErrorBoundary } from './core/components/ErrorBoundary';
+import { LoadingSpinner } from './core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faInbox,
@@ -28,7 +30,6 @@ import {
   faCog,
   faPen,
   faEnvelope,
-  faSpinner,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -218,10 +219,7 @@ function AuthenticatedApp() {
               path="/inbox"
               element={<Inbox folder={EmailFolder.Inbox} />}
             />
-            <Route
-              path="/starred"
-              element={<Inbox folder={EmailFolder.Inbox} />}
-            />
+            <Route path="/starred" element={<StarredInbox />} />
             <Route path="/sent" element={<Inbox folder={EmailFolder.Sent} />} />
             <Route
               path="/drafts"
@@ -246,22 +244,7 @@ function App() {
   const location = useLocation();
 
   if (isLoading) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        }}
-      >
-        <div style={{ color: 'white', fontSize: '2rem' }}>
-          <FontAwesomeIcon icon={faSpinner} spin className="me-2" />
-          Loading...
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullPage message="Loading StacksMail..." />;
   }
 
   // Public routes

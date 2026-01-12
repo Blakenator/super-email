@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   Container,
@@ -19,6 +19,7 @@ import {
   CREATE_EMAIL_ACCOUNT_MUTATION,
   DELETE_EMAIL_ACCOUNT_MUTATION,
   SYNC_EMAIL_ACCOUNT_MUTATION,
+  SYNC_ALL_ACCOUNTS_MUTATION,
   GET_SMTP_PROFILES_FULL_QUERY,
   CREATE_SMTP_PROFILE_MUTATION,
   DELETE_SMTP_PROFILE_MUTATION,
@@ -225,7 +226,24 @@ export function Settings() {
     data: emailAccountsData,
     loading: emailAccountsLoading,
     refetch: refetchEmailAccounts,
+    startPolling,
+    stopPolling,
   } = useQuery(GET_EMAIL_ACCOUNTS_QUERY);
+
+  // Poll when any account is syncing
+  const isSyncing = emailAccountsData?.getEmailAccounts?.some(
+    (a) => a.isSyncing,
+  );
+
+  // Use useEffect for polling to avoid initialization error
+  useEffect(() => {
+    if (isSyncing) {
+      startPolling(2000);
+    } else {
+      stopPolling();
+    }
+    return () => stopPolling();
+  }, [isSyncing, startPolling, stopPolling]);
 
   const {
     data: smtpProfilesData,
@@ -250,10 +268,21 @@ export function Settings() {
     onError: (err) => setError(err.message),
   });
 
-  const [syncEmailAccount] = useMutation(SYNC_EMAIL_ACCOUNT_MUTATION, {
-    onCompleted: () => refetchEmailAccounts(),
-    onError: (err) => setError(err.message),
-  });
+  const [syncEmailAccount, { loading: syncingAccount }] = useMutation(
+    SYNC_EMAIL_ACCOUNT_MUTATION,
+    {
+      onCompleted: () => refetchEmailAccounts(),
+      onError: (err) => setError(err.message),
+    },
+  );
+
+  const [syncAllAccounts, { loading: syncingAll }] = useMutation(
+    SYNC_ALL_ACCOUNTS_MUTATION,
+    {
+      onCompleted: () => refetchEmailAccounts(),
+      onError: (err) => setError(err.message),
+    },
+  );
 
   const [createSmtpProfile, { loading: creatingSmtpProfile }] = useMutation(
     CREATE_SMTP_PROFILE_MUTATION,
@@ -740,14 +769,33 @@ export function Settings() {
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <h5 className="mb-0">Incoming Email Accounts</h5>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowEmailAccountModal(true)}
-                  >
-                    <FontAwesomeIcon icon={faPlus} className="me-1" />
-                    Add Account
-                  </Button>
+                  <div className="d-flex gap-2">
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={() => syncAllAccounts()}
+                      disabled={syncingAll || emailAccounts.length === 0}
+                    >
+                      {syncingAll ? (
+                        <Spinner
+                          animation="border"
+                          size="sm"
+                          className="me-1"
+                        />
+                      ) : (
+                        <FontAwesomeIcon icon={faSync} className="me-1" />
+                      )}
+                      Sync All
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setShowEmailAccountModal(true)}
+                    >
+                      <FontAwesomeIcon icon={faPlus} className="me-1" />
+                      Add Account
+                    </Button>
+                  </div>
                 </div>
 
                 {emailAccountsLoading ? (
@@ -801,9 +849,35 @@ export function Settings() {
                             )}
                           </td>
                           <td>
-                            {account.lastSyncedAt
-                              ? new Date(account.lastSyncedAt).toLocaleString()
-                              : 'Never'}
+                            {account.isSyncing ? (
+                              <div>
+                                <Spinner
+                                  animation="border"
+                                  size="sm"
+                                  className="me-2"
+                                />
+                                <span className="text-primary">
+                                  {account.syncStatus || 'Syncing...'}
+                                  {account.syncProgress !== null &&
+                                    ` (${account.syncProgress}%)`}
+                                </span>
+                              </div>
+                            ) : account.lastSyncedAt ? (
+                              <div>
+                                <div>
+                                  {new Date(
+                                    account.lastSyncedAt,
+                                  ).toLocaleString()}
+                                </div>
+                                {account.syncStatus && (
+                                  <small className="text-muted">
+                                    {account.syncStatus}
+                                  </small>
+                                )}
+                              </div>
+                            ) : (
+                              'Never'
+                            )}
                           </td>
                           <td>
                             <Button
@@ -826,9 +900,19 @@ export function Settings() {
                                   },
                                 })
                               }
+                              disabled={account.isSyncing}
                             >
-                              <FontAwesomeIcon icon={faSync} className="me-1" />
-                              Sync
+                              {account.isSyncing ? (
+                                <Spinner animation="border" size="sm" />
+                              ) : (
+                                <>
+                                  <FontAwesomeIcon
+                                    icon={faSync}
+                                    className="me-1"
+                                  />
+                                  Sync
+                                </>
+                              )}
                             </Button>
                             <Button
                               variant="outline-danger"

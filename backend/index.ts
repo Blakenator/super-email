@@ -12,15 +12,18 @@ import { QueryResolvers } from './queries/index.js';
 import { MutationResolvers } from './mutations/index.js';
 import { GraphQLScalarType, Kind } from 'graphql';
 import { verifyToken } from './helpers/auth.js';
+import { logger } from './helpers/logger.js';
+import type { ApolloServerPlugin } from '@apollo/server';
 
 const app = express();
-
 const httpServer = http.createServer(app);
 
+// Load GraphQL schema
 const typeDefs = readFileSync('../common/schema.graphql', {
   encoding: 'utf-8',
 });
 
+// Custom Date scalar
 const dateScalar = new GraphQLScalarType({
   name: 'Date',
   description: 'Date custom scalar type',
@@ -31,12 +34,10 @@ const dateScalar = new GraphQLScalarType({
       try {
         return new Date(Date.parse(value)).toISOString();
       } catch (e: any) {
-        throw Error(
-          `Error occurred while serializing the date string: ${e.message}`,
-        );
+        throw Error(`Error serializing date string: ${e.message}`);
       }
     }
-    throw Error('GraphQL Date Scalar serializer expected a `Date` object');
+    throw Error('GraphQL Date Scalar serializer expected a Date object');
   },
   parseValue(value) {
     if (typeof value === 'string') {
@@ -54,33 +55,60 @@ const dateScalar = new GraphQLScalarType({
   },
 });
 
+// Logging plugin for Apollo Server
+const loggingPlugin: ApolloServerPlugin<BackendContext> = {
+  async requestDidStart({ request }) {
+    const start = Date.now();
+    const operationName = request.operationName;
+
+    logger.request(operationName, request.variables);
+
+    return {
+      async didEncounterErrors({ errors }) {
+        const duration = Date.now() - start;
+        logger.response(operationName, duration, errors[0]);
+      },
+      async willSendResponse() {
+        const duration = Date.now() - start;
+        logger.response(operationName, duration);
+      },
+    };
+  },
+};
+
 const resolvers: AllBackendResolvers = {
   Query: QueryResolvers,
   Mutation: MutationResolvers,
   Date: dateScalar,
 };
 
-const server = new ApolloServer<MyContext>({
+const server = new ApolloServer<BackendContext>({
   typeDefs,
-  resolvers: resolvers,
-  plugins: [ApolloServerPluginDrainHttpServer({ httpServer })],
+  resolvers,
+  plugins: [ApolloServerPluginDrainHttpServer({ httpServer }), loggingPlugin],
   formatError: (formattedError, error) => {
-    console.error(
-      `Uncaught error encountered:`,
+    logger.error(
+      'GraphQL',
+      'Uncaught error:',
       (error as any)?.originalError ?? error,
     );
     return formattedError;
   },
 });
 
+// Initialize server
 await server.start();
+logger.info('Server', 'Apollo Server started');
 
+// Sync database
 await sequelize.sync({ alter: true });
+logger.info('Database', 'Database synchronized');
 
+// Setup Express middleware
 app.use(
   '/api/graphql',
   cors<cors.CorsRequest>(),
-  express.json(),
+  express.json({ limit: '10mb' }), // Increase limit for larger emails
   expressMiddleware(server, {
     context: async ({ req }): Promise<BackendContext> => {
       const token = req.headers.authorization?.replace('Bearer ', '') ?? '';
@@ -100,8 +128,17 @@ app.use(
   }),
 );
 
+// Health check endpoint
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Start HTTP server
 await new Promise<void>((resolve) =>
   httpServer.listen({ port: 4000 }, resolve),
 );
 
-console.log(`📧 Email Client API ready at http://localhost:4000/api/graphql`);
+logger.info(
+  'Server',
+  '📧 Email Client API ready at http://localhost:4000/api/graphql',
+);

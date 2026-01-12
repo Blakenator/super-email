@@ -8,8 +8,10 @@ import { ApolloClient, HttpLink, InMemoryCache } from '@apollo/client/core';
 import { ApolloProvider } from '@apollo/client/react';
 import { setContext } from '@apollo/client/link/context';
 import { BrowserRouter } from 'react-router';
+import { ThemeProvider } from 'styled-components';
 import { AuthProvider } from './contexts/AuthContext.tsx';
-import { ErrorBoundary } from './components/ErrorBoundary.tsx';
+import { ErrorBoundary } from './core/components/ErrorBoundary.tsx';
+import { theme } from './core/theme.ts';
 
 const httpLink = new HttpLink({ uri: '/api/graphql' });
 
@@ -30,14 +32,16 @@ const client = new ApolloClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary>
-      <ApolloProvider client={client}>
-        <AuthProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        </AuthProvider>
-      </ApolloProvider>
-    </ErrorBoundary>
+    <ThemeProvider theme={theme}>
+      <ErrorBoundary>
+        <ApolloProvider client={client}>
+          <AuthProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </AuthProvider>
+        </ApolloProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   </StrictMode>,
 );

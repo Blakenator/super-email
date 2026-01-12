@@ -11,6 +11,9 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       accountType
       useSsl
       lastSyncedAt
+      isSyncing
+      syncProgress
+      syncStatus
       defaultSmtpProfileId
       defaultSmtpProfile {
         id
@@ -40,6 +43,12 @@ export const DELETE_EMAIL_ACCOUNT_MUTATION = gql(`
 export const SYNC_EMAIL_ACCOUNT_MUTATION = gql(`
   mutation SyncEmailAccount($input: SyncEmailAccountInput!) {
     syncEmailAccount(input: $input)
+  }
+`);
+
+export const SYNC_ALL_ACCOUNTS_MUTATION = gql(`
+  mutation SyncAllAccountsSettings {
+    syncAllAccounts
   }
 `);
 
