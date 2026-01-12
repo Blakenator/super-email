@@ -13,14 +13,19 @@ export interface SyncResult {
 
 // Configurable batch sizes for bulk-friendly processing
 const BATCH_SIZE = 50; // Messages to process per batch
-const MAX_MESSAGES_PER_SYNC = 500; // Max messages per sync operation
 const DB_BATCH_SIZE = 20; // Emails to insert in a single DB transaction
 
 /**
  * Start an async sync for an email account
  * Updates progress in the database for UI polling
  */
-export async function startAsyncSync(emailAccount: EmailAccount): Promise<void> {
+export async function startAsyncSync(emailAccount: EmailAccount): Promise<boolean> {
+  // Check if already syncing - prevent duplicate syncs
+  if (emailAccount.isSyncing) {
+    console.log(`[IMAP] Sync already in progress for ${emailAccount.email}, skipping`);
+    return false;
+  }
+
   // Mark as syncing
   await emailAccount.update({
     isSyncing: true,
@@ -48,6 +53,8 @@ export async function startAsyncSync(emailAccount: EmailAccount): Promise<void> 
       });
       console.error(`[IMAP] Sync failed for ${emailAccount.email}:`, err);
     });
+
+  return true;
 }
 
 /**
@@ -111,9 +118,8 @@ export async function syncEmailsFromImapAccount(
       return result;
     }
 
-    // Limit to MAX_MESSAGES_PER_SYNC and set hasMore flag
-    const messagesToProcess = allMessages.slice(0, MAX_MESSAGES_PER_SYNC);
-    result.hasMore = allMessages.length > MAX_MESSAGES_PER_SYNC;
+    // Process all messages (no limit)
+    const messagesToProcess = allMessages;
 
     await emailAccount.update({
       syncStatus: `Found ${messagesToProcess.length} messages to process...`,

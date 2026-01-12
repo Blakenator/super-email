@@ -34,7 +34,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
-  height: 100%;
+  height: 100vh;
   overflow-y: auto;
   background: ${({ theme }) => theme.colors.background};
 `;
@@ -86,8 +86,6 @@ const QuotedContent = styled.div`
     ${({ theme }) => theme.borderRadius.md} 0;
   font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ theme }) => theme.colors.textSecondary};
-  max-height: 300px;
-  overflow-y: auto;
 `;
 
 const CcBccToggle = styled.span`

@@ -31,6 +31,9 @@ export class SmtpProfile extends Model {
   @Column({ type: DataType.TEXT, allowNull: false })
   declare email: string;
 
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare alias: string | null;
+
   @Column({ type: DataType.TEXT, allowNull: false })
   declare host: string;
 

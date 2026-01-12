@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import styled from 'styled-components';
 
 const ViewerContainer = styled.div`
@@ -73,60 +74,36 @@ interface HtmlViewerProps {
 }
 
 /**
- * Sanitize HTML to remove potentially dangerous content
- */
-function sanitizeHtml(html: string): string {
-  // Create a temporary element to parse the HTML
-  const temp = document.createElement('div');
-  temp.innerHTML = html;
-
-  // Remove script tags
-  const scripts = temp.querySelectorAll('script');
-  scripts.forEach((script) => script.remove());
-
-  // Remove event handlers from all elements
-  const allElements = temp.querySelectorAll('*');
-  allElements.forEach((el) => {
-    // Get all attributes
-    const attrs = Array.from(el.attributes);
-    attrs.forEach((attr) => {
-      // Remove event handlers
-      if (attr.name.startsWith('on')) {
-        el.removeAttribute(attr.name);
-      }
-      // Remove javascript: URLs
-      if (attr.value.includes('javascript:')) {
-        el.removeAttribute(attr.name);
-      }
-    });
-  });
-
-  // Remove iframe tags (can be enabled if needed with sandboxing)
-  const iframes = temp.querySelectorAll('iframe');
-  iframes.forEach((iframe) => iframe.remove());
-
-  // Remove object and embed tags
-  const objects = temp.querySelectorAll('object, embed');
-  objects.forEach((obj) => obj.remove());
-
-  // Remove form elements that could submit data
-  const forms = temp.querySelectorAll('form');
-  forms.forEach((form) => {
-    // Keep the content but remove form functionality
-    const div = document.createElement('div');
-    div.innerHTML = form.innerHTML;
-    form.replaceWith(div);
-  });
-
-  return temp.innerHTML;
-}
-
-/**
- * Safe HTML viewer component
- * Sanitizes HTML before rendering to prevent XSS attacks
+ * Safe HTML viewer using DOMPurify for sanitization
+ * Renders HTML content safely by removing XSS vectors
  */
 export function HtmlViewer({ html, className }: HtmlViewerProps) {
-  const sanitizedHtml = useMemo(() => sanitizeHtml(html), [html]);
+  const sanitizedHtml = useMemo(() => {
+    // Configure DOMPurify for email viewing
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: [
+        'a', 'abbr', 'address', 'article', 'aside', 'b', 'bdi', 'bdo',
+        'blockquote', 'br', 'caption', 'cite', 'code', 'col', 'colgroup',
+        'data', 'dd', 'del', 'details', 'dfn', 'div', 'dl', 'dt', 'em',
+        'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'header', 'hgroup', 'hr', 'i', 'img', 'ins', 'kbd', 'li', 'main',
+        'mark', 'nav', 'ol', 'p', 'pre', 'q', 'rp', 'rt', 'ruby', 's',
+        'samp', 'section', 'small', 'span', 'strong', 'sub', 'summary',
+        'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time',
+        'tr', 'u', 'ul', 'var', 'wbr', 'center', 'font',
+      ],
+      ALLOWED_ATTR: [
+        'href', 'src', 'alt', 'title', 'class', 'id', 'name', 'width', 'height',
+        'style', 'target', 'rel', 'colspan', 'rowspan', 'scope', 'border',
+        'cellpadding', 'cellspacing', 'align', 'valign', 'bgcolor', 'color',
+        'face', 'size',
+      ],
+      ALLOW_DATA_ATTR: false,
+      ADD_ATTR: ['target'],
+      FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select'],
+      FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
+    });
+  }, [html]);
 
   return (
     <ViewerContainer

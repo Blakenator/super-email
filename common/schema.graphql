@@ -94,6 +94,7 @@ type SmtpProfile implements BaseEntityProps {
   userId: String!
   name: String!
   email: String!
+  alias: String
   host: String!
   port: Int!
   useSsl: Boolean!
@@ -103,6 +104,7 @@ type SmtpProfile implements BaseEntityProps {
 input CreateSmtpProfileInput {
   name: String!
   email: String!
+  alias: String
   host: String!
   port: Int!
   username: String!
@@ -114,6 +116,7 @@ input CreateSmtpProfileInput {
 input UpdateSmtpProfileInput {
   id: String!
   name: String
+  alias: String
   host: String
   port: Int
   username: String

@@ -56,6 +56,7 @@ export type CreateEmailAccountInput = {
 };
 
 export type CreateSmtpProfileInput = {
+  alias?: InputMaybe<Scalars['String']['input']>;
   email: Scalars['String']['input'];
   host: Scalars['String']['input'];
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
@@ -299,6 +300,7 @@ export type SignUpInput = {
 
 export type SmtpProfile = BaseEntityProps & {
   __typename?: 'SmtpProfile';
+  alias?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['Date']['output']>;
   email: Scalars['String']['output'];
   host: Scalars['String']['output'];
@@ -363,6 +365,7 @@ export type UpdateEmailInput = {
 };
 
 export type UpdateSmtpProfileInput = {
+  alias?: InputMaybe<Scalars['String']['input']>;
   host?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['String']['input'];
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
@@ -623,6 +626,7 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
 }>;
 
 export type SmtpProfileResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['SmtpProfile'] = ResolversParentTypes['SmtpProfile']> = ResolversObject<{
+  alias?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;

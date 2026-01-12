@@ -58,6 +58,7 @@ export const GET_SMTP_PROFILES_FULL_QUERY = gql(`
       id
       name
       email
+      alias
       host
       port
       useSsl
@@ -120,6 +121,7 @@ export const UPDATE_SMTP_PROFILE_MUTATION = gql(`
       id
       name
       email
+      alias
       host
       port
       useSsl

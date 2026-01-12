@@ -1,28 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
-import {
-  ListGroup,
-  Badge,
-  Button,
-  ButtonGroup,
-  Tabs,
-  Tab,
-  Alert,
-  Pagination,
-} from 'react-bootstrap';
+import { Badge, Button, ButtonGroup, Tabs, Tab, Alert } from 'react-bootstrap';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router';
-import toast from 'react-hot-toast';
-import {
-  GET_EMAILS_QUERY,
-  UPDATE_EMAIL_MUTATION,
-  DELETE_EMAIL_MUTATION,
-  GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY,
-  SYNC_ALL_ACCOUNTS_MUTATION,
-  GET_EMAIL_COUNT_QUERY,
-} from './queries';
 import { EmailFolder } from '../../__generated__/graphql';
 import { EmailView } from './EmailView';
+import { EmailListItem, InboxPagination } from './components';
+import { useInboxEmails } from './hooks';
 import { LoadingSpinner, EmptyState } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -34,14 +17,13 @@ import {
   faArchive,
   faSync,
   faEnvelopeOpen,
-  faStar as faStarSolid,
 } from '@fortawesome/free-solid-svg-icons';
-import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 
+// Styled components
 const PageWrapper = styled.div`
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: 100vh;
   overflow: hidden;
 `;
 
@@ -82,87 +64,8 @@ const EmailListContainer = styled.div`
   background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
-const EmailItem = styled(ListGroup.Item)<{ $isUnread: boolean }>`
-  cursor: pointer;
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-  border-left: none;
-  border-right: none;
-  background: ${(props) =>
-    props.$isUnread
-      ? props.theme.colors.unreadBackground
-      : props.theme.colors.backgroundWhite};
-  font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.backgroundHover};
-  }
-`;
-
-const EmailMeta = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: ${({ theme }) => theme.spacing.xs};
-`;
-
-const SenderName = styled.span`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const EmailDate = styled.span`
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-weight: 400;
-`;
-
-const Subject = styled.div`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const Preview = styled.div`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 400;
-`;
-
-const StarButton = styled.span<{ $isStarred: boolean }>`
-  color: ${(props) =>
-    props.$isStarred
-      ? props.theme.colors.star
-      : props.theme.colors.starInactive};
-  cursor: pointer;
-  margin-right: ${({ theme }) => theme.spacing.sm};
-  font-size: 1.2rem;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.star};
-  }
-`;
-
-const AccountBadge = styled(Badge)`
-  font-size: 0.7rem;
-  margin-left: ${({ theme }) => theme.spacing.sm};
-`;
-
-const PaginationWrapper = styled.div`
-  display: flex;
-  justify-content: center;
-  padding: ${({ theme }) => theme.spacing.md};
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  flex-shrink: 0;
-`;
-
-interface InboxProps {
-  folder?: EmailFolder;
-}
-
-const ITEMS_PER_PAGE = 25;
-
-const folderConfig = {
+// Folder configuration
+const FOLDER_CONFIG = {
   [EmailFolder.Inbox]: { icon: faInbox, label: 'Inbox' },
   [EmailFolder.Sent]: { icon: faPaperPlane, label: 'Sent' },
   [EmailFolder.Drafts]: { icon: faFileAlt, label: 'Drafts' },
@@ -171,105 +74,36 @@ const folderConfig = {
   [EmailFolder.Archive]: { icon: faArchive, label: 'Archive' },
 };
 
+interface InboxProps {
+  folder?: EmailFolder;
+}
+
 export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const navigate = useNavigate();
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
-  const [activeAccountTab, setActiveAccountTab] = useState<string>('all');
-  const [currentPage, setCurrentPage] = useState(1);
 
-  // Reset selected email and page when folder or tab changes
+  const {
+    emails,
+    accounts,
+    loading,
+    syncing,
+    totalCount,
+    totalPages,
+    currentPage,
+    activeAccountTab,
+    showTabs,
+    setCurrentPage,
+    setActiveAccountTab,
+    handleStarToggle,
+    handleMarkRead,
+    handleDelete,
+    handleRefresh,
+  } = useInboxEmails(folder);
+
+  // Reset selected email when folder or tab changes
   useEffect(() => {
     setSelectedEmailId(null);
-    setCurrentPage(1);
   }, [folder, activeAccountTab]);
-
-  // Load email accounts for tabs
-  const { data: accountsData } = useQuery(GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY);
-  const accounts = accountsData?.getEmailAccounts ?? [];
-
-  // Determine which account to filter by
-  const emailAccountId =
-    activeAccountTab === 'all' ? undefined : activeAccountTab;
-
-  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
-
-  const { data, loading, refetch } = useQuery(GET_EMAILS_QUERY, {
-    variables: {
-      input: {
-        folder,
-        emailAccountId,
-        limit: ITEMS_PER_PAGE,
-        offset,
-      },
-    },
-    fetchPolicy: 'cache-and-network',
-  });
-
-  // Get total count for pagination
-  const { data: countData } = useQuery(GET_EMAIL_COUNT_QUERY, {
-    variables: { input: { folder, emailAccountId } },
-  });
-
-  const totalCount = countData?.getEmailCount ?? 0;
-  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
-
-  const [updateEmail] = useMutation(UPDATE_EMAIL_MUTATION, {
-    refetchQueries: [
-      {
-        query: GET_EMAILS_QUERY,
-        variables: {
-          input: { folder, emailAccountId, limit: ITEMS_PER_PAGE, offset },
-        },
-      },
-      {
-        query: GET_EMAIL_COUNT_QUERY,
-        variables: { input: { folder: EmailFolder.Inbox, isRead: false } },
-      },
-    ],
-  });
-
-  const [deleteEmail] = useMutation(DELETE_EMAIL_MUTATION, {
-    onCompleted: () => {
-      toast.success(
-        folder === EmailFolder.Trash
-          ? 'Email permanently deleted'
-          : 'Email moved to trash',
-      );
-    },
-    refetchQueries: [
-      {
-        query: GET_EMAILS_QUERY,
-        variables: {
-          input: { folder, emailAccountId, limit: ITEMS_PER_PAGE, offset },
-        },
-      },
-      {
-        query: GET_EMAIL_COUNT_QUERY,
-        variables: { input: { folder } },
-      },
-    ],
-  });
-
-  const [syncAllAccounts, { loading: syncing }] = useMutation(
-    SYNC_ALL_ACCOUNTS_MUTATION,
-    {
-      onCompleted: () => {
-        toast.success('Sync started');
-        refetch();
-      },
-    },
-  );
-
-  const handleStarToggle = async (
-    e: React.MouseEvent,
-    emailId: string,
-    currentlyStarred: boolean,
-  ) => {
-    e.stopPropagation();
-    await updateEmail({
-      variables: { input: { id: emailId, isStarred: !currentlyStarred } },
-    });
-  };
 
   const handleEmailClick = async (email: {
     id: string;
@@ -285,6 +119,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     fromAddress?: string;
     fromName?: string | null;
     receivedAt?: string;
+    messageId?: string;
   }) => {
     // For drafts, navigate to compose instead of email view
     if (folder === EmailFolder.Drafts) {
@@ -311,57 +146,60 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     }
 
     if (!email.isRead) {
-      await updateEmail({
-        variables: { input: { id: email.id, isRead: true } },
-      });
+      await handleMarkRead(email.id);
     }
     setSelectedEmailId(email.id);
+  };
+
+  const handleReply = (email: {
+    fromAddress?: string;
+    subject: string;
+    messageId?: string;
+    textBody?: string | null;
+    htmlBody?: string | null;
+    fromName?: string | null;
+    receivedAt?: string;
+    emailAccountId: string;
+  }) => {
+    navigate('/compose', {
+      state: {
+        replyTo: {
+          to: email.fromAddress,
+          subject: email.subject.startsWith('Re:')
+            ? email.subject
+            : `Re: ${email.subject}`,
+          inReplyTo: email.messageId,
+          originalBody: email.textBody,
+          originalHtmlBody: email.htmlBody,
+          originalFrom: email.fromName || email.fromAddress,
+          originalDate: email.receivedAt,
+          emailAccountId: email.emailAccountId,
+        },
+      },
+    });
   };
 
   const handleBack = () => {
     setSelectedEmailId(null);
   };
 
-  const handleDelete = async (emailId: string) => {
-    await deleteEmail({ variables: { id: emailId } });
+  const handleDeleteFromView = async (emailId: string) => {
+    await handleDelete(emailId);
     setSelectedEmailId(null);
   };
 
-  const handleRefresh = async () => {
-    if (folder === EmailFolder.Inbox) {
-      await syncAllAccounts();
-    } else {
-      await refetch();
-    }
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-
-    if (isToday) {
-      return date.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    }
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  };
-
+  // Show email view when an email is selected
   if (selectedEmailId) {
     return (
       <EmailView
         emailId={selectedEmailId}
         onBack={handleBack}
-        onDelete={() => handleDelete(selectedEmailId)}
+        onDelete={() => handleDeleteFromView(selectedEmailId)}
       />
     );
   }
 
-  const emails = data?.getEmails ?? [];
-  const config = folderConfig[folder];
-  const showTabs = folder === EmailFolder.Inbox && accounts.length > 1;
+  const config = FOLDER_CONFIG[folder];
 
   return (
     <PageWrapper>
@@ -427,96 +265,29 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             }
           />
         ) : (
-          <ListGroup variant="flush">
-            {emails.map((email) => {
-              const account = accounts.find(
-                (a) => a.id === email.emailAccountId,
-              );
-              return (
-                <EmailItem
-                  key={email.id}
-                  $isUnread={!email.isRead}
-                  onClick={() => handleEmailClick(email)}
-                >
-                  <EmailMeta>
-                    <div>
-                      <StarButton
-                        $isStarred={email.isStarred}
-                        onClick={(e) =>
-                          handleStarToggle(e, email.id, email.isStarred)
-                        }
-                      >
-                        <FontAwesomeIcon
-                          icon={email.isStarred ? faStarSolid : faStarRegular}
-                        />
-                      </StarButton>
-                      <SenderName>
-                        {email.fromName || email.fromAddress}
-                      </SenderName>
-                      {activeAccountTab === 'all' && account && (
-                        <AccountBadge bg="light" text="dark">
-                          {account.name || account.email.split('@')[0]}
-                        </AccountBadge>
-                      )}
-                    </div>
-                    <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
-                  </EmailMeta>
-                  <Subject>{email.subject}</Subject>
-                  <Preview>
-                    {email.textBody?.substring(0, 100) || '(No content)'}
-                  </Preview>
-                </EmailItem>
-              );
-            })}
-          </ListGroup>
+          emails.map((email) => {
+            const account = accounts.find((a) => a.id === email.emailAccountId);
+            return (
+              <EmailListItem
+                key={email.id}
+                email={email}
+                account={account}
+                showAccount={activeAccountTab === 'all'}
+                onEmailClick={handleEmailClick}
+                onStarToggle={handleStarToggle}
+                onReply={handleReply}
+                onDelete={handleDelete}
+              />
+            );
+          })
         )}
       </EmailListContainer>
 
-      {totalPages > 1 && (
-        <PaginationWrapper>
-          <Pagination size="sm" className="mb-0">
-            <Pagination.First
-              onClick={() => setCurrentPage(1)}
-              disabled={currentPage === 1}
-            />
-            <Pagination.Prev
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            />
-
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              let pageNum: number;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (currentPage <= 3) {
-                pageNum = i + 1;
-              } else if (currentPage >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = currentPage - 2 + i;
-              }
-              return (
-                <Pagination.Item
-                  key={pageNum}
-                  active={pageNum === currentPage}
-                  onClick={() => setCurrentPage(pageNum)}
-                >
-                  {pageNum}
-                </Pagination.Item>
-              );
-            })}
-
-            <Pagination.Next
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-            />
-            <Pagination.Last
-              onClick={() => setCurrentPage(totalPages)}
-              disabled={currentPage === totalPages}
-            />
-          </Pagination>
-        </PaginationWrapper>
-      )}
+      <InboxPagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        onPageChange={setCurrentPage}
+      />
     </PageWrapper>
   );
 }

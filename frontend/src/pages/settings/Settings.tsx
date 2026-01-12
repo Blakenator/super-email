@@ -218,6 +218,7 @@ export function Settings() {
   const [smtpProfileForm, setSmtpProfileForm] = useState({
     name: '',
     email: '',
+    alias: '' as string | null,
     host: '',
     port: 587,
     username: '',
@@ -343,6 +344,7 @@ export function Settings() {
     setSmtpProfileForm({
       name: '',
       email: '',
+      alias: null,
       host: '',
       port: 587,
       username: '',
@@ -380,6 +382,7 @@ export function Settings() {
       setSmtpProfileForm({
         name: profile.name,
         email: profile.email,
+        alias: profile.alias || null,
         host: profile.host,
         port: profile.port,
         username: '', // Don't populate - user must re-enter for security
@@ -662,6 +665,7 @@ export function Settings() {
             input: {
               id: editingSmtpProfileId,
               name: smtpProfileForm.name,
+              alias: smtpProfileForm.alias || undefined,
               host: smtpProfileForm.host,
               port: smtpProfileForm.port,
               useSsl: smtpProfileForm.useSsl,
@@ -676,7 +680,14 @@ export function Settings() {
           },
         });
       } else {
-        await createSmtpProfile({ variables: { input: smtpProfileForm } });
+        await createSmtpProfile({
+          variables: {
+            input: {
+              ...smtpProfileForm,
+              alias: smtpProfileForm.alias || undefined,
+            },
+          },
+        });
       }
 
       setSaveSteps((prev) =>
@@ -1316,6 +1327,25 @@ export function Settings() {
                     })
                   }
                   required
+                />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label>
+                  Email Alias (optional)
+                  <span className="text-muted ms-2">
+                    Display name for sent emails
+                  </span>
+                </Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="John Doe"
+                  value={smtpProfileForm.alias || ''}
+                  onChange={(e) =>
+                    setSmtpProfileForm({
+                      ...smtpProfileForm,
+                      alias: e.target.value || null,
+                    })
+                  }
                 />
               </Form.Group>
               <Form.Group className="mb-3">
