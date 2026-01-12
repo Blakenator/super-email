@@ -12,7 +12,11 @@ import {
   Badge,
   Tabs,
   Tab,
+  ProgressBar,
+  OverlayTrigger,
+  Tooltip,
 } from 'react-bootstrap';
+import toast from 'react-hot-toast';
 import styled from 'styled-components';
 import {
   GET_EMAIL_ACCOUNTS_QUERY,
@@ -848,19 +852,38 @@ export function Settings() {
                               <span className="text-muted">—</span>
                             )}
                           </td>
-                          <td>
+                          <td style={{ minWidth: '200px' }}>
                             {account.isSyncing ? (
                               <div>
-                                <Spinner
-                                  animation="border"
-                                  size="sm"
-                                  className="me-2"
-                                />
-                                <span className="text-primary">
-                                  {account.syncStatus || 'Syncing...'}
-                                  {account.syncProgress !== null &&
-                                    ` (${account.syncProgress}%)`}
-                                </span>
+                                <div className="d-flex align-items-center mb-1">
+                                  <Spinner
+                                    animation="border"
+                                    size="sm"
+                                    className="me-2"
+                                  />
+                                  <small className="text-primary">
+                                    {(
+                                      account.syncStatus || 'Syncing...'
+                                    ).replace(/\s*\(\d+%\)\s*/, '')}
+                                  </small>
+                                </div>
+                                {account.syncProgress !== null && (
+                                  <OverlayTrigger
+                                    placement="top"
+                                    overlay={
+                                      <Tooltip>
+                                        {account.syncProgress}% complete
+                                      </Tooltip>
+                                    }
+                                  >
+                                    <ProgressBar
+                                      now={account.syncProgress}
+                                      variant="primary"
+                                      animated
+                                      style={{ height: '6px' }}
+                                    />
+                                  </OverlayTrigger>
+                                )}
                               </div>
                             ) : account.lastSyncedAt ? (
                               <div>
@@ -876,7 +899,7 @@ export function Settings() {
                                 )}
                               </div>
                             ) : (
-                              'Never'
+                              <span className="text-muted">Never synced</span>
                             )}
                           </td>
                           <td>

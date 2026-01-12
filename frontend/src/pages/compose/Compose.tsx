@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   Container,
@@ -12,26 +12,28 @@ import {
 } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router';
 import styled from 'styled-components';
+import toast from 'react-hot-toast';
 import {
   GET_SMTP_PROFILES_QUERY,
   GET_EMAIL_ACCOUNTS_QUERY,
   SEND_EMAIL_MUTATION,
   SAVE_DRAFT_MUTATION,
 } from './queries';
-import { LoadingSpinner, RichTextEditor } from '../../core/components';
+import {
+  LoadingSpinner,
+  RichTextEditor,
+  HtmlViewer,
+} from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faReply,
   faPen,
   faPaperPlane,
-  faCheckCircle,
   faSave,
   faTimes,
 } from '@fortawesome/free-solid-svg-icons';
 
 const PageWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
   height: 100%;
   overflow-y: auto;
   background: ${({ theme }) => theme.colors.background};
@@ -65,8 +67,8 @@ const HeaderActions = styled.div`
 `;
 
 const ContentArea = styled.div`
-  flex: 1;
   padding: ${({ theme }) => theme.spacing.lg};
+  padding-bottom: ${({ theme }) => theme.spacing.xxl};
 `;
 
 const ComposeCard = styled(Card)`
@@ -75,7 +77,7 @@ const ComposeCard = styled(Card)`
   border-radius: ${({ theme }) => theme.borderRadius.lg};
 `;
 
-const QuotedText = styled.div`
+const QuotedContent = styled.div`
   margin-top: ${({ theme }) => theme.spacing.md};
   padding: ${({ theme }) => theme.spacing.md};
   background: ${({ theme }) => theme.colors.background};
@@ -84,12 +86,8 @@ const QuotedText = styled.div`
     ${({ theme }) => theme.borderRadius.md} 0;
   font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ theme }) => theme.colors.textSecondary};
-  white-space: pre-wrap;
-`;
-
-const DraftSavedIndicator = styled.span`
-  color: ${({ theme }) => theme.colors.success};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
+  max-height: 300px;
+  overflow-y: auto;
 `;
 
 const CcBccToggle = styled.span`
@@ -108,6 +106,7 @@ interface ReplyToState {
   subject: string;
   inReplyTo: string;
   originalBody: string;
+  originalHtmlBody?: string;
   originalFrom: string;
   originalDate: string;
   emailAccountId?: string;
@@ -124,6 +123,7 @@ interface DraftState {
   body?: string;
   htmlBody?: string;
   originalBody?: string;
+  originalHtmlBody?: string;
   originalFrom?: string;
   originalDate?: string;
   inReplyTo?: string;
@@ -152,16 +152,33 @@ export function Compose() {
   const [htmlBody, setHtmlBody] = useState(existingDraft?.htmlBody || '');
   const [textBody, setTextBody] = useState(existingDraft?.body || '');
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(
     existingDraft?.draftId || null,
   );
-  const [draftSaved, setDraftSaved] = useState(false);
   const [showCcBcc, setShowCcBcc] = useState(
     !!(existingDraft?.cc || existingDraft?.bcc),
   );
 
-  // Get original message info for drafts
+  // Track if content has changed for auto-save
+  const initialContentRef = useRef({
+    to: toAddresses,
+    cc: ccAddresses,
+    bcc: bccAddresses,
+    subject,
+    textBody,
+  });
+  const hasChanges = useCallback(() => {
+    const initial = initialContentRef.current;
+    return (
+      toAddresses !== initial.to ||
+      ccAddresses !== initial.cc ||
+      bccAddresses !== initial.bcc ||
+      subject !== initial.subject ||
+      textBody !== initial.textBody
+    );
+  }, [toAddresses, ccAddresses, bccAddresses, subject, textBody]);
+
+  // Get original message info for drafts/replies
   const originalInfo = replyTo || existingDraft;
 
   const { data: accountsData, loading: accountsLoading } = useQuery(
@@ -173,10 +190,11 @@ export function Compose() {
 
   const [sendEmail, { loading: sending }] = useMutation(SEND_EMAIL_MUTATION, {
     onCompleted: () => {
-      setSuccess(true);
-      setTimeout(() => navigate('/inbox'), 1500);
+      toast.success('Email sent successfully!');
+      navigate('/inbox');
     },
     onError: (err) => {
+      toast.error(`Failed to send: ${err.message}`);
       setError(err.message);
     },
   });
@@ -186,11 +204,11 @@ export function Compose() {
     {
       onCompleted: (data) => {
         setDraftId(data.saveDraft.id);
-        setDraftSaved(true);
-        setTimeout(() => setDraftSaved(false), 2000);
+        toast.success('Draft saved');
       },
       onError: (err) => {
         console.error('Failed to save draft:', err);
+        toast.error('Failed to save draft');
       },
     },
   );
@@ -223,8 +241,8 @@ export function Compose() {
     setTextBody(text);
   }, []);
 
-  const handleSaveDraft = useCallback(() => {
-    if (!emailAccountId) return;
+  const doSaveDraft = useCallback(async () => {
+    if (!emailAccountId) return false;
 
     const toList = toAddresses
       .split(',')
@@ -239,22 +257,27 @@ export function Compose() {
       .map((s) => s.trim())
       .filter(Boolean);
 
-    saveDraft({
-      variables: {
-        input: {
-          id: draftId,
-          emailAccountId,
-          smtpProfileId: smtpProfileId || undefined,
-          toAddresses: toList.length > 0 ? toList : undefined,
-          ccAddresses: ccList.length > 0 ? ccList : undefined,
-          bccAddresses: bccList.length > 0 ? bccList : undefined,
-          subject: subject || undefined,
-          textBody: textBody || undefined,
-          htmlBody: htmlBody || undefined,
-          inReplyTo: originalInfo?.inReplyTo,
+    try {
+      await saveDraft({
+        variables: {
+          input: {
+            id: draftId,
+            emailAccountId,
+            smtpProfileId: smtpProfileId || undefined,
+            toAddresses: toList.length > 0 ? toList : undefined,
+            ccAddresses: ccList.length > 0 ? ccList : undefined,
+            bccAddresses: bccList.length > 0 ? bccList : undefined,
+            subject: subject || undefined,
+            textBody: textBody || undefined,
+            htmlBody: htmlBody || undefined,
+            inReplyTo: originalInfo?.inReplyTo,
+          },
         },
-      },
-    });
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }, [
     emailAccountId,
     smtpProfileId,
@@ -268,6 +291,37 @@ export function Compose() {
     originalInfo?.inReplyTo,
     saveDraft,
   ]);
+
+  // Handle escape key and browser back
+  const handleExit = useCallback(async () => {
+    if (hasChanges() && emailAccountId) {
+      await doSaveDraft();
+    }
+    navigate(-1);
+  }, [hasChanges, emailAccountId, doSaveDraft, navigate]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleExit();
+      }
+    };
+
+    const handlePopState = () => {
+      if (hasChanges() && emailAccountId) {
+        doSaveDraft();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [handleExit, hasChanges, emailAccountId, doSaveDraft]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -338,16 +392,10 @@ export function Compose() {
           {isReply ? 'Reply' : isDraft ? 'Edit Draft' : 'Compose Email'}
         </Title>
         <HeaderActions>
-          {draftSaved && (
-            <DraftSavedIndicator>
-              <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
-              Saved
-            </DraftSavedIndicator>
-          )}
           <Button
             variant="outline-secondary"
             size="sm"
-            onClick={handleSaveDraft}
+            onClick={doSaveDraft}
             disabled={savingDraft || !emailAccountId}
           >
             {savingDraft ? (
@@ -374,11 +422,7 @@ export function Compose() {
               </>
             )}
           </Button>
-          <Button
-            variant="outline-secondary"
-            size="sm"
-            onClick={() => navigate(-1)}
-          >
+          <Button variant="outline-secondary" size="sm" onClick={handleExit}>
             <FontAwesomeIcon icon={faTimes} className="me-1" />
             Cancel
           </Button>
@@ -387,13 +431,6 @@ export function Compose() {
 
       <ContentArea>
         <Container>
-          {success && (
-            <Alert variant="success">
-              <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-              Email sent successfully! Redirecting...
-            </Alert>
-          )}
-
           {error && (
             <Alert variant="danger" dismissible onClose={() => setError(null)}>
               {error}
@@ -532,7 +569,7 @@ export function Compose() {
                 </Form.Group>
 
                 {originalInfo?.originalBody && (
-                  <QuotedText>
+                  <QuotedContent>
                     <strong>
                       On{' '}
                       {new Date(
@@ -540,10 +577,16 @@ export function Compose() {
                       ).toLocaleString()}
                       , {originalInfo.originalFrom} wrote:
                     </strong>
-                    <br />
-                    <br />
-                    {originalInfo.originalBody}
-                  </QuotedText>
+                    <div style={{ marginTop: '0.5rem' }}>
+                      {originalInfo.originalHtmlBody ? (
+                        <HtmlViewer html={originalInfo.originalHtmlBody} />
+                      ) : (
+                        <div style={{ whiteSpace: 'pre-wrap' }}>
+                          {originalInfo.originalBody}
+                        </div>
+                      )}
+                    </div>
+                  </QuotedContent>
                 )}
               </Form>
             </Card.Body>

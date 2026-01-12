@@ -1,32 +1,20 @@
-import { useEffect } from 'react';
-import { LexicalComposer } from '@lexical/react/LexicalComposer';
-import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
-import { ContentEditable } from '@lexical/react/LexicalContentEditable';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
-import { HeadingNode, QuoteNode } from '@lexical/rich-text';
-import { ListNode, ListItemNode } from '@lexical/list';
-import { LinkNode, AutoLinkNode } from '@lexical/link';
-import { CodeNode } from '@lexical/code';
-import { $generateNodesFromDOM } from '@lexical/html';
-import { $getRoot } from 'lexical';
+import { useMemo } from 'react';
 import styled from 'styled-components';
 
 const ViewerContainer = styled.div`
   line-height: 1.7;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 
   p {
     margin: 0 0 0.75rem;
   }
 
-  h1,
-  h2,
-  h3 {
+  h1, h2, h3, h4, h5, h6 {
     margin: 1rem 0 0.5rem;
   }
 
-  ul,
-  ol {
+  ul, ol {
     margin: 0.5rem 0;
     padding-left: 1.5rem;
   }
@@ -49,6 +37,13 @@ const ViewerContainer = styled.div`
     font-family: monospace;
   }
 
+  pre {
+    background: ${({ theme }) => theme.colors.background};
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+
   img {
     max-width: 100%;
     height: auto;
@@ -56,48 +51,21 @@ const ViewerContainer = styled.div`
 
   table {
     max-width: 100%;
-    overflow-x: auto;
-    display: block;
     border-collapse: collapse;
+    margin: 0.5rem 0;
   }
 
-  td,
-  th {
+  td, th {
     padding: 0.5rem;
     border: 1px solid ${({ theme }) => theme.colors.border};
   }
+
+  hr {
+    border: none;
+    border-top: 1px solid ${({ theme }) => theme.colors.border};
+    margin: 1rem 0;
+  }
 `;
-
-const ReadOnlyContent = styled(ContentEditable)`
-  outline: none;
-  cursor: default;
-`;
-
-// Plugin to load HTML content into the editor
-function HtmlContentPlugin({ html }: { html: string }) {
-  const [editor] = useLexicalComposerContext();
-
-  useEffect(() => {
-    if (html) {
-      editor.update(() => {
-        try {
-          const parser = new DOMParser();
-          const dom = parser.parseFromString(html, 'text/html');
-          const nodes = $generateNodesFromDOM(editor, dom);
-          const root = $getRoot();
-          root.clear();
-          if (nodes.length > 0) {
-            root.append(...nodes);
-          }
-        } catch (error) {
-          console.error('Failed to parse HTML:', error);
-        }
-      });
-    }
-  }, [editor, html]);
-
-  return null;
-}
 
 interface HtmlViewerProps {
   html: string;
@@ -105,68 +73,65 @@ interface HtmlViewerProps {
 }
 
 /**
- * Safe HTML viewer using Lexical
- * Renders HTML content without using dangerouslySetInnerHTML
+ * Sanitize HTML to remove potentially dangerous content
  */
-export function HtmlViewer({ html, className }: HtmlViewerProps) {
-  const initialConfig = {
-    namespace: 'HtmlViewer',
-    editable: false,
-    theme: {},
-    nodes: [
-      HeadingNode,
-      QuoteNode,
-      ListNode,
-      ListItemNode,
-      LinkNode,
-      AutoLinkNode,
-      CodeNode,
-    ],
-    onError: (error: Error) => {
-      console.error('HtmlViewer error:', error);
-    },
-  };
+function sanitizeHtml(html: string): string {
+  // Create a temporary element to parse the HTML
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
 
-  // For very complex HTML, fall back to a sanitized version
-  // Lexical can't handle all HTML (e.g., complex tables, iframes)
-  if (html.includes('<table') || html.includes('<iframe') || html.includes('<style')) {
-    return (
-      <ViewerContainer className={className}>
-        <SafeHtmlFallback html={html} />
-      </ViewerContainer>
-    );
-  }
+  // Remove script tags
+  const scripts = temp.querySelectorAll('script');
+  scripts.forEach((script) => script.remove());
 
-  return (
-    <ViewerContainer className={className}>
-      <LexicalComposer initialConfig={initialConfig}>
-        <RichTextPlugin
-          contentEditable={<ReadOnlyContent />}
-          placeholder={null}
-          ErrorBoundary={LexicalErrorBoundary}
-        />
-        <HtmlContentPlugin html={html} />
-      </LexicalComposer>
-    </ViewerContainer>
-  );
+  // Remove event handlers from all elements
+  const allElements = temp.querySelectorAll('*');
+  allElements.forEach((el) => {
+    // Get all attributes
+    const attrs = Array.from(el.attributes);
+    attrs.forEach((attr) => {
+      // Remove event handlers
+      if (attr.name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+      }
+      // Remove javascript: URLs
+      if (attr.value.includes('javascript:')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+
+  // Remove iframe tags (can be enabled if needed with sandboxing)
+  const iframes = temp.querySelectorAll('iframe');
+  iframes.forEach((iframe) => iframe.remove());
+
+  // Remove object and embed tags
+  const objects = temp.querySelectorAll('object, embed');
+  objects.forEach((obj) => obj.remove());
+
+  // Remove form elements that could submit data
+  const forms = temp.querySelectorAll('form');
+  forms.forEach((form) => {
+    // Keep the content but remove form functionality
+    const div = document.createElement('div');
+    div.innerHTML = form.innerHTML;
+    form.replaceWith(div);
+  });
+
+  return temp.innerHTML;
 }
 
 /**
- * Fallback component that sanitizes HTML before rendering
- * Used for complex HTML that Lexical can't parse
+ * Safe HTML viewer component
+ * Sanitizes HTML before rendering to prevent XSS attacks
  */
-function SafeHtmlFallback({ html }: { html: string }) {
-  // Basic HTML sanitization - remove scripts and event handlers
-  const sanitized = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/\son\w+="[^"]*"/gi, '')
-    .replace(/\son\w+='[^']*'/gi, '')
-    .replace(/javascript:/gi, '');
+export function HtmlViewer({ html, className }: HtmlViewerProps) {
+  const sanitizedHtml = useMemo(() => sanitizeHtml(html), [html]);
 
   return (
-    <div
-      style={{ overflow: 'auto' }}
-      dangerouslySetInnerHTML={{ __html: sanitized }}
+    <ViewerContainer
+      className={className}
+      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
     />
   );
 }

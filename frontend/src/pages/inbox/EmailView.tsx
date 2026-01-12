@@ -155,6 +155,7 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
               : `Re: ${email.subject}`,
             inReplyTo: email.messageId,
             originalBody: email.textBody,
+            originalHtmlBody: email.htmlBody,
             originalFrom: email.fromName || email.fromAddress,
             originalDate: email.receivedAt,
             emailAccountId: email.emailAccountId,

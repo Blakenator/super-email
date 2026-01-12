@@ -9,6 +9,7 @@ import { ApolloProvider } from '@apollo/client/react';
 import { setContext } from '@apollo/client/link/context';
 import { BrowserRouter } from 'react-router';
 import { ThemeProvider } from 'styled-components';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext.tsx';
 import { ErrorBoundary } from './core/components/ErrorBoundary.tsx';
 import { theme } from './core/theme.ts';
@@ -38,6 +39,28 @@ createRoot(document.getElementById('root')!).render(
           <AuthProvider>
             <BrowserRouter>
               <App />
+              <Toaster
+                position="bottom-right"
+                toastOptions={{
+                  duration: 4000,
+                  style: {
+                    background: '#363636',
+                    color: '#fff',
+                  },
+                  success: {
+                    iconTheme: {
+                      primary: '#22c55e',
+                      secondary: '#fff',
+                    },
+                  },
+                  error: {
+                    iconTheme: {
+                      primary: '#ef4444',
+                      secondary: '#fff',
+                    },
+                  },
+                }}
+              />
             </BrowserRouter>
           </AuthProvider>
         </ApolloProvider>

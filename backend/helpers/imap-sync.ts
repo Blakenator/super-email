@@ -83,16 +83,28 @@ export async function syncEmailsFromImapAccount(
       return result;
     }
 
-    // Get the last synced date or default to 30 days ago
-    const sinceDate = emailAccount.lastSyncedAt
-      ? new Date(emailAccount.lastSyncedAt)
-      : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    // Get the last synced date - if null, sync entire history
+    const isFullSync = !emailAccount.lastSyncedAt;
+    let allMessages: number[];
 
-    await emailAccount.update({ syncStatus: 'Searching for new messages...' });
-    const searchResult = await client.search({ since: sinceDate });
-    const allMessages = searchResult === false ? [] : searchResult;
+    await emailAccount.update({ 
+      syncStatus: isFullSync 
+        ? 'Fetching all messages (first sync)...' 
+        : 'Searching for new messages...' 
+    });
 
-    console.log(`[IMAP] Found ${allMessages.length} messages since ${sinceDate.toISOString()}`);
+    if (isFullSync) {
+      // Full history sync - get all message UIDs
+      const searchResult = await client.search({ all: true });
+      allMessages = searchResult === false ? [] : searchResult;
+      console.log(`[IMAP] Full sync: found ${allMessages.length} messages total`);
+    } else {
+      // Incremental sync - only get messages since last sync
+      const sinceDate = new Date(emailAccount.lastSyncedAt!);
+      const searchResult = await client.search({ since: sinceDate });
+      allMessages = searchResult === false ? [] : searchResult;
+      console.log(`[IMAP] Incremental sync: found ${allMessages.length} messages since ${sinceDate.toISOString()}`);
+    }
 
     if (allMessages.length === 0) {
       await client.logout();

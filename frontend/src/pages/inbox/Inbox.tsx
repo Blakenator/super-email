@@ -8,9 +8,11 @@ import {
   Tabs,
   Tab,
   Alert,
+  Pagination,
 } from 'react-bootstrap';
 import styled from 'styled-components';
 import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
 import {
   GET_EMAILS_QUERY,
   UPDATE_EMAIL_MUTATION,
@@ -21,14 +23,7 @@ import {
 } from './queries';
 import { EmailFolder } from '../../__generated__/graphql';
 import { EmailView } from './EmailView';
-import {
-  LoadingSpinner,
-  EmptyState,
-  PageWrapper,
-  PageToolbar,
-  PageContent,
-  PageTitle,
-} from '../../core/components';
+import { LoadingSpinner, EmptyState } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faInbox,
@@ -43,10 +38,48 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 
+const PageWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+`;
+
+const PageToolbar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
+  background: ${({ theme }) => theme.colors.backgroundWhite};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  flex-shrink: 0;
+`;
+
+const PageTitle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+  font-size: ${({ theme }) => theme.fontSizes.lg};
+  font-weight: 600;
+`;
+
 const TabsWrapper = styled.div`
   padding: 0 ${({ theme }) => theme.spacing.md};
   background: ${({ theme }) => theme.colors.backgroundWhite};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  flex-shrink: 0;
+`;
+
+const TrashWarning = styled(Alert)`
+  margin: ${({ theme }) => theme.spacing.md};
+  margin-bottom: 0;
+  flex-shrink: 0;
+`;
+
+const EmailListContainer = styled.div`
+  flex: 1;
+  overflow-y: auto;
+  background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
 const EmailItem = styled(ListGroup.Item)<{ $isUnread: boolean }>`
@@ -114,9 +147,20 @@ const AccountBadge = styled(Badge)`
   margin-left: ${({ theme }) => theme.spacing.sm};
 `;
 
+const PaginationWrapper = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: ${({ theme }) => theme.spacing.md};
+  background: ${({ theme }) => theme.colors.backgroundWhite};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+  flex-shrink: 0;
+`;
+
 interface InboxProps {
   folder?: EmailFolder;
 }
+
+const ITEMS_PER_PAGE = 25;
 
 const folderConfig = {
   [EmailFolder.Inbox]: { icon: faInbox, label: 'Inbox' },
@@ -131,10 +175,12 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const navigate = useNavigate();
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [activeAccountTab, setActiveAccountTab] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
-  // Reset selected email when folder or tab changes
+  // Reset selected email and page when folder or tab changes
   useEffect(() => {
     setSelectedEmailId(null);
+    setCurrentPage(1);
   }, [folder, activeAccountTab]);
 
   // Load email accounts for tabs
@@ -145,43 +191,72 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const emailAccountId =
     activeAccountTab === 'all' ? undefined : activeAccountTab;
 
+  const offset = (currentPage - 1) * ITEMS_PER_PAGE;
+
   const { data, loading, refetch } = useQuery(GET_EMAILS_QUERY, {
-    variables: { input: { folder, emailAccountId, limit: 50 } },
+    variables: {
+      input: {
+        folder,
+        emailAccountId,
+        limit: ITEMS_PER_PAGE,
+        offset,
+      },
+    },
     fetchPolicy: 'cache-and-network',
   });
 
-  const [updateEmail, { loading: updatingEmail }] = useMutation(
-    UPDATE_EMAIL_MUTATION,
-    {
-      refetchQueries: [
-        {
-          query: GET_EMAILS_QUERY,
-          variables: { input: { folder, emailAccountId, limit: 50 } },
-        },
-        {
-          query: GET_EMAIL_COUNT_QUERY,
-          variables: { input: { folder: EmailFolder.Inbox, isRead: false } },
-        },
-      ],
-    },
-  );
+  // Get total count for pagination
+  const { data: countData } = useQuery(GET_EMAIL_COUNT_QUERY, {
+    variables: { input: { folder, emailAccountId } },
+  });
 
-  const [deleteEmail, { loading: deletingEmail }] = useMutation(
-    DELETE_EMAIL_MUTATION,
-    {
-      refetchQueries: [
-        {
-          query: GET_EMAILS_QUERY,
-          variables: { input: { folder, emailAccountId, limit: 50 } },
+  const totalCount = countData?.getEmailCount ?? 0;
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
+  const [updateEmail] = useMutation(UPDATE_EMAIL_MUTATION, {
+    refetchQueries: [
+      {
+        query: GET_EMAILS_QUERY,
+        variables: {
+          input: { folder, emailAccountId, limit: ITEMS_PER_PAGE, offset },
         },
-      ],
+      },
+      {
+        query: GET_EMAIL_COUNT_QUERY,
+        variables: { input: { folder: EmailFolder.Inbox, isRead: false } },
+      },
+    ],
+  });
+
+  const [deleteEmail] = useMutation(DELETE_EMAIL_MUTATION, {
+    onCompleted: () => {
+      toast.success(
+        folder === EmailFolder.Trash
+          ? 'Email permanently deleted'
+          : 'Email moved to trash',
+      );
     },
-  );
+    refetchQueries: [
+      {
+        query: GET_EMAILS_QUERY,
+        variables: {
+          input: { folder, emailAccountId, limit: ITEMS_PER_PAGE, offset },
+        },
+      },
+      {
+        query: GET_EMAIL_COUNT_QUERY,
+        variables: { input: { folder } },
+      },
+    ],
+  });
 
   const [syncAllAccounts, { loading: syncing }] = useMutation(
     SYNC_ALL_ACCOUNTS_MUTATION,
     {
-      onCompleted: () => refetch(),
+      onCompleted: () => {
+        toast.success('Sync started');
+        refetch();
+      },
     },
   );
 
@@ -225,8 +300,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             body: email.textBody || '',
             htmlBody: email.htmlBody || '',
             inReplyTo: email.inReplyTo,
-            // Include original message info if this is a reply draft
             originalBody: email.inReplyTo ? email.textBody : undefined,
+            originalHtmlBody: email.inReplyTo ? email.htmlBody : undefined,
             originalFrom: email.fromName || email.fromAddress,
             originalDate: email.receivedAt,
           },
@@ -294,7 +369,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         <PageTitle>
           <FontAwesomeIcon icon={config.icon} />
           {config.label}
-          <Badge bg="secondary">{emails.length}</Badge>
+          <Badge bg="secondary">{totalCount}</Badge>
         </PageTitle>
         <ButtonGroup size="sm">
           <Button
@@ -328,13 +403,13 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       )}
 
       {folder === EmailFolder.Trash && emails.length > 0 && (
-        <Alert variant="warning" className="m-3 mb-0">
+        <TrashWarning variant="warning">
           <FontAwesomeIcon icon={faTrash} className="me-2" />
           Emails in trash will be permanently deleted after 30 days.
-        </Alert>
+        </TrashWarning>
       )}
 
-      <PageContent>
+      <EmailListContainer>
         {loading && emails.length === 0 ? (
           <LoadingSpinner
             message={`Loading ${config.label.toLowerCase()}...`}
@@ -346,7 +421,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             description={
               folder === EmailFolder.Inbox
                 ? 'Your inbox is empty. New emails will appear here.'
-                : undefined
+                : folder === EmailFolder.Trash
+                  ? 'Your trash is empty.'
+                  : undefined
             }
           />
         ) : (
@@ -393,7 +470,53 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             })}
           </ListGroup>
         )}
-      </PageContent>
+      </EmailListContainer>
+
+      {totalPages > 1 && (
+        <PaginationWrapper>
+          <Pagination size="sm" className="mb-0">
+            <Pagination.First
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+            />
+            <Pagination.Prev
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            />
+
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number;
+              if (totalPages <= 5) {
+                pageNum = i + 1;
+              } else if (currentPage <= 3) {
+                pageNum = i + 1;
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i;
+              } else {
+                pageNum = currentPage - 2 + i;
+              }
+              return (
+                <Pagination.Item
+                  key={pageNum}
+                  active={pageNum === currentPage}
+                  onClick={() => setCurrentPage(pageNum)}
+                >
+                  {pageNum}
+                </Pagination.Item>
+              );
+            })}
+
+            <Pagination.Next
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            />
+            <Pagination.Last
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+            />
+          </Pagination>
+        </PaginationWrapper>
+      )}
     </PageWrapper>
   );
 }

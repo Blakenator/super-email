@@ -1,5 +1,5 @@
 import { makeMutation } from '../../types.js';
-import { Email, EmailAccount } from '../../db/models/index.js';
+import { Email, EmailAccount, EmailFolder } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const deleteEmail = makeMutation(
@@ -22,7 +22,13 @@ export const deleteEmail = makeMutation(
       throw new Error('Email not found or access denied');
     }
 
-    await email.destroy();
+    // If already in trash, permanently delete
+    if (email.folder === EmailFolder.TRASH) {
+      await email.destroy();
+    } else {
+      // Move to trash (soft delete)
+      await email.update({ folder: EmailFolder.TRASH });
+    }
 
     return true;
   },
