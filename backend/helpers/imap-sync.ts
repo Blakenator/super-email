@@ -16,6 +16,64 @@ export interface SyncResult {
 const BATCH_SIZE = 200; // Messages to fetch from IMAP per batch
 const DB_BATCH_SIZE = 50; // Emails to insert in a single DB transaction
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+/**
+ * Check if an error is a timeout or connection error that should be retried
+ */
+function isRetryableError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('timeout') ||
+    message.includes('etimedout') ||
+    message.includes('econnreset') ||
+    message.includes('econnrefused') ||
+    message.includes('socket hang up') ||
+    message.includes('connection closed') ||
+    message.includes('network error')
+  );
+}
+
+/**
+ * Sleep for a specified number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Execute an IMAP operation with retry logic for timeout errors
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  maxRetries: number = MAX_RETRIES,
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (isRetryableError(error) && attempt < maxRetries) {
+        console.log(
+          `[IMAP] ${operationName} failed (attempt ${attempt}/${maxRetries}): ${lastError.message}. Retrying in ${RETRY_DELAY_MS}ms...`,
+        );
+        await sleep(RETRY_DELAY_MS * attempt); // Exponential backoff
+      } else {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 /**
  * Start an async sync for an email account
  * Uses syncId to prevent overlapping syncs and allow cancellation
@@ -156,11 +214,17 @@ export async function syncEmailsFromImapAccount(
 
   try {
     await emailAccount.update({ syncStatus: 'Connecting to server...' });
-    await client.connect();
+    await withRetry(
+      () => client.connect(),
+      `Connect to ${emailAccount.host}`,
+    );
     console.log(`[IMAP] Connected to ${emailAccount.host}`);
 
     await emailAccount.update({ syncStatus: 'Opening mailbox...' });
-    const mailbox = await client.mailboxOpen('INBOX');
+    const mailbox = await withRetry(
+      () => client.mailboxOpen('INBOX'),
+      'Open INBOX mailbox',
+    );
     console.log(`[IMAP] Mailbox opened: ${mailbox.exists} messages total`);
 
     if (mailbox.exists === 0) {
@@ -226,7 +290,10 @@ export async function syncEmailsFromImapAccount(
     } else {
       // Incremental sync: search for messages since last sync
       const sinceDate = new Date(emailAccount.lastSyncedAt!);
-      const searchResult = await client.search({ since: sinceDate });
+      const searchResult = await withRetry(
+        () => client.search({ since: sinceDate }),
+        'Search for new messages',
+      );
       const messageUids = searchResult === false ? [] : searchResult;
 
       console.log(
@@ -324,7 +391,10 @@ async function syncSentFolder(
   // Try to open one of the sent folders
   for (const folderName of sentFolderNames) {
     try {
-      sentMailbox = await client.mailboxOpen(folderName);
+      sentMailbox = await withRetry(
+        () => client.mailboxOpen(folderName),
+        `Open Sent folder: ${folderName}`,
+      );
       sentFolderName = folderName;
       console.log(
         `[IMAP] ${emailAccount.email} Opened Sent folder: ${folderName} (${sentMailbox.exists} messages)`,
@@ -389,7 +459,10 @@ async function syncSentFolder(
   } else {
     // Incremental sync
     const sinceDate = new Date(emailAccount.lastSyncedAt!);
-    const searchResult = await client.search({ since: sinceDate });
+    const searchResult = await withRetry(
+      () => client.search({ since: sinceDate }),
+      'Search Sent folder for new messages',
+    );
     const messageUids = searchResult === false ? [] : searchResult;
 
     console.log(
@@ -835,11 +908,16 @@ export async function testImapConnection(
   });
 
   try {
-    await client.connect();
+    await withRetry(() => client.connect(), `Test connect to ${host}`);
     await client.logout();
     return { success: true };
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    try {
+      await client.logout();
+    } catch {
+      // Ignore logout errors
+    }
     return { success: false, error: errorMsg };
   }
 }
@@ -862,8 +940,14 @@ export async function listImapMailboxes(
   });
 
   try {
-    await client.connect();
-    const mailboxes = await client.list();
+    await withRetry(
+      () => client.connect(),
+      `Connect to ${emailAccount.host} for listing`,
+    );
+    const mailboxes = await withRetry(
+      () => client.list(),
+      'List mailboxes',
+    );
     await client.logout();
 
     return mailboxes.map((mb) => mb.path);

@@ -8,9 +8,8 @@ import {
   faEnvelope,
   faBuilding,
   faPhone,
-  faExternalLinkAlt,
 } from '@fortawesome/free-solid-svg-icons';
-import { Popover, OverlayTrigger, Button } from 'react-bootstrap';
+import { Popover, OverlayTrigger, Button, Badge } from 'react-bootstrap';
 import { gql } from '../../__generated__/gql';
 import { ContactFormModal } from './ContactFormModal';
 
@@ -45,6 +44,33 @@ const EmailLink = styled.span<{ $isClickable?: boolean; $isContact?: boolean }>`
   .contact-icon {
     font-size: 0.75em;
     opacity: 0.7;
+  }
+`;
+
+const EmailChip = styled.span<{ $isClickable?: boolean; $isContact?: boolean }>`
+  cursor: ${({ $isClickable }) => ($isClickable ? 'pointer' : 'default')};
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 16px;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  background: ${({ theme, $isContact }) =>
+    $isContact ? `${theme.colors.primary}15` : theme.colors.background};
+  border: 1px solid
+    ${({ theme, $isContact }) =>
+      $isContact ? theme.colors.primary : theme.colors.border};
+  color: ${({ theme, $isContact }) =>
+    $isContact ? theme.colors.primary : theme.colors.textPrimary};
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${({ theme, $isContact }) =>
+      $isContact ? `${theme.colors.primary}25` : theme.colors.backgroundHover};
+  }
+
+  .chip-icon {
+    font-size: 0.75em;
   }
 `;
 
@@ -112,6 +138,8 @@ interface EmailContactCardProps {
   name?: string | null;
   showIcon?: boolean;
   enablePopover?: boolean;
+  /** Render as a chip (default: true). Set to false for plain text display. */
+  asChip?: boolean;
   className?: string;
 }
 
@@ -120,15 +148,18 @@ export function EmailContactCard({
   name,
   showIcon = false,
   enablePopover = true,
+  asChip = true,
   className,
 }: EmailContactCardProps) {
   const [showContactModal, setShowContactModal] = useState(false);
   const [contactModalData, setContactModalData] = useState<any>(null);
 
-  const [searchContact, { data: contactData, loading: contactLoading }] =
-    useLazyQuery(SEARCH_CONTACTS_BY_EMAIL, {
+  const [searchContact, { data: contactData }] = useLazyQuery(
+    SEARCH_CONTACTS_BY_EMAIL,
+    {
       fetchPolicy: 'cache-first',
-    });
+    },
+  );
 
   const contact = contactData?.searchContacts?.find(
     (c) => c.email.toLowerCase() === email.toLowerCase(),
@@ -153,7 +184,18 @@ export function EmailContactCard({
   const displayName = name || contact?.name || email;
   const isContact = !!contact;
 
+  // Plain text version without popover
   if (!enablePopover) {
+    if (asChip) {
+      return (
+        <EmailChip $isClickable={false} $isContact={isContact} className={className}>
+          {(showIcon || isContact) && (
+            <FontAwesomeIcon icon={faUser} className="chip-icon" />
+          )}
+          {displayName}
+        </EmailChip>
+      );
+    }
     return (
       <EmailLink $isClickable={false} $isContact={isContact} className={className}>
         {showIcon && isContact && (
@@ -217,6 +259,8 @@ export function EmailContactCard({
     </Popover>
   );
 
+  const Wrapper = asChip ? EmailChip : EmailLink;
+
   return (
     <>
       <OverlayTrigger
@@ -226,19 +270,23 @@ export function EmailContactCard({
         rootClose
         onEnter={handlePopoverEnter}
       >
-        <EmailLink $isClickable $isContact={isContact} className={className}>
-          {showIcon && isContact && (
-            <FontAwesomeIcon icon={faUser} className="contact-icon" />
+        <Wrapper $isClickable $isContact={isContact} className={className}>
+          {(showIcon || (asChip && isContact)) && (
+            <FontAwesomeIcon
+              icon={faUser}
+              className={asChip ? 'chip-icon' : 'contact-icon'}
+            />
           )}
           {displayName}
-        </EmailLink>
+        </Wrapper>
       </OverlayTrigger>
 
       <ContactFormModal
         show={showContactModal}
         onHide={() => setShowContactModal(false)}
         initialData={contactModalData}
-        onSave={() => {
+        emailToAdd={email}
+        onSuccess={() => {
           setShowContactModal(false);
           // Refetch contact data
           searchContact({ variables: { query: email } });

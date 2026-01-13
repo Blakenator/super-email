@@ -1,5 +1,5 @@
 import { makeQuery } from '../../types.js';
-import { Contact } from '../../db/models/index.js';
+import { Contact, ContactEmail } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const getContact = makeQuery(
@@ -9,6 +9,7 @@ export const getContact = makeQuery(
 
     const contact = await Contact.findOne({
       where: { id, userId },
+      include: [ContactEmail],
     });
 
     return contact;

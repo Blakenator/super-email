@@ -4,6 +4,7 @@ import { AuthenticationMethod } from './models/authentication-method.model.js';
 import { EmailAccount } from './models/email-account.model.js';
 import { SmtpProfile } from './models/smtp-profile.model.js';
 import { Email } from './models/email.model.js';
+import { ContactEmail } from './models/contact-email.model.js';
 import { Contact } from './models/contact.model.js';
 
 export const sequelize = new Sequelize({
@@ -19,6 +20,7 @@ export const sequelize = new Sequelize({
     EmailAccount,
     SmtpProfile,
     Email,
+    ContactEmail,
     Contact,
   ],
   logging: false,

@@ -109,7 +109,9 @@ export const GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY = gql(`
       id
       name
       email
+      host
       lastSyncedAt
+      providerId
     }
   }
 `);
@@ -163,5 +165,11 @@ export const FORWARD_EMAIL_MUTATION = gql(`
       messageId
       subject
     }
+  }
+`);
+
+export const NUKE_OLD_EMAILS_MUTATION = gql(`
+  mutation NukeOldEmails($input: NukeOldEmailsInput!) {
+    nukeOldEmails(input: $input)
   }
 `);

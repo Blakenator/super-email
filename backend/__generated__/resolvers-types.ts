@@ -19,6 +19,13 @@ export type Scalars = {
   JSON: { input: Record<string, unknown>; output: Record<string, unknown>; }
 };
 
+export type AddEmailToContactInput = {
+  contactId: Scalars['String']['input'];
+  email: Scalars['String']['input'];
+  isPrimary?: InputMaybe<Scalars['Boolean']['input']>;
+  label?: InputMaybe<Scalars['String']['input']>;
+};
+
 export enum AuthProvider {
   Apple = 'APPLE',
   EmailPassword = 'EMAIL_PASSWORD',
@@ -70,7 +77,8 @@ export type Contact = BaseEntityProps & {
   __typename?: 'Contact';
   company?: Maybe<Scalars['String']['output']>;
   createdAt?: Maybe<Scalars['Date']['output']>;
-  email: Scalars['String']['output'];
+  email?: Maybe<Scalars['String']['output']>;
+  emails: Array<ContactEmail>;
   firstName?: Maybe<Scalars['String']['output']>;
   id: Scalars['String']['output'];
   isAutoCreated: Scalars['Boolean']['output'];
@@ -82,9 +90,26 @@ export type Contact = BaseEntityProps & {
   userId: Scalars['String']['output'];
 };
 
+export type ContactEmail = BaseEntityProps & {
+  __typename?: 'ContactEmail';
+  contactId: Scalars['String']['output'];
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  email: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  isPrimary: Scalars['Boolean']['output'];
+  label?: Maybe<Scalars['String']['output']>;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+};
+
+export type ContactEmailInput = {
+  email: Scalars['String']['input'];
+  isPrimary?: InputMaybe<Scalars['Boolean']['input']>;
+  label?: InputMaybe<Scalars['String']['input']>;
+};
+
 export type CreateContactInput = {
   company?: InputMaybe<Scalars['String']['input']>;
-  email: Scalars['String']['input'];
+  emails: Array<ContactEmailInput>;
   firstName?: InputMaybe<Scalars['String']['input']>;
   lastName?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
@@ -100,6 +125,7 @@ export type CreateEmailAccountInput = {
   name: Scalars['String']['input'];
   password: Scalars['String']['input'];
   port: Scalars['Int']['input'];
+  providerId?: InputMaybe<Scalars['String']['input']>;
   useSsl: Scalars['Boolean']['input'];
   username: Scalars['String']['input'];
 };
@@ -112,6 +138,7 @@ export type CreateSmtpProfileInput = {
   name: Scalars['String']['input'];
   password: Scalars['String']['input'];
   port: Scalars['Int']['input'];
+  providerId?: InputMaybe<Scalars['String']['input']>;
   useSsl: Scalars['Boolean']['input'];
   username: Scalars['String']['input'];
 };
@@ -162,6 +189,7 @@ export type EmailAccount = BaseEntityProps & {
   lastSyncedAt?: Maybe<Scalars['Date']['output']>;
   name: Scalars['String']['output'];
   port: Scalars['Int']['output'];
+  providerId?: Maybe<Scalars['String']['output']>;
   syncProgress?: Maybe<Scalars['Int']['output']>;
   syncStatus?: Maybe<Scalars['String']['output']>;
   updatedAt?: Maybe<Scalars['Date']['output']>;
@@ -209,6 +237,7 @@ export type GetEmailsInput = {
 
 export type Mutation = {
   __typename?: 'Mutation';
+  addEmailToContact: Contact;
   bulkDeleteEmails: Scalars['Int']['output'];
   bulkUpdateEmails: Array<Email>;
   createContact: Contact;
@@ -220,6 +249,7 @@ export type Mutation = {
   deleteEmailAccount: Scalars['Boolean']['output'];
   deleteSmtpProfile: Scalars['Boolean']['output'];
   forwardEmail: Email;
+  nukeOldEmails: Scalars['Int']['output'];
   saveDraft: Email;
   sendEmail: Email;
   syncAllAccounts: Scalars['Boolean']['output'];
@@ -230,6 +260,11 @@ export type Mutation = {
   updateContact: Contact;
   updateEmailAccount: EmailAccount;
   updateSmtpProfile: SmtpProfile;
+};
+
+
+export type MutationAddEmailToContactArgs = {
+  input: AddEmailToContactInput;
 };
 
 
@@ -288,6 +323,11 @@ export type MutationForwardEmailArgs = {
 };
 
 
+export type MutationNukeOldEmailsArgs = {
+  input: NukeOldEmailsInput;
+};
+
+
 export type MutationSaveDraftArgs = {
   input: SaveDraftInput;
 };
@@ -330,6 +370,10 @@ export type MutationUpdateEmailAccountArgs = {
 
 export type MutationUpdateSmtpProfileArgs = {
   input: UpdateSmtpProfileInput;
+};
+
+export type NukeOldEmailsInput = {
+  olderThan: Scalars['Date']['input'];
 };
 
 export type Query = {
@@ -412,6 +456,7 @@ export type SmtpProfile = BaseEntityProps & {
   isDefault: Scalars['Boolean']['output'];
   name: Scalars['String']['output'];
   port: Scalars['Int']['output'];
+  providerId?: Maybe<Scalars['String']['output']>;
   updatedAt?: Maybe<Scalars['Date']['output']>;
   useSsl: Scalars['Boolean']['output'];
   userId: Scalars['String']['output'];
@@ -456,7 +501,7 @@ export type UnsubscribeInput = {
 
 export type UpdateContactInput = {
   company?: InputMaybe<Scalars['String']['input']>;
-  email?: InputMaybe<Scalars['String']['input']>;
+  emails?: InputMaybe<Array<ContactEmailInput>>;
   firstName?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['String']['input'];
   lastName?: InputMaybe<Scalars['String']['input']>;
@@ -472,6 +517,7 @@ export type UpdateEmailAccountInput = {
   name?: InputMaybe<Scalars['String']['input']>;
   password?: InputMaybe<Scalars['String']['input']>;
   port?: InputMaybe<Scalars['Int']['input']>;
+  providerId?: InputMaybe<Scalars['String']['input']>;
   useSsl?: InputMaybe<Scalars['Boolean']['input']>;
   username?: InputMaybe<Scalars['String']['input']>;
 };
@@ -484,6 +530,7 @@ export type UpdateSmtpProfileInput = {
   name?: InputMaybe<Scalars['String']['input']>;
   password?: InputMaybe<Scalars['String']['input']>;
   port?: InputMaybe<Scalars['Int']['input']>;
+  providerId?: InputMaybe<Scalars['String']['input']>;
   useSsl?: InputMaybe<Scalars['Boolean']['input']>;
   username?: InputMaybe<Scalars['String']['input']>;
 };
@@ -577,6 +624,7 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
   BaseEntityProps:
     | ( AuthenticationMethod )
     | ( Contact )
+    | ( ContactEmail )
     | ( Email )
     | ( EmailAccount )
     | ( SmtpProfile )
@@ -586,6 +634,7 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
 
 /** Mapping between all available schema types and the resolvers types */
 export type ResolversTypes = ResolversObject<{
+  AddEmailToContactInput: AddEmailToContactInput;
   AuthProvider: AuthProvider;
   AuthenticationMethod: ResolverTypeWrapper<AuthenticationMethod>;
   BaseEntityProps: ResolverTypeWrapper<ResolversInterfaceTypes<ResolversTypes>['BaseEntityProps']>;
@@ -593,6 +642,8 @@ export type ResolversTypes = ResolversObject<{
   BulkUpdateEmailsInput: BulkUpdateEmailsInput;
   ComposeEmailInput: ComposeEmailInput;
   Contact: ResolverTypeWrapper<Contact>;
+  ContactEmail: ResolverTypeWrapper<ContactEmail>;
+  ContactEmailInput: ContactEmailInput;
   CreateContactInput: CreateContactInput;
   CreateEmailAccountInput: CreateEmailAccountInput;
   CreateSmtpProfileInput: CreateSmtpProfileInput;
@@ -607,6 +658,7 @@ export type ResolversTypes = ResolversObject<{
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  NukeOldEmailsInput: NukeOldEmailsInput;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
   SaveDraftInput: SaveDraftInput;
   SmtpProfile: ResolverTypeWrapper<SmtpProfile>;
@@ -625,12 +677,15 @@ export type ResolversTypes = ResolversObject<{
 
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = ResolversObject<{
+  AddEmailToContactInput: AddEmailToContactInput;
   AuthenticationMethod: AuthenticationMethod;
   BaseEntityProps: ResolversInterfaceTypes<ResolversParentTypes>['BaseEntityProps'];
   Boolean: Scalars['Boolean']['output'];
   BulkUpdateEmailsInput: BulkUpdateEmailsInput;
   ComposeEmailInput: ComposeEmailInput;
   Contact: Contact;
+  ContactEmail: ContactEmail;
+  ContactEmailInput: ContactEmailInput;
   CreateContactInput: CreateContactInput;
   CreateEmailAccountInput: CreateEmailAccountInput;
   CreateSmtpProfileInput: CreateSmtpProfileInput;
@@ -643,6 +698,7 @@ export type ResolversParentTypes = ResolversObject<{
   Int: Scalars['Int']['output'];
   JSON: Scalars['JSON']['output'];
   Mutation: Record<PropertyKey, never>;
+  NukeOldEmailsInput: NukeOldEmailsInput;
   Query: Record<PropertyKey, never>;
   SaveDraftInput: SaveDraftInput;
   SmtpProfile: SmtpProfile;
@@ -673,13 +729,14 @@ export type AuthenticationMethodResolvers<ContextType = MyContext, ParentType ex
 }>;
 
 export type BaseEntityPropsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BaseEntityProps'] = ResolversParentTypes['BaseEntityProps']> = ResolversObject<{
-  __resolveType: TypeResolveFn<'AuthenticationMethod' | 'Contact' | 'Email' | 'EmailAccount' | 'SmtpProfile' | 'User', ParentType, ContextType>;
+  __resolveType: TypeResolveFn<'AuthenticationMethod' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'SmtpProfile' | 'User', ParentType, ContextType>;
 }>;
 
 export type ContactResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Contact'] = ResolversParentTypes['Contact']> = ResolversObject<{
   company?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
-  email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  email?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  emails?: Resolver<Array<ResolversTypes['ContactEmail']>, ParentType, ContextType>;
   firstName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   isAutoCreated?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -689,6 +746,17 @@ export type ContactResolvers<ContextType = MyContext, ParentType extends Resolve
   phone?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type ContactEmailResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['ContactEmail'] = ResolversParentTypes['ContactEmail']> = ResolversObject<{
+  contactId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isPrimary?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  label?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
@@ -741,6 +809,7 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   lastSyncedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   syncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   syncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
@@ -754,6 +823,7 @@ export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes
 }
 
 export type MutationResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
+  addEmailToContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationAddEmailToContactArgs, 'input'>>;
   bulkDeleteEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationBulkDeleteEmailsArgs, 'ids'>>;
   bulkUpdateEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationBulkUpdateEmailsArgs, 'input'>>;
   createContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactArgs, 'input'>>;
@@ -765,6 +835,7 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   deleteEmailAccount?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteEmailAccountArgs, 'id'>>;
   deleteSmtpProfile?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSmtpProfileArgs, 'id'>>;
   forwardEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationForwardEmailArgs, 'input'>>;
+  nukeOldEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationNukeOldEmailsArgs, 'input'>>;
   saveDraft?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSaveDraftArgs, 'input'>>;
   sendEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSendEmailArgs, 'input'>>;
   syncAllAccounts?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -802,6 +873,7 @@ export type SmtpProfileResolvers<ContextType = MyContext, ParentType extends Res
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   useSsl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -835,6 +907,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   AuthenticationMethod?: AuthenticationMethodResolvers<ContextType>;
   BaseEntityProps?: BaseEntityPropsResolvers<ContextType>;
   Contact?: ContactResolvers<ContextType>;
+  ContactEmail?: ContactEmailResolvers<ContextType>;
   Date?: GraphQLScalarType;
   Email?: EmailResolvers<ContextType>;
   EmailAccount?: EmailAccountResolvers<ContextType>;

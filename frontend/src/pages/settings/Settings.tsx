@@ -36,6 +36,12 @@ import {
 } from './queries';
 import { EmailAccountType } from '../../__generated__/graphql';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  EmailAccountForm,
+  type EmailAccountFormData,
+  SmtpProfileForm,
+  type SmtpProfileFormData,
+} from './components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCog,
@@ -53,6 +59,7 @@ import {
   faEdit,
   faKey,
   faShieldAlt,
+  faLock,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faGoogle,
@@ -278,6 +285,83 @@ const AccountCardFooter = styled(Card.Footer)`
 `;
 
 const AccountCardActions = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.xs};
+  flex-wrap: wrap;
+`;
+
+// SMTP Profile Card Grid (similar to email accounts)
+const SmtpCardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const SmtpCard = styled(Card)`
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+`;
+
+const SmtpCardHeader = styled(Card.Header)<{ $isDefault?: boolean }>`
+  background: ${({ $isDefault }) =>
+    $isDefault
+      ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
+      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'};
+  color: white;
+  padding: ${({ theme }) => theme.spacing.md};
+  border: none;
+`;
+
+const SmtpCardTitle = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.lg};
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const SmtpCardSubtitle = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  opacity: 0.9;
+`;
+
+const SmtpCardBody = styled(Card.Body)`
+  padding: ${({ theme }) => theme.spacing.md};
+`;
+
+const SmtpDetailRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid ${({ theme }) => theme.colors.borderLight};
+
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const SmtpDetailLabel = styled.span`
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+`;
+
+const SmtpCardFooter = styled(Card.Footer)`
+  background: ${({ theme }) => theme.colors.background};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+`;
+
+const SmtpCardActions = styled.div`
   display: flex;
   gap: ${({ theme }) => theme.spacing.xs};
   flex-wrap: wrap;
@@ -661,6 +745,164 @@ export function Settings() {
     } catch (err: any) {
       setTestResult({ success: false, message: err.message });
     }
+  };
+
+  // Handler for the new EmailAccountForm component
+  const handleEmailAccountFormTest = async (
+    formData: EmailAccountFormData,
+  ): Promise<{ success: boolean; message: string }> => {
+    setError(null);
+    setTestResult(null);
+    try {
+      const result = await testEmailAccountConnection({
+        variables: {
+          input: {
+            host: formData.host,
+            port: formData.port,
+            username: formData.username,
+            password: formData.password,
+            accountType: formData.accountType,
+            useSsl: formData.useSsl,
+          },
+        },
+      });
+      const testRes = result.data?.testEmailAccountConnection || {
+        success: false,
+        message: 'Unknown error',
+      };
+      setTestResult(testRes);
+      return testRes;
+    } catch (err: any) {
+      const errorResult = { success: false, message: err.message };
+      setTestResult(errorResult);
+      return errorResult;
+    }
+  };
+
+  const handleEmailAccountFormSubmit = async (
+    formData: EmailAccountFormData,
+  ) => {
+    setError(null);
+
+    if (editingEmailAccountId) {
+      // Update existing account
+      await updateEmailAccount({
+        variables: {
+          input: {
+            id: editingEmailAccountId,
+            name: formData.name,
+            host: formData.host,
+            port: formData.port,
+            username: formData.username || undefined,
+            password: formData.password || undefined,
+            useSsl: formData.useSsl,
+            defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
+            providerId: formData.providerId || undefined,
+          },
+        },
+      });
+      toast.success('Email account updated!');
+    } else {
+      // Create new account
+      await createEmailAccount({
+        variables: {
+          input: {
+            name: formData.name,
+            email: formData.email,
+            host: formData.host,
+            port: formData.port,
+            username: formData.username,
+            password: formData.password,
+            accountType: formData.accountType,
+            useSsl: formData.useSsl,
+            defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
+            providerId: formData.providerId || undefined,
+          },
+        },
+      });
+      toast.success('Email account added!');
+    }
+    setShowEmailAccountModal(false);
+    resetEmailAccountForm();
+    refetchEmailAccounts();
+  };
+
+  // Handler for the new SmtpProfileForm component
+  const handleSmtpProfileFormTest = async (
+    formData: SmtpProfileFormData,
+  ): Promise<{ success: boolean; message: string }> => {
+    setError(null);
+    setTestResult(null);
+    try {
+      const result = await testSmtpConnection({
+        variables: {
+          input: {
+            host: formData.host,
+            port: formData.port,
+            username: formData.username,
+            password: formData.password,
+            useSsl: formData.useSsl,
+          },
+        },
+      });
+      const testRes = result.data?.testSmtpConnection || {
+        success: false,
+        message: 'Unknown error',
+      };
+      setTestResult(testRes);
+      return testRes;
+    } catch (err: any) {
+      const errorResult = { success: false, message: err.message };
+      setTestResult(errorResult);
+      return errorResult;
+    }
+  };
+
+  const handleSmtpProfileFormSubmit = async (formData: SmtpProfileFormData) => {
+    setError(null);
+
+    if (editingSmtpProfileId) {
+      // Update existing profile
+      await updateSmtpProfile({
+        variables: {
+          input: {
+            id: editingSmtpProfileId,
+            name: formData.name,
+            alias: formData.alias || undefined,
+            host: formData.host,
+            port: formData.port,
+            username: formData.username || undefined,
+            password: formData.password || undefined,
+            useSsl: formData.useSsl,
+            isDefault: formData.isDefault,
+            providerId: formData.providerId || undefined,
+          },
+        },
+      });
+      toast.success('SMTP profile updated!');
+    } else {
+      // Create new profile
+      await createSmtpProfile({
+        variables: {
+          input: {
+            name: formData.name,
+            email: formData.email,
+            alias: formData.alias || undefined,
+            host: formData.host,
+            port: formData.port,
+            username: formData.username,
+            password: formData.password,
+            useSsl: formData.useSsl,
+            isDefault: formData.isDefault,
+            providerId: formData.providerId || undefined,
+          },
+        },
+      });
+      toast.success('SMTP profile added!');
+    }
+    setShowSmtpProfileModal(false);
+    resetSmtpProfileForm();
+    refetchSmtpProfiles();
   };
 
   const handleSaveEmailAccount = async (e: React.FormEvent) => {
@@ -1229,34 +1471,61 @@ export function Settings() {
                     emails.
                   </p>
                 ) : (
-                  <Table hover responsive>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Server</th>
-                        <th>Default</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {smtpProfiles.map((profile) => (
-                        <tr key={profile.id}>
-                          <td>{profile.name}</td>
-                          <td>{profile.email}</td>
-                          <td>
-                            {profile.host}:{profile.port}
-                          </td>
-                          <td>
+                  <SmtpCardGrid>
+                    {smtpProfiles.map((profile) => (
+                      <SmtpCard key={profile.id}>
+                        <SmtpCardHeader $isDefault={profile.isDefault}>
+                          <SmtpCardTitle>
+                            {profile.name}
                             {profile.isDefault && (
-                              <Badge bg="success">Default</Badge>
+                              <Badge bg="light" text="dark" pill>
+                                Default
+                              </Badge>
                             )}
-                          </td>
-                          <td>
+                          </SmtpCardTitle>
+                          <SmtpCardSubtitle>
+                            {profile.alias
+                              ? `${profile.alias} <${profile.email}>`
+                              : profile.email}
+                          </SmtpCardSubtitle>
+                        </SmtpCardHeader>
+                        <SmtpCardBody>
+                          <SmtpDetailRow>
+                            <SmtpDetailLabel>Server</SmtpDetailLabel>
+                            <span>
+                              {profile.host}:{profile.port}
+                            </span>
+                          </SmtpDetailRow>
+                          <SmtpDetailRow>
+                            <SmtpDetailLabel>Security</SmtpDetailLabel>
+                            <span>
+                              {profile.useSsl ? (
+                                <Badge bg="success">
+                                  <FontAwesomeIcon
+                                    icon={faLock}
+                                    className="me-1"
+                                  />
+                                  SSL/TLS
+                                </Badge>
+                              ) : (
+                                <Badge bg="warning" text="dark">
+                                  No SSL
+                                </Badge>
+                              )}
+                            </span>
+                          </SmtpDetailRow>
+                          {profile.alias && (
+                            <SmtpDetailRow>
+                              <SmtpDetailLabel>Display Name</SmtpDetailLabel>
+                              <span>{profile.alias}</span>
+                            </SmtpDetailRow>
+                          )}
+                        </SmtpCardBody>
+                        <SmtpCardFooter>
+                          <SmtpCardActions>
                             <Button
                               variant="outline-secondary"
                               size="sm"
-                              className="me-1"
                               onClick={() => handleEditSmtpProfile(profile.id)}
                             >
                               <FontAwesomeIcon icon={faEdit} className="me-1" />
@@ -1277,11 +1546,11 @@ export function Settings() {
                               />
                               Delete
                             </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
+                          </SmtpCardActions>
+                        </SmtpCardFooter>
+                      </SmtpCard>
+                    ))}
+                  </SmtpCardGrid>
                 )}
               </Card.Body>
             </SectionCard>
@@ -1411,429 +1680,43 @@ export function Settings() {
         </Tabs>
 
         {/* Email Account Modal */}
-        <Modal
+        <EmailAccountForm
           show={showEmailAccountModal}
           onHide={() => {
             setShowEmailAccountModal(false);
             resetEmailAccountForm();
           }}
-          size="lg"
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              {editingEmailAccountId
-                ? 'Edit Email Account'
-                : 'Add Email Account'}
-            </Modal.Title>
-          </Modal.Header>
-          <Form onSubmit={handleSaveEmailAccount}>
-            <Modal.Body>
-              <Form.Group className="mb-3">
-                <Form.Label>Account Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Personal Gmail"
-                  value={emailAccountForm.name}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      name: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Email Address</Form.Label>
-                <Form.Control
-                  type="email"
-                  placeholder="you@gmail.com"
-                  value={emailAccountForm.email}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      email: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Account Type</Form.Label>
-                <Form.Select
-                  value={emailAccountForm.accountType}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      accountType: e.target.value as EmailAccountType,
-                      port: e.target.value === 'IMAP' ? 993 : 995,
-                    })
-                  }
-                >
-                  <option value="IMAP">IMAP</option>
-                  <option value="POP3">POP3</option>
-                </Form.Select>
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Server Host</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="imap.gmail.com"
-                  value={emailAccountForm.host}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      host: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Port</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={emailAccountForm.port}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      port: parseInt(e.target.value),
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>
-                  Username
-                  {editingEmailAccountId && (
-                    <span className="text-muted ms-2">
-                      (leave blank to keep current)
-                    </span>
-                  )}
-                </Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder={
-                    editingEmailAccountId ? '(unchanged)' : 'you@gmail.com'
-                  }
-                  value={emailAccountForm.username}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      username: e.target.value,
-                    })
-                  }
-                  required={!editingEmailAccountId}
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>
-                  Password / App Password
-                  {editingEmailAccountId && (
-                    <span className="text-muted ms-2">
-                      (leave blank to keep current)
-                    </span>
-                  )}
-                </Form.Label>
-                <Form.Control
-                  type="password"
-                  value={emailAccountForm.password}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      password: e.target.value,
-                    })
-                  }
-                  required={!editingEmailAccountId}
-                  placeholder={editingEmailAccountId ? '••••••••' : ''}
-                />
-              </Form.Group>
-              <Form.Check
-                type="checkbox"
-                label="Use SSL/TLS"
-                checked={emailAccountForm.useSsl}
-                onChange={(e) =>
-                  setEmailAccountForm({
-                    ...emailAccountForm,
-                    useSsl: e.target.checked,
-                  })
-                }
-                className="mb-3"
-              />
-              <Form.Group className="mb-3">
-                <Form.Label>Default SMTP Profile for Sending</Form.Label>
-                <Form.Select
-                  value={emailAccountForm.defaultSmtpProfileId || ''}
-                  onChange={(e) =>
-                    setEmailAccountForm({
-                      ...emailAccountForm,
-                      defaultSmtpProfileId: e.target.value || null,
-                    })
-                  }
-                >
-                  <option value="">-- None --</option>
-                  {smtpProfiles.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.name} ({profile.email})
-                    </option>
-                  ))}
-                </Form.Select>
-                <Form.Text className="text-muted">
-                  Select a default SMTP profile for sending replies from this
-                  account
-                </Form.Text>
-              </Form.Group>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button
-                variant="secondary"
-                onClick={() => setShowEmailAccountModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline-info"
-                onClick={handleTestEmailAccountConnection}
-                disabled={
-                  testingEmailAccount ||
-                  !emailAccountForm.host ||
-                  !emailAccountForm.username ||
-                  !emailAccountForm.password
-                }
-              >
-                {testingEmailAccount ? (
-                  <Spinner animation="border" size="sm" />
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faPlug} className="me-1" />
-                    Test Only
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="primary"
-                type="submit"
-                disabled={
-                  !emailAccountForm.host ||
-                  !emailAccountForm.name ||
-                  (!editingEmailAccountId &&
-                    (!emailAccountForm.username || !emailAccountForm.password))
-                }
-              >
-                <FontAwesomeIcon icon={faSave} className="me-1" />
-                {editingEmailAccountId ? 'Save Changes' : 'Test & Save'}
-              </Button>
-            </Modal.Footer>
-          </Form>
-        </Modal>
+          onSubmit={handleEmailAccountFormSubmit}
+          onTest={handleEmailAccountFormTest}
+          editingAccount={
+            editingEmailAccountId
+              ? emailAccounts.find((a) => a.id === editingEmailAccountId)
+              : null
+          }
+          smtpProfiles={smtpProfiles}
+          isSubmitting={creatingEmailAccount}
+          isTesting={testingEmailAccount}
+          testResult={testResult}
+        />
 
         {/* SMTP Profile Modal */}
-        <Modal
+        <SmtpProfileForm
           show={showSmtpProfileModal}
           onHide={() => {
             setShowSmtpProfileModal(false);
             resetSmtpProfileForm();
           }}
-          size="lg"
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              {editingSmtpProfileId ? 'Edit SMTP Profile' : 'Add SMTP Profile'}
-            </Modal.Title>
-          </Modal.Header>
-          <Form onSubmit={handleSaveSmtpProfile}>
-            <Modal.Body>
-              <Form.Group className="mb-3">
-                <Form.Label>Profile Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="Work Email"
-                  value={smtpProfileForm.name}
-                  onChange={(e) =>
-                    setSmtpProfileForm({
-                      ...smtpProfileForm,
-                      name: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>From Email Address</Form.Label>
-                <Form.Control
-                  type="email"
-                  placeholder="you@company.com"
-                  value={smtpProfileForm.email}
-                  onChange={(e) =>
-                    setSmtpProfileForm({
-                      ...smtpProfileForm,
-                      email: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>
-                  Email Alias (optional)
-                  <span className="text-muted ms-2">
-                    Display name for sent emails
-                  </span>
-                </Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="John Doe"
-                  value={smtpProfileForm.alias || ''}
-                  onChange={(e) =>
-                    setSmtpProfileForm({
-                      ...smtpProfileForm,
-                      alias: e.target.value || null,
-                    })
-                  }
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>SMTP Server Host</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="smtp.gmail.com"
-                  value={smtpProfileForm.host}
-                  onChange={(e) =>
-                    setSmtpProfileForm({
-                      ...smtpProfileForm,
-                      host: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>Port</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={smtpProfileForm.port}
-                  onChange={(e) =>
-                    setSmtpProfileForm({
-                      ...smtpProfileForm,
-                      port: parseInt(e.target.value),
-                    })
-                  }
-                  required
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>
-                  Username
-                  {editingSmtpProfileId && (
-                    <span className="text-muted ms-2">
-                      (leave blank to keep current)
-                    </span>
-                  )}
-                </Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder={
-                    editingSmtpProfileId ? '(unchanged)' : 'you@company.com'
-                  }
-                  value={smtpProfileForm.username}
-                  onChange={(e) =>
-                    setSmtpProfileForm({
-                      ...smtpProfileForm,
-                      username: e.target.value,
-                    })
-                  }
-                  required={!editingSmtpProfileId}
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label>
-                  Password / App Password
-                  {editingSmtpProfileId && (
-                    <span className="text-muted ms-2">
-                      (leave blank to keep current)
-                    </span>
-                  )}
-                </Form.Label>
-                <Form.Control
-                  type="password"
-                  value={smtpProfileForm.password}
-                  onChange={(e) =>
-                    setSmtpProfileForm({
-                      ...smtpProfileForm,
-                      password: e.target.value,
-                    })
-                  }
-                  required={!editingSmtpProfileId}
-                  placeholder={editingSmtpProfileId ? '••••••••' : ''}
-                />
-              </Form.Group>
-              <Form.Check
-                type="checkbox"
-                label="Use SSL/TLS"
-                checked={smtpProfileForm.useSsl}
-                onChange={(e) =>
-                  setSmtpProfileForm({
-                    ...smtpProfileForm,
-                    useSsl: e.target.checked,
-                  })
-                }
-                className="mb-2"
-              />
-              <Form.Check
-                type="checkbox"
-                label="Set as default profile"
-                checked={smtpProfileForm.isDefault}
-                onChange={(e) =>
-                  setSmtpProfileForm({
-                    ...smtpProfileForm,
-                    isDefault: e.target.checked,
-                  })
-                }
-              />
-            </Modal.Body>
-            <Modal.Footer>
-              <Button
-                variant="secondary"
-                onClick={() => setShowSmtpProfileModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="outline-info"
-                onClick={handleTestSmtpConnection}
-                disabled={
-                  testingSmtp ||
-                  !smtpProfileForm.host ||
-                  !smtpProfileForm.username ||
-                  !smtpProfileForm.password
-                }
-              >
-                {testingSmtp ? (
-                  <Spinner animation="border" size="sm" />
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faPlug} className="me-1" />
-                    Test Only
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="primary"
-                type="submit"
-                disabled={
-                  !smtpProfileForm.host ||
-                  !smtpProfileForm.name ||
-                  (!editingSmtpProfileId &&
-                    (!smtpProfileForm.username || !smtpProfileForm.password))
-                }
-              >
-                <FontAwesomeIcon icon={faSave} className="me-1" />
-                {editingSmtpProfileId ? 'Save Changes' : 'Test & Save'}
-              </Button>
-            </Modal.Footer>
-          </Form>
-        </Modal>
+          onSubmit={handleSmtpProfileFormSubmit}
+          onTest={handleSmtpProfileFormTest}
+          editingProfile={
+            editingSmtpProfileId
+              ? smtpProfiles.find((p) => p.id === editingSmtpProfileId)
+              : null
+          }
+          isSubmitting={creatingSmtpProfile}
+          isTesting={testingSmtp}
+          testResult={testResult}
+        />
 
         {/* Progress Modal */}
         <Modal

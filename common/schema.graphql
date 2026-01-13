@@ -66,6 +66,7 @@ type EmailAccount implements BaseEntityProps {
   syncStatus: String
   defaultSmtpProfileId: String
   defaultSmtpProfile: SmtpProfile
+  providerId: String
 }
 
 input CreateEmailAccountInput {
@@ -78,6 +79,7 @@ input CreateEmailAccountInput {
   accountType: EmailAccountType!
   useSsl: Boolean!
   defaultSmtpProfileId: String
+  providerId: String
 }
 
 input UpdateEmailAccountInput {
@@ -89,6 +91,7 @@ input UpdateEmailAccountInput {
   password: String
   useSsl: Boolean
   defaultSmtpProfileId: String
+  providerId: String
 }
 
 # ============ SMTP Profiles ============
@@ -105,6 +108,7 @@ type SmtpProfile implements BaseEntityProps {
   port: Int!
   useSsl: Boolean!
   isDefault: Boolean!
+  providerId: String
 }
 
 input CreateSmtpProfileInput {
@@ -117,6 +121,7 @@ input CreateSmtpProfileInput {
   password: String!
   useSsl: Boolean!
   isDefault: Boolean
+  providerId: String
 }
 
 input UpdateSmtpProfileInput {
@@ -129,16 +134,28 @@ input UpdateSmtpProfileInput {
   password: String
   useSsl: Boolean
   isDefault: Boolean
+  providerId: String
 }
 
 # ============ Contacts ============
+
+type ContactEmail implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  contactId: String!
+  email: String!
+  isPrimary: Boolean!
+  label: String
+}
 
 type Contact implements BaseEntityProps {
   id: String!
   createdAt: Date
   updatedAt: Date
   userId: String!
-  email: String!
+  email: String
+  emails: [ContactEmail!]!
   name: String
   firstName: String
   lastName: String
@@ -148,8 +165,14 @@ type Contact implements BaseEntityProps {
   isAutoCreated: Boolean!
 }
 
-input CreateContactInput {
+input ContactEmailInput {
   email: String!
+  isPrimary: Boolean
+  label: String
+}
+
+input CreateContactInput {
+  emails: [ContactEmailInput!]!
   name: String
   firstName: String
   lastName: String
@@ -160,13 +183,20 @@ input CreateContactInput {
 
 input UpdateContactInput {
   id: String!
-  email: String
+  emails: [ContactEmailInput!]
   name: String
   firstName: String
   lastName: String
   company: String
   phone: String
   notes: String
+}
+
+input AddEmailToContactInput {
+  contactId: String!
+  email: String!
+  isPrimary: Boolean
+  label: String
 }
 
 # ============ Emails ============
@@ -362,9 +392,17 @@ type Mutation {
   updateContact(input: UpdateContactInput!): Contact!
   deleteContact(id: String!): Boolean!
   createContactFromEmail(emailId: String!): Contact!
+  addEmailToContact(input: AddEmailToContactInput!): Contact!
 
   # Sync
   syncAllAccounts: Boolean!
+
+  # Inbox Zero
+  nukeOldEmails(input: NukeOldEmailsInput!): Int!
+}
+
+input NukeOldEmailsInput {
+  olderThan: Date!
 }
 
 # ============ Subscriptions ============

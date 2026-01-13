@@ -51,4 +51,8 @@ export class SmtpProfile extends Model {
 
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare isDefault: boolean;
+
+  // Provider ID for icon display (gmail, outlook, yahoo, etc.)
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare providerId: string | null;
 }

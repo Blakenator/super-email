@@ -203,6 +203,29 @@ export function useInboxEmails(folder: EmailFolder) {
     [bulkUpdateEmails],
   );
 
+  const handleUnarchive = useCallback(
+    async (emailId: string) => {
+      await bulkUpdateEmails({
+        variables: {
+          input: { ids: [emailId], folder: EmailFolder.Inbox },
+        },
+      });
+      toast.success('Email moved to inbox');
+    },
+    [bulkUpdateEmails],
+  );
+
+  const handleBulkUnarchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    await bulkUpdateEmails({
+      variables: {
+        input: { ids: Array.from(selectedIds), folder: EmailFolder.Inbox },
+      },
+    });
+    toast.success(`Moved ${selectedIds.size} email(s) to inbox`);
+    setSelectedIds(new Set());
+  }, [selectedIds, bulkUpdateEmails]);
+
   // Selection handlers
   const handleSelectEmail = useCallback((emailId: string, selected: boolean) => {
     setSelectedIds((prev) => {
@@ -262,5 +285,7 @@ export function useInboxEmails(folder: EmailFolder) {
     handleBulkDelete,
     handleBulkArchive,
     handleArchive,
+    handleUnarchive,
+    handleBulkUnarchive,
   };
 }

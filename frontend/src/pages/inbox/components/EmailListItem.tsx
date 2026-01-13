@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Badge, Button, Modal, Form } from 'react-bootstrap';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { DateTime } from 'luxon';
 import {
   faStar as faStarSolid,
   faReply,
@@ -166,17 +167,28 @@ interface EmailListItemProps {
 }
 
 function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
+  const date = DateTime.fromISO(dateStr);
+  const now = DateTime.now();
+
+  if (!date.isValid) {
+    return dateStr;
+  }
+
+  const isToday = date.hasSame(now, 'day');
+  const isSameYear = date.hasSame(now, 'year');
+  const monthsDiff = now.diff(date, 'months').months;
+  const isWithin3Months = monthsDiff >= 0 && monthsDiff < 3;
 
   if (isToday) {
-    return date.toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    // Show time for today (e.g., "2:30 PM")
+    return date.toFormat('h:mm a');
+  } else if (isSameYear && isWithin3Months) {
+    // Show "Nov 20" format for within 3 months
+    return date.toFormat('LLL d');
+  } else {
+    // Show "1/17/2010" format for older dates
+    return date.toFormat('M/d/yyyy');
   }
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 export function EmailListItem({

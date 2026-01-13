@@ -16,10 +16,12 @@ import { bulkDeleteEmails } from './email/bulkDeleteEmails.js';
 import { forwardEmail } from './email/forwardEmail.js';
 import { unsubscribe } from './email/unsubscribe.js';
 import { syncAllAccounts } from './email/syncAllAccounts.js';
+import { nukeOldEmails } from './email/nukeOldEmails.js';
 import { createContact } from './contact/createContact.js';
 import { updateContact } from './contact/updateContact.js';
 import { deleteContact } from './contact/deleteContact.js';
 import { createContactFromEmail } from './contact/createContactFromEmail.js';
+import { addEmailToContact } from './contact/addEmailToContact.js';
 
 export const MutationResolvers: AllMutations = {
   deleteAuthenticationMethod,
@@ -39,8 +41,10 @@ export const MutationResolvers: AllMutations = {
   forwardEmail,
   unsubscribe,
   syncAllAccounts,
+  nukeOldEmails,
   createContact,
   updateContact,
   deleteContact,
   createContactFromEmail,
+  addEmailToContact,
 };

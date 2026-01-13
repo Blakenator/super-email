@@ -79,4 +79,8 @@ export class EmailAccount extends Model {
 
   @BelongsTo(() => SmtpProfile)
   declare defaultSmtpProfile: SmtpProfile | null;
+
+  // Provider ID for icon display (gmail, outlook, yahoo, etc.)
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare providerId: string | null;
 }

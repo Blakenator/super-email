@@ -10,12 +10,21 @@
     "db:up": "docker-compose up -d",
     "db:down": "docker-compose down"
   },
-  "keywords": ["email", "imap", "smtp", "client"],
+  "keywords": [
+    "email",
+    "imap",
+    "smtp",
+    "client"
+  ],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.18.2",
   "devDependencies": {
+    "@types/luxon": "^3.7.1",
     "prettier": "^3.6.2",
     "typescript": "~5.9.3"
+  },
+  "dependencies": {
+    "luxon": "^3.7.2"
   }
 }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { Button, Modal, Alert, Badge, Accordion } from 'react-bootstrap';
 import styled from 'styled-components';
+import { DateTime } from 'luxon';
 import {
   GET_EMAIL_QUERY,
   GET_EMAILS_BY_THREAD_QUERY,
@@ -20,12 +21,14 @@ import {
   faChevronDown,
   faChevronUp,
   faArchive,
+  faInbox,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   LoadingSpinner,
   HtmlViewer,
   BackButton,
   ContactFormModal,
+  EmailContactCard,
 } from '../../core/components';
 import toast from 'react-hot-toast';
 
@@ -132,17 +135,26 @@ const ThreadContainer = styled.div`
 `;
 
 const ThreadEmail = styled.div<{ $isSelected?: boolean }>`
-  border: 1px solid
+  border: ${(props) => (props.$isSelected ? '2px' : '1px')} solid
     ${(props) =>
       props.$isSelected
         ? props.theme.colors.primary
         : props.theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius.md};
   padding: ${({ theme }) => theme.spacing.md};
+  position: relative;
   background: ${(props) =>
     props.$isSelected
       ? `${props.theme.colors.primary}08`
       : props.theme.colors.backgroundWhite};
+`;
+
+const CurrentEmailBadge = styled(Badge)`
+  position: absolute;
+  top: -8px;
+  right: 12px;
+  font-size: ${({ theme }) => theme.fontSizes.xs};
+  padding: 4px 8px;
 `;
 
 const ThreadEmailHeader = styled.div`
@@ -214,6 +226,7 @@ interface EmailViewProps {
   onBack: () => void;
   onDelete: () => void;
   onArchive?: () => void;
+  onUnarchive?: () => void;
 }
 
 export function EmailView({
@@ -221,6 +234,7 @@ export function EmailView({
   onBack,
   onDelete,
   onArchive,
+  onUnarchive,
 }: EmailViewProps) {
   const navigate = useNavigate();
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
@@ -288,15 +302,10 @@ export function EmailView({
   }, [onBack, handleKeyDown]);
 
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString([], {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    const date = DateTime.fromISO(dateStr);
+    if (!date.isValid) return dateStr;
+    // Format: "Mon, Nov 20, 2024, 2:30 PM"
+    return date.toFormat('ccc, LLL d, yyyy, h:mm a');
   };
 
   const handleReply = () => {
@@ -441,6 +450,12 @@ export function EmailView({
             Archive
           </Button>
         )}
+        {onUnarchive && (
+          <Button variant="outline-info" onClick={onUnarchive}>
+            <FontAwesomeIcon icon={faInbox} className="me-1" />
+            Move to Inbox
+          </Button>
+        )}
         <Button variant="outline-danger" onClick={onDelete}>
           <FontAwesomeIcon icon={faTrash} className="me-1" />
           Delete
@@ -474,19 +489,21 @@ export function EmailView({
 
               return (
                 <ThreadEmail key={threadEmail.id} $isSelected={isCurrentEmail}>
+                  {isCurrentEmail && (
+                    <CurrentEmailBadge bg="primary">
+                      Current Email
+                    </CurrentEmailBadge>
+                  )}
                   <ThreadEmailHeader
                     onClick={() => toggleThreadEmail(threadEmail.id)}
                   >
                     <ThreadEmailMeta>
                       <SenderRow>
-                        <SenderName>
-                          {threadEmail.fromName || threadEmail.fromAddress}
-                        </SenderName>
-                        {threadEmail.fromName && (
-                          <SenderEmail>
-                            &lt;{threadEmail.fromAddress}&gt;
-                          </SenderEmail>
-                        )}
+                        <EmailContactCard
+                          email={threadEmail.fromAddress}
+                          name={threadEmail.fromName}
+                          showIcon
+                        />
                       </SenderRow>
                       {!isExpanded && (
                         <CollapsedPreview>
@@ -508,12 +525,26 @@ export function EmailView({
                   {isExpanded && (
                     <>
                       <Recipients>
-                        To: {threadEmail.toAddresses.join(', ')}
+                        To:{' '}
+                        {threadEmail.toAddresses.map((addr, idx) => (
+                          <span key={addr}>
+                            {idx > 0 && ', '}
+                            <EmailContactCard email={addr} enablePopover />
+                          </span>
+                        ))}
                         {threadEmail.ccAddresses &&
                           threadEmail.ccAddresses.length > 0 && (
                             <span>
-                              {' '}
-                              • CC: {threadEmail.ccAddresses.join(', ')}
+                              {' • CC: '}
+                              {threadEmail.ccAddresses.map((addr, idx) => (
+                                <span key={addr}>
+                                  {idx > 0 && ', '}
+                                  <EmailContactCard
+                                    email={addr}
+                                    enablePopover
+                                  />
+                                </span>
+                              ))}
                             </span>
                           )}
                       </Recipients>
@@ -535,15 +566,30 @@ export function EmailView({
             <MetaRow>
               <SenderInfo>
                 <SenderRow>
-                  <SenderName>{email.fromName || email.fromAddress}</SenderName>
-                  {email.fromName && (
-                    <SenderEmail>&lt;{email.fromAddress}&gt;</SenderEmail>
-                  )}
+                  <EmailContactCard
+                    email={email.fromAddress}
+                    name={email.fromName}
+                    showIcon
+                  />
                 </SenderRow>
                 <Recipients>
-                  To: {email.toAddresses.join(', ')}
+                  To:{' '}
+                  {email.toAddresses.map((addr, idx) => (
+                    <span key={addr}>
+                      {idx > 0 && ', '}
+                      <EmailContactCard email={addr} enablePopover />
+                    </span>
+                  ))}
                   {email.ccAddresses && email.ccAddresses.length > 0 && (
-                    <span> • CC: {email.ccAddresses.join(', ')}</span>
+                    <span>
+                      {' • CC: '}
+                      {email.ccAddresses.map((addr, idx) => (
+                        <span key={addr}>
+                          {idx > 0 && ', '}
+                          <EmailContactCard email={addr} enablePopover />
+                        </span>
+                      ))}
+                    </span>
                   )}
                 </Recipients>
               </SenderInfo>

@@ -11,8 +11,14 @@ import {
   Form,
   InputGroup,
   Dropdown,
+  Card,
+  Modal,
 } from 'react-bootstrap';
+import { useMutation } from '@apollo/client/react';
+import toast from 'react-hot-toast';
 import styled from 'styled-components';
+import { DateTime } from 'luxon';
+import { getProviderById, getProviderByHost } from '../../core/emailProviders';
 import { useNavigate } from 'react-router';
 import { EmailFolder } from '../../__generated__/graphql';
 import { EmailView } from './EmailView';
@@ -32,6 +38,7 @@ import {
   faExclamationTriangle,
   faArchive,
   faSync,
+  faBomb,
   faEnvelopeOpen,
   faList,
   faBars,
@@ -46,6 +53,7 @@ import {
   faSquare,
   faCheckSquare as faCheckSquareRegular,
 } from '@fortawesome/free-regular-svg-icons';
+import { NUKE_OLD_EMAILS_MUTATION } from './queries.ts';
 
 type ViewMode = 'spacious' | 'dense';
 
@@ -73,25 +81,15 @@ const RECENCY_GROUP_LABELS: Record<RecencyGroup, string> = {
 };
 
 function getRecencyGroup(dateStr: string): RecencyGroup {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  );
-  const startOfYesterday = new Date(startOfToday);
-  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-  const start7DaysAgo = new Date(startOfToday);
-  start7DaysAgo.setDate(start7DaysAgo.getDate() - 7);
-  const start1MonthAgo = new Date(startOfToday);
-  start1MonthAgo.setMonth(start1MonthAgo.getMonth() - 1);
-  const start3MonthsAgo = new Date(startOfToday);
-  start3MonthsAgo.setMonth(start3MonthsAgo.getMonth() - 3);
-  const start6MonthsAgo = new Date(startOfToday);
-  start6MonthsAgo.setMonth(start6MonthsAgo.getMonth() - 6);
-  const start1YearAgo = new Date(startOfToday);
-  start1YearAgo.setFullYear(start1YearAgo.getFullYear() - 1);
+  const date = DateTime.fromISO(dateStr);
+  const now = DateTime.now();
+  const startOfToday = now.startOf('day');
+  const startOfYesterday = startOfToday.minus({ days: 1 });
+  const start7DaysAgo = startOfToday.minus({ days: 7 });
+  const start1MonthAgo = startOfToday.minus({ months: 1 });
+  const start3MonthsAgo = startOfToday.minus({ months: 3 });
+  const start6MonthsAgo = startOfToday.minus({ months: 6 });
+  const start1YearAgo = startOfToday.minus({ years: 1 });
 
   if (date >= startOfToday) return RecencyGroup.TODAY;
   if (date >= startOfYesterday) return RecencyGroup.YESTERDAY;
@@ -213,6 +211,42 @@ const EmailListContainer = styled.div`
   background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
+const GroupCard = styled(Card)`
+  margin-bottom: 1.5rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  overflow: hidden;
+  box-shadow: ${({ theme }) => theme.shadows.sm};
+`;
+
+const GroupCardHeader = styled(Card.Header)`
+  background: linear-gradient(
+    135deg,
+    ${({ theme }) => theme.colors.primary}15 0%,
+    ${({ theme }) => theme.colors.primary}05 100%
+  );
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
+`;
+
+const GroupTitle = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.md};
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+`;
+
+const GroupCount = styled(Badge)`
+  font-size: ${({ theme }) => theme.fontSizes.xs};
+  font-weight: 500;
+`;
+
+const GroupCardBody = styled(Card.Body)`
+  padding: 0;
+`;
+
 const GroupHeader = styled.div`
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.lg};
   background: ${({ theme }) => theme.colors.background};
@@ -267,6 +301,11 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     localStorage.setItem('inboxGroupByRecency', String(enabled));
   };
 
+  // Nuke functionality
+  const [showNukeModal, setShowNukeModal] = useState(false);
+  const [nukePreset, setNukePreset] = useState<string>('1month');
+  const [customNukeDate, setCustomNukeDate] = useState('');
+
   const {
     emails,
     accounts,
@@ -297,7 +336,46 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     handleBulkDelete,
     handleBulkArchive,
     handleArchive,
+    handleUnarchive,
+    handleBulkUnarchive,
   } = useInboxEmails(folder);
+
+  // Nuke mutation
+  const [nukeOldEmails, { loading: nuking }] = useMutation(
+    NUKE_OLD_EMAILS_MUTATION,
+    {
+      onCompleted: (data: any) => {
+        toast.success(`Archived ${data.nukeOldEmails} email(s)`);
+        setShowNukeModal(false);
+        handleRefresh();
+      },
+      onError: (err: any) => toast.error(`Failed to archive: ${err.message}`),
+    },
+  );
+
+  const getNukeDate = () => {
+    if (nukePreset === 'custom') {
+      return DateTime.fromISO(customNukeDate).toJSDate();
+    }
+    const now = DateTime.now();
+    switch (nukePreset) {
+      case '1week':
+        return now.minus({ weeks: 1 }).toJSDate();
+      case '1month':
+        return now.minus({ months: 1 }).toJSDate();
+      case '6months':
+        return now.minus({ months: 6 }).toJSDate();
+      case '1year':
+        return now.minus({ years: 1 }).toJSDate();
+      default:
+        return now.minus({ months: 1 }).toJSDate();
+    }
+  };
+
+  const handleNuke = () => {
+    const olderThan = getNukeDate();
+    nukeOldEmails({ variables: { input: { olderThan } } });
+  };
 
   // Reset selected email when folder or tab changes
   useEffect(() => {
@@ -415,6 +493,14 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
               }
             : undefined
         }
+        onUnarchive={
+          folder === EmailFolder.Archive
+            ? () => {
+                handleUnarchive(selectedEmailId);
+                setSelectedEmailId(null);
+              }
+            : undefined
+        }
       />
     );
   }
@@ -493,6 +579,17 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             <FontAwesomeIcon icon={faSync} spin={syncing} className="me-1" />
             {syncing ? 'Syncing...' : 'Refresh'}
           </Button>
+          {folder === EmailFolder.Inbox && (
+            <Button
+              variant="outline-warning"
+              size="sm"
+              onClick={() => setShowNukeModal(true)}
+              title="Archive old emails to reach inbox zero"
+            >
+              <FontAwesomeIcon icon={faBomb} className="me-1" />
+              Nuke
+            </Button>
+          )}
         </ToolbarActions>
       </PageToolbar>
 
@@ -504,13 +601,29 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             className="mb-0"
           >
             <Tab eventKey="all" title="All Inboxes" />
-            {accounts.map((account) => (
-              <Tab
-                key={account.id}
-                eventKey={account.id}
-                title={account.name || account.email}
-              />
-            ))}
+            {accounts.map((account) => {
+              // Get provider icon from providerId or by matching host
+              const provider =
+                (account.providerId && getProviderById(account.providerId)) ||
+                getProviderByHost(account.host);
+              return (
+                <Tab
+                  key={account.id}
+                  eventKey={account.id}
+                  title={
+                    <span className="d-flex align-items-center gap-1">
+                      {provider && (
+                        <FontAwesomeIcon
+                          icon={provider.icon}
+                          style={{ color: provider.iconColor }}
+                        />
+                      )}
+                      {account.name || account.email.split('@')[0]}
+                    </span>
+                  }
+                />
+              );
+            })}
           </Tabs>
         </TabsWrapper>
       )}
@@ -568,6 +681,16 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                   Archive
                 </Button>
               )}
+              {folder === EmailFolder.Archive && (
+                <Button
+                  variant="outline-info"
+                  onClick={handleBulkUnarchive}
+                  title="Move to Inbox"
+                >
+                  <FontAwesomeIcon icon={faInbox} className="me-1" />
+                  Move to Inbox
+                </Button>
+              )}
               <Button
                 variant="outline-danger"
                 onClick={handleBulkDelete}
@@ -616,45 +739,56 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                   ? 'Your inbox is empty. New emails will appear here.'
                   : folder === EmailFolder.Trash
                     ? 'Your trash is empty.'
-                    : undefined
+                    : folder === EmailFolder.Archive
+                      ? 'Your archive is empty. Archive emails to keep them out of your inbox.'
+                      : undefined
             }
           />
         ) : groupByRecency ? (
-          // Grouped by recency
-          groupEmailsByRecency(emails).map((group) => (
-            <div key={group.group}>
-              <GroupHeader>
-                {RECENCY_GROUP_LABELS[group.group]} ({group.emails.length})
-              </GroupHeader>
-              {group.emails.map((email) => {
-                const account = accounts.find(
-                  (a) => a.id === email.emailAccountId,
-                );
-                const ItemComponent =
-                  viewMode === 'dense' ? EmailListItemDense : EmailListItem;
-                return (
-                  <ItemComponent
-                    key={email.id}
-                    email={email}
-                    account={account}
-                    showAccount={activeAccountTab === 'all'}
-                    isSelected={selectedIds.has(email.id)}
-                    onSelect={(selected) =>
-                      handleSelectEmail(email.id, selected)
-                    }
-                    onEmailClick={handleEmailClick}
-                    onStarToggle={handleStarToggle}
-                    onMarkRead={handleMarkRead}
-                    onReply={handleReply}
-                    onDelete={handleDelete}
-                    onArchive={
-                      folder !== EmailFolder.Archive ? handleArchive : undefined
-                    }
-                  />
-                );
-              })}
-            </div>
-          ))
+          // Grouped by recency with cards
+          <div style={{ padding: '1rem' }}>
+            {groupEmailsByRecency(emails).map((group) => (
+              <GroupCard key={group.group}>
+                <GroupCardHeader>
+                  <GroupTitle>
+                    {RECENCY_GROUP_LABELS[group.group]}
+                    <GroupCount bg="primary">{group.emails.length}</GroupCount>
+                  </GroupTitle>
+                </GroupCardHeader>
+                <GroupCardBody>
+                  {group.emails.map((email) => {
+                    const account = accounts.find(
+                      (a) => a.id === email.emailAccountId,
+                    );
+                    const ItemComponent =
+                      viewMode === 'dense' ? EmailListItemDense : EmailListItem;
+                    return (
+                      <ItemComponent
+                        key={email.id}
+                        email={email}
+                        account={account}
+                        showAccount={activeAccountTab === 'all'}
+                        isSelected={selectedIds.has(email.id)}
+                        onSelect={(selected) =>
+                          handleSelectEmail(email.id, selected)
+                        }
+                        onEmailClick={handleEmailClick}
+                        onStarToggle={handleStarToggle}
+                        onMarkRead={handleMarkRead}
+                        onReply={handleReply}
+                        onDelete={handleDelete}
+                        onArchive={
+                          folder !== EmailFolder.Archive
+                            ? handleArchive
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
+                </GroupCardBody>
+              </GroupCard>
+            ))}
+          </div>
         ) : (
           // Flat list
           emails.map((email) => {
@@ -691,6 +825,95 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         onPageChange={setCurrentPage}
         onPageSizeChange={setPageSize}
       />
+
+      {/* Nuke Modal */}
+      <Modal
+        show={showNukeModal}
+        onHide={() => setShowNukeModal(false)}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <FontAwesomeIcon icon={faBomb} className="me-2 text-warning" />
+            Reach Inbox Zero
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted">
+            Archive all emails older than a specific date. This helps you reach
+            inbox zero by moving old emails out of your inbox while keeping them
+            accessible in your archive.
+          </p>
+          <Form.Group className="mb-3">
+            <Form.Label>Archive emails older than:</Form.Label>
+            <div className="d-flex flex-column gap-2">
+              <Form.Check
+                type="radio"
+                id="nuke-1week"
+                label="1 week ago"
+                checked={nukePreset === '1week'}
+                onChange={() => setNukePreset('1week')}
+              />
+              <Form.Check
+                type="radio"
+                id="nuke-1month"
+                label="1 month ago"
+                checked={nukePreset === '1month'}
+                onChange={() => setNukePreset('1month')}
+              />
+              <Form.Check
+                type="radio"
+                id="nuke-6months"
+                label="6 months ago"
+                checked={nukePreset === '6months'}
+                onChange={() => setNukePreset('6months')}
+              />
+              <Form.Check
+                type="radio"
+                id="nuke-1year"
+                label="1 year ago"
+                checked={nukePreset === '1year'}
+                onChange={() => setNukePreset('1year')}
+              />
+              <Form.Check
+                type="radio"
+                id="nuke-custom"
+                label="Custom date"
+                checked={nukePreset === 'custom'}
+                onChange={() => setNukePreset('custom')}
+              />
+              {nukePreset === 'custom' && (
+                <Form.Control
+                  type="date"
+                  value={customNukeDate}
+                  onChange={(e) => setCustomNukeDate(e.target.value)}
+                  className="mt-2"
+                  max={new Date().toISOString().split('T')[0]}
+                />
+              )}
+            </div>
+          </Form.Group>
+          <Alert variant="info">
+            <small>
+              Emails will be moved to your Archive folder, not deleted. You can
+              always find them later.
+            </small>
+          </Alert>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowNukeModal(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="warning"
+            onClick={handleNuke}
+            disabled={nuking || (nukePreset === 'custom' && !customNukeDate)}
+          >
+            <FontAwesomeIcon icon={faBomb} className="me-1" />
+            {nuking ? 'Archiving...' : 'Archive Old Emails'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </PageWrapper>
   );
 }

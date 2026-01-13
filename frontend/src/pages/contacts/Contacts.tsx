@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   Container,
   Card,
-  Table,
   Button,
   Modal,
   Form,
   InputGroup,
   Badge,
+  ListGroup,
 } from 'react-bootstrap';
 import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -20,6 +20,10 @@ import {
   faAddressBook,
   faBuilding,
   faPhone,
+  faEnvelope,
+  faStar,
+  faTimes,
+  faUser,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
 import {
@@ -60,52 +64,151 @@ const SearchWrapper = styled.div`
   max-width: 300px;
 `;
 
-const ContactCard = styled(Card)`
+const ContactsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: ${({ theme }) => theme.spacing.lg};
+`;
+
+const ContactCardStyled = styled(Card)`
   border: none;
   box-shadow: ${({ theme }) => theme.shadows.sm};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-`;
-
-const ContactRow = styled.tr`
-  cursor: pointer;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 
   &:hover {
-    background: ${({ theme }) => theme.colors.backgroundHover};
+    box-shadow: ${({ theme }) => theme.shadows.md};
+    transform: translateY(-2px);
   }
 `;
 
-const ContactName = styled.span`
-  font-weight: 500;
+const ContactCardHeader = styled(Card.Header)`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.md};
+  background: linear-gradient(
+    135deg,
+    ${({ theme }) => theme.colors.primary}15 0%,
+    ${({ theme }) => theme.colors.primary}05 100%
+  );
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  padding: ${({ theme }) => theme.spacing.md};
 `;
 
-const ContactEmail = styled.span`
+const ContactAvatar = styled.div`
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.primary}20;
   color: ${({ theme }) => theme.colors.primary};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
 `;
 
-const SecondaryInfo = styled.span`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
+const ContactInfo = styled.div`
+  flex: 1;
+  min-width: 0;
 `;
+
+const ContactName = styled.div`
+  font-weight: 600;
+  font-size: ${({ theme }) => theme.fontSizes.md};
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ContactCompany = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const ContactCardBody = styled(Card.Body)`
+  padding: ${({ theme }) => theme.spacing.md};
+`;
+
+const EmailList = styled.div`
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+`;
+
+const EmailItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => theme.spacing.xs} 0;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+
+  .email-address {
+    color: ${({ theme }) => theme.colors.primary};
+    flex: 1;
+  }
+
+  .email-label {
+    color: ${({ theme }) => theme.colors.textMuted};
+    font-size: ${({ theme }) => theme.fontSizes.xs};
+  }
+`;
+
+const ContactMeta = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.lg};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const ContactCardFooter = styled(Card.Footer)`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.sm};
+  background: ${({ theme }) => theme.colors.background};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+`;
+
+// Email form types
+interface EmailFormItem {
+  id?: string;
+  email: string;
+  isPrimary: boolean;
+  label: string;
+}
 
 interface ContactFormData {
-  email: string;
   name: string;
   firstName: string;
   lastName: string;
   company: string;
   phone: string;
   notes: string;
+  emails: EmailFormItem[];
 }
 
 const emptyFormData: ContactFormData = {
-  email: '',
   name: '',
   firstName: '',
   lastName: '',
   company: '',
   phone: '',
   notes: '',
+  emails: [{ email: '', isPrimary: true, label: '' }],
 };
+
+const EmailFormRow = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.sm};
+  align-items: center;
+  margin-bottom: ${({ theme }) => theme.spacing.sm};
+
+  .email-input {
+    flex: 2;
+  }
+
+  .label-input {
+    flex: 1;
+  }
+`;
 
 export function Contacts() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,7 +220,7 @@ export function Contacts() {
   const [deletingContact, setDeletingContact] = useState<{
     id: string;
     name?: string | null;
-    email: string;
+    email?: string | null;
   } | null>(null);
   const [formData, setFormData] = useState<ContactFormData>(emptyFormData);
 
@@ -166,14 +269,17 @@ export function Contacts() {
   const contacts = data?.getContacts ?? [];
 
   const filteredContacts = searchQuery
-    ? contacts.filter(
-        (c) =>
-          c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.firstName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.lastName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          c.company?.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
+    ? contacts.filter((c) => {
+        const query = searchQuery.toLowerCase();
+        return (
+          c.email?.toLowerCase().includes(query) ||
+          c.emails?.some((e) => e.email.toLowerCase().includes(query)) ||
+          c.name?.toLowerCase().includes(query) ||
+          c.firstName?.toLowerCase().includes(query) ||
+          c.lastName?.toLowerCase().includes(query) ||
+          c.company?.toLowerCase().includes(query)
+        );
+      })
     : contacts;
 
   const handleOpenCreate = () => {
@@ -185,13 +291,21 @@ export function Contacts() {
   const handleOpenEdit = (contact: any) => {
     setEditingContact({ id: contact.id });
     setFormData({
-      email: contact.email,
       name: contact.name || '',
       firstName: contact.firstName || '',
       lastName: contact.lastName || '',
       company: contact.company || '',
       phone: contact.phone || '',
       notes: contact.notes || '',
+      emails:
+        contact.emails?.length > 0
+          ? contact.emails.map((e: any) => ({
+              id: e.id,
+              email: e.email,
+              isPrimary: e.isPrimary,
+              label: e.label || '',
+            }))
+          : [{ email: contact.email || '', isPrimary: true, label: '' }],
     });
     setShowModal(true);
   };
@@ -205,27 +319,81 @@ export function Contacts() {
     setShowDeleteModal(true);
   };
 
+  const handleAddEmail = () => {
+    setFormData({
+      ...formData,
+      emails: [...formData.emails, { email: '', isPrimary: false, label: '' }],
+    });
+  };
+
+  const handleRemoveEmail = (index: number) => {
+    if (formData.emails.length <= 1) {
+      toast.error('Contact must have at least one email');
+      return;
+    }
+    const newEmails = formData.emails.filter((_, i) => i !== index);
+    // If we removed the primary, make the first one primary
+    if (formData.emails[index].isPrimary && newEmails.length > 0) {
+      newEmails[0].isPrimary = true;
+    }
+    setFormData({ ...formData, emails: newEmails });
+  };
+
+  const handleEmailChange = (
+    index: number,
+    field: keyof EmailFormItem,
+    value: string | boolean,
+  ) => {
+    const newEmails = [...formData.emails];
+    if (field === 'isPrimary' && value === true) {
+      // Unset all other primaries
+      newEmails.forEach((e) => (e.isPrimary = false));
+    }
+    (newEmails[index] as any)[field] = value;
+    setFormData({ ...formData, emails: newEmails });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.email) {
-      toast.error('Email is required');
+    const validEmails = formData.emails.filter((e) => e.email.trim());
+    if (validEmails.length === 0) {
+      toast.error('At least one email is required');
       return;
     }
+
+    // Ensure one is primary
+    if (!validEmails.some((e) => e.isPrimary)) {
+      validEmails[0].isPrimary = true;
+    }
+
+    const input = {
+      name: formData.name || undefined,
+      firstName: formData.firstName || undefined,
+      lastName: formData.lastName || undefined,
+      company: formData.company || undefined,
+      phone: formData.phone || undefined,
+      notes: formData.notes || undefined,
+      emails: validEmails.map((e) => ({
+        email: e.email.trim(),
+        isPrimary: e.isPrimary,
+        label: e.label || undefined,
+      })),
+    };
 
     if (editingContact) {
       updateContact({
         variables: {
           input: {
             id: editingContact.id,
-            ...formData,
+            ...input,
           },
         },
       });
     } else {
       createContact({
         variables: {
-          input: formData,
+          input,
         },
       });
     }
@@ -237,13 +405,33 @@ export function Contacts() {
     }
   };
 
+  const getDisplayName = (contact: any) => {
+    return (
+      contact.name ||
+      [contact.firstName, contact.lastName].filter(Boolean).join(' ') ||
+      contact.email ||
+      contact.emails?.[0]?.email ||
+      'Unknown'
+    );
+  };
+
+  const getContactEmails = (contact: any) => {
+    if (contact.emails?.length > 0) {
+      return contact.emails;
+    }
+    if (contact.email) {
+      return [{ email: contact.email, isPrimary: true, label: null }];
+    }
+    return [];
+  };
+
   if (loading) {
     return <LoadingSpinner message="Loading contacts..." />;
   }
 
   return (
     <PageWrapper>
-      <Container>
+      <Container fluid>
         <PageHeader>
           <PageTitle>
             <FontAwesomeIcon icon={faAddressBook} />
@@ -283,87 +471,95 @@ export function Contacts() {
             }
           />
         ) : (
-          <ContactCard>
-            <Table hover responsive className="mb-0">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Company</th>
-                  <th>Phone</th>
-                  <th style={{ width: '100px' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredContacts.map((contact) => (
-                  <ContactRow key={contact.id}>
-                    <td>
+          <ContactsGrid>
+            {filteredContacts.map((contact) => {
+              const emails = getContactEmails(contact);
+              return (
+                <ContactCardStyled key={contact.id}>
+                  <ContactCardHeader>
+                    <ContactAvatar>
+                      <FontAwesomeIcon icon={faUser} />
+                    </ContactAvatar>
+                    <ContactInfo>
                       <ContactName>
-                        {contact.name ||
-                          [contact.firstName, contact.lastName]
-                            .filter(Boolean)
-                            .join(' ') ||
-                          '-'}
+                        {getDisplayName(contact)}
+                        {contact.isAutoCreated && (
+                          <Badge bg="light" text="dark" className="ms-2">
+                            Auto
+                          </Badge>
+                        )}
                       </ContactName>
-                      {contact.isAutoCreated && (
-                        <Badge bg="light" text="dark" className="ms-2">
-                          Auto
-                        </Badge>
+                      {contact.company && (
+                        <ContactCompany>
+                          <FontAwesomeIcon icon={faBuilding} className="me-1" />
+                          {contact.company}
+                        </ContactCompany>
                       )}
-                    </td>
-                    <td>
-                      <ContactEmail>{contact.email}</ContactEmail>
-                    </td>
-                    <td>
-                      <SecondaryInfo>
-                        {contact.company && (
-                          <>
-                            <FontAwesomeIcon
-                              icon={faBuilding}
-                              className="me-1"
-                            />
-                            {contact.company}
-                          </>
-                        )}
-                      </SecondaryInfo>
-                    </td>
-                    <td>
-                      <SecondaryInfo>
-                        {contact.phone && (
-                          <>
-                            <FontAwesomeIcon icon={faPhone} className="me-1" />
-                            {contact.phone}
-                          </>
-                        )}
-                      </SecondaryInfo>
-                    </td>
-                    <td>
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        className="me-1"
-                        onClick={() => handleOpenEdit(contact)}
-                      >
-                        <FontAwesomeIcon icon={faEdit} />
-                      </Button>
-                      <Button
-                        variant="outline-danger"
-                        size="sm"
-                        onClick={() => handleOpenDelete(contact)}
-                      >
-                        <FontAwesomeIcon icon={faTrash} />
-                      </Button>
-                    </td>
-                  </ContactRow>
-                ))}
-              </tbody>
-            </Table>
-          </ContactCard>
+                    </ContactInfo>
+                  </ContactCardHeader>
+                  <ContactCardBody>
+                    <EmailList>
+                      {emails.map((emailItem: any, index: number) => (
+                        <EmailItem key={emailItem.id || index}>
+                          <FontAwesomeIcon
+                            icon={faEnvelope}
+                            style={{
+                              color: emailItem.isPrimary ? '#667eea' : '#999',
+                            }}
+                          />
+                          <span className="email-address">{emailItem.email}</span>
+                          {emailItem.isPrimary && (
+                            <Badge bg="primary" pill>
+                              Primary
+                            </Badge>
+                          )}
+                          {emailItem.label && (
+                            <span className="email-label">{emailItem.label}</span>
+                          )}
+                        </EmailItem>
+                      ))}
+                    </EmailList>
+                    {contact.phone && (
+                      <ContactMeta>
+                        <span>
+                          <FontAwesomeIcon icon={faPhone} className="me-1" />
+                          {contact.phone}
+                        </span>
+                      </ContactMeta>
+                    )}
+                  </ContactCardBody>
+                  <ContactCardFooter>
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      onClick={() => handleOpenEdit(contact)}
+                    >
+                      <FontAwesomeIcon icon={faEdit} className="me-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleOpenDelete(contact)}
+                    >
+                      <FontAwesomeIcon icon={faTrash} className="me-1" />
+                      Delete
+                    </Button>
+                  </ContactCardFooter>
+                </ContactCardStyled>
+              );
+            })}
+          </ContactsGrid>
         )}
       </Container>
 
       {/* Create/Edit Modal */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered>
+      <Modal
+        show={showModal}
+        onHide={() => setShowModal(false)}
+        centered
+        size="lg"
+      >
         <Form onSubmit={handleSubmit}>
           <Modal.Header closeButton>
             <Modal.Title>
@@ -372,16 +568,66 @@ export function Contacts() {
           </Modal.Header>
           <Modal.Body>
             <Form.Group className="mb-3">
-              <Form.Label>Email *</Form.Label>
-              <Form.Control
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                required
-              />
+              <Form.Label>
+                <FontAwesomeIcon icon={faEnvelope} className="me-1" />
+                Email Addresses *
+              </Form.Label>
+              {formData.emails.map((emailItem, index) => (
+                <EmailFormRow key={index}>
+                  <Form.Control
+                    type="email"
+                    className="email-input"
+                    placeholder="email@example.com"
+                    value={emailItem.email}
+                    onChange={(e) =>
+                      handleEmailChange(index, 'email', e.target.value)
+                    }
+                    required={index === 0}
+                  />
+                  <Form.Control
+                    type="text"
+                    className="label-input"
+                    placeholder="Label (Work, Personal...)"
+                    value={emailItem.label}
+                    onChange={(e) =>
+                      handleEmailChange(index, 'label', e.target.value)
+                    }
+                  />
+                  <Button
+                    variant={emailItem.isPrimary ? 'primary' : 'outline-secondary'}
+                    size="sm"
+                    onClick={() => handleEmailChange(index, 'isPrimary', true)}
+                    title="Set as primary"
+                    type="button"
+                  >
+                    <FontAwesomeIcon icon={faStar} />
+                  </Button>
+                  {formData.emails.length > 1 && (
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleRemoveEmail(index)}
+                      title="Remove email"
+                      type="button"
+                    >
+                      <FontAwesomeIcon icon={faTimes} />
+                    </Button>
+                  )}
+                </EmailFormRow>
+              ))}
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handleAddEmail}
+                type="button"
+              >
+                <FontAwesomeIcon icon={faPlus} className="me-1" />
+                Add Email
+              </Button>
             </Form.Group>
+
+            <hr />
+
             <Form.Group className="mb-3">
               <Form.Label>Display Name</Form.Label>
               <Form.Control
@@ -420,7 +666,10 @@ export function Contacts() {
               </div>
             </div>
             <Form.Group className="mb-3">
-              <Form.Label>Company</Form.Label>
+              <Form.Label>
+                <FontAwesomeIcon icon={faBuilding} className="me-1" />
+                Company
+              </Form.Label>
               <Form.Control
                 type="text"
                 value={formData.company}
@@ -430,7 +679,10 @@ export function Contacts() {
               />
             </Form.Group>
             <Form.Group className="mb-3">
-              <Form.Label>Phone</Form.Label>
+              <Form.Label>
+                <FontAwesomeIcon icon={faPhone} className="me-1" />
+                Phone
+              </Form.Label>
               <Form.Control
                 type="tel"
                 value={formData.phone}

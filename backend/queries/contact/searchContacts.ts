@@ -1,7 +1,7 @@
 import { makeQuery } from '../../types.js';
-import { Contact } from '../../db/models/index.js';
+import { Contact, ContactEmail } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
-import { Op, literal, fn, col } from 'sequelize';
+import { Op, literal } from 'sequelize';
 
 export const searchContacts = makeQuery(
   'searchContacts',
@@ -33,29 +33,30 @@ export const searchContacts = makeQuery(
         [Op.and]: [
           literal(`(
             to_tsvector('english', 
-              COALESCE("email", '') || ' ' || 
-              COALESCE("name", '') || ' ' || 
-              COALESCE("firstName", '') || ' ' || 
-              COALESCE("lastName", '') || ' ' || 
-              COALESCE("company", '') || ' ' || 
-              COALESCE("phone", '') || ' ' || 
-              COALESCE("notes", '')
+              COALESCE("Contact"."email", '') || ' ' || 
+              COALESCE("Contact"."name", '') || ' ' || 
+              COALESCE("Contact"."firstName", '') || ' ' || 
+              COALESCE("Contact"."lastName", '') || ' ' || 
+              COALESCE("Contact"."company", '') || ' ' || 
+              COALESCE("Contact"."phone", '') || ' ' || 
+              COALESCE("Contact"."notes", '')
             ) @@ to_tsquery('english', '${searchTerms.replace(/'/g, "''")}')
           )`),
         ],
       },
+      include: [ContactEmail],
       order: [
         // Order by relevance (ts_rank)
         [
           literal(`ts_rank(
             to_tsvector('english', 
-              COALESCE("email", '') || ' ' || 
-              COALESCE("name", '') || ' ' || 
-              COALESCE("firstName", '') || ' ' || 
-              COALESCE("lastName", '') || ' ' || 
-              COALESCE("company", '') || ' ' || 
-              COALESCE("phone", '') || ' ' || 
-              COALESCE("notes", '')
+              COALESCE("Contact"."email", '') || ' ' || 
+              COALESCE("Contact"."name", '') || ' ' || 
+              COALESCE("Contact"."firstName", '') || ' ' || 
+              COALESCE("Contact"."lastName", '') || ' ' || 
+              COALESCE("Contact"."company", '') || ' ' || 
+              COALESCE("Contact"."phone", '') || ' ' || 
+              COALESCE("Contact"."notes", '')
             ),
             to_tsquery('english', '${searchTerms.replace(/'/g, "''")}')
           )`),

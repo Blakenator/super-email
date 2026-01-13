@@ -3,11 +3,12 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasMany,
   Model,
   Table,
-  Index,
 } from 'sequelize-typescript';
 import { User } from './user.model.js';
+import { ContactEmail } from './contact-email.model.js';
 
 @Table({ timestamps: true, tableName: 'contacts' })
 export class Contact extends Model {
@@ -26,8 +27,9 @@ export class Contact extends Model {
   @BelongsTo(() => User)
   declare user: User;
 
-  @Column({ type: DataType.TEXT, allowNull: false })
-  declare email: string;
+  // Primary email for backward compatibility - will be synced with the primary ContactEmail
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare email: string | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare name: string | null;
@@ -50,4 +52,7 @@ export class Contact extends Model {
   // Whether this contact was auto-created from email interaction
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare isAutoCreated: boolean;
+
+  @HasMany(() => ContactEmail)
+  declare emails: ContactEmail[];
 }

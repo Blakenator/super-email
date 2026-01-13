@@ -32,6 +32,7 @@ import {
   faPen,
   faEnvelope,
   faAddressBook,
+  faArchive,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 
@@ -152,6 +153,12 @@ function AuthenticatedApp() {
       icon: faTrash,
       folder: EmailFolder.Trash,
     },
+    {
+      path: '/archive',
+      label: 'Archive',
+      icon: faArchive,
+      folder: EmailFolder.Archive,
+    },
   ];
 
   return (
@@ -244,6 +251,10 @@ function AuthenticatedApp() {
             <Route
               path="/trash"
               element={<Inbox folder={EmailFolder.Trash} />}
+            />
+            <Route
+              path="/archive"
+              element={<Inbox folder={EmailFolder.Archive} />}
             />
             <Route path="/compose" element={<Compose />} />
             <Route path="/contacts" element={<Contacts />} />

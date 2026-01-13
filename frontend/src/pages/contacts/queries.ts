@@ -5,6 +5,12 @@ export const GET_CONTACTS_QUERY = gql(`
     getContacts {
       id
       email
+      emails {
+        id
+        email
+        isPrimary
+        label
+      }
       name
       firstName
       lastName
@@ -22,6 +28,12 @@ export const SEARCH_CONTACTS_QUERY = gql(`
     searchContacts(query: $query) {
       id
       email
+      emails {
+        id
+        email
+        isPrimary
+        label
+      }
       name
       firstName
       lastName
@@ -34,6 +46,12 @@ export const CREATE_CONTACT_MUTATION = gql(`
     createContact(input: $input) {
       id
       email
+      emails {
+        id
+        email
+        isPrimary
+        label
+      }
       name
     }
   }
@@ -44,6 +62,12 @@ export const UPDATE_CONTACT_MUTATION = gql(`
     updateContact(input: $input) {
       id
       email
+      emails {
+        id
+        email
+        isPrimary
+        label
+      }
       name
       firstName
       lastName

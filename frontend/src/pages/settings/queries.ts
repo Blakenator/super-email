@@ -20,6 +20,7 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
         name
         email
       }
+      providerId
     }
   }
 `);
@@ -63,6 +64,7 @@ export const GET_SMTP_PROFILES_FULL_QUERY = gql(`
       port
       useSsl
       isDefault
+      providerId
     }
   }
 `);
@@ -146,5 +148,11 @@ export const GET_AUTHENTICATION_METHODS_QUERY = gql(`
 export const DELETE_AUTHENTICATION_METHOD_MUTATION = gql(`
   mutation DeleteAuthenticationMethod($id: String!) {
     deleteAuthenticationMethod(id: $id)
+  }
+`);
+
+export const NUKE_OLD_EMAILS_MUTATION = gql(`
+  mutation NukeOldEmails($input: NukeOldEmailsInput!) {
+    nukeOldEmails(input: $input)
   }
 `);
