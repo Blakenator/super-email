@@ -174,12 +174,34 @@ export function useInboxEmails(folder: EmailFolder) {
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    const count = selectedIds.size;
     await bulkDeleteEmails({
       variables: { ids: Array.from(selectedIds) },
     });
     setSelectedIds(new Set());
   }, [selectedIds, bulkDeleteEmails]);
+
+  const handleBulkArchive = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    await bulkUpdateEmails({
+      variables: {
+        input: { ids: Array.from(selectedIds), folder: EmailFolder.Archive },
+      },
+    });
+    toast.success(`Archived ${selectedIds.size} email(s)`);
+    setSelectedIds(new Set());
+  }, [selectedIds, bulkUpdateEmails]);
+
+  const handleArchive = useCallback(
+    async (emailId: string) => {
+      await bulkUpdateEmails({
+        variables: {
+          input: { ids: [emailId], folder: EmailFolder.Archive },
+        },
+      });
+      toast.success('Email archived');
+    },
+    [bulkUpdateEmails],
+  );
 
   // Selection handlers
   const handleSelectEmail = useCallback((emailId: string, selected: boolean) => {
@@ -238,5 +260,7 @@ export function useInboxEmails(folder: EmailFolder) {
     handleBulkMarkRead,
     handleBulkStar,
     handleBulkDelete,
+    handleBulkArchive,
+    handleArchive,
   };
 }

@@ -8,6 +8,7 @@ import {
   faTrash,
   faEnvelope,
   faEnvelopeOpen,
+  faArchive,
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 
@@ -161,6 +162,7 @@ interface EmailListItemDenseProps {
   onMarkRead: (emailId: string, isRead: boolean) => void;
   onReply: (email: Email) => void;
   onDelete: (emailId: string) => void;
+  onArchive?: (emailId: string) => void;
 }
 
 function formatDate(dateStr: string) {
@@ -188,6 +190,7 @@ export function EmailListItemDense({
   onMarkRead,
   onReply,
   onDelete,
+  onArchive,
 }: EmailListItemDenseProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -209,6 +212,13 @@ export function EmailListItemDense({
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setShowDeleteConfirm(true);
+  };
+
+  const handleArchiveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onArchive) {
+      onArchive(email.id);
+    }
   };
 
   const confirmDelete = () => {
@@ -275,6 +285,16 @@ export function EmailListItemDense({
           >
             <FontAwesomeIcon icon={faReply} />
           </ActionButton>
+          {onArchive && (
+            <ActionButton
+              variant="outline-secondary"
+              size="sm"
+              onClick={handleArchiveClick}
+              title="Archive"
+            >
+              <FontAwesomeIcon icon={faArchive} />
+            </ActionButton>
+          )}
           <ActionButton
             variant="outline-danger"
             size="sm"

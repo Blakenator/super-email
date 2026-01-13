@@ -2,6 +2,7 @@
 export * from './BackButton';
 export * from './ContactFormModal';
 export * from './EmailChipInput';
+export * from './EmailContactCard';
 export * from './EmptyState';
 export * from './ErrorBoundary';
 export * from './HtmlViewer';

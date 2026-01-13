@@ -18,24 +18,29 @@ type User implements BaseEntityProps {
   lastName: String!
   emailAccounts: [EmailAccount!]!
   smtpProfiles: [SmtpProfile!]!
+  authenticationMethods: [AuthenticationMethod!]!
 }
 
-input SignUpInput {
+enum AuthProvider {
+  EMAIL_PASSWORD
+  GOOGLE
+  GITHUB
+  APPLE
+  MICROSOFT
+}
+
+type AuthenticationMethod implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  userId: String!
+  provider: AuthProvider!
+  providerUserId: String!
   email: String!
-  password: String!
-  firstName: String!
-  lastName: String!
+  displayName: String
+  lastUsedAt: Date
 }
 
-input LoginInput {
-  email: String!
-  password: String!
-}
-
-type AuthPayload {
-  token: String!
-  user: User!
-}
 
 # ============ Email Accounts (IMAP/POP) ============
 
@@ -300,7 +305,8 @@ input TestSmtpConnectionInput {
 
 type Query {
   # Auth
-  me: User
+  fetchProfile: User
+  getAuthenticationMethods: [AuthenticationMethod!]!
 
   # Email Accounts
   getEmailAccounts: [EmailAccount!]!
@@ -326,8 +332,7 @@ type Query {
 
 type Mutation {
   # Auth
-  signUp(input: SignUpInput!): AuthPayload!
-  login(input: LoginInput!): AuthPayload!
+  deleteAuthenticationMethod(id: String!): Boolean!
 
   # Email Accounts
   createEmailAccount(input: CreateEmailAccountInput!): EmailAccount!

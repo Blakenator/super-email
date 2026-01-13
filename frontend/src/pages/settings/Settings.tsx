@@ -31,6 +31,8 @@ import {
   TEST_SMTP_CONNECTION_MUTATION,
   UPDATE_EMAIL_ACCOUNT_MUTATION,
   UPDATE_SMTP_PROFILE_MUTATION,
+  GET_AUTHENTICATION_METHODS_QUERY,
+  DELETE_AUTHENTICATION_METHOD_MUTATION,
 } from './queries';
 import { EmailAccountType } from '../../__generated__/graphql';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,7 +51,15 @@ import {
   faCircle,
   faSave,
   faEdit,
+  faKey,
+  faShieldAlt,
 } from '@fortawesome/free-solid-svg-icons';
+import {
+  faGoogle,
+  faGithub,
+  faApple,
+  faMicrosoft,
+} from '@fortawesome/free-brands-svg-icons';
 
 const PageWrapper = styled.div`
   padding: 1.5rem;
@@ -198,6 +208,158 @@ const SyncProgressBar = styled(ProgressBar)`
   }
 `;
 
+// Email Account Card Grid
+const AccountCardGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const AccountCard = styled(Card)<{ $isSyncing?: boolean }>`
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  overflow: hidden;
+
+  ${({ $isSyncing }) =>
+    $isSyncing &&
+    `
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+  `}
+
+  &:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+  }
+`;
+
+const AccountCardHeader = styled(Card.Header)`
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: ${({ theme }) => theme.spacing.md};
+  border: none;
+`;
+
+const AccountCardTitle = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.lg};
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+`;
+
+const AccountCardSubtitle = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  opacity: 0.9;
+`;
+
+const AccountCardBody = styled(Card.Body)`
+  padding: ${({ theme }) => theme.spacing.md};
+`;
+
+const AccountDetailRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: ${({ theme }) => theme.spacing.xs} 0;
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const AccountDetailLabel = styled.span`
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const AccountCardFooter = styled(Card.Footer)`
+  background: ${({ theme }) => theme.colors.background};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+`;
+
+const AccountCardActions = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.xs};
+  flex-wrap: wrap;
+`;
+
+// Authentication Method styles
+const AuthMethodCard = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  margin-bottom: 0.75rem;
+  background: white;
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+`;
+
+const AuthMethodIcon = styled.div<{ $provider: string }>`
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-right: 1rem;
+  background: ${({ $provider }) => {
+    switch ($provider) {
+      case 'GOOGLE':
+        return '#fff';
+      case 'GITHUB':
+        return '#24292e';
+      case 'APPLE':
+        return '#000';
+      case 'MICROSOFT':
+        return '#00a4ef';
+      default:
+        return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+    }
+  }};
+  color: ${({ $provider }) => {
+    switch ($provider) {
+      case 'GOOGLE':
+        return '#4285f4';
+      case 'GITHUB':
+        return '#fff';
+      case 'APPLE':
+        return '#fff';
+      case 'MICROSOFT':
+        return '#fff';
+      default:
+        return '#fff';
+    }
+  }};
+  border: ${({ $provider }) => ($provider === 'GOOGLE' ? '1px solid #e0e0e0' : 'none')};
+`;
+
+const AuthMethodInfo = styled.div`
+  flex: 1;
+`;
+
+const AuthMethodName = styled.div`
+  font-weight: 600;
+  font-size: 1rem;
+  color: ${({ theme }) => theme.colors.text};
+`;
+
+const AuthMethodEmail = styled.div`
+  font-size: 0.875rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+const AuthMethodMeta = styled.div`
+  font-size: 0.75rem;
+  color: ${({ theme }) => theme.colors.textMuted};
+  margin-top: 0.25rem;
+`;
+
 type SaveStep = {
   id: string;
   title: string;
@@ -286,6 +448,25 @@ export function Settings() {
     loading: smtpProfilesLoading,
     refetch: refetchSmtpProfiles,
   } = useQuery(GET_SMTP_PROFILES_FULL_QUERY);
+
+  const {
+    data: authMethodsData,
+    loading: authMethodsLoading,
+    refetch: refetchAuthMethods,
+  } = useQuery(GET_AUTHENTICATION_METHODS_QUERY);
+
+  const [deleteAuthMethod, { loading: deletingAuthMethod }] = useMutation(
+    DELETE_AUTHENTICATION_METHOD_MUTATION,
+    {
+      onCompleted: () => {
+        refetchAuthMethods();
+        toast.success('Authentication method removed');
+      },
+      onError: (err) => toast.error(err.message),
+    },
+  );
+
+  const authMethods = authMethodsData?.getAuthenticationMethods ?? [];
 
   const [createEmailAccount, { loading: creatingEmailAccount }] = useMutation(
     CREATE_EMAIL_ACCOUNT_MUTATION,
@@ -859,27 +1040,27 @@ export function Settings() {
                     emails.
                   </p>
                 ) : (
-                  <Table hover responsive>
-                    <thead>
-                      <tr>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Server</th>
-                        <th>Type</th>
-                        <th>Default SMTP</th>
-                        <th>Last Sync</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {emailAccounts.map((account) => (
-                        <tr key={account.id}>
-                          <td>{account.name}</td>
-                          <td>{account.email}</td>
-                          <td>
-                            {account.host}:{account.port}
-                          </td>
-                          <td>
+                  <AccountCardGrid>
+                    {emailAccounts.map((account) => (
+                      <AccountCard
+                        key={account.id}
+                        $isSyncing={account.isSyncing}
+                      >
+                        <AccountCardHeader>
+                          <AccountCardTitle>{account.name}</AccountCardTitle>
+                          <AccountCardSubtitle>
+                            {account.email}
+                          </AccountCardSubtitle>
+                        </AccountCardHeader>
+                        <AccountCardBody>
+                          <AccountDetailRow>
+                            <AccountDetailLabel>Server</AccountDetailLabel>
+                            <span>
+                              {account.host}:{account.port}
+                            </span>
+                          </AccountDetailRow>
+                          <AccountDetailRow>
+                            <AccountDetailLabel>Type</AccountDetailLabel>
                             <Badge
                               bg={
                                 account.accountType === 'IMAP'
@@ -889,8 +1070,11 @@ export function Settings() {
                             >
                               {account.accountType}
                             </Badge>
-                          </td>
-                          <td>
+                          </AccountDetailRow>
+                          <AccountDetailRow>
+                            <AccountDetailLabel>
+                              Default SMTP
+                            </AccountDetailLabel>
                             {account.defaultSmtpProfile ? (
                               <Badge bg="primary">
                                 {account.defaultSmtpProfile.name}
@@ -898,60 +1082,66 @@ export function Settings() {
                             ) : (
                               <span className="text-muted">—</span>
                             )}
-                          </td>
-                          <td style={{ minWidth: '180px', maxWidth: '220px' }}>
-                            {account.isSyncing ? (
-                              <SyncStatusContainer>
-                                <SyncStatusHeader>
-                                  <Spinner
-                                    animation="border"
-                                    size="sm"
-                                    style={{ width: '14px', height: '14px' }}
-                                  />
-                                  <SyncStatusText>Syncing...</SyncStatusText>
-                                </SyncStatusHeader>
-                                {account.syncProgress !== null &&
-                                  account.syncProgress !== undefined && (
-                                    <OverlayTrigger
-                                      placement="top"
-                                      overlay={
-                                        <Tooltip>
-                                          {account.syncProgress}% complete
-                                        </Tooltip>
-                                      }
-                                    >
-                                      <SyncProgressBar
-                                        now={account.syncProgress}
-                                        variant="primary"
-                                        animated
-                                      />
-                                    </OverlayTrigger>
-                                  )}
-                              </SyncStatusContainer>
-                            ) : account.lastSyncedAt ? (
-                              <div>
-                                <small>
-                                  {new Date(
-                                    account.lastSyncedAt,
-                                  ).toLocaleString([], {
+                          </AccountDetailRow>
+                          <AccountDetailRow>
+                            <AccountDetailLabel>Last Sync</AccountDetailLabel>
+                            {account.lastSyncedAt ? (
+                              <span>
+                                {new Date(account.lastSyncedAt).toLocaleString(
+                                  [],
+                                  {
                                     month: 'short',
                                     day: 'numeric',
                                     hour: '2-digit',
                                     minute: '2-digit',
-                                  })}
-                                </small>
-                              </div>
-                            ) : (
-                              <span className="text-muted small">
-                                Never synced
+                                  },
+                                )}
                               </span>
+                            ) : (
+                              <span className="text-muted">Never synced</span>
                             )}
-                          </td>
-                          <td>
+                          </AccountDetailRow>
+                        </AccountCardBody>
+                        {account.isSyncing && (
+                          <AccountCardFooter>
+                            <SyncStatusContainer>
+                              <SyncStatusHeader>
+                                <Spinner
+                                  animation="border"
+                                  size="sm"
+                                  style={{ width: '14px', height: '14px' }}
+                                />
+                                <SyncStatusText>
+                                  {account.syncStatus || 'Syncing...'}
+                                </SyncStatusText>
+                              </SyncStatusHeader>
+                              {account.syncProgress !== null &&
+                                account.syncProgress !== undefined && (
+                                  <OverlayTrigger
+                                    placement="top"
+                                    overlay={
+                                      <Tooltip
+                                        id={`sync-progress-${account.id}`}
+                                      >
+                                        {account.syncProgress}% complete
+                                      </Tooltip>
+                                    }
+                                  >
+                                    <SyncProgressBar
+                                      now={account.syncProgress}
+                                      variant="primary"
+                                      animated
+                                    />
+                                  </OverlayTrigger>
+                                )}
+                            </SyncStatusContainer>
+                          </AccountCardFooter>
+                        )}
+                        <AccountCardFooter>
+                          <AccountCardActions>
                             <Button
                               variant="outline-secondary"
                               size="sm"
-                              className="me-1"
                               onClick={() => handleEditEmailAccount(account.id)}
                             >
                               <FontAwesomeIcon icon={faEdit} className="me-1" />
@@ -960,7 +1150,6 @@ export function Settings() {
                             <Button
                               variant="outline-primary"
                               size="sm"
-                              className="me-1"
                               onClick={() =>
                                 syncEmailAccount({
                                   variables: {
@@ -997,11 +1186,11 @@ export function Settings() {
                               />
                               Delete
                             </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
+                          </AccountCardActions>
+                        </AccountCardFooter>
+                      </AccountCard>
+                    ))}
+                  </AccountCardGrid>
                 )}
               </Card.Body>
             </SectionCard>
@@ -1093,6 +1282,128 @@ export function Settings() {
                       ))}
                     </tbody>
                   </Table>
+                )}
+              </Card.Body>
+            </SectionCard>
+          </Tab>
+
+          <Tab
+            eventKey="auth-methods"
+            title={
+              <>
+                <FontAwesomeIcon icon={faShieldAlt} className="me-1" />
+                Login Methods
+              </>
+            }
+          >
+            <SectionCard>
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h5 className="mb-0">Authentication Methods</h5>
+                </div>
+                <p className="text-muted mb-4">
+                  Manage the ways you can sign in to your account. You can link
+                  multiple email addresses or social accounts.
+                </p>
+
+                {authMethodsLoading ? (
+                  <div className="text-center py-4">
+                    <Spinner animation="border" size="sm" />
+                  </div>
+                ) : authMethods.length === 0 ? (
+                  <Alert variant="warning">
+                    No authentication methods found. This may indicate an issue
+                    with your account.
+                  </Alert>
+                ) : (
+                  <>
+                    {authMethods.map((method) => {
+                      const getProviderIcon = () => {
+                        switch (method.provider) {
+                          case 'GOOGLE':
+                            return faGoogle;
+                          case 'GITHUB':
+                            return faGithub;
+                          case 'APPLE':
+                            return faApple;
+                          case 'MICROSOFT':
+                            return faMicrosoft;
+                          default:
+                            return faKey;
+                        }
+                      };
+
+                      const getProviderName = () => {
+                        switch (method.provider) {
+                          case 'EMAIL_PASSWORD':
+                            return 'Email & Password';
+                          case 'GOOGLE':
+                            return 'Google';
+                          case 'GITHUB':
+                            return 'GitHub';
+                          case 'APPLE':
+                            return 'Apple';
+                          case 'MICROSOFT':
+                            return 'Microsoft';
+                          default:
+                            return method.provider;
+                        }
+                      };
+
+                      return (
+                        <AuthMethodCard key={method.id}>
+                          <AuthMethodIcon $provider={method.provider}>
+                            <FontAwesomeIcon icon={getProviderIcon()} />
+                          </AuthMethodIcon>
+                          <AuthMethodInfo>
+                            <AuthMethodName>{getProviderName()}</AuthMethodName>
+                            <AuthMethodEmail>{method.email}</AuthMethodEmail>
+                            <AuthMethodMeta>
+                              Added{' '}
+                              {method.createdAt
+                                ? new Date(
+                                    method.createdAt,
+                                  ).toLocaleDateString()
+                                : 'Unknown'}
+                              {method.lastUsedAt && (
+                                <>
+                                  {' · '}Last used{' '}
+                                  {new Date(
+                                    method.lastUsedAt,
+                                  ).toLocaleDateString()}
+                                </>
+                              )}
+                            </AuthMethodMeta>
+                          </AuthMethodInfo>
+                          {authMethods.length > 1 && (
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={() =>
+                                deleteAuthMethod({
+                                  variables: { id: method.id },
+                                })
+                              }
+                              disabled={deletingAuthMethod}
+                            >
+                              <FontAwesomeIcon
+                                icon={faTrash}
+                                className="me-1"
+                              />
+                              Remove
+                            </Button>
+                          )}
+                        </AuthMethodCard>
+                      );
+                    })}
+
+                    <Alert variant="info" className="mt-4">
+                      <FontAwesomeIcon icon={faShieldAlt} className="me-2" />
+                      <strong>Coming Soon:</strong> Link additional sign-in
+                      methods like Google, GitHub, Apple, or Microsoft to your
+                      account.
+                    </Alert>
+                  </>
                 )}
               </Card.Body>
             </SectionCard>

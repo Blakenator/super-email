@@ -19,6 +19,7 @@ import {
   faInfoCircle,
   faChevronDown,
   faChevronUp,
+  faArchive,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   LoadingSpinner,
@@ -212,9 +213,15 @@ interface EmailViewProps {
   emailId: string;
   onBack: () => void;
   onDelete: () => void;
+  onArchive?: () => void;
 }
 
-export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
+export function EmailView({
+  emailId,
+  onBack,
+  onDelete,
+  onArchive,
+}: EmailViewProps) {
   const navigate = useNavigate();
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
   const [showAddContactModal, setShowAddContactModal] = useState(false);
@@ -426,6 +433,12 @@ export function EmailView({ emailId, onBack, onDelete }: EmailViewProps) {
           >
             <FontAwesomeIcon icon={faBellSlash} className="me-1" />
             Unsubscribe
+          </Button>
+        )}
+        {onArchive && (
+          <Button variant="outline-secondary" onClick={onArchive}>
+            <FontAwesomeIcon icon={faArchive} className="me-1" />
+            Archive
           </Button>
         )}
         <Button variant="outline-danger" onClick={onDelete}>

@@ -1,5 +1,6 @@
 import type { AllQueries } from '../types.js';
-import { me } from './auth/me.js';
+import { fetchProfile } from './auth/fetchProfile.js';
+import { getAuthenticationMethods } from './auth/getAuthenticationMethods.js';
 import { getEmailAccounts } from './email-account/getEmailAccounts.js';
 import { getEmailAccount } from './email-account/getEmailAccount.js';
 import { getSmtpProfiles } from './smtp-profile/getSmtpProfiles.js';
@@ -13,7 +14,8 @@ import { getContact } from './contact/getContact.js';
 import { searchContacts } from './contact/searchContacts.js';
 
 export const QueryResolvers: AllQueries = {
-  me,
+  fetchProfile,
+  getAuthenticationMethods,
   getEmailAccounts,
   getEmailAccount,
   getSmtpProfiles,

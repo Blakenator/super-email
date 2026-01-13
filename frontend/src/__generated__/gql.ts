@@ -17,8 +17,8 @@ type Documents = {
     "\n  mutation CreateContactFromModal($input: CreateContactInput!) {\n    createContact(input: $input) {\n      id\n      email\n      name\n    }\n  }\n": typeof types.CreateContactFromModalDocument,
     "\n  mutation UpdateContactFromModal($input: UpdateContactInput!) {\n    updateContact(input: $input) {\n      id\n      email\n      name\n    }\n  }\n": typeof types.UpdateContactFromModalDocument,
     "\n  query SearchContactsForChipInput($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n    }\n  }\n": typeof types.SearchContactsForChipInputDocument,
-    "\n  mutation SignUp($input: SignUpInput!) {\n    signUp(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n": typeof types.SignUpDocument,
-    "\n  mutation Login($input: LoginInput!) {\n    login(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n": typeof types.LoginDocument,
+    "\n  query SearchContactByEmail($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n    }\n  }\n": typeof types.SearchContactByEmailDocument,
+    "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n": typeof types.FetchProfileDocument,
     "\n  query GetSmtpProfiles {\n    getSmtpProfiles {\n      id\n      name\n      email\n      alias\n      isDefault\n    }\n  }\n": typeof types.GetSmtpProfilesDocument,
     "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n    }\n  }\n": typeof types.GetEmailAccountsForComposeDocument,
     "\n  mutation SendEmail($input: ComposeEmailInput!) {\n    sendEmail(input: $input) {\n      id\n      messageId\n      subject\n    }\n  }\n": typeof types.SendEmailDocument,
@@ -52,13 +52,15 @@ type Documents = {
     "\n  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {\n    testSmtpConnection(input: $input) {\n      success\n      message\n    }\n  }\n": typeof types.TestSmtpConnectionDocument,
     "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n": typeof types.UpdateEmailAccountDocument,
     "\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      alias\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n": typeof types.UpdateSmtpProfileDocument,
+    "\n  query GetAuthenticationMethods {\n    getAuthenticationMethods {\n      id\n      provider\n      email\n      displayName\n      lastUsedAt\n      createdAt\n    }\n  }\n": typeof types.GetAuthenticationMethodsDocument,
+    "\n  mutation DeleteAuthenticationMethod($id: String!) {\n    deleteAuthenticationMethod(id: $id)\n  }\n": typeof types.DeleteAuthenticationMethodDocument,
 };
 const documents: Documents = {
     "\n  mutation CreateContactFromModal($input: CreateContactInput!) {\n    createContact(input: $input) {\n      id\n      email\n      name\n    }\n  }\n": types.CreateContactFromModalDocument,
     "\n  mutation UpdateContactFromModal($input: UpdateContactInput!) {\n    updateContact(input: $input) {\n      id\n      email\n      name\n    }\n  }\n": types.UpdateContactFromModalDocument,
     "\n  query SearchContactsForChipInput($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n    }\n  }\n": types.SearchContactsForChipInputDocument,
-    "\n  mutation SignUp($input: SignUpInput!) {\n    signUp(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n": types.SignUpDocument,
-    "\n  mutation Login($input: LoginInput!) {\n    login(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n": types.LoginDocument,
+    "\n  query SearchContactByEmail($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n    }\n  }\n": types.SearchContactByEmailDocument,
+    "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n": types.FetchProfileDocument,
     "\n  query GetSmtpProfiles {\n    getSmtpProfiles {\n      id\n      name\n      email\n      alias\n      isDefault\n    }\n  }\n": types.GetSmtpProfilesDocument,
     "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n    }\n  }\n": types.GetEmailAccountsForComposeDocument,
     "\n  mutation SendEmail($input: ComposeEmailInput!) {\n    sendEmail(input: $input) {\n      id\n      messageId\n      subject\n    }\n  }\n": types.SendEmailDocument,
@@ -92,6 +94,8 @@ const documents: Documents = {
     "\n  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {\n    testSmtpConnection(input: $input) {\n      success\n      message\n    }\n  }\n": types.TestSmtpConnectionDocument,
     "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n": types.UpdateEmailAccountDocument,
     "\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      alias\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n": types.UpdateSmtpProfileDocument,
+    "\n  query GetAuthenticationMethods {\n    getAuthenticationMethods {\n      id\n      provider\n      email\n      displayName\n      lastUsedAt\n      createdAt\n    }\n  }\n": types.GetAuthenticationMethodsDocument,
+    "\n  mutation DeleteAuthenticationMethod($id: String!) {\n    deleteAuthenticationMethod(id: $id)\n  }\n": types.DeleteAuthenticationMethodDocument,
 };
 
 /**
@@ -123,11 +127,11 @@ export function gql(source: "\n  query SearchContactsForChipInput($query: String
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  mutation SignUp($input: SignUpInput!) {\n    signUp(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n"): (typeof documents)["\n  mutation SignUp($input: SignUpInput!) {\n    signUp(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n"];
+export function gql(source: "\n  query SearchContactByEmail($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n    }\n  }\n"): (typeof documents)["\n  query SearchContactByEmail($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  mutation Login($input: LoginInput!) {\n    login(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n"): (typeof documents)["\n  mutation Login($input: LoginInput!) {\n    login(input: $input) {\n      token\n      user {\n        id\n        email\n        firstName\n        lastName\n      }\n    }\n  }\n"];
+export function gql(source: "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n"): (typeof documents)["\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -260,6 +264,14 @@ export function gql(source: "\n  mutation UpdateEmailAccount($input: UpdateEmail
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      alias\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {\n    updateSmtpProfile(input: $input) {\n      id\n      name\n      email\n      alias\n      host\n      port\n      useSsl\n      isDefault\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  query GetAuthenticationMethods {\n    getAuthenticationMethods {\n      id\n      provider\n      email\n      displayName\n      lastUsedAt\n      createdAt\n    }\n  }\n"): (typeof documents)["\n  query GetAuthenticationMethods {\n    getAuthenticationMethods {\n      id\n      provider\n      email\n      displayName\n      lastUsedAt\n      createdAt\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation DeleteAuthenticationMethod($id: String!) {\n    deleteAuthenticationMethod(id: $id)\n  }\n"): (typeof documents)["\n  mutation DeleteAuthenticationMethod($id: String!) {\n    deleteAuthenticationMethod(id: $id)\n  }\n"];
 
 export function gql(source: string) {
   return (documents as any)[source] ?? {};

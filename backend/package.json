@@ -22,6 +22,7 @@
     "@apollo/server": "^5.0.0",
     "@as-integrations/express5": "^1.1.2",
     "@main/common": "workspace:^",
+    "@supabase/supabase-js": "^2.90.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^5.1.0",

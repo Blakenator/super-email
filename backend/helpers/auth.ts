@@ -1,43 +1,82 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { createClient } from '@supabase/supabase-js';
 import type { BackendContext } from '../types.js';
+import { AuthenticationMethod } from '../db/models/index.js';
 
-// In production, use environment variable
-const JWT_SECRET = 'email-client-secret-key-change-in-production';
-const SALT_ROUNDS = 10;
+// Supabase client configuration
+const supabaseUrl = 'https://ivqyyttllhpwbducgpih.supabase.co';
+const supabaseAnonKey = 'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F';
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS);
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export async function verifyPassword(
-  password: string,
-  hash: string,
-): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
-
-export function generateToken(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '7d' });
-}
-
-export function verifyToken(token: string): { userId: string } | null {
+/**
+ * Verify a Supabase JWT token and return the local user ID
+ * by looking up the auth method with the matching Supabase user ID
+ */
+export async function verifyToken(
+  token: string,
+): Promise<{ userId: string; supabaseUserId: string } | null> {
   try {
-    return jwt.verify(token, JWT_SECRET) as { userId: string };
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return null;
+    }
+
+    const supabaseUserId = user.id;
+
+    // Look up auth method to find the local user ID
+    const authMethod = await AuthenticationMethod.findOne({
+      where: { providerUserId: supabaseUserId },
+    });
+
+    if (authMethod) {
+      return { userId: authMethod.userId, supabaseUserId };
+    }
+
+    // No auth method found yet - this is okay for new users
+    // The me query or login/signup will create the auth method
+    // Return null for userId so requireAuth will fail but we have supabaseUserId for later
+    return { userId: '', supabaseUserId };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get user metadata from Supabase
+ */
+export async function getUserFromToken(token: string): Promise<{
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+} | null> {
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      email: user.email || '',
+      firstName: user.user_metadata?.firstName || '',
+      lastName: user.user_metadata?.lastName || '',
+    };
   } catch {
     return null;
   }
 }
 
 export function getUserIdFromContext(context: BackendContext): string | null {
-  if (context.userId) {
-    return context.userId;
-  }
-  if (context.token) {
-    const payload = verifyToken(context.token);
-    return payload?.userId ?? null;
-  }
-  return null;
+  return context.userId || null;
 }
 
 export function requireAuth(context: BackendContext): string {

@@ -129,3 +129,22 @@ export const UPDATE_SMTP_PROFILE_MUTATION = gql(`
     }
   }
 `);
+
+export const GET_AUTHENTICATION_METHODS_QUERY = gql(`
+  query GetAuthenticationMethods {
+    getAuthenticationMethods {
+      id
+      provider
+      email
+      displayName
+      lastUsedAt
+      createdAt
+    }
+  }
+`);
+
+export const DELETE_AUTHENTICATION_METHOD_MUTATION = gql(`
+  mutation DeleteAuthenticationMethod($id: String!) {
+    deleteAuthenticationMethod(id: $id)
+  }
+`);

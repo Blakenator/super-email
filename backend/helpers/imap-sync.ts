@@ -736,14 +736,6 @@ function extractUnsubscribeInfo(headers: Headers): {
       }
     }
   }
-  console.log({
-    listUnsubscribeRaw,
-    listHeaderRaw,
-    result,
-    unsub: (listHeaderRaw as any).unsubscribe,
-    url: (listHeaderRaw as any).unsubscribe?.url,
-    mail: (listHeaderRaw as any).unsubscribe?.mail,
-  });
 
   return result;
 }

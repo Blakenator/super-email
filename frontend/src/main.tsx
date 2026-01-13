@@ -10,14 +10,19 @@ import { setContext } from '@apollo/client/link/context';
 import { BrowserRouter } from 'react-router';
 import { ThemeProvider } from 'styled-components';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext.tsx';
+import { AuthProvider, supabase } from './contexts/AuthContext.tsx';
 import { ErrorBoundary } from './core/components/ErrorBoundary.tsx';
 import { theme } from './core/theme.ts';
 
 const httpLink = new HttpLink({ uri: '/api/graphql' });
 
-const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('email_client_token');
+const authLink = setContext(async (_, { headers }) => {
+  // Get the current session from Supabase
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+
   return {
     headers: {
       ...headers,

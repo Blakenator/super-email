@@ -97,15 +97,46 @@ const loggingPlugin: ApolloServerPlugin<BackendContext> = {
   },
 };
 
-// Import Email model for field resolvers
-import { Email } from './db/models/index.js';
+// Import models for field resolvers
+import {
+  Email,
+  EmailAccount as EmailAccountModel,
+  SmtpProfile as SmtpProfileModel,
+  AuthenticationMethod as AuthMethodModel,
+} from './db/models/index.js';
 
-const resolvers = {
+const resolvers: AllBackendResolvers = {
   Query: QueryResolvers,
   Mutation: MutationResolvers,
   Date: dateScalar,
   JSON: jsonScalar,
   // Field resolvers for computed fields
+  User: {
+    // Fetch email accounts for user
+    emailAccounts: async (parent) => {
+      const accounts = await EmailAccountModel.findAll({
+        where: { userId: parent.id },
+        order: [['createdAt', 'DESC']],
+      });
+      return accounts.map((a) => a.get({ plain: true })) as any;
+    },
+    // Fetch SMTP profiles for user
+    smtpProfiles: async (parent) => {
+      const profiles = await SmtpProfileModel.findAll({
+        where: { userId: parent.id },
+        order: [['createdAt', 'DESC']],
+      });
+      return profiles.map((p) => p.get({ plain: true })) as any;
+    },
+    // Fetch authentication methods for user
+    authenticationMethods: async (parent) => {
+      const methods = await AuthMethodModel.findAll({
+        where: { userId: parent.id },
+        order: [['createdAt', 'DESC']],
+      });
+      return methods.map((m) => m.get({ plain: true })) as any;
+    },
+  },
   EmailAccount: {
     // Compute isSyncing from syncId presence
     isSyncing: (parent: any) => !!parent.syncId,
@@ -120,7 +151,7 @@ const resolvers = {
       return count;
     },
   },
-} as AllBackendResolvers;
+};
 
 const server = new ApolloServer<BackendContext>({
   typeDefs,
@@ -153,15 +184,18 @@ app.use(
     context: async ({ req }): Promise<BackendContext> => {
       const token = req.headers.authorization?.replace('Bearer ', '') ?? '';
       let userId: string | undefined;
+      let supabaseUserId: string | undefined;
 
       if (token) {
-        const payload = verifyToken(token);
-        userId = payload?.userId;
+        const payload = await verifyToken(token);
+        userId = payload?.userId || undefined;
+        supabaseUserId = payload?.supabaseUserId;
       }
 
       return {
         token,
         userId,
+        supabaseUserId,
         sequelize,
       };
     },

@@ -1,10 +1,8 @@
 import { useState } from 'react';
-import { useMutation } from '@apollo/client/react';
 import { Container, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { useAuth } from '../../contexts/AuthContext';
-import { LOGIN_MUTATION } from './queries';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope } from '@fortawesome/free-solid-svg-icons';
 
@@ -42,32 +40,23 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [loginMutation, { loading }] = useMutation(LOGIN_MUTATION, {
-    onCompleted: (data) => {
-      login(data.login.token, {
-        id: data.login.user.id,
-        email: data.login.user.email,
-        firstName: data.login.user.firstName,
-        lastName: data.login.user.lastName,
-      });
-      navigate('/inbox');
-    },
-    onError: (err) => {
-      setError(err.message);
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    loginMutation({
-      variables: {
-        input: { email, password },
-      },
-    });
+    setLoading(true);
+
+    try {
+      await login(email, password);
+      navigate('/inbox');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

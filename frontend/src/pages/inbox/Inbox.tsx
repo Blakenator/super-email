@@ -40,6 +40,7 @@ import {
   faStar,
   faEnvelope,
   faTimes,
+  faLayerGroup,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faSquare,
@@ -47,6 +48,90 @@ import {
 } from '@fortawesome/free-regular-svg-icons';
 
 type ViewMode = 'spacious' | 'dense';
+
+// Recency grouping
+enum RecencyGroup {
+  TODAY = 'TODAY',
+  YESTERDAY = 'YESTERDAY',
+  LAST_7_DAYS = 'LAST_7_DAYS',
+  LAST_MONTH = 'LAST_MONTH',
+  LAST_3_MONTHS = 'LAST_3_MONTHS',
+  LAST_6_MONTHS = 'LAST_6_MONTHS',
+  LAST_YEAR = 'LAST_YEAR',
+  OLDER = 'OLDER',
+}
+
+const RECENCY_GROUP_LABELS: Record<RecencyGroup, string> = {
+  [RecencyGroup.TODAY]: 'Today',
+  [RecencyGroup.YESTERDAY]: 'Yesterday',
+  [RecencyGroup.LAST_7_DAYS]: 'Last 7 Days',
+  [RecencyGroup.LAST_MONTH]: 'Last Month',
+  [RecencyGroup.LAST_3_MONTHS]: 'Last 3 Months',
+  [RecencyGroup.LAST_6_MONTHS]: 'Last 6 Months',
+  [RecencyGroup.LAST_YEAR]: 'Last Year',
+  [RecencyGroup.OLDER]: 'Older',
+};
+
+function getRecencyGroup(dateStr: string): RecencyGroup {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+  const start7DaysAgo = new Date(startOfToday);
+  start7DaysAgo.setDate(start7DaysAgo.getDate() - 7);
+  const start1MonthAgo = new Date(startOfToday);
+  start1MonthAgo.setMonth(start1MonthAgo.getMonth() - 1);
+  const start3MonthsAgo = new Date(startOfToday);
+  start3MonthsAgo.setMonth(start3MonthsAgo.getMonth() - 3);
+  const start6MonthsAgo = new Date(startOfToday);
+  start6MonthsAgo.setMonth(start6MonthsAgo.getMonth() - 6);
+  const start1YearAgo = new Date(startOfToday);
+  start1YearAgo.setFullYear(start1YearAgo.getFullYear() - 1);
+
+  if (date >= startOfToday) return RecencyGroup.TODAY;
+  if (date >= startOfYesterday) return RecencyGroup.YESTERDAY;
+  if (date >= start7DaysAgo) return RecencyGroup.LAST_7_DAYS;
+  if (date >= start1MonthAgo) return RecencyGroup.LAST_MONTH;
+  if (date >= start3MonthsAgo) return RecencyGroup.LAST_3_MONTHS;
+  if (date >= start6MonthsAgo) return RecencyGroup.LAST_6_MONTHS;
+  if (date >= start1YearAgo) return RecencyGroup.LAST_YEAR;
+  return RecencyGroup.OLDER;
+}
+
+interface GroupedEmails<T> {
+  group: RecencyGroup;
+  emails: T[];
+}
+
+function groupEmailsByRecency<T extends { receivedAt: string }>(
+  emails: T[],
+): GroupedEmails<T>[] {
+  const groups = new Map<RecencyGroup, T[]>();
+
+  // Initialize all groups in order
+  Object.values(RecencyGroup).forEach((group) => {
+    groups.set(group, []);
+  });
+
+  // Group emails
+  emails.forEach((email) => {
+    const group = getRecencyGroup(email.receivedAt);
+    groups.get(group)!.push(email);
+  });
+
+  // Return only non-empty groups in order
+  return Object.values(RecencyGroup)
+    .map((group) => ({
+      group,
+      emails: groups.get(group) || [],
+    }))
+    .filter((g) => g.emails.length > 0);
+}
 
 // Styled components
 const PageWrapper = styled.div`
@@ -128,6 +213,20 @@ const EmailListContainer = styled.div`
   background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
+const GroupHeader = styled.div`
+  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.lg};
+  background: ${({ theme }) => theme.colors.background};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+`;
+
 // Folder configuration
 const FOLDER_CONFIG = {
   [EmailFolder.Inbox]: { icon: faInbox, label: 'Inbox' },
@@ -158,6 +257,16 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     }
   };
 
+  const [groupByRecency, setGroupByRecency] = useState<boolean>(() => {
+    const saved = localStorage.getItem('inboxGroupByRecency');
+    return saved === 'true';
+  });
+
+  const handleGroupByRecencyChange = (enabled: boolean) => {
+    setGroupByRecency(enabled);
+    localStorage.setItem('inboxGroupByRecency', String(enabled));
+  };
+
   const {
     emails,
     accounts,
@@ -186,6 +295,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     handleBulkMarkRead,
     handleBulkStar,
     handleBulkDelete,
+    handleBulkArchive,
+    handleArchive,
   } = useInboxEmails(folder);
 
   // Reset selected email when folder or tab changes
@@ -296,6 +407,14 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         emailId={selectedEmailId}
         onBack={handleBack}
         onDelete={() => handleDeleteFromView(selectedEmailId)}
+        onArchive={
+          folder !== EmailFolder.Archive
+            ? () => {
+                handleArchive(selectedEmailId);
+                setSelectedEmailId(null);
+              }
+            : undefined
+        }
       />
     );
   }
@@ -355,6 +474,16 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
               <FontAwesomeIcon icon={faList} />
             </ToggleButton>
           </ToggleButtonGroup>
+          <Button
+            variant={groupByRecency ? 'primary' : 'outline-secondary'}
+            size="sm"
+            onClick={() => handleGroupByRecencyChange(!groupByRecency)}
+            title={
+              groupByRecency ? 'Disable grouping by date' : 'Group by date'
+            }
+          >
+            <FontAwesomeIcon icon={faLayerGroup} />
+          </Button>
           <Button
             variant="outline-secondary"
             size="sm"
@@ -429,6 +558,16 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                 <FontAwesomeIcon icon={faStar} className="me-1" />
                 Star
               </Button>
+              {folder !== EmailFolder.Archive && (
+                <Button
+                  variant="outline-secondary"
+                  onClick={handleBulkArchive}
+                  title="Archive"
+                >
+                  <FontAwesomeIcon icon={faArchive} className="me-1" />
+                  Archive
+                </Button>
+              )}
               <Button
                 variant="outline-danger"
                 onClick={handleBulkDelete}
@@ -480,7 +619,44 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                     : undefined
             }
           />
+        ) : groupByRecency ? (
+          // Grouped by recency
+          groupEmailsByRecency(emails).map((group) => (
+            <div key={group.group}>
+              <GroupHeader>
+                {RECENCY_GROUP_LABELS[group.group]} ({group.emails.length})
+              </GroupHeader>
+              {group.emails.map((email) => {
+                const account = accounts.find(
+                  (a) => a.id === email.emailAccountId,
+                );
+                const ItemComponent =
+                  viewMode === 'dense' ? EmailListItemDense : EmailListItem;
+                return (
+                  <ItemComponent
+                    key={email.id}
+                    email={email}
+                    account={account}
+                    showAccount={activeAccountTab === 'all'}
+                    isSelected={selectedIds.has(email.id)}
+                    onSelect={(selected) =>
+                      handleSelectEmail(email.id, selected)
+                    }
+                    onEmailClick={handleEmailClick}
+                    onStarToggle={handleStarToggle}
+                    onMarkRead={handleMarkRead}
+                    onReply={handleReply}
+                    onDelete={handleDelete}
+                    onArchive={
+                      folder !== EmailFolder.Archive ? handleArchive : undefined
+                    }
+                  />
+                );
+              })}
+            </div>
+          ))
         ) : (
+          // Flat list
           emails.map((email) => {
             const account = accounts.find((a) => a.id === email.emailAccountId);
             const ItemComponent =
@@ -498,6 +674,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                 onMarkRead={handleMarkRead}
                 onReply={handleReply}
                 onDelete={handleDelete}
+                onArchive={
+                  folder !== EmailFolder.Archive ? handleArchive : undefined
+                }
               />
             );
           })

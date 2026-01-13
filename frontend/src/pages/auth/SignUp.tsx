@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useMutation } from '@apollo/client/react';
 import {
   Container,
   Card,
@@ -13,7 +12,6 @@ import {
 import { Link, useNavigate } from 'react-router';
 import styled from 'styled-components';
 import { useAuth } from '../../contexts/AuthContext';
-import { SIGN_UP_MUTATION } from './queries';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope } from '@fortawesome/free-solid-svg-icons';
 
@@ -55,25 +53,11 @@ export function SignUp() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const { login } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const { signUp } = useAuth();
   const navigate = useNavigate();
 
-  const [signUpMutation, { loading }] = useMutation(SIGN_UP_MUTATION, {
-    onCompleted: (data) => {
-      login(data.signUp.token, {
-        id: data.signUp.user.id,
-        email: data.signUp.user.email,
-        firstName: data.signUp.user.firstName,
-        lastName: data.signUp.user.lastName,
-      });
-      navigate('/inbox');
-    },
-    onError: (err) => {
-      setError(err.message);
-    },
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -87,11 +71,16 @@ export function SignUp() {
       return;
     }
 
-    signUpMutation({
-      variables: {
-        input: { email, password, firstName, lastName },
-      },
-    });
+    setLoading(true);
+
+    try {
+      await signUp(email, password, firstName, lastName);
+      navigate('/inbox');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sign up failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
