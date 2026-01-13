@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import toast from 'react-hot-toast';
 import {
@@ -10,19 +10,35 @@ import {
   BULK_DELETE_EMAILS_MUTATION,
 } from '../queries';
 import { EmailFolder } from '../../../__generated__/graphql';
+import type { EmailFilters } from '../components';
 
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_KEY = 'inboxPageSize';
+const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
+
+const emptyFilters: EmailFilters = {
+  fromContains: '',
+  toContains: '',
+  ccContains: '',
+  bccContains: '',
+  subjectContains: '',
+  bodyContains: '',
+};
 
 export function useInboxEmails(folder: EmailFolder) {
   const [activeAccountTab, setActiveAccountTab] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [advancedFilters, setAdvancedFilters] = useState<EmailFilters>(emptyFilters);
   const [pageSize, setPageSize] = useState(() => {
     const saved = localStorage.getItem(PAGE_SIZE_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_PAGE_SIZE;
   });
+
+  // Track previous email count for notifications
+  const prevEmailCountRef = useRef<number | null>(null);
+  const isDocumentVisibleRef = useRef(true);
 
   const handlePageSizeChange = useCallback((newSize: number) => {
     setPageSize(newSize);
@@ -30,11 +46,11 @@ export function useInboxEmails(folder: EmailFolder) {
     localStorage.setItem(PAGE_SIZE_KEY, String(newSize));
   }, []);
 
-  // Reset page and selection when folder, tab, or search changes
+  // Reset page and selection when folder, tab, search, or filters change
   useEffect(() => {
     setCurrentPage(1);
     setSelectedIds(new Set());
-  }, [folder, activeAccountTab, searchQuery]);
+  }, [folder, activeAccountTab, searchQuery, advancedFilters]);
 
   // Load email accounts for tabs
   const { data: accountsData } = useQuery(GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY);
@@ -46,6 +62,9 @@ export function useInboxEmails(folder: EmailFolder) {
 
   const offset = (currentPage - 1) * pageSize;
 
+  // Check if any advanced filters are active
+  const hasActiveFilters = Object.values(advancedFilters).some((v) => v.trim() !== '');
+
   const queryInput = useMemo(
     () => ({
       folder,
@@ -53,28 +72,80 @@ export function useInboxEmails(folder: EmailFolder) {
       limit: pageSize,
       offset,
       searchQuery: searchQuery.trim() || undefined,
+      fromContains: advancedFilters.fromContains.trim() || undefined,
+      toContains: advancedFilters.toContains.trim() || undefined,
+      ccContains: advancedFilters.ccContains.trim() || undefined,
+      bccContains: advancedFilters.bccContains.trim() || undefined,
+      subjectContains: advancedFilters.subjectContains.trim() || undefined,
+      bodyContains: advancedFilters.bodyContains.trim() || undefined,
     }),
-    [folder, emailAccountId, pageSize, offset, searchQuery],
+    [folder, emailAccountId, pageSize, offset, searchQuery, advancedFilters],
+  );
+
+  const countInput = useMemo(
+    () => ({
+      folder,
+      emailAccountId,
+      searchQuery: searchQuery.trim() || undefined,
+      fromContains: advancedFilters.fromContains.trim() || undefined,
+      toContains: advancedFilters.toContains.trim() || undefined,
+      ccContains: advancedFilters.ccContains.trim() || undefined,
+      bccContains: advancedFilters.bccContains.trim() || undefined,
+      subjectContains: advancedFilters.subjectContains.trim() || undefined,
+      bodyContains: advancedFilters.bodyContains.trim() || undefined,
+    }),
+    [folder, emailAccountId, searchQuery, advancedFilters],
   );
 
   const { data, loading, refetch } = useQuery(GET_EMAILS_QUERY, {
     variables: { input: queryInput },
     fetchPolicy: 'cache-and-network',
+    // Poll every minute for inbox folder when not filtering
+    pollInterval: folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery ? POLL_INTERVAL_MS : 0,
   });
 
   // Get total count for pagination
   const { data: countData } = useQuery(GET_EMAIL_COUNT_QUERY, {
-    variables: {
-      input: {
-        folder,
-        emailAccountId,
-        searchQuery: searchQuery.trim() || undefined,
-      },
-    },
+    variables: { input: countInput },
+    // Also poll the count
+    pollInterval: folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery ? POLL_INTERVAL_MS : 0,
   });
 
   const totalCount = countData?.getEmailCount ?? 0;
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  // Track document visibility for notifications
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isDocumentVisibleRef.current = !document.hidden;
+      if (!document.hidden) {
+        // Reset the count when user comes back
+        prevEmailCountRef.current = totalCount;
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [totalCount]);
+
+  // Notify on new emails
+  useEffect(() => {
+    if (folder !== EmailFolder.Inbox) return;
+    if (prevEmailCountRef.current === null) {
+      // Initial load
+      prevEmailCountRef.current = totalCount;
+      return;
+    }
+
+    const newEmailCount = totalCount - prevEmailCountRef.current;
+    if (newEmailCount > 0 && !isDocumentVisibleRef.current) {
+      // Show browser notification
+      showNewEmailNotification(newEmailCount);
+    }
+    prevEmailCountRef.current = totalCount;
+  }, [totalCount, folder]);
 
   const [bulkUpdateEmails] = useMutation(BULK_UPDATE_EMAILS_MUTATION, {
     refetchQueries: [
@@ -96,7 +167,7 @@ export function useInboxEmails(folder: EmailFolder) {
     },
     refetchQueries: [
       { query: GET_EMAILS_QUERY, variables: { input: queryInput } },
-      { query: GET_EMAIL_COUNT_QUERY, variables: { input: { folder } } },
+      { query: GET_EMAIL_COUNT_QUERY, variables: { input: countInput } },
       {
         query: GET_EMAIL_COUNT_QUERY,
         variables: { input: { folder: EmailFolder.Trash } },
@@ -267,6 +338,7 @@ export function useInboxEmails(folder: EmailFolder) {
     activeAccountTab,
     showTabs,
     searchQuery,
+    advancedFilters,
     selectedIds,
     allSelected,
     someSelected,
@@ -274,6 +346,7 @@ export function useInboxEmails(folder: EmailFolder) {
     setActiveAccountTab,
     setPageSize: handlePageSizeChange,
     setSearchQuery,
+    setAdvancedFilters,
     handleStarToggle,
     handleMarkRead,
     handleDelete,
@@ -288,4 +361,31 @@ export function useInboxEmails(folder: EmailFolder) {
     handleUnarchive,
     handleBulkUnarchive,
   };
+}
+
+/**
+ * Show a browser notification for new emails
+ */
+function showNewEmailNotification(count: number) {
+  if (!('Notification' in window)) {
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    new Notification('New Email', {
+      body: count === 1 ? 'You have 1 new email' : `You have ${count} new emails`,
+      icon: '/icon-192x192.png',
+      tag: 'new-email',
+    });
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then((permission) => {
+      if (permission === 'granted') {
+        new Notification('New Email', {
+          body: count === 1 ? 'You have 1 new email' : `You have ${count} new emails`,
+          icon: '/icon-192x192.svg',
+          tag: 'new-email',
+        });
+      }
+    });
+  }
 }

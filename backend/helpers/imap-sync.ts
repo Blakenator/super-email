@@ -500,12 +500,62 @@ async function syncSentFolder(
 }
 
 /**
- * Process a batch of messages by sequence range
+ * Insert parsed emails into the database, skipping duplicates
+ */
+async function insertEmailBatch(
+  emailAccountId: string,
+  emailsToCreate: Array<Record<string, unknown>>,
+  messageIdsInBatch: string[],
+): Promise<{ synced: number; skipped: number; errors: string[] }> {
+  const result = { synced: 0, skipped: 0, errors: [] as string[] };
+
+  if (messageIdsInBatch.length === 0) {
+    return result;
+  }
+
+  // Check which messages already exist in DB (per-batch query)
+  const existingEmails = await Email.findAll({
+    where: {
+      emailAccountId,
+      messageId: { [Op.in]: messageIdsInBatch },
+    },
+    attributes: ['messageId'],
+  });
+  const existingIds = new Set(existingEmails.map((e) => e.messageId));
+
+  // Filter out existing emails
+  const newEmails = emailsToCreate.filter(
+    (e) => !existingIds.has(e.messageId as string),
+  );
+  result.skipped = emailsToCreate.length - newEmails.length;
+
+  // Bulk insert new emails
+  if (newEmails.length > 0) {
+    for (let j = 0; j < newEmails.length; j += DB_BATCH_SIZE) {
+      const dbBatch = newEmails.slice(j, j + DB_BATCH_SIZE);
+      try {
+        await Email.bulkCreate(dbBatch as any);
+        result.synced += dbBatch.length;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        result.errors.push(`Failed to insert batch: ${errorMsg}`);
+        console.error('[IMAP] Batch insert failed:', err);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Process a batch of messages from IMAP and insert into database
+ * @param range - Either a sequence range string (e.g., "1:100") or array of UIDs
+ * @param useUid - Whether to use UID mode for fetch (only applies to string ranges)
  */
 async function processBatch(
   client: ImapFlow,
   emailAccountId: string,
-  seqRange: string,
+  range: string | number[],
   useUid: boolean,
   folder: EmailFolder = EmailFolder.INBOX,
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
@@ -513,17 +563,21 @@ async function processBatch(
   const emailsToCreate: Array<Record<string, unknown>> = [];
   const messageIdsInBatch: string[] = [];
 
+  const fetchOptions = {
+    envelope: true,
+    source: true,
+    uid: true,
+    internalDate: true,
+  };
+
   try {
-    for await (const message of client.fetch(
-      seqRange,
-      {
-        envelope: true,
-        source: true,
-        uid: true,
-        internalDate: true, // IMAP INTERNALDATE - when server received the email
-      },
-      { uid: useUid },
-    )) {
+    // Determine fetch call based on range type
+    const messages =
+      typeof range === 'string'
+        ? client.fetch(range, fetchOptions, { uid: useUid })
+        : client.fetch(range, fetchOptions);
+
+    for await (const message of messages) {
       try {
         if (!message.source) {
           console.warn(`[IMAP] No source data for message UID ${message.uid}`);
@@ -538,7 +592,6 @@ async function processBatch(
         const parsed = await simpleParser(message.source);
 
         // Use IMAP internalDate (when server received email) as receivedAt
-        // Fall back to parsed.date (Date header) or envelope.date, then current date
         const receivedAtRaw =
           message.internalDate || parsed.date || envelope?.date || new Date();
         const receivedAt =
@@ -565,39 +618,15 @@ async function processBatch(
       }
     }
 
-    // Check which messages already exist in DB (per-batch query)
-    if (messageIdsInBatch.length > 0) {
-      const existingEmails = await Email.findAll({
-        where: {
-          emailAccountId,
-          messageId: { [Op.in]: messageIdsInBatch },
-        },
-        attributes: ['messageId'],
-      });
-      const existingIds = new Set(existingEmails.map((e) => e.messageId));
-
-      // Filter out existing emails
-      const newEmails = emailsToCreate.filter(
-        (e) => !existingIds.has(e.messageId as string),
-      );
-      batchResult.skipped = emailsToCreate.length - newEmails.length;
-
-      // Bulk insert new emails
-      if (newEmails.length > 0) {
-        for (let j = 0; j < newEmails.length; j += DB_BATCH_SIZE) {
-          const dbBatch = newEmails.slice(j, j + DB_BATCH_SIZE);
-          try {
-            await Email.bulkCreate(dbBatch as any);
-            batchResult.synced += dbBatch.length;
-          } catch (err) {
-            const errorMsg =
-              err instanceof Error ? err.message : 'Unknown error';
-            batchResult.errors.push(`Failed to insert batch: ${errorMsg}`);
-            console.error('[IMAP] Batch insert failed:', err);
-          }
-        }
-      }
-    }
+    // Insert emails into database
+    const insertResult = await insertEmailBatch(
+      emailAccountId,
+      emailsToCreate,
+      messageIdsInBatch,
+    );
+    batchResult.synced = insertResult.synced;
+    batchResult.skipped = insertResult.skipped;
+    batchResult.errors.push(...insertResult.errors);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     batchResult.errors.push(`Failed to fetch messages: ${errorMsg}`);
@@ -608,7 +637,7 @@ async function processBatch(
 }
 
 /**
- * Process a batch of messages by UIDs
+ * Process a batch of messages by UIDs (convenience wrapper)
  */
 async function processBatchByUids(
   client: ImapFlow,
@@ -616,98 +645,7 @@ async function processBatchByUids(
   uids: number[],
   folder: EmailFolder = EmailFolder.INBOX,
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
-  const batchResult = { synced: 0, skipped: 0, errors: [] as string[] };
-  const emailsToCreate: Array<Record<string, unknown>> = [];
-  const messageIdsInBatch: string[] = [];
-
-  try {
-    for await (const message of client.fetch(uids, {
-      envelope: true,
-      source: true,
-      uid: true,
-      internalDate: true, // IMAP INTERNALDATE - when server received the email
-    })) {
-      try {
-        if (!message.source) {
-          console.warn(`[IMAP] No source data for message UID ${message.uid}`);
-          continue;
-        }
-
-        const envelope = message.envelope;
-        const envelopeMessageId = envelope?.messageId || `uid-${message.uid}`;
-        messageIdsInBatch.push(envelopeMessageId);
-
-        // Parse the message (includes headers)
-        const parsed = await simpleParser(message.source);
-
-        // Use IMAP internalDate (when server received email) as receivedAt
-        // Fall back to parsed.date (Date header) or envelope.date, then current date
-        const receivedAtRaw =
-          message.internalDate || parsed.date || envelope?.date || new Date();
-        const receivedAt =
-          receivedAtRaw instanceof Date
-            ? receivedAtRaw
-            : new Date(receivedAtRaw);
-
-        // Prepare email data for batch insert
-        const emailData = createEmailDataFromParsed(
-          emailAccountId,
-          envelopeMessageId,
-          parsed,
-          receivedAt,
-          folder,
-        );
-
-        emailsToCreate.push(emailData);
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        batchResult.errors.push(
-          `Failed to process message UID ${message.uid}: ${errorMsg}`,
-        );
-        console.error(`[IMAP] Error processing message:`, err);
-      }
-    }
-
-    // Check which messages already exist in DB (per-batch query)
-    if (messageIdsInBatch.length > 0) {
-      const existingEmails = await Email.findAll({
-        where: {
-          emailAccountId,
-          messageId: { [Op.in]: messageIdsInBatch },
-        },
-        attributes: ['messageId'],
-      });
-      const existingIds = new Set(existingEmails.map((e) => e.messageId));
-
-      // Filter out existing emails
-      const newEmails = emailsToCreate.filter(
-        (e) => !existingIds.has(e.messageId as string),
-      );
-      batchResult.skipped = emailsToCreate.length - newEmails.length;
-
-      // Bulk insert new emails
-      if (newEmails.length > 0) {
-        for (let j = 0; j < newEmails.length; j += DB_BATCH_SIZE) {
-          const dbBatch = newEmails.slice(j, j + DB_BATCH_SIZE);
-          try {
-            await Email.bulkCreate(dbBatch as any);
-            batchResult.synced += dbBatch.length;
-          } catch (err) {
-            const errorMsg =
-              err instanceof Error ? err.message : 'Unknown error';
-            batchResult.errors.push(`Failed to insert batch: ${errorMsg}`);
-            console.error('[IMAP] Batch insert failed:', err);
-          }
-        }
-      }
-    }
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-    batchResult.errors.push(`Failed to fetch messages: ${errorMsg}`);
-    console.error('[IMAP] Fetch failed:', err);
-  }
-
-  return batchResult;
+  return processBatch(client, emailAccountId, uids, true, folder);
 }
 
 /**

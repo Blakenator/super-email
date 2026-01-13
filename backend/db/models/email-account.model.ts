@@ -14,7 +14,14 @@ export enum EmailAccountType {
   POP3 = 'POP3',
 }
 
-@Table({ timestamps: true, tableName: 'email_accounts' })
+@Table({
+  timestamps: true,
+  tableName: 'email_accounts',
+  indexes: [
+    // Index for listing accounts by user
+    { fields: ['userId'] },
+  ],
+})
 export class EmailAccount extends Model {
   @Column({
     type: DataType.UUID,
@@ -28,7 +35,7 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.UUID, allowNull: false })
   declare userId: string;
 
-  @BelongsTo(() => User)
+  @BelongsTo(() => User, { onDelete: 'CASCADE' })
   declare user: User;
 
   @Column({ type: DataType.TEXT, allowNull: false })

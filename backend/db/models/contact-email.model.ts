@@ -8,7 +8,16 @@ import {
 } from 'sequelize-typescript';
 import { Contact } from './contact.model.js';
 
-@Table({ timestamps: true, tableName: 'contact_emails' })
+@Table({
+  timestamps: true,
+  tableName: 'contact_emails',
+  indexes: [
+    // Index for looking up emails by contact
+    { fields: ['contactId'] },
+    // Index for looking up contacts by email address
+    { fields: ['email'] },
+  ],
+})
 export class ContactEmail extends Model {
   @Column({
     type: DataType.UUID,
@@ -22,7 +31,7 @@ export class ContactEmail extends Model {
   @Column({ type: DataType.UUID, allowNull: false })
   declare contactId: string;
 
-  @BelongsTo(() => Contact)
+  @BelongsTo(() => Contact, { onDelete: 'CASCADE' })
   declare contact: Contact;
 
   @Column({ type: DataType.TEXT, allowNull: false })

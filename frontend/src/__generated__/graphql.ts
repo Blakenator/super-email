@@ -225,13 +225,19 @@ export type GetEmailInput = {
 };
 
 export type GetEmailsInput = {
+  bccContains?: InputMaybe<Scalars['String']['input']>;
+  bodyContains?: InputMaybe<Scalars['String']['input']>;
+  ccContains?: InputMaybe<Scalars['String']['input']>;
   emailAccountId?: InputMaybe<Scalars['String']['input']>;
   folder?: InputMaybe<EmailFolder>;
+  fromContains?: InputMaybe<Scalars['String']['input']>;
   isRead?: InputMaybe<Scalars['Boolean']['input']>;
   isStarred?: InputMaybe<Scalars['Boolean']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
   offset?: InputMaybe<Scalars['Int']['input']>;
   searchQuery?: InputMaybe<Scalars['String']['input']>;
+  subjectContains?: InputMaybe<Scalars['String']['input']>;
+  toContains?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type Mutation = {

@@ -1,5 +1,5 @@
 import { makeMutation } from '../../types.js';
-import { Contact, ContactEmail } from '../../db/models/index.js';
+import { Contact } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const deleteContact = makeMutation(
@@ -15,11 +15,7 @@ export const deleteContact = makeMutation(
       throw new Error('Contact not found');
     }
 
-    // Delete associated contact emails first
-    await ContactEmail.destroy({
-      where: { contactId: id },
-    });
-
+    // ContactEmails are deleted via cascade
     await contact.destroy();
     return true;
   },

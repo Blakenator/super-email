@@ -1,4 +1,12 @@
-import { Column, DataType, Model, Table } from 'sequelize-typescript';
+import {
+  Column,
+  DataType,
+  ForeignKey,
+  BelongsTo,
+  Model,
+  Table,
+} from 'sequelize-typescript';
+import { User } from './user.model.js';
 
 export enum AuthProvider {
   EMAIL_PASSWORD = 'EMAIL_PASSWORD',
@@ -8,7 +16,16 @@ export enum AuthProvider {
   MICROSOFT = 'MICROSOFT',
 }
 
-@Table({ timestamps: true, tableName: 'authentication_methods' })
+@Table({
+  timestamps: true,
+  tableName: 'authentication_methods',
+  indexes: [
+    // Index for looking up auth methods by user
+    { fields: ['userId'] },
+    // Index for looking up by provider user ID (for OAuth logins)
+    { fields: ['providerUserId'] },
+  ],
+})
 export class AuthenticationMethod extends Model {
   @Column({
     type: DataType.UUID,
@@ -18,8 +35,12 @@ export class AuthenticationMethod extends Model {
   })
   declare id: string;
 
+  @ForeignKey(() => User)
   @Column({ type: DataType.UUID, allowNull: false })
   declare userId: string;
+
+  @BelongsTo(() => User, { onDelete: 'CASCADE' })
+  declare user: User;
 
   @Column({
     type: DataType.ENUM(...Object.values(AuthProvider)),

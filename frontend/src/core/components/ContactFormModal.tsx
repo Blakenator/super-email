@@ -15,7 +15,9 @@ import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faPlus, faSearch } from '@fortawesome/free-solid-svg-icons';
 import { gql } from '../../__generated__/gql';
+import { GET_CONTACTS_QUERY as CONTACTS_PAGE_QUERY } from '../../pages/contacts/queries';
 
+// Use the same query for fetching contacts in the modal
 const GET_CONTACTS_QUERY = gql(`
   query GetContactsForModal {
     getContacts {
@@ -242,6 +244,13 @@ export function ContactFormModal({
     }
   }, [show, initialData, emailToAdd]);
 
+  // Refetch both the modal query and the main contacts page query
+  const allRefetchQueries = [
+    ...refetchQueries,
+    { query: GET_CONTACTS_QUERY },
+    { query: CONTACTS_PAGE_QUERY },
+  ];
+
   const [createContact, { loading: creating }] = useMutation(
     CREATE_CONTACT_MUTATION,
     {
@@ -251,7 +260,7 @@ export function ContactFormModal({
         onSuccess?.(data.createContact);
       },
       onError: (err) => toast.error(`Failed to create contact: ${err.message}`),
-      refetchQueries: [...refetchQueries, { query: GET_CONTACTS_QUERY }],
+      refetchQueries: allRefetchQueries,
     },
   );
 
@@ -264,7 +273,7 @@ export function ContactFormModal({
         onSuccess?.(data.updateContact);
       },
       onError: (err) => toast.error(`Failed to update contact: ${err.message}`),
-      refetchQueries: [...refetchQueries, { query: GET_CONTACTS_QUERY }],
+      refetchQueries: allRefetchQueries,
     },
   );
 
@@ -277,7 +286,7 @@ export function ContactFormModal({
         onSuccess?.(data.addEmailToContact);
       },
       onError: (err) => toast.error(`Failed to add email: ${err.message}`),
-      refetchQueries: [...refetchQueries, { query: GET_CONTACTS_QUERY }],
+      refetchQueries: allRefetchQueries,
     },
   );
 

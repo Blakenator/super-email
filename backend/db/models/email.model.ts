@@ -5,6 +5,7 @@ import {
   BelongsTo,
   Model,
   Table,
+  Index,
 } from 'sequelize-typescript';
 import { EmailAccount } from './email-account.model.js';
 import { SmtpProfile } from './smtp-profile.model.js';
@@ -18,7 +19,21 @@ export enum EmailFolder {
   ARCHIVE = 'ARCHIVE',
 }
 
-@Table({ timestamps: true, tableName: 'emails' })
+@Table({
+  timestamps: true,
+  tableName: 'emails',
+  indexes: [
+    // Composite index for listing emails by account and folder, sorted by date
+    { fields: ['emailAccountId', 'folder', 'receivedAt'] },
+    // Index for thread lookups
+    { fields: ['threadId'] },
+    // Index for duplicate checking during sync
+    { fields: ['emailAccountId', 'messageId'] },
+    // Index for starred/unread filtering
+    { fields: ['emailAccountId', 'isStarred'] },
+    { fields: ['emailAccountId', 'isRead'] },
+  ],
+})
 export class Email extends Model {
   @Column({
     type: DataType.UUID,
@@ -32,7 +47,7 @@ export class Email extends Model {
   @Column({ type: DataType.UUID, allowNull: false })
   declare emailAccountId: string;
 
-  @BelongsTo(() => EmailAccount)
+  @BelongsTo(() => EmailAccount, { onDelete: 'CASCADE' })
   declare emailAccount: EmailAccount;
 
   @ForeignKey(() => SmtpProfile)

@@ -4,17 +4,12 @@ import {
   Container,
   Card,
   Button,
-  Table,
   Modal,
-  Form,
   Alert,
   Spinner,
   Badge,
   Tabs,
   Tab,
-  ProgressBar,
-  OverlayTrigger,
-  Tooltip,
 } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import styled from 'styled-components';
@@ -41,6 +36,8 @@ import {
   type EmailAccountFormData,
   SmtpProfileForm,
   type SmtpProfileFormData,
+  EmailAccountCard,
+  SmtpProfileCard,
 } from './components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -51,15 +48,11 @@ import {
   faPlus,
   faSync,
   faTrash,
-  faPlug,
   faCheckCircle,
   faTimesCircle,
   faCircle,
-  faSave,
-  faEdit,
   faKey,
   faShieldAlt,
-  faLock,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faGoogle,
@@ -187,35 +180,7 @@ const StepSubtitle = styled.div`
   margin-top: 0.25rem;
 `;
 
-const SyncStatusContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`;
-
-const SyncStatusHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-`;
-
-const SyncStatusText = styled.span`
-  font-size: 0.8rem;
-  color: #667eea;
-  font-weight: 500;
-`;
-
-const SyncProgressBar = styled(ProgressBar)`
-  height: 8px;
-  border-radius: 4px;
-  background-color: #e0e0e0 !important;
-
-  .progress-bar {
-    border-radius: 4px;
-  }
-`;
-
-// Email Account Card Grid
+// Card grids for accounts and profiles
 const AccountCardGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -223,148 +188,11 @@ const AccountCardGrid = styled.div`
   margin-top: 1rem;
 `;
 
-const AccountCard = styled(Card)<{ $isSyncing?: boolean }>`
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-  overflow: hidden;
-
-  ${({ $isSyncing }) =>
-    $isSyncing &&
-    `
-    border-color: #667eea;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
-  `}
-
-  &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
-  }
-`;
-
-const AccountCardHeader = styled(Card.Header)`
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: ${({ theme }) => theme.spacing.md};
-  border: none;
-`;
-
-const AccountCardTitle = styled.div`
-  font-size: ${({ theme }) => theme.fontSizes.lg};
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-`;
-
-const AccountCardSubtitle = styled.div`
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  opacity: 0.9;
-`;
-
-const AccountCardBody = styled(Card.Body)`
-  padding: ${({ theme }) => theme.spacing.md};
-`;
-
-const AccountDetailRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: ${({ theme }) => theme.spacing.xs} 0;
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textSecondary};
-`;
-
-const AccountDetailLabel = styled.span`
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const AccountCardFooter = styled(Card.Footer)`
-  background: ${({ theme }) => theme.colors.background};
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-`;
-
-const AccountCardActions = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.xs};
-  flex-wrap: wrap;
-`;
-
-// SMTP Profile Card Grid (similar to email accounts)
 const SmtpCardGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1rem;
   margin-top: 1rem;
-`;
-
-const SmtpCard = styled(Card)`
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-  overflow: hidden;
-
-  &:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
-  }
-`;
-
-const SmtpCardHeader = styled(Card.Header)<{ $isDefault?: boolean }>`
-  background: ${({ $isDefault }) =>
-    $isDefault
-      ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
-      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'};
-  color: white;
-  padding: ${({ theme }) => theme.spacing.md};
-  border: none;
-`;
-
-const SmtpCardTitle = styled.div`
-  font-size: ${({ theme }) => theme.fontSizes.lg};
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const SmtpCardSubtitle = styled.div`
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  opacity: 0.9;
-`;
-
-const SmtpCardBody = styled(Card.Body)`
-  padding: ${({ theme }) => theme.spacing.md};
-`;
-
-const SmtpDetailRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.4rem 0;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.borderLight};
-
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const SmtpDetailLabel = styled.span`
-  color: ${({ theme }) => theme.colors.textMuted};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-`;
-
-const SmtpCardFooter = styled(Card.Footer)`
-  background: ${({ theme }) => theme.colors.background};
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-`;
-
-const SmtpCardActions = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.xs};
-  flex-wrap: wrap;
 `;
 
 // Authentication Method styles
@@ -1284,153 +1112,19 @@ export function Settings() {
                 ) : (
                   <AccountCardGrid>
                     {emailAccounts.map((account) => (
-                      <AccountCard
+                      <EmailAccountCard
                         key={account.id}
-                        $isSyncing={account.isSyncing}
-                      >
-                        <AccountCardHeader>
-                          <AccountCardTitle>{account.name}</AccountCardTitle>
-                          <AccountCardSubtitle>
-                            {account.email}
-                          </AccountCardSubtitle>
-                        </AccountCardHeader>
-                        <AccountCardBody>
-                          <AccountDetailRow>
-                            <AccountDetailLabel>Server</AccountDetailLabel>
-                            <span>
-                              {account.host}:{account.port}
-                            </span>
-                          </AccountDetailRow>
-                          <AccountDetailRow>
-                            <AccountDetailLabel>Type</AccountDetailLabel>
-                            <Badge
-                              bg={
-                                account.accountType === 'IMAP'
-                                  ? 'info'
-                                  : 'secondary'
-                              }
-                            >
-                              {account.accountType}
-                            </Badge>
-                          </AccountDetailRow>
-                          <AccountDetailRow>
-                            <AccountDetailLabel>
-                              Default SMTP
-                            </AccountDetailLabel>
-                            {account.defaultSmtpProfile ? (
-                              <Badge bg="primary">
-                                {account.defaultSmtpProfile.name}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted">—</span>
-                            )}
-                          </AccountDetailRow>
-                          <AccountDetailRow>
-                            <AccountDetailLabel>Last Sync</AccountDetailLabel>
-                            {account.lastSyncedAt ? (
-                              <span>
-                                {new Date(account.lastSyncedAt).toLocaleString(
-                                  [],
-                                  {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  },
-                                )}
-                              </span>
-                            ) : (
-                              <span className="text-muted">Never synced</span>
-                            )}
-                          </AccountDetailRow>
-                        </AccountCardBody>
-                        {account.isSyncing && (
-                          <AccountCardFooter>
-                            <SyncStatusContainer>
-                              <SyncStatusHeader>
-                                <Spinner
-                                  animation="border"
-                                  size="sm"
-                                  style={{ width: '14px', height: '14px' }}
-                                />
-                                <SyncStatusText>
-                                  {account.syncStatus || 'Syncing...'}
-                                </SyncStatusText>
-                              </SyncStatusHeader>
-                              {account.syncProgress !== null &&
-                                account.syncProgress !== undefined && (
-                                  <OverlayTrigger
-                                    placement="top"
-                                    overlay={
-                                      <Tooltip
-                                        id={`sync-progress-${account.id}`}
-                                      >
-                                        {account.syncProgress}% complete
-                                      </Tooltip>
-                                    }
-                                  >
-                                    <SyncProgressBar
-                                      now={account.syncProgress}
-                                      variant="primary"
-                                      animated
-                                    />
-                                  </OverlayTrigger>
-                                )}
-                            </SyncStatusContainer>
-                          </AccountCardFooter>
-                        )}
-                        <AccountCardFooter>
-                          <AccountCardActions>
-                            <Button
-                              variant="outline-secondary"
-                              size="sm"
-                              onClick={() => handleEditEmailAccount(account.id)}
-                            >
-                              <FontAwesomeIcon icon={faEdit} className="me-1" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              onClick={() =>
-                                syncEmailAccount({
-                                  variables: {
-                                    input: { emailAccountId: account.id },
-                                  },
-                                })
-                              }
-                              disabled={account.isSyncing}
-                            >
-                              {account.isSyncing ? (
-                                <Spinner animation="border" size="sm" />
-                              ) : (
-                                <>
-                                  <FontAwesomeIcon
-                                    icon={faSync}
-                                    className="me-1"
-                                  />
-                                  Sync
-                                </>
-                              )}
-                            </Button>
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() =>
-                                deleteEmailAccount({
-                                  variables: { id: account.id },
-                                })
-                              }
-                            >
-                              <FontAwesomeIcon
-                                icon={faTrash}
-                                className="me-1"
-                              />
-                              Delete
-                            </Button>
-                          </AccountCardActions>
-                        </AccountCardFooter>
-                      </AccountCard>
+                        account={account}
+                        onEdit={handleEditEmailAccount}
+                        onSync={(id) =>
+                          syncEmailAccount({
+                            variables: { input: { emailAccountId: id } },
+                          })
+                        }
+                        onDelete={(id) =>
+                          deleteEmailAccount({ variables: { id } })
+                        }
+                      />
                     ))}
                   </AccountCardGrid>
                 )}
@@ -1473,82 +1167,14 @@ export function Settings() {
                 ) : (
                   <SmtpCardGrid>
                     {smtpProfiles.map((profile) => (
-                      <SmtpCard key={profile.id}>
-                        <SmtpCardHeader $isDefault={profile.isDefault}>
-                          <SmtpCardTitle>
-                            {profile.name}
-                            {profile.isDefault && (
-                              <Badge bg="light" text="dark" pill>
-                                Default
-                              </Badge>
-                            )}
-                          </SmtpCardTitle>
-                          <SmtpCardSubtitle>
-                            {profile.alias
-                              ? `${profile.alias} <${profile.email}>`
-                              : profile.email}
-                          </SmtpCardSubtitle>
-                        </SmtpCardHeader>
-                        <SmtpCardBody>
-                          <SmtpDetailRow>
-                            <SmtpDetailLabel>Server</SmtpDetailLabel>
-                            <span>
-                              {profile.host}:{profile.port}
-                            </span>
-                          </SmtpDetailRow>
-                          <SmtpDetailRow>
-                            <SmtpDetailLabel>Security</SmtpDetailLabel>
-                            <span>
-                              {profile.useSsl ? (
-                                <Badge bg="success">
-                                  <FontAwesomeIcon
-                                    icon={faLock}
-                                    className="me-1"
-                                  />
-                                  SSL/TLS
-                                </Badge>
-                              ) : (
-                                <Badge bg="warning" text="dark">
-                                  No SSL
-                                </Badge>
-                              )}
-                            </span>
-                          </SmtpDetailRow>
-                          {profile.alias && (
-                            <SmtpDetailRow>
-                              <SmtpDetailLabel>Display Name</SmtpDetailLabel>
-                              <span>{profile.alias}</span>
-                            </SmtpDetailRow>
-                          )}
-                        </SmtpCardBody>
-                        <SmtpCardFooter>
-                          <SmtpCardActions>
-                            <Button
-                              variant="outline-secondary"
-                              size="sm"
-                              onClick={() => handleEditSmtpProfile(profile.id)}
-                            >
-                              <FontAwesomeIcon icon={faEdit} className="me-1" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() =>
-                                deleteSmtpProfile({
-                                  variables: { id: profile.id },
-                                })
-                              }
-                            >
-                              <FontAwesomeIcon
-                                icon={faTrash}
-                                className="me-1"
-                              />
-                              Delete
-                            </Button>
-                          </SmtpCardActions>
-                        </SmtpCardFooter>
-                      </SmtpCard>
+                      <SmtpProfileCard
+                        key={profile.id}
+                        profile={profile}
+                        onEdit={handleEditSmtpProfile}
+                        onDelete={(id) =>
+                          deleteSmtpProfile({ variables: { id } })
+                        }
+                      />
                     ))}
                   </SmtpCardGrid>
                 )}

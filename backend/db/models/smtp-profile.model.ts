@@ -8,7 +8,14 @@ import {
 } from 'sequelize-typescript';
 import { User } from './user.model.js';
 
-@Table({ timestamps: true, tableName: 'smtp_profiles' })
+@Table({
+  timestamps: true,
+  tableName: 'smtp_profiles',
+  indexes: [
+    // Index for listing profiles by user
+    { fields: ['userId'] },
+  ],
+})
 export class SmtpProfile extends Model {
   @Column({
     type: DataType.UUID,
@@ -22,7 +29,7 @@ export class SmtpProfile extends Model {
   @Column({ type: DataType.UUID, allowNull: false })
   declare userId: string;
 
-  @BelongsTo(() => User)
+  @BelongsTo(() => User, { onDelete: 'CASCADE' })
   declare user: User;
 
   @Column({ type: DataType.TEXT, allowNull: false })

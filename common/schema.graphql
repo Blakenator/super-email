@@ -250,6 +250,13 @@ input GetEmailsInput {
   isRead: Boolean
   isStarred: Boolean
   searchQuery: String
+  # Advanced filters
+  fromContains: String
+  toContains: String
+  ccContains: String
+  bccContains: String
+  subjectContains: String
+  bodyContains: String
 }
 
 input GetEmailInput {
