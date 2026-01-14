@@ -11,6 +11,8 @@ import {
   LoadingSpinner,
   EmptyState,
   PageWrapper,
+} from '../../core/components';
+import {
   PageToolbar,
   PageContent,
   PageTitle,
@@ -117,7 +119,7 @@ export function StarredInbox() {
   const emails = data?.getEmails ?? [];
 
   return (
-    <PageWrapper>
+    <PageWrapper $overflow="hidden">
       <PageToolbar>
         <PageTitle>
           <FontAwesomeIcon icon={faStarSolid} style={{ color: '#fbbc04' }} />

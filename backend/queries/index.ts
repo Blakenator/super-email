@@ -9,6 +9,7 @@ import { getEmails } from './email/getEmails.js';
 import { getEmail } from './email/getEmail.js';
 import { getEmailCount } from './email/getEmailCount.js';
 import { getEmailsByThread } from './email/getEmailsByThread.js';
+import { getTopEmailSources } from './email/getTopEmailSources.js';
 import { getContacts } from './contact/getContacts.js';
 import { getContact } from './contact/getContact.js';
 import { searchContacts } from './contact/searchContacts.js';
@@ -29,6 +30,7 @@ export const QueryResolvers: AllQueries = {
   getEmail,
   getEmailCount,
   getEmailsByThread,
+  getTopEmailSources,
   getContacts,
   getContact,
   searchContacts,

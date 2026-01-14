@@ -241,3 +241,86 @@ export const TagRemoveBtn = styled.button`
     color: white;
   }
 `;
+
+// Per-email action buttons container
+export const EmailActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.xs};
+  margin-left: auto;
+  flex-shrink: 0;
+`;
+
+export const ActionButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: ${({ theme }) => theme.borderRadius.sm};
+  background: transparent;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.backgroundHover};
+    color: ${({ theme }) => theme.colors.primary};
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.primary}40;
+  }
+`;
+
+export const ActionButtonDanger = styled(ActionButton)`
+  &:hover {
+    background: ${({ theme }) => theme.colors.danger}15;
+    color: ${({ theme }) => theme.colors.danger};
+  }
+`;
+
+export const MoreActionsDropdown = styled.div`
+  position: relative;
+  display: inline-block;
+
+  .dropdown-menu {
+    min-width: 160px;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: ${({ theme }) => theme.spacing.sm};
+    padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+    font-size: ${({ theme }) => theme.fontSizes.sm};
+
+    svg {
+      width: 14px;
+      color: ${({ theme }) => theme.colors.textSecondary};
+    }
+  }
+
+  .dropdown-item.text-danger svg {
+    color: ${({ theme }) => theme.colors.danger};
+  }
+`;
+
+// Global header subject for thread view (used inside StickyHeader)
+export const GlobalHeaderSubject = styled.h2`
+  font-size: ${({ theme }) => theme.fontSizes.lg};
+  font-weight: 600;
+  margin: 0;
+  color: ${({ theme }) => theme.colors.textPrimary};
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+export const ThreadCount = styled(Badge)`
+  flex-shrink: 0;
+`;

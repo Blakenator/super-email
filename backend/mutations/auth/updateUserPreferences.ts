@@ -1,4 +1,4 @@
-import { ThemePreference, NotificationDetailLevel } from '../../db/models/index.js';
+import { ThemePreference, NotificationDetailLevel, User } from '../../db/models/index.js';
 import { makeMutation } from '../../types.js';
 import { requireAuth } from '../../helpers/auth.js';
 
@@ -7,7 +7,7 @@ export const updateUserPreferences = makeMutation(
   async (_parent, { input }, context) => {
     const userId = requireAuth(context);
 
-    const user = context.user;
+    const user = await User.findByPk(userId);
     if (!user) {
       throw new Error('User not found');
     }
@@ -16,6 +16,8 @@ export const updateUserPreferences = makeMutation(
       themePreference: ThemePreference;
       navbarCollapsed: boolean;
       notificationDetailLevel: NotificationDetailLevel;
+      inboxDensity: boolean;
+      inboxGroupByDate: boolean;
     }> = {};
 
     // Validate and set theme preference
@@ -37,6 +39,16 @@ export const updateUserPreferences = makeMutation(
         throw new Error('Invalid notification detail level');
       }
       updates.notificationDetailLevel = input.notificationDetailLevel as NotificationDetailLevel;
+    }
+
+    // Set inbox density preference
+    if (input.inboxDensity !== undefined && input.inboxDensity !== null) {
+      updates.inboxDensity = input.inboxDensity;
+    }
+
+    // Set inbox group by date preference
+    if (input.inboxGroupByDate !== undefined && input.inboxGroupByDate !== null) {
+      updates.inboxGroupByDate = input.inboxGroupByDate;
     }
 
     // Only update if there are changes

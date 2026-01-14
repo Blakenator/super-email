@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useLazyQuery } from '@apollo/client/react';
 import {
   Card,
-  Button,
   Form,
   Modal,
   Badge,
@@ -12,6 +11,7 @@ import {
   Col,
   Alert,
 } from 'react-bootstrap';
+import { Button } from '../../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faFilter,
@@ -28,7 +28,7 @@ import {
   faShare,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
-import { EmailChipInput } from '../../../core/components';
+import { EmailChipInput, TagSelector } from '../../../core/components';
 import {
   GET_MAIL_RULES_QUERY,
   CREATE_MAIL_RULE_MUTATION,
@@ -327,8 +327,12 @@ export function MailRulesManager() {
             <FontAwesomeIcon icon={faFilter} className="me-2" />
             Mail Rules
           </span>
-          <Button size="sm" variant="primary" onClick={handleOpenCreateModal}>
-            <FontAwesomeIcon icon={faPlus} className="me-1" />
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<FontAwesomeIcon icon={faPlus} />}
+            onClick={handleOpenCreateModal}
+          >
             New Rule
           </Button>
         </Card.Header>
@@ -360,25 +364,22 @@ export function MailRulesManager() {
                       <Button
                         size="sm"
                         variant="outline-primary"
+                        icon={<FontAwesomeIcon icon={faPlay} />}
                         onClick={() => handleRunRule(rule.id)}
                         title="Run rule on all emails"
-                      >
-                        <FontAwesomeIcon icon={faPlay} />
-                      </Button>
+                      />
                       <Button
                         size="sm"
                         variant="outline-secondary"
+                        icon={<FontAwesomeIcon icon={faEdit} />}
                         onClick={() => handleOpenEditModal(rule)}
-                      >
-                        <FontAwesomeIcon icon={faEdit} />
-                      </Button>
+                      />
                       <Button
                         size="sm"
                         variant="outline-danger"
+                        icon={<FontAwesomeIcon icon={faTrash} />}
                         onClick={() => handleDelete(rule.id, rule.name)}
-                      >
-                        <FontAwesomeIcon icon={faTrash} />
-                      </Button>
+                      />
                     </RuleActions>
                   </RuleHeader>
                   <RuleDetails>
@@ -649,50 +650,19 @@ export function MailRulesManager() {
               <Col md={6}>
                 <Form.Group className="mb-3">
                   <Form.Label>Add tags</Form.Label>
-                  <div className="d-flex flex-wrap gap-2">
-                    {tags.map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        bg={
-                          formData.actions.addTagIds.includes(tag.id)
-                            ? undefined
-                            : 'light'
-                        }
-                        text={
-                          formData.actions.addTagIds.includes(tag.id)
-                            ? 'white'
-                            : 'dark'
-                        }
-                        style={{
-                          backgroundColor: formData.actions.addTagIds.includes(
-                            tag.id,
-                          )
-                            ? tag.color
-                            : undefined,
-                          cursor: 'pointer',
-                          border: `1px solid ${tag.color}`,
-                        }}
-                        onClick={() => {
-                          const tagIds = formData.actions.addTagIds.includes(
-                            tag.id,
-                          )
-                            ? formData.actions.addTagIds.filter(
-                                (id) => id !== tag.id,
-                              )
-                            : [...formData.actions.addTagIds, tag.id];
-                          setFormData({
-                            ...formData,
-                            actions: { ...formData.actions, addTagIds: tagIds },
-                          });
-                        }}
-                      >
-                        {tag.name}
-                      </Badge>
-                    ))}
-                    {tags.length === 0 && (
-                      <span className="text-muted">No tags available</span>
-                    )}
-                  </div>
+                  <TagSelector
+                    tags={tags}
+                    selectedTagIds={formData.actions.addTagIds}
+                    onToggleTag={(tagId) => {
+                      const tagIds = formData.actions.addTagIds.includes(tagId)
+                        ? formData.actions.addTagIds.filter((id) => id !== tagId)
+                        : [...formData.actions.addTagIds, tagId];
+                      setFormData({
+                        ...formData,
+                        actions: { ...formData.actions, addTagIds: tagIds },
+                      });
+                    }}
+                  />
                 </Form.Group>
 
                 <Form.Group className="mb-3">
@@ -729,15 +699,9 @@ export function MailRulesManager() {
             <Button
               type="submit"
               variant="primary"
-              disabled={creating || updating}
+              loading={creating || updating}
             >
-              {creating || updating ? (
-                <Spinner animation="border" size="sm" />
-              ) : editingRule ? (
-                'Update Rule'
-              ) : (
-                'Create Rule'
-              )}
+              {editingRule ? 'Update Rule' : 'Create Rule'}
             </Button>
           </Modal.Footer>
         </Form>

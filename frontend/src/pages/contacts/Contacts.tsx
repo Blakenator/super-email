@@ -32,6 +32,8 @@ import {
 import { LoadingSpinner, EmptyState } from '../../core/components';
 import {
   PageWrapper,
+} from '../../core/components';
+import {
   PageHeader,
   PageTitle,
   SearchWrapper,
@@ -298,7 +300,7 @@ export function Contacts() {
   }
 
   return (
-    <PageWrapper>
+    <PageWrapper $padding $overflow="auto" $background="default">
       <Container fluid>
         <PageHeader>
           <PageTitle>

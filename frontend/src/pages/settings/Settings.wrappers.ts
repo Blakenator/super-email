@@ -1,44 +1,13 @@
 import styled, { css } from 'styled-components';
 import { Card } from 'react-bootstrap';
 
-export const PageWrapper = styled.div`
-  padding: 1.5rem;
-  height: 100%;
-  overflow-y: auto;
-`;
-
-// Responsive tabs wrapper that switches between horizontal, vertical, and dropdown
+// Responsive tabs wrapper - always vertical or dropdown (never horizontal)
 export const ResponsiveTabsWrapper = styled.div`
-  /* Desktop: Horizontal tabs */
-  .nav-tabs {
-    border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-    margin-bottom: ${({ theme }) => theme.spacing.lg};
-    flex-wrap: wrap;
-  }
-
-  .nav-link {
-    color: ${({ theme }) => theme.colors.textSecondary};
-    border: none;
-    padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-    margin-bottom: -1px;
-    white-space: nowrap;
-    
-    &:hover {
-      color: ${({ theme }) => theme.colors.primary};
-      border-color: transparent;
-    }
-    
-    &.active {
-      color: ${({ theme }) => theme.colors.primary};
-      background: transparent;
-      border-bottom: 2px solid ${({ theme }) => theme.colors.primary};
-    }
-  }
-
-  /* Tablet: Vertical tabs on the left */
-  @media (max-width: 991px) and (min-width: 576px) {
+  /* Desktop/Tablet: Vertical tabs on the left */
+  @media (min-width: 576px) {
     display: flex;
     gap: ${({ theme }) => theme.spacing.lg};
+    align-items: flex-start;
     
     .nav-tabs {
       flex-direction: column;
@@ -46,18 +15,31 @@ export const ResponsiveTabsWrapper = styled.div`
       border-right: 1px solid ${({ theme }) => theme.colors.border};
       margin-bottom: 0;
       padding-right: ${({ theme }) => theme.spacing.md};
-      width: 180px;
+      width: 200px;
       flex-shrink: 0;
+      position: sticky;
+      top: 0;
+      align-self: flex-start;
     }
 
     .nav-link {
+      color: ${({ theme }) => theme.colors.textSecondary};
+      border: none;
       text-align: left;
       border-radius: ${({ theme }) => theme.borderRadius.md};
       margin-bottom: ${({ theme }) => theme.spacing.xs};
+      padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+      white-space: normal;
+      word-wrap: break-word;
+      
+      &:hover {
+        color: ${({ theme }) => theme.colors.primary};
+        background: ${({ theme }) => theme.colors.backgroundHover};
+      }
       
       &.active {
+        color: ${({ theme }) => theme.colors.primary};
         background: ${({ theme }) => theme.colors.primary}15;
-        border-bottom: none;
         border-left: 3px solid ${({ theme }) => theme.colors.primary};
       }
     }
@@ -68,7 +50,7 @@ export const ResponsiveTabsWrapper = styled.div`
     }
   }
 
-  /* Mobile: Dropdown-like tabs */
+  /* Mobile: Stacked tabs */
   @media (max-width: 575px) {
     .nav-tabs {
       flex-direction: column;
@@ -79,13 +61,20 @@ export const ResponsiveTabsWrapper = styled.div`
     }
 
     .nav-link {
+      color: ${({ theme }) => theme.colors.textSecondary};
+      border: none;
       padding: ${({ theme }) => theme.spacing.sm};
       border-radius: ${({ theme }) => theme.borderRadius.sm};
       font-size: ${({ theme }) => theme.fontSizes.sm};
       
+      &:hover {
+        color: ${({ theme }) => theme.colors.primary};
+        background: ${({ theme }) => theme.colors.backgroundHover};
+      }
+      
       &.active {
+        color: ${({ theme }) => theme.colors.primary};
         background: ${({ theme }) => theme.colors.primary}15;
-        border-bottom: none;
       }
     }
   }

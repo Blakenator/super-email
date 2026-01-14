@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Badge,
-  Button,
   ButtonGroup,
   Tabs,
   Tab,
@@ -14,6 +13,7 @@ import {
   Card,
   Modal,
 } from 'react-bootstrap';
+import { Button } from '../../core/components';
 import { useQuery, useMutation } from '@apollo/client/react';
 import toast from 'react-hot-toast';
 import { DateTime } from 'luxon';
@@ -29,7 +29,13 @@ import {
   type EmailFilters,
 } from './components';
 import { useInboxEmails, emptyFilters } from './hooks';
-import { LoadingSpinner, EmptyState } from '../../core/components';
+import {
+  LoadingSpinner,
+  EmptyState,
+  CreateRuleBanner,
+  CreateRuleModal,
+} from '../../core/components';
+import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faInbox,
@@ -69,10 +75,8 @@ import {
   groupEmailsByRecency,
 } from './utils';
 
+import { PageWrapper, PageToolbar, PageTitle } from '../../core/components';
 import {
-  PageWrapper,
-  PageToolbar,
-  PageTitle,
   SearchWrapper,
   ToolbarActions,
   TabsWrapper,
@@ -129,7 +133,7 @@ function serializeFiltersToUrl(filters: EmailFilters): string | null {
 
   for (const [key, value] of Object.entries(filters)) {
     if (key === 'tagIds') {
-      const tagIds = value as string[];
+      const tagIds = (value as string[]) || [];
       if (tagIds.length > 0) {
         cleanedFilters[key as keyof EmailFilters] = tagIds as any;
       }
@@ -159,6 +163,7 @@ interface InboxProps {
 
 export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const navigate = useNavigate();
+  const { user, updatePreferences } = useAuth();
   const { accountId: urlAccountId, emailId: urlEmailId } = useParams<{
     accountId?: string;
     emailId?: string;
@@ -178,6 +183,10 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   );
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('inboxViewMode');
+    // Use user preference if available, otherwise fall back to localStorage or default
+    if (user?.inboxDensity !== undefined) {
+      return user.inboxDensity ? 'dense' : 'spacious';
+    }
     return (saved as ViewMode) || 'spacious';
   });
 
@@ -193,21 +202,55 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     }
   }, [urlFilters]);
 
-  const handleViewModeChange = (val: ViewMode) => {
+  const handleViewModeChange = async (val: ViewMode) => {
     if (val) {
       setViewMode(val);
       localStorage.setItem('inboxViewMode', val);
+      // Update user preference
+      const isDense = val === 'dense';
+      if (user?.inboxDensity !== isDense) {
+        try {
+          await updatePreferences({ inboxDensity: isDense });
+        } catch (error) {
+          console.error('Failed to update inbox density preference:', error);
+        }
+      }
     }
   };
 
   const [groupByRecency, setGroupByRecency] = useState<boolean>(() => {
+    // Use user preference if available, otherwise fall back to localStorage
+    if (user?.inboxGroupByDate !== undefined) {
+      return user.inboxGroupByDate;
+    }
     const saved = localStorage.getItem('inboxGroupByRecency');
     return saved === 'true';
   });
 
-  const handleGroupByRecencyChange = (enabled: boolean) => {
+  // Sync groupByRecency with user preference when user loads
+  useEffect(() => {
+    if (user?.inboxGroupByDate !== undefined) {
+      if (groupByRecency !== user.inboxGroupByDate) {
+        setGroupByRecency(user.inboxGroupByDate);
+        localStorage.setItem(
+          'inboxGroupByRecency',
+          String(user.inboxGroupByDate),
+        );
+      }
+    }
+  }, [user?.inboxGroupByDate]);
+
+  const handleGroupByRecencyChange = async (enabled: boolean) => {
     setGroupByRecency(enabled);
     localStorage.setItem('inboxGroupByRecency', String(enabled));
+    // Update user preference
+    if (user?.inboxGroupByDate !== enabled) {
+      try {
+        await updatePreferences({ inboxGroupByDate: enabled });
+      } catch (error) {
+        console.error('Failed to update group by date preference:', error);
+      }
+    }
   };
 
   // Show tags toggle
@@ -384,6 +427,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   );
 
   const getNukeDate = () => {
+    if (nukePreset === 'all') {
+      return undefined; // Archive all emails
+    }
     if (nukePreset === 'custom') {
       return DateTime.fromISO(customNukeDate).toJSDate();
     }
@@ -536,7 +582,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const hasSelection = selectedIds.size > 0;
 
   return (
-    <PageWrapper>
+    <PageWrapper $overflow="hidden">
       <PageToolbar>
         <PageTitle>
           <FontAwesomeIcon icon={config.icon} />
@@ -555,9 +601,11 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
               onChange={(e) => setSearchInput(e.target.value)}
             />
             {searchInput && (
-              <Button variant="outline-secondary" onClick={clearSearch}>
-                <FontAwesomeIcon icon={faTimes} />
-              </Button>
+              <Button
+                variant="outline-secondary"
+                icon={<FontAwesomeIcon icon={faTimes} />}
+                onClick={clearSearch}
+              />
             )}
           </InputGroup>
         </SearchWrapper>
@@ -672,27 +720,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
 
       {/* Create Rule from Filter Button */}
       {hasActiveFilters && (
-        <div
-          style={{
-            padding: '8px 16px',
-            background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
-            borderBottom: '1px solid #ddd',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
-          <FontAwesomeIcon icon={faFilter} />
-          <span style={{ fontSize: '0.875rem' }}>Filters active -</span>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowCreateRuleModal(true)}
-          >
-            <FontAwesomeIcon icon={faPlus} className="me-1" />
-            Create Mail Rule from Filters
-          </Button>
-        </div>
+        <CreateRuleBanner onCreateRule={() => setShowCreateRuleModal(true)} />
       )}
 
       {/* Bulk Actions Bar */}
@@ -716,54 +744,60 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             <ButtonGroup size="sm">
               <Button
                 variant="outline-secondary"
+                size="sm"
+                icon={<FontAwesomeIcon icon={faEnvelopeOpen} />}
                 onClick={() => handleBulkMarkRead(true)}
                 title="Mark as read"
               >
-                <FontAwesomeIcon icon={faEnvelopeOpen} className="me-1" />
                 Read
               </Button>
               <Button
                 variant="outline-secondary"
+                size="sm"
+                icon={<FontAwesomeIcon icon={faEnvelope} />}
                 onClick={() => handleBulkMarkRead(false)}
                 title="Mark as unread"
               >
-                <FontAwesomeIcon icon={faEnvelope} className="me-1" />
                 Unread
               </Button>
               <Button
                 variant="outline-secondary"
+                size="sm"
+                icon={<FontAwesomeIcon icon={faStar} />}
                 onClick={() => handleBulkStar(true)}
                 title="Star"
               >
-                <FontAwesomeIcon icon={faStar} className="me-1" />
                 Star
               </Button>
               {folder !== EmailFolder.Archive && (
                 <Button
                   variant="outline-secondary"
+                  size="sm"
+                  icon={<FontAwesomeIcon icon={faArchive} />}
                   onClick={handleBulkArchive}
                   title="Archive"
                 >
-                  <FontAwesomeIcon icon={faArchive} className="me-1" />
                   Archive
                 </Button>
               )}
               {folder === EmailFolder.Archive && (
                 <Button
                   variant="outline-info"
+                  size="sm"
+                  icon={<FontAwesomeIcon icon={faInbox} />}
                   onClick={handleBulkUnarchive}
                   title="Move to Inbox"
                 >
-                  <FontAwesomeIcon icon={faInbox} className="me-1" />
                   Move to Inbox
                 </Button>
               )}
               <Button
                 variant="outline-danger"
+                size="sm"
+                icon={<FontAwesomeIcon icon={faTrash} />}
                 onClick={handleBulkDelete}
                 title="Delete"
               >
-                <FontAwesomeIcon icon={faTrash} className="me-1" />
                 Delete
               </Button>
             </ButtonGroup>
@@ -960,6 +994,13 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             <div className="d-flex flex-column gap-2">
               <Form.Check
                 type="radio"
+                id="nuke-all"
+                label="All emails"
+                checked={nukePreset === 'all'}
+                onChange={() => setNukePreset('all')}
+              />
+              <Form.Check
+                type="radio"
                 id="nuke-1week"
                 label="1 week ago"
                 checked={nukePreset === '1week'}
@@ -1017,108 +1058,34 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
           </Button>
           <Button
             variant="warning"
+            icon={<FontAwesomeIcon icon={faBomb} />}
             onClick={handleNuke}
+            loading={nuking}
             disabled={nuking || (nukePreset === 'custom' && !customNukeDate)}
           >
-            <FontAwesomeIcon icon={faBomb} className="me-1" />
-            {nuking ? 'Archiving...' : 'Archive Old Emails'}
+            Archive Old Emails
           </Button>
         </Modal.Footer>
       </Modal>
 
       {/* Create Rule from Filter Modal */}
-      <Modal
+      <CreateRuleModal
         show={showCreateRuleModal}
         onHide={() => setShowCreateRuleModal(false)}
-        centered
-        size="lg"
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>
-            <FontAwesomeIcon icon={faFilter} className="me-2" />
-            Create Mail Rule from Filters
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p>Create a new mail rule based on your current filter settings:</p>
-          <Card className="mb-3">
-            <Card.Body>
-              <h6>Current Filters:</h6>
-              <div className="d-flex flex-wrap gap-2 mt-2">
-                {searchQuery && (
-                  <Badge bg="primary">Search: {searchQuery}</Badge>
-                )}
-                {advancedFilters.fromContains && (
-                  <Badge bg="secondary">
-                    From: {advancedFilters.fromContains}
-                  </Badge>
-                )}
-                {advancedFilters.toContains && (
-                  <Badge bg="secondary">To: {advancedFilters.toContains}</Badge>
-                )}
-                {advancedFilters.ccContains && (
-                  <Badge bg="secondary">CC: {advancedFilters.ccContains}</Badge>
-                )}
-                {advancedFilters.bccContains && (
-                  <Badge bg="secondary">
-                    BCC: {advancedFilters.bccContains}
-                  </Badge>
-                )}
-                {advancedFilters.subjectContains && (
-                  <Badge bg="secondary">
-                    Subject: {advancedFilters.subjectContains}
-                  </Badge>
-                )}
-                {advancedFilters.bodyContains && (
-                  <Badge bg="secondary">
-                    Body: {advancedFilters.bodyContains}
-                  </Badge>
-                )}
-                {advancedFilters.tagIds.length > 0 && (
-                  <Badge bg="info">
-                    Tags: {advancedFilters.tagIds.length} selected
-                  </Badge>
-                )}
-              </div>
-            </Card.Body>
-          </Card>
-          <Alert variant="info">
-            <FontAwesomeIcon icon={faFilter} className="me-2" />
-            To create the rule, go to <strong>Settings → Mail Rules</strong> and
-            create a new rule with these conditions. The rule will automatically
-            apply to new emails as they arrive.
-          </Alert>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button
-            variant="secondary"
-            onClick={() => setShowCreateRuleModal(false)}
-          >
-            Close
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              // Store filter state in sessionStorage for the settings page to pick up
-              sessionStorage.setItem(
-                'createRuleFromFilter',
-                JSON.stringify({
-                  fromContains: advancedFilters.fromContains,
-                  toContains: advancedFilters.toContains,
-                  ccContains: advancedFilters.ccContains,
-                  bccContains: advancedFilters.bccContains,
-                  subjectContains: advancedFilters.subjectContains,
-                  bodyContains: advancedFilters.bodyContains,
-                }),
-              );
-              window.open('/settings#mail-rules', '_blank');
-              setShowCreateRuleModal(false);
-            }}
-          >
-            Open Settings
-          </Button>
-        </Modal.Footer>
-      </Modal>
+        initialData={{
+          conditions: {
+            fromContains: advancedFilters.fromContains || '',
+            toContains: advancedFilters.toContains || '',
+            ccContains: advancedFilters.ccContains || '',
+            bccContains: advancedFilters.bccContains || '',
+            subjectContains: advancedFilters.subjectContains || '',
+            bodyContains: advancedFilters.bodyContains || '',
+          },
+          actions: {
+            addTagIds: advancedFilters.tagIds || [],
+          },
+        }}
+      />
     </PageWrapper>
   );
 }

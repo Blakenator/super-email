@@ -1,6 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { ViewerContainer } from './HtmlViewer.wrappers';
+import { Button } from 'react-bootstrap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faMoon, faSun } from '@fortawesome/free-solid-svg-icons';
+import { useTheme } from '../../contexts/ThemeContext';
+import { ViewerContainer, IframeContainer, ThemeToggleButton } from './HtmlViewer.wrappers';
 
 interface HtmlViewerProps {
   html: string;
@@ -8,10 +12,24 @@ interface HtmlViewerProps {
 }
 
 /**
- * Safe HTML viewer using DOMPurify for sanitization
- * Renders HTML content safely by removing XSS vectors
+ * Safe HTML viewer using both DOMPurify sanitization AND iframe sandboxing
+ * 
+ * Security benefits of iframe approach:
+ * 1. Origin isolation - iframe content cannot access parent DOM, cookies, or JS context
+ * 2. Defense in depth - even if sanitization misses something, sandbox blocks execution
+ * 3. Style isolation - email CSS cannot affect the parent application
+ * 4. Navigation control - links in sandboxed iframe can be controlled
+ * 5. Prevents CSS-based attacks (data exfiltration via CSS selectors)
  */
 export function HtmlViewer({ html, className }: HtmlViewerProps) {
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [iframeHeight, setIframeHeight] = useState(200);
+  const { isDarkMode } = useTheme();
+  const [emailDarkMode, setEmailDarkMode] = useState<boolean | null>(null);
+  
+  // Use page dark mode as default, but allow override
+  const effectiveDarkMode = emailDarkMode !== null ? emailDarkMode : isDarkMode;
+
   const sanitizedHtml = useMemo(() => {
     // Configure DOMPurify for email viewing
     return DOMPurify.sanitize(html, {
@@ -39,10 +57,200 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
     });
   }, [html]);
 
+  // Check if the email dark mode setting matches the app's dark mode
+  const colorSchemeMatchesApp = emailDarkMode === null;
+  
+  // Build the complete HTML document for the iframe
+  const iframeContent = useMemo(() => {
+    const textColor = effectiveDarkMode ? '#e8eaed' : '#202124';
+    const linkColor = effectiveDarkMode ? '#8ab4f8' : '#1a73e8';
+    const mutedColor = effectiveDarkMode ? '#9aa0a6' : '#5f6368';
+    const borderColor = effectiveDarkMode ? '#5f6368' : '#dadce0';
+    const codeBgColor = effectiveDarkMode ? '#2d2d2d' : '#f6f8fa';
+    const codeTextColor = effectiveDarkMode ? '#e8eaed' : '#24292e';
+    // Use transparent when matching app theme, otherwise use explicit color
+    const bgColor = colorSchemeMatchesApp ? 'transparent' : (effectiveDarkMode ? '#1a1a1a' : '#ffffff');
+    
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="${effectiveDarkMode ? 'dark' : 'light'}">
+  <base target="_blank">
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      color-scheme: ${effectiveDarkMode ? 'dark' : 'light'};
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      background-color: ${bgColor};
+      color: ${textColor};
+    }
+    a {
+      color: ${linkColor};
+    }
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+    table {
+      border-collapse: collapse;
+      border-spacing: 0;
+    }
+    td, th {
+      border-color: ${borderColor};
+    }
+    p {
+      margin: 0 0 1em 0;
+      padding: 0;
+    }
+    p:last-child {
+      margin-bottom: 0;
+    }
+    blockquote {
+      margin: 0.5em 0 0.5em 0;
+      padding: 0.5em 0 0.5em 1em;
+      border-left: 3px solid ${mutedColor};
+      color: ${mutedColor};
+      background-color: ${effectiveDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
+    }
+    hr {
+      border: none;
+      border-top: 1px solid ${borderColor};
+      margin: 1em 0;
+    }
+    /* Code block styles for rich text emails */
+    pre {
+      background-color: ${codeBgColor};
+      color: ${codeTextColor};
+      padding: 12px 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+      font-size: 13px;
+      line-height: 1.45;
+      margin: 0.5em 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    code {
+      background-color: ${codeBgColor};
+      color: ${codeTextColor};
+      padding: 0.2em 0.4em;
+      border-radius: 4px;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+      font-size: 85%;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+      border-radius: 0;
+      font-size: inherit;
+    }
+    /* List styles with proper indentation */
+    ul, ol {
+      margin: 0.5em 0;
+      padding-left: 2em;
+    }
+    li {
+      margin: 0.25em 0;
+    }
+    ul ul, ul ol, ol ul, ol ol {
+      margin: 0.25em 0;
+    }
+    /* Nested list indentation */
+    li > ul, li > ol {
+      margin-top: 0.25em;
+    }
+    /* Override inline styles that might conflict with dark mode */
+    ${effectiveDarkMode ? `
+      [bgcolor="#ffffff"], [bgcolor="white"] {
+        background-color: transparent !important;
+      }
+      [color="#000000"], [color="black"] {
+        color: ${textColor} !important;
+      }
+    ` : ''}
+  </style>
+</head>
+<body>${sanitizedHtml}</body>
+</html>`;
+  }, [sanitizedHtml, effectiveDarkMode, colorSchemeMatchesApp]);
+
+  // Create blob URL for the iframe
+  const blobUrl = useMemo(() => {
+    const blob = new Blob([iframeContent], { type: 'text/html' });
+    return URL.createObjectURL(blob);
+  }, [iframeContent]);
+
+  // Clean up blob URL when component unmounts or content changes
+  useEffect(() => {
+    return () => {
+      URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
+
+  // Resize iframe to fit content
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const handleLoad = () => {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow?.document;
+        if (doc?.body) {
+          // Add a small buffer to avoid scrollbars
+          const height = doc.body.scrollHeight + 16;
+          setIframeHeight(Math.max(100, Math.min(height, 2000))); // Cap at 2000px
+        }
+      } catch (e) {
+        // Cross-origin error - can't access iframe content
+        // This shouldn't happen with blob URLs but handle gracefully
+        setIframeHeight(400);
+      }
+    };
+
+    iframe.addEventListener('load', handleLoad);
+    return () => iframe.removeEventListener('load', handleLoad);
+  }, [blobUrl]);
+
   return (
-    <ViewerContainer
-      className={className}
-      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-    />
+    <IframeContainer className={className}>
+      <ThemeToggleButton
+        variant="outline-secondary"
+        size="sm"
+        onClick={() => setEmailDarkMode(prev => prev === null ? !isDarkMode : !prev)}
+        title={effectiveDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        <FontAwesomeIcon icon={effectiveDarkMode ? faSun : faMoon} />
+      </ThemeToggleButton>
+      <iframe
+        ref={iframeRef}
+        src={blobUrl}
+        title="Email content"
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        // @ts-expect-error - allowtransparency is a valid HTML attribute but not typed in React
+        allowtransparency="true"
+        style={{
+          width: '100%',
+          height: `${iframeHeight}px`,
+          border: 'none',
+          display: 'block',
+          backgroundColor: 'transparent',
+          colorScheme: effectiveDarkMode ? 'dark' : 'light',
+        }}
+      />
+    </IframeContainer>
   );
 }

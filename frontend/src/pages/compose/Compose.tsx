@@ -38,9 +38,8 @@ import {
   faInfoCircle,
   faExchangeAlt,
 } from '@fortawesome/free-solid-svg-icons';
+import { PageWrapper, StickyHeader } from '../../core/components';
 import {
-  PageWrapper,
-  StickyHeader,
   Title,
   HeaderActions,
   ContentArea,
@@ -451,7 +450,7 @@ ${quotedHtml}
   const isDraft = !!existingDraft;
 
   return (
-    <PageWrapper>
+    <PageWrapper $overflow="auto" $background="default">
       <StickyHeader>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <BackButton onClick={handleExit} />

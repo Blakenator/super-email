@@ -1,10 +1,21 @@
 import styled from 'styled-components';
-import { Card } from 'react-bootstrap';
+import { Card, Form } from 'react-bootstrap';
+
+export const SettingsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing.lg};
+`;
 
 export const ThemeCard = styled(Card)`
-  margin-bottom: ${({ theme }) => theme.spacing.lg};
   border: 1px solid ${({ theme }) => theme.colors.borderLight};
   box-shadow: ${({ theme }) => theme.shadows.sm};
+`;
+
+export const OptionsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing.sm};
 `;
 
 export const ThemeOption = styled.div<{ $selected?: boolean }>`
@@ -16,7 +27,6 @@ export const ThemeOption = styled.div<{ $selected?: boolean }>`
     ${({ theme, $selected }) =>
       $selected ? theme.colors.primary : theme.colors.borderLight};
   border-radius: ${({ theme }) => theme.borderRadius.md};
-  margin-bottom: ${({ theme }) => theme.spacing.sm};
   cursor: pointer;
   background: ${({ theme, $selected }) =>
     $selected ? `${theme.colors.primary}10` : theme.colors.backgroundWhite};
@@ -26,10 +36,17 @@ export const ThemeOption = styled.div<{ $selected?: boolean }>`
     border-color: ${({ theme }) => theme.colors.primary};
     background: ${({ theme }) => `${theme.colors.primary}05`};
   }
+`;
 
-  &:last-child {
-    margin-bottom: 0;
-  }
+export const SectionLabel = styled(Form.Label)`
+  margin-bottom: ${({ theme }) => theme.spacing.md};
+  display: block;
+`;
+
+export const SectionContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing.lg};
 `;
 
 export const ThemeIcon = styled.div<{ $selected?: boolean }>`

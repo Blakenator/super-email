@@ -10,6 +10,8 @@ export const FETCH_PROFILE_QUERY = gql(`
       themePreference
       navbarCollapsed
       notificationDetailLevel
+      inboxDensity
+      inboxGroupByDate
     }
   }
 `);
@@ -21,6 +23,8 @@ export const UPDATE_USER_PREFERENCES_MUTATION = gql(`
       themePreference
       navbarCollapsed
       notificationDetailLevel
+      inboxDensity
+      inboxGroupByDate
     }
   }
 `);

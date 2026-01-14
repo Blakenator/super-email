@@ -8,6 +8,7 @@ export interface EmailFilterInput {
   isRead?: boolean;
   isStarred?: boolean;
   searchQuery?: string;
+  includeAllFolders?: boolean;
   fromContains?: string;
   toContains?: string;
   ccContains?: string;
@@ -32,8 +33,9 @@ export function buildEmailWhereClause(
   if (input.folder === 'DRAFTS') {
     where.isDraft = true;
     where.folder = EmailFolder.DRAFTS;
-  } else if (!input.searchQuery && !hasAdvancedFilters(input)) {
-    // For all other folders (when not searching), exclude drafts
+  } else if (!input.includeAllFolders) {
+    // For all other folders, exclude drafts and apply folder filter
+    // Only skip folder filter if includeAllFolders is explicitly true
     where.isDraft = false;
     if (input.folder) {
       where.folder = input.folder;
@@ -76,9 +78,20 @@ export function buildEmailWhereClause(
   // Advanced field-specific filters
   if (input.fromContains?.trim()) {
     const fromTerm = input.fromContains.trim().toLowerCase().replace(/'/g, "''");
-    andConditions.push(
-      literal(`(LOWER("fromAddress") LIKE '%${fromTerm}%' OR LOWER("fromName") LIKE '%${fromTerm}%')`),
-    );
+    // Check if it looks like an exact email address (contains @ and no wildcards)
+    // If so, use exact match on fromAddress only to match getTopEmailSources behavior
+    const isExactEmail = fromTerm.includes('@') && !fromTerm.includes('%') && !fromTerm.includes('*');
+    if (isExactEmail) {
+      // Exact match on fromAddress only (case-insensitive)
+      andConditions.push(
+        literal(`LOWER("fromAddress") = '${fromTerm}'`),
+      );
+    } else {
+      // LIKE match on both fromAddress and fromName for partial matches
+      andConditions.push(
+        literal(`(LOWER("fromAddress") LIKE '%${fromTerm}%' OR LOWER("fromName") LIKE '%${fromTerm}%')`),
+      );
+    }
   }
 
   if (input.toContains?.trim()) {

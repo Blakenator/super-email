@@ -1,26 +1,6 @@
 import styled from 'styled-components';
 import { Card } from 'react-bootstrap';
 
-export const PageWrapper = styled.div`
-  height: 100vh;
-  overflow-y: auto;
-  background: ${({ theme }) => theme.colors.background};
-`;
-
-export const StickyHeader = styled.div`
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: ${({ theme }) => theme.spacing.sm};
-`;
-
 export const Title = styled.h2`
   font-size: ${({ theme }) => theme.fontSizes.lg};
   font-weight: 600;

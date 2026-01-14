@@ -1,4 +1,26 @@
 import styled from 'styled-components';
+import { Button } from 'react-bootstrap';
+
+export const IframeContainer = styled.div`
+  width: 100%;
+  background: ${({ theme }) => theme.colors.backgroundWhite};
+  border-radius: ${({ theme }) => theme.borderRadius.sm};
+  overflow: hidden;
+  position: relative;
+`;
+
+export const ThemeToggleButton = styled(Button)`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+  
+  &:hover {
+    opacity: 1;
+  }
+`;
 
 export const ViewerContainer = styled.div`
   /* Reset to match typical email HTML defaults */

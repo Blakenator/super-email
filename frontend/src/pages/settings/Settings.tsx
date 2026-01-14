@@ -69,8 +69,8 @@ import {
   faApple,
   faMicrosoft,
 } from '@fortawesome/free-brands-svg-icons';
+import { PageWrapper } from '../../core/components';
 import {
-  PageWrapper,
   Header,
   Title,
   SectionCard,
@@ -870,7 +870,7 @@ export function Settings() {
   const smtpProfiles = smtpProfilesData?.getSmtpProfiles ?? [];
 
   return (
-    <PageWrapper>
+    <PageWrapper $padding $overflow="auto">
       <Container>
         <Header>
           <Title>

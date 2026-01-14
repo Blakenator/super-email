@@ -181,21 +181,39 @@ function showNewEmailNotification(emails: CachedEmail[]) {
   const detailLevel = getNotificationDetailLevel();
   const count = emails.length;
 
+  let notification: Notification;
+
   if (detailLevel === 'full' && count === 1) {
     // Show full details for single email
     const email = emails[0];
-    new Notification(`New Email from ${email.fromName || email.fromAddress}`, {
+    notification = new Notification(`New Email from ${email.fromName || email.fromAddress}`, {
       body: email.subject || '(No Subject)',
       icon: '/icon-192x192.svg',
       tag: `new-email-${email.id}`,
     });
+    // Navigate to the specific email when clicked
+    notification.onclick = () => {
+      window.focus();
+      window.location.href = `/inbox/email/${email.id}`;
+      notification.close();
+    };
   } else {
     // Minimal notification
-    new Notification('New Email', {
+    notification = new Notification('New Email', {
       body:
         count === 1 ? 'You have 1 new email' : `You have ${count} new emails`,
       icon: '/icon-192x192.svg',
       tag: 'new-email',
     });
+    // Navigate to inbox when clicked, or to specific email if only one
+    notification.onclick = () => {
+      window.focus();
+      if (count === 1 && emails[0]) {
+        window.location.href = `/inbox/email/${emails[0].id}`;
+      } else {
+        window.location.href = '/inbox';
+      }
+      notification.close();
+    };
   }
 }

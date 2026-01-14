@@ -30,6 +30,8 @@ type User implements BaseEntityProps {
   themePreference: ThemePreference!
   navbarCollapsed: Boolean!
   notificationDetailLevel: NotificationDetailLevel!
+  inboxDensity: Boolean!
+  inboxGroupByDate: Boolean!
   emailAccounts: [EmailAccount!]!
   smtpProfiles: [SmtpProfile!]!
   authenticationMethods: [AuthenticationMethod!]!
@@ -39,6 +41,8 @@ input UpdateUserPreferencesInput {
   themePreference: ThemePreference
   navbarCollapsed: Boolean
   notificationDetailLevel: NotificationDetailLevel
+  inboxDensity: Boolean
+  inboxGroupByDate: Boolean
 }
 
 enum AuthProvider {
@@ -392,6 +396,7 @@ input GetEmailsInput {
   isRead: Boolean
   isStarred: Boolean
   searchQuery: String
+  includeAllFolders: Boolean
   # Advanced filters
   fromContains: String
   toContains: String
@@ -481,6 +486,14 @@ input TestSmtpConnectionInput {
   useSsl: Boolean!
 }
 
+# ============ Email Sources (Triage) ============
+
+type EmailSource {
+  fromAddress: String!
+  fromName: String
+  count: Int!
+}
+
 # ============ Queries ============
 
 type Query {
@@ -501,6 +514,7 @@ type Query {
   getEmail(input: GetEmailInput!): Email
   getEmailCount(input: GetEmailsInput!): Int!
   getEmailsByThread(threadId: String!): [Email!]!
+  getTopEmailSources(limit: Int): [EmailSource!]!
 
   # Contacts
   getContacts: [Contact!]!
@@ -576,7 +590,7 @@ type Mutation {
 }
 
 input NukeOldEmailsInput {
-  olderThan: Date!
+  olderThan: Date
 }
 
 # ============ Subscriptions ============

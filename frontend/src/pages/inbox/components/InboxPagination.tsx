@@ -114,8 +114,8 @@ export function InboxPagination({
     return items;
   };
 
-  const startItem = (currentPage - 1) * pageSize + 1;
-  const endItem = Math.min(currentPage * pageSize, totalCount);
+  const startItem = totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const endItem = totalCount > 0 ? Math.min(currentPage * pageSize, totalCount) : 0;
 
   return (
     <PaginationWrapper>

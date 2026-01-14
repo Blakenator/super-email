@@ -20,15 +20,21 @@ export const nukeOldEmails = makeMutation(
       return 0;
     }
 
-    // Archive all emails in INBOX that are older than the specified date
+    // Build where clause - if olderThan is provided, filter by date, otherwise archive all
+    const whereClause: any = {
+      emailAccountId: { [Op.in]: accountIds },
+      folder: EmailFolder.INBOX,
+    };
+
+    if (input.olderThan) {
+      whereClause.receivedAt = { [Op.lt]: input.olderThan };
+    }
+
+    // Archive all emails in INBOX (optionally filtered by date)
     const [affectedCount] = await Email.update(
       { folder: EmailFolder.ARCHIVE },
       {
-        where: {
-          emailAccountId: { [Op.in]: accountIds },
-          folder: EmailFolder.INBOX,
-          receivedAt: { [Op.lt]: input.olderThan },
-        },
+        where: whereClause,
       },
     );
 

@@ -17,6 +17,8 @@ interface ResponsiveTabsProps {
   activeKey: string;
   onSelect: (key: string) => void;
   className?: string;
+  /** When true, never show horizontal tabs - only vertical or dropdown */
+  disableHorizontal?: boolean;
 }
 
 type ViewMode = 'horizontal' | 'vertical' | 'dropdown';
@@ -153,15 +155,16 @@ export function ResponsiveTabs({
   activeKey,
   onSelect,
   className,
+  disableHorizontal = false,
 }: ResponsiveTabsProps) {
-  const [viewMode, setViewMode] = useState<ViewMode>('horizontal');
+  const [viewMode, setViewMode] = useState<ViewMode>(disableHorizontal ? 'vertical' : 'horizontal');
 
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
       if (width < BREAKPOINTS.mobile) {
         setViewMode('dropdown');
-      } else if (width < BREAKPOINTS.tablet) {
+      } else if (width < BREAKPOINTS.tablet || disableHorizontal) {
         setViewMode('vertical');
       } else {
         setViewMode('horizontal');
@@ -171,7 +174,7 @@ export function ResponsiveTabs({
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  }, [disableHorizontal]);
 
   const activeTab = tabs.find((t) => t.key === activeKey) || tabs[0];
   const activeContent = activeTab?.content;

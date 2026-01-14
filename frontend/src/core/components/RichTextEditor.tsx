@@ -19,6 +19,7 @@ import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import {
   type TextMatchTransformer,
+  type ElementTransformer,
   TEXT_FORMAT_TRANSFORMERS,
   TEXT_MATCH_TRANSFORMERS,
   ELEMENT_TRANSFORMERS,
@@ -372,12 +373,33 @@ const STRIKETHROUGH_TRANSFORMER: TextMatchTransformer = {
   type: 'text-match',
 };
 
-// Custom transformers including strikethrough
+// Code block transformer for ``` syntax
+const CODE_BLOCK_TRANSFORMER: ElementTransformer = {
+  dependencies: [CodeNode],
+  export: (node) => {
+    if (node.getType() === 'code') {
+      const codeNode = node as any;
+      const language = codeNode.getLanguage?.() || '';
+      return `\`\`\`${language}\n${codeNode.getTextContent()}\n\`\`\``;
+    }
+    return null;
+  },
+  regExp: /^```(\w+)?$/,
+  replace: (parentNode, _children, match) => {
+    const codeNode = $createCodeNode(match[1] || undefined);
+    parentNode.replace(codeNode);
+    codeNode.selectEnd();
+  },
+  type: 'element',
+};
+
+// Custom transformers including strikethrough and code blocks
 const CUSTOM_TRANSFORMERS = [
   ...TEXT_FORMAT_TRANSFORMERS,
   ...TEXT_MATCH_TRANSFORMERS,
   ...ELEMENT_TRANSFORMERS,
   STRIKETHROUGH_TRANSFORMER,
+  CODE_BLOCK_TRANSFORMER,
 ];
 
 // Keyboard shortcuts plugin

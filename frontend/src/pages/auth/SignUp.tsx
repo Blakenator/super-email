@@ -7,6 +7,7 @@ import {
   Spinner,
   Row,
   Col,
+  Card,
 } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';

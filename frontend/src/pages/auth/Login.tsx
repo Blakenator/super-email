@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Container, Form, Button, Alert, Spinner } from 'react-bootstrap';
+import { Container, Form, Button, Alert, Spinner, Card } from 'react-bootstrap';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';

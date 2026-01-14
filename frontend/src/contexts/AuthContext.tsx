@@ -30,12 +30,16 @@ interface User {
   themePreference: ThemePreference;
   navbarCollapsed: boolean;
   notificationDetailLevel: NotificationDetailLevel;
+  inboxDensity: boolean;
+  inboxGroupByDate: boolean;
 }
 
 interface UpdatePreferencesInput {
   themePreference?: ThemePreference;
   navbarCollapsed?: boolean;
   notificationDetailLevel?: NotificationDetailLevel;
+  inboxDensity?: boolean;
+  inboxGroupByDate?: boolean;
 }
 
 interface AuthContextType {
@@ -89,6 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             notificationDetailLevel:
               (data.fetchProfile
                 .notificationDetailLevel as NotificationDetailLevel) || 'FULL',
+            inboxDensity: data.fetchProfile.inboxDensity ?? false,
+            inboxGroupByDate: data.fetchProfile.inboxGroupByDate ?? false,
           });
           return data.fetchProfile;
         }
@@ -234,33 +240,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Not authenticated');
       }
 
-      const { data } = await apolloClient.mutate({
-        mutation: UPDATE_USER_PREFERENCES_MUTATION,
-        variables: { input },
-        context: {
-          headers: {
-            authorization: `Bearer ${token}`,
-          },
-        },
-      });
+      // Optimistic update - apply changes immediately for better UX
+      const previousUser = user;
+      setUser((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(input.themePreference !== undefined && {
+                themePreference: input.themePreference,
+              }),
+              ...(input.navbarCollapsed !== undefined && {
+                navbarCollapsed: input.navbarCollapsed,
+              }),
+              ...(input.notificationDetailLevel !== undefined && {
+                notificationDetailLevel: input.notificationDetailLevel,
+              }),
+            }
+          : null,
+      );
 
-      if (data?.updateUserPreferences) {
-        setUser((prev) =>
-          prev
-            ? {
-                ...prev,
-                ...(input.themePreference !== undefined && {
-                  themePreference: input.themePreference,
-                }),
-                ...(input.navbarCollapsed !== undefined && {
-                  navbarCollapsed: input.navbarCollapsed,
-                }),
-                ...(input.notificationDetailLevel !== undefined && {
-                  notificationDetailLevel: input.notificationDetailLevel,
-                }),
-              }
-            : null,
-        );
+      try {
+        await apolloClient.mutate({
+          mutation: UPDATE_USER_PREFERENCES_MUTATION,
+          variables: { input },
+          context: {
+            headers: {
+              authorization: `Bearer ${token}`,
+            },
+          },
+        });
+      } catch (error) {
+        // Rollback on error
+        setUser(previousUser);
+        throw error;
       }
     },
     [token, user, apolloClient],

@@ -35,6 +35,7 @@ import {
   faTimes,
   faPlus,
   faStar,
+  faEllipsisV,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   LoadingSpinner,
@@ -42,6 +43,7 @@ import {
   BackButton,
   ContactFormModal,
   EmailContactCard,
+  StickyHeader,
 } from '../../core/components';
 import toast from 'react-hot-toast';
 import { useEmailStore } from '../../stores/emailStore';
@@ -71,6 +73,12 @@ import {
   TagsContainer,
   TagBadge,
   TagRemoveBtn,
+  EmailActions,
+  ActionButton,
+  ActionButtonDanger,
+  MoreActionsDropdown,
+  GlobalHeaderSubject,
+  ThreadCount,
 } from './EmailView.wrappers';
 
 interface EmailViewProps {
@@ -95,6 +103,13 @@ export function EmailView({
   const [expandedThreadEmails, setExpandedThreadEmails] = useState<Set<string>>(
     new Set([emailId]),
   );
+  // Track which email's modals are being shown
+  const [activeEmailForModal, setActiveEmailForModal] = useState<string | null>(
+    null,
+  );
+
+  // Track the current emailId to detect changes
+  const currentEmailIdRef = useRef(emailId);
 
   const { data, loading, refetch } = useQuery(GET_EMAIL_QUERY, {
     variables: { input: { id: emailId } },
@@ -112,7 +127,6 @@ export function EmailView({
     variables: { threadId: email?.threadId || '' },
     skip: !email?.threadId || (email?.threadCount ?? 1) <= 1,
     fetchPolicy: 'cache-and-network',
-    nextFetchPolicy: 'cache-first',
     notifyOnNetworkStatusChange: true,
   });
 
@@ -123,6 +137,18 @@ export function EmailView({
   // to identify new emails added via real-time updates
   const initialThreadIdsRef = useRef<Set<string>>(new Set());
   const [newEmailIds, setNewEmailIds] = useState<Set<string>>(new Set());
+
+  // Reset state when emailId changes (user navigates to different email)
+  useEffect(() => {
+    if (emailId !== currentEmailIdRef.current) {
+      currentEmailIdRef.current = emailId;
+      // Reset expanded state to show the new email
+      setExpandedThreadEmails(new Set([emailId]));
+      // Reset tracking refs for the new email context
+      initialThreadIdsRef.current = new Set();
+      setNewEmailIds(new Set());
+    }
+  }, [emailId]);
 
   // Initialize the initial thread IDs on first load
   useEffect(() => {
@@ -263,67 +289,82 @@ export function EmailView({
     return date.toFormat('ccc, LLL d, yyyy, h:mm a');
   };
 
-  const handleReply = () => {
-    if (email) {
-      // Build thread emails array for full conversation context
-      const threadEmailsForReply = hasThread
-        ? threadEmails.map((te) => ({
-            from: te.fromName || te.fromAddress,
-            fromAddress: te.fromAddress,
-            date: te.receivedAt,
-            body: te.textBody || '',
-            htmlBody: te.htmlBody,
-          }))
-        : undefined;
+  const handleReply = useCallback(
+    (targetEmail: typeof email) => {
+      if (targetEmail) {
+        // Build thread emails array for full conversation context
+        const threadEmailsForReply = hasThread
+          ? threadEmails.map((te) => ({
+              from: te.fromName || te.fromAddress,
+              fromAddress: te.fromAddress,
+              date: te.receivedAt,
+              body: te.textBody || '',
+              htmlBody: te.htmlBody,
+            }))
+          : undefined;
 
-      navigate('/compose', {
-        state: {
-          replyTo: {
-            to: email.fromAddress,
-            subject: email.subject.startsWith('Re:')
-              ? email.subject
-              : `Re: ${email.subject}`,
-            inReplyTo: email.messageId,
-            originalBody: email.textBody,
-            originalHtmlBody: email.htmlBody,
-            originalFrom: email.fromName || email.fromAddress,
-            originalDate: email.receivedAt,
-            emailAccountId: email.emailAccountId,
-            threadEmails: threadEmailsForReply,
+        navigate('/compose', {
+          state: {
+            replyTo: {
+              to: targetEmail.fromAddress,
+              subject: targetEmail.subject.startsWith('Re:')
+                ? targetEmail.subject
+                : `Re: ${targetEmail.subject}`,
+              inReplyTo: targetEmail.messageId,
+              originalBody: targetEmail.textBody,
+              originalHtmlBody: targetEmail.htmlBody,
+              originalFrom: targetEmail.fromName || targetEmail.fromAddress,
+              originalDate: targetEmail.receivedAt,
+              emailAccountId: targetEmail.emailAccountId,
+              threadEmails: threadEmailsForReply,
+            },
           },
-        },
-      });
-    }
-  };
+        });
+      }
+    },
+    [hasThread, threadEmails, navigate],
+  );
 
-  const handleForward = () => {
-    if (email) {
-      navigate('/compose', {
-        state: {
-          forward: {
-            originalEmailId: email.id,
-            subject: email.subject.startsWith('Fwd:')
-              ? email.subject
-              : `Fwd: ${email.subject}`,
-            originalBody: email.textBody,
-            originalHtmlBody: email.htmlBody,
-            originalFrom: email.fromName || email.fromAddress,
-            originalFromAddress: email.fromAddress,
-            originalDate: email.receivedAt,
-            originalTo: email.toAddresses,
-            originalCc: email.ccAddresses,
-            emailAccountId: email.emailAccountId,
+  const handleForward = useCallback(
+    (targetEmail: typeof email) => {
+      if (targetEmail) {
+        navigate('/compose', {
+          state: {
+            forward: {
+              originalEmailId: targetEmail.id,
+              subject: targetEmail.subject.startsWith('Fwd:')
+                ? targetEmail.subject
+                : `Fwd: ${targetEmail.subject}`,
+              originalBody: targetEmail.textBody,
+              originalHtmlBody: targetEmail.htmlBody,
+              originalFrom: targetEmail.fromName || targetEmail.fromAddress,
+              originalFromAddress: targetEmail.fromAddress,
+              originalDate: targetEmail.receivedAt,
+              originalTo: targetEmail.toAddresses,
+              originalCc: targetEmail.ccAddresses,
+              emailAccountId: targetEmail.emailAccountId,
+            },
           },
-        },
-      });
-    }
-  };
+        });
+      }
+    },
+    [navigate],
+  );
 
-  const handleUnsubscribe = () => {
-    if (email) {
-      unsubscribe({ variables: { input: { emailId: email.id } } });
+  const handleUnsubscribe = useCallback(
+    (targetEmailId: string) => {
+      unsubscribe({ variables: { input: { emailId: targetEmailId } } });
+    },
+    [unsubscribe],
+  );
+
+  // Get email for modal display (either active or main email)
+  const getEmailForModal = useCallback(() => {
+    if (activeEmailForModal) {
+      return threadEmails.find((e) => e.id === activeEmailForModal) || email;
     }
-  };
+    return email;
+  }, [activeEmailForModal, threadEmails, email]);
 
   const toggleThreadEmail = useCallback((id: string) => {
     setExpandedThreadEmails((prev) => {
@@ -339,7 +380,10 @@ export function EmailView({
 
   const hasUnsubscribeOption = email?.unsubscribeUrl || email?.unsubscribeEmail;
 
-  if (loading) {
+  // Show loading spinner only when no email data exists
+  // or when navigating to a different email (stale data from previous email)
+  const isStaleData = email && email.id !== emailId;
+  if (!email || isStaleData) {
     return (
       <Wrapper>
         <LoadingSpinner message="Loading email..." />
@@ -347,75 +391,127 @@ export function EmailView({
     );
   }
 
-  if (!email) {
+  // Helper to render action buttons for an email
+  const renderEmailActions = (
+    targetEmail: typeof email,
+    showFullActions = false,
+  ) => {
+    if (!targetEmail) return null;
+
+    const hasUnsubscribe =
+      targetEmail.unsubscribeUrl || targetEmail.unsubscribeEmail;
+
     return (
-      <Wrapper>
-        <Toolbar>
-          <BackButton onClick={onBack} label="Back" />
-        </Toolbar>
-        <EmailContent>
-          <div className="text-center text-muted">Email not found</div>
-        </EmailContent>
-      </Wrapper>
+      <EmailActions onClick={(e) => e.stopPropagation()}>
+        <ActionButton onClick={() => handleReply(targetEmail)} title="Reply">
+          <FontAwesomeIcon icon={faReply} />
+        </ActionButton>
+        <ActionButton
+          onClick={() => handleForward(targetEmail)}
+          title="Forward"
+        >
+          <FontAwesomeIcon icon={faShare} />
+        </ActionButton>
+        {onArchive && (
+          <ActionButton onClick={onArchive} title="Archive">
+            <FontAwesomeIcon icon={faArchive} />
+          </ActionButton>
+        )}
+        {onUnarchive && (
+          <ActionButton onClick={onUnarchive} title="Move to Inbox">
+            <FontAwesomeIcon icon={faInbox} />
+          </ActionButton>
+        )}
+        {unassignedTags.length > 0 && (
+          <Dropdown>
+            <Dropdown.Toggle
+              as={ActionButton}
+              id={`add-tag-quick-${targetEmail.id}`}
+              title="Add Tag"
+            >
+              <FontAwesomeIcon icon={faTag} />
+            </Dropdown.Toggle>
+            <Dropdown.Menu align="end">
+              {unassignedTags.map((tag) => (
+                <Dropdown.Item
+                  key={tag.id}
+                  onClick={() => handleAddTag(tag.id)}
+                >
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      width: 12,
+                      height: 12,
+                      borderRadius: '50%',
+                      backgroundColor: tag.color,
+                      marginRight: 8,
+                    }}
+                  />
+                  {tag.name}
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Menu>
+          </Dropdown>
+        )}
+        <MoreActionsDropdown>
+          <Dropdown>
+            <Dropdown.Toggle
+              as={ActionButton}
+              id={`more-actions-${targetEmail.id}`}
+            >
+              <FontAwesomeIcon icon={faEllipsisV} />
+            </Dropdown.Toggle>
+            <Dropdown.Menu align="end">
+              <Dropdown.Item
+                onClick={() => {
+                  setActiveEmailForModal(targetEmail.id);
+                  setShowAddContactModal(true);
+                }}
+              >
+                <FontAwesomeIcon icon={faUserPlus} />
+                Add to Contacts
+              </Dropdown.Item>
+              <Dropdown.Item
+                onClick={() => {
+                  setActiveEmailForModal(targetEmail.id);
+                  setShowHeadersModal(true);
+                }}
+              >
+                <FontAwesomeIcon icon={faInfoCircle} />
+                View Headers
+              </Dropdown.Item>
+              {hasUnsubscribe && !targetEmail.isUnsubscribed && (
+                <Dropdown.Item
+                  onClick={() => {
+                    setActiveEmailForModal(targetEmail.id);
+                    setShowUnsubscribeModal(true);
+                  }}
+                >
+                  <FontAwesomeIcon icon={faBellSlash} />
+                  Unsubscribe
+                </Dropdown.Item>
+              )}
+              <Dropdown.Divider />
+              <Dropdown.Item className="text-danger" onClick={onDelete}>
+                <FontAwesomeIcon icon={faTrash} />
+                Delete
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown>
+        </MoreActionsDropdown>
+      </EmailActions>
     );
-  }
+  };
 
   return (
     <Wrapper>
-      <Toolbar>
+      <StickyHeader>
         <BackButton onClick={onBack} label="Back" />
-        <Button variant="primary" onClick={handleReply}>
-          <FontAwesomeIcon icon={faReply} className="me-1" />
-          Reply
-        </Button>
-        <Button variant="outline-primary" onClick={handleForward}>
-          <FontAwesomeIcon icon={faShare} className="me-1" />
-          Forward
-        </Button>
-        <Button
-          variant="outline-secondary"
-          onClick={() => setShowAddContactModal(true)}
-          title="Add sender to contacts"
-        >
-          <FontAwesomeIcon icon={faUserPlus} className="me-1" />
-          Add Contact
-        </Button>
-        <Button
-          variant="outline-secondary"
-          onClick={() => setShowHeadersModal(true)}
-          title="View email headers"
-        >
-          <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
-          More Info
-        </Button>
-        <ToolbarSpacer />
-        {hasUnsubscribeOption && !email.isUnsubscribed && (
-          <Button
-            variant="outline-warning"
-            onClick={() => setShowUnsubscribeModal(true)}
-            title="Unsubscribe from this mailing list"
-          >
-            <FontAwesomeIcon icon={faBellSlash} className="me-1" />
-            Unsubscribe
-          </Button>
+        <GlobalHeaderSubject>{email.subject}</GlobalHeaderSubject>
+        {hasThread && (
+          <ThreadCount bg="primary">{threadEmails.length} messages</ThreadCount>
         )}
-        {onArchive && (
-          <Button variant="outline-secondary" onClick={onArchive}>
-            <FontAwesomeIcon icon={faArchive} className="me-1" />
-            Archive
-          </Button>
-        )}
-        {onUnarchive && (
-          <Button variant="outline-info" onClick={onUnarchive}>
-            <FontAwesomeIcon icon={faInbox} className="me-1" />
-            Move to Inbox
-          </Button>
-        )}
-        <Button variant="outline-danger" onClick={onDelete}>
-          <FontAwesomeIcon icon={faTrash} className="me-1" />
-          Delete
-        </Button>
-      </Toolbar>
+      </StickyHeader>
 
       <EmailContent>
         {email.isUnsubscribed && (
@@ -427,71 +523,26 @@ export function EmailView({
           </UnsubscribeBanner>
         )}
 
-        <Subject>
-          {email.subject}
-          {hasThread && (
-            <Badge bg="primary" className="ms-2">
-              {threadEmails.length} messages in thread
-            </Badge>
-          )}
-        </Subject>
-
         {/* Tags Section */}
-        <TagsContainer>
-          <FontAwesomeIcon
-            icon={faTag}
-            style={{ color: '#6c757d', marginRight: 4 }}
-          />
-          {emailTags.map((tag) => (
-            <TagBadge key={tag.id} $bgColor={tag.color}>
-              {tag.name}
-              <TagRemoveBtn
-                onClick={() => handleRemoveTag(tag.id)}
-                title="Remove tag"
-              >
-                <FontAwesomeIcon icon={faTimes} />
-              </TagRemoveBtn>
-            </TagBadge>
-          ))}
-          {unassignedTags.length > 0 && (
-            <Dropdown>
-              <Dropdown.Toggle
-                variant="outline-secondary"
-                size="sm"
-                id="add-tag-dropdown"
-                style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-              >
-                <FontAwesomeIcon icon={faPlus} className="me-1" />
-                Add Tag
-              </Dropdown.Toggle>
-              <Dropdown.Menu>
-                {unassignedTags.map((tag) => (
-                  <Dropdown.Item
-                    key={tag.id}
-                    onClick={() => handleAddTag(tag.id)}
-                  >
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        width: 12,
-                        height: 12,
-                        borderRadius: '50%',
-                        backgroundColor: tag.color,
-                        marginRight: 8,
-                      }}
-                    />
-                    {tag.name}
-                  </Dropdown.Item>
-                ))}
-              </Dropdown.Menu>
-            </Dropdown>
-          )}
-          {emailTags.length === 0 && unassignedTags.length === 0 && (
-            <span className="text-muted" style={{ fontSize: '0.85rem' }}>
-              No tags available
-            </span>
-          )}
-        </TagsContainer>
+        {emailTags.length > 0 && (
+          <TagsContainer>
+            <FontAwesomeIcon
+              icon={faTag}
+              style={{ color: '#6c757d', marginRight: 4 }}
+            />
+            {emailTags.map((tag) => (
+              <TagBadge key={tag.id} $bgColor={tag.color}>
+                {tag.name}
+                <TagRemoveBtn
+                  onClick={() => handleRemoveTag(tag.id)}
+                  title="Remove tag"
+                >
+                  <FontAwesomeIcon icon={faTimes} />
+                </TagRemoveBtn>
+              </TagBadge>
+            ))}
+          </TagsContainer>
+        )}
 
         {hasThread ? (
           <ThreadContainer>
@@ -538,8 +589,10 @@ export function EmailView({
                       <EmailDate>
                         {formatDate(threadEmail.receivedAt)}
                       </EmailDate>
+                      {isExpanded && renderEmailActions(threadEmail)}
                       <FontAwesomeIcon
                         icon={isExpanded ? faChevronUp : faChevronDown}
+                        style={{ marginLeft: '8px' }}
                       />
                     </div>
                   </ThreadEmailHeader>
@@ -615,8 +668,14 @@ export function EmailView({
                   )}
                 </Recipients>
               </SenderInfo>
-              <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
+              <div className="d-flex align-items-center gap-2">
+                <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
+                {renderEmailActions(email)}
+              </div>
             </MetaRow>
+
+            {/* Subject for single email view */}
+            <Subject>{email.subject}</Subject>
 
             {email.htmlBody ? (
               <HtmlBodyContainer>
@@ -628,71 +687,96 @@ export function EmailView({
           </>
         )}
       </EmailContent>
+      {loading && <LoadingSpinner message="Loading email..." />}
 
       {/* Unsubscribe Confirmation Modal */}
       <Modal
         show={showUnsubscribeModal}
-        onHide={() => setShowUnsubscribeModal(false)}
+        onHide={() => {
+          setShowUnsubscribeModal(false);
+          setActiveEmailForModal(null);
+        }}
         centered
       >
         <Modal.Header closeButton>
           <Modal.Title>Confirm Unsubscribe</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>Are you sure you want to unsubscribe from this mailing list?</p>
+          {(() => {
+            const modalEmail = getEmailForModal();
+            return (
+              <>
+                <p>
+                  Are you sure you want to unsubscribe from this mailing list?
+                </p>
 
-          {email?.unsubscribeUrl && (
-            <Alert variant="success" className="small mb-2">
-              <strong>One-Click Unsubscribe (URL)</strong>
-              <br />
-              <span className="text-muted">
-                We will automatically send an unsubscribe request to:
-              </span>
-              <br />
-              <code style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}>
-                {email.unsubscribeUrl}
-              </code>
-            </Alert>
-          )}
+                {modalEmail?.unsubscribeUrl && (
+                  <Alert variant="success" className="small mb-2">
+                    <strong>One-Click Unsubscribe (URL)</strong>
+                    <br />
+                    <span className="text-muted">
+                      We will automatically send an unsubscribe request to:
+                    </span>
+                    <br />
+                    <code
+                      style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}
+                    >
+                      {modalEmail.unsubscribeUrl}
+                    </code>
+                  </Alert>
+                )}
 
-          {email?.unsubscribeEmail && !email?.unsubscribeUrl && (
-            <Alert variant="warning" className="small mb-2">
-              <strong>Email-Based Unsubscribe</strong>
-              <br />
-              <span className="text-muted">
-                This will send an unsubscribe email from your account to:
-              </span>
-              <br />
-              <code>{email.unsubscribeEmail}</code>
-              <br />
-              <small className="text-muted mt-2 d-block">
-                ⚠️ Note: An email will be sent from your configured SMTP
-                profile.
-              </small>
-            </Alert>
-          )}
+                {modalEmail?.unsubscribeEmail &&
+                  !modalEmail?.unsubscribeUrl && (
+                    <Alert variant="warning" className="small mb-2">
+                      <strong>Email-Based Unsubscribe</strong>
+                      <br />
+                      <span className="text-muted">
+                        This will send an unsubscribe email from your account
+                        to:
+                      </span>
+                      <br />
+                      <code>{modalEmail.unsubscribeEmail}</code>
+                      <br />
+                      <small className="text-muted mt-2 d-block">
+                        ⚠️ Note: An email will be sent from your configured SMTP
+                        profile.
+                      </small>
+                    </Alert>
+                  )}
 
-          {email?.unsubscribeEmail && email?.unsubscribeUrl && (
-            <Alert variant="secondary" className="small mb-2">
-              <strong>Alternative: Email-Based Unsubscribe</strong>
-              <br />
-              <span className="text-muted">
-                If the URL doesn't work, you can email:{' '}
-              </span>
-              <code>{email.unsubscribeEmail}</code>
-            </Alert>
-          )}
+                {modalEmail?.unsubscribeEmail && modalEmail?.unsubscribeUrl && (
+                  <Alert variant="secondary" className="small mb-2">
+                    <strong>Alternative: Email-Based Unsubscribe</strong>
+                    <br />
+                    <span className="text-muted">
+                      If the URL doesn't work, you can email:{' '}
+                    </span>
+                    <code>{modalEmail.unsubscribeEmail}</code>
+                  </Alert>
+                )}
+              </>
+            );
+          })()}
         </Modal.Body>
         <Modal.Footer>
           <Button
             variant="secondary"
-            onClick={() => setShowUnsubscribeModal(false)}
+            onClick={() => {
+              setShowUnsubscribeModal(false);
+              setActiveEmailForModal(null);
+            }}
           >
             Cancel
           </Button>
           <Button
             variant="warning"
-            onClick={handleUnsubscribe}
+            onClick={() => {
+              const modalEmail = getEmailForModal();
+              if (modalEmail) {
+                handleUnsubscribe(modalEmail.id);
+              }
+            }}
             disabled={unsubscribing}
           >
             {unsubscribing ? 'Unsubscribing...' : 'Unsubscribe'}
@@ -703,25 +787,35 @@ export function EmailView({
       {/* Add Contact Modal */}
       <ContactFormModal
         show={showAddContactModal}
-        onHide={() => setShowAddContactModal(false)}
-        initialData={{
-          email: email?.fromAddress || '',
-          name: email?.fromName || '',
-          firstName: email?.fromName?.split(' ')[0] || '',
-          lastName: email?.fromName?.split(' ').slice(1).join(' ') || '',
-          company: '',
-          phone: '',
-          notes: '',
+        onHide={() => {
+          setShowAddContactModal(false);
+          setActiveEmailForModal(null);
         }}
+        initialData={(() => {
+          const modalEmail = getEmailForModal();
+          return {
+            email: modalEmail?.fromAddress || '',
+            name: modalEmail?.fromName || '',
+            firstName: modalEmail?.fromName?.split(' ')[0] || '',
+            lastName: modalEmail?.fromName?.split(' ').slice(1).join(' ') || '',
+            company: '',
+            phone: '',
+            notes: '',
+          };
+        })()}
         onSuccess={() => {
           setShowAddContactModal(false);
+          setActiveEmailForModal(null);
         }}
       />
 
       {/* Email Headers Modal */}
       <Modal
         show={showHeadersModal}
-        onHide={() => setShowHeadersModal(false)}
+        onHide={() => {
+          setShowHeadersModal(false);
+          setActiveEmailForModal(null);
+        }}
         size="lg"
         centered
       >
@@ -729,54 +823,60 @@ export function EmailView({
           <Modal.Title>Email Headers</Modal.Title>
         </Modal.Header>
         <Modal.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-          {email?.headers ? (
-            <HeadersTable>
-              <tbody>
-                {Object.entries(email.headers).map(([key, value]) => {
-                  let displayValue: string;
+          {(() => {
+            const modalEmail = getEmailForModal();
+            return modalEmail?.headers ? (
+              <HeadersTable>
+                <tbody>
+                  {Object.entries(modalEmail.headers).map(([key, value]) => {
+                    let displayValue: string;
 
-                  if (value === null || value === undefined) {
-                    displayValue = '';
-                  } else if (typeof value === 'object') {
-                    // Pretty-print JSON objects
-                    displayValue = JSON.stringify(value, null, 2);
-                  } else if (Array.isArray(value)) {
-                    displayValue = value.join('\n');
-                  } else if (typeof value === 'string') {
-                    // Check if it's a JSON string
-                    try {
-                      const parsed = JSON.parse(value);
-                      if (typeof parsed === 'object') {
-                        displayValue = JSON.stringify(parsed, null, 2);
-                      } else {
+                    if (value === null || value === undefined) {
+                      displayValue = '';
+                    } else if (typeof value === 'object') {
+                      // Pretty-print JSON objects
+                      displayValue = JSON.stringify(value, null, 2);
+                    } else if (Array.isArray(value)) {
+                      displayValue = value.join('\n');
+                    } else if (typeof value === 'string') {
+                      // Check if it's a JSON string
+                      try {
+                        const parsed = JSON.parse(value);
+                        if (typeof parsed === 'object') {
+                          displayValue = JSON.stringify(parsed, null, 2);
+                        } else {
+                          displayValue = value;
+                        }
+                      } catch {
                         displayValue = value;
                       }
-                    } catch {
-                      displayValue = value;
+                    } else {
+                      displayValue = String(value);
                     }
-                  } else {
-                    displayValue = String(value);
-                  }
 
-                  return (
-                    <tr key={key}>
-                      <th>{key}</th>
-                      <td>
-                        <HeaderValue>{displayValue}</HeaderValue>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </HeadersTable>
-          ) : (
-            <p className="text-muted">No headers available for this email.</p>
-          )}
+                    return (
+                      <tr key={key}>
+                        <th>{key}</th>
+                        <td>
+                          <HeaderValue>{displayValue}</HeaderValue>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </HeadersTable>
+            ) : (
+              <p className="text-muted">No headers available for this email.</p>
+            );
+          })()}
         </Modal.Body>
         <Modal.Footer>
           <Button
             variant="secondary"
-            onClick={() => setShowHeadersModal(false)}
+            onClick={() => {
+              setShowHeadersModal(false);
+              setActiveEmailForModal(null);
+            }}
           >
             Close
           </Button>

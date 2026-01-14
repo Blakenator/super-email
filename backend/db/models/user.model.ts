@@ -51,6 +51,20 @@ export class User extends Model {
   })
   declare notificationDetailLevel: NotificationDetailLevel;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare inboxDensity: boolean; // true = dense, false = spacious
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare inboxGroupByDate: boolean;
+
   // Note: HasMany associations are not defined here to avoid circular dependencies.
   // The ForeignKey/BelongsTo decorators on child models are sufficient for Sequelize
   // to establish relationships. Query with `include: [EmailAccount, SmtpProfile]` will still work.

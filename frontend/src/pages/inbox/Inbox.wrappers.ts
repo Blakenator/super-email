@@ -1,13 +1,6 @@
 import styled from 'styled-components';
 import { Card, Alert, Badge } from 'react-bootstrap';
 
-export const PageWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-`;
-
 export const PageToolbar = styled.div`
   display: flex;
   justify-content: space-between;

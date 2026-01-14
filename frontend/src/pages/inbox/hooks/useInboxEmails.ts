@@ -86,7 +86,7 @@ export function useInboxEmails({
 
   // Check if any advanced filters are active
   const hasActiveFilters = Object.entries(advancedFilters).some(([key, v]) => {
-    if (key === 'tagIds') return (v as string[]).length > 0;
+    if (key === 'tagIds') return (v as string[] || []).length > 0;
     return typeof v === 'string' && v.trim() !== '';
   });
 
@@ -97,13 +97,14 @@ export function useInboxEmails({
       limit: pageSize,
       offset,
       searchQuery: searchQuery.trim() || undefined,
-      fromContains: advancedFilters.fromContains.trim() || undefined,
-      toContains: advancedFilters.toContains.trim() || undefined,
-      ccContains: advancedFilters.ccContains.trim() || undefined,
-      bccContains: advancedFilters.bccContains.trim() || undefined,
-      subjectContains: advancedFilters.subjectContains.trim() || undefined,
-      bodyContains: advancedFilters.bodyContains.trim() || undefined,
-      tagIds: advancedFilters.tagIds.length > 0 ? advancedFilters.tagIds : undefined,
+      includeAllFolders: searchQuery.trim() ? true : undefined, // Include all folders when searching
+      fromContains: (advancedFilters.fromContains || '').trim() || undefined,
+      toContains: (advancedFilters.toContains || '').trim() || undefined,
+      ccContains: (advancedFilters.ccContains || '').trim() || undefined,
+      bccContains: (advancedFilters.bccContains || '').trim() || undefined,
+      subjectContains: (advancedFilters.subjectContains || '').trim() || undefined,
+      bodyContains: (advancedFilters.bodyContains || '').trim() || undefined,
+      tagIds: (advancedFilters.tagIds || []).length > 0 ? advancedFilters.tagIds : undefined,
     }),
     [folder, emailAccountId, pageSize, offset, searchQuery, advancedFilters],
   );
@@ -113,13 +114,14 @@ export function useInboxEmails({
       folder,
       emailAccountId,
       searchQuery: searchQuery.trim() || undefined,
-      fromContains: advancedFilters.fromContains.trim() || undefined,
-      toContains: advancedFilters.toContains.trim() || undefined,
-      ccContains: advancedFilters.ccContains.trim() || undefined,
-      bccContains: advancedFilters.bccContains.trim() || undefined,
-      subjectContains: advancedFilters.subjectContains.trim() || undefined,
-      bodyContains: advancedFilters.bodyContains.trim() || undefined,
-      tagIds: advancedFilters.tagIds.length > 0 ? advancedFilters.tagIds : undefined,
+      includeAllFolders: searchQuery.trim() ? true : undefined, // Include all folders when searching
+      fromContains: (advancedFilters.fromContains || '').trim() || undefined,
+      toContains: (advancedFilters.toContains || '').trim() || undefined,
+      ccContains: (advancedFilters.ccContains || '').trim() || undefined,
+      bccContains: (advancedFilters.bccContains || '').trim() || undefined,
+      subjectContains: (advancedFilters.subjectContains || '').trim() || undefined,
+      bodyContains: (advancedFilters.bodyContains || '').trim() || undefined,
+      tagIds: (advancedFilters.tagIds || []).length > 0 ? advancedFilters.tagIds : undefined,
     }),
     [folder, emailAccountId, searchQuery, advancedFilters],
   );

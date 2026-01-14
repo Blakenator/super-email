@@ -1,13 +1,6 @@
 import styled from 'styled-components';
 import { Card } from 'react-bootstrap';
 
-export const PageWrapper = styled.div`
-  padding: ${({ theme }) => theme.spacing.lg};
-  height: 100%;
-  overflow-y: auto;
-  background: ${({ theme }) => theme.colors.background};
-`;
-
 export const PageHeader = styled.div`
   display: flex;
   justify-content: space-between;

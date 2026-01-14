@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useLazyQuery } from '@apollo/client/react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -43,6 +43,12 @@ const SEARCH_CONTACTS = gql(`
       lastName
       company
       phone
+      emails {
+        id
+        email
+        isPrimary
+        label
+      }
     }
   }
 `);
@@ -52,6 +58,16 @@ interface EmailChip {
   label: string;
   isContact: boolean;
   contactId?: string;
+}
+
+interface EmailOption {
+  email: string;
+  contactId: string;
+  contactName: string | null;
+  emailLabel: string | null;
+  isPrimary: boolean;
+  company: string | null;
+  phone: string | null;
 }
 
 interface EmailChipInputProps {
@@ -78,11 +94,58 @@ export function EmailChipInput({
 
   const [searchContacts, { data: searchData }] = useLazyQuery(SEARCH_CONTACTS);
 
+  // Flatten contacts into individual email options
+  const emailOptions = useMemo<EmailOption[]>(() => {
+    if (!searchData?.searchContacts) return [];
+
+    const options: EmailOption[] = [];
+
+    for (const contact of searchData.searchContacts) {
+      // Add all emails from the emails array
+      if (contact.emails && contact.emails.length > 0) {
+        for (const emailEntry of contact.emails) {
+          options.push({
+            email: emailEntry.email,
+            contactId: contact.id,
+            contactName:
+              contact.name ||
+              [contact.firstName, contact.lastName].filter(Boolean).join(' ') ||
+              null,
+            emailLabel: emailEntry.label,
+            isPrimary: emailEntry.isPrimary,
+            company: contact.company,
+            phone: contact.phone,
+          });
+        }
+      } else if (contact.email) {
+        // Fallback to primary email if emails array is empty
+        options.push({
+          email: contact.email,
+          contactId: contact.id,
+          contactName:
+            contact.name ||
+            [contact.firstName, contact.lastName].filter(Boolean).join(' ') ||
+            null,
+          emailLabel: null,
+          isPrimary: true,
+          company: contact.company,
+          phone: contact.phone,
+        });
+      }
+    }
+
+    return options;
+  }, [searchData]);
+
   // Find contact info for chips by searching for exact email matches
   const getContactForEmail = useCallback(
     (email: string) => {
       return searchData?.searchContacts?.find(
-        (c) => c.email.toLowerCase() === email.toLowerCase(),
+        (c) =>
+          c.email.toLowerCase() === email.toLowerCase() ||
+          c.emails?.some(
+            (e: any) => e.email.toLowerCase() === email.toLowerCase(),
+          ),
       );
     },
     [searchData],
@@ -96,7 +159,10 @@ export function EmailChipInput({
   // Parse initial value into chips
   useEffect(() => {
     if (value) {
-      const emails = value.split(',').map((e) => e.trim()).filter(Boolean);
+      const emails = value
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean);
       const newChips = emails.map((email) => ({
         value: email,
         label: email,
@@ -133,7 +199,9 @@ export function EmailChipInput({
   const addChip = useCallback(
     (chip: EmailChip) => {
       // Check if already exists
-      if (chips.some((c) => c.value.toLowerCase() === chip.value.toLowerCase())) {
+      if (
+        chips.some((c) => c.value.toLowerCase() === chip.value.toLowerCase())
+      ) {
         return;
       }
 
@@ -158,15 +226,15 @@ export function EmailChipInput({
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',') {
       e.preventDefault();
-      
-      if (showDropdown && suggestions.length > 0) {
-        const selected = suggestions[highlightedIndex];
+
+      if (showDropdown && emailOptions.length > 0) {
+        const selected = emailOptions[highlightedIndex];
         if (selected) {
           addChip({
             value: selected.email,
-            label: selected.name || selected.email,
+            label: selected.contactName || selected.email,
             isContact: true,
-            contactId: selected.id,
+            contactId: selected.contactId,
           });
           return;
         }
@@ -187,7 +255,9 @@ export function EmailChipInput({
       removeChip(chips.length - 1);
     } else if (e.key === 'ArrowDown' && showDropdown) {
       e.preventDefault();
-      setHighlightedIndex((prev) => Math.min(prev + 1, suggestions.length - 1));
+      setHighlightedIndex((prev) =>
+        Math.min(prev + 1, emailOptions.length - 1),
+      );
     } else if (e.key === 'ArrowUp' && showDropdown) {
       e.preventDefault();
       setHighlightedIndex((prev) => Math.max(prev - 1, 0));
@@ -196,12 +266,12 @@ export function EmailChipInput({
     }
   };
 
-  const handleSuggestionClick = (contact: typeof suggestions[0]) => {
+  const handleSuggestionClick = (option: EmailOption) => {
     addChip({
-      value: contact.email,
-      label: contact.name || contact.email,
+      value: option.email,
+      label: option.contactName || option.email,
       isContact: true,
-      contactId: contact.id,
+      contactId: option.contactId,
     });
   };
 
@@ -225,7 +295,10 @@ export function EmailChipInput({
   // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setShowDropdown(false);
       }
     };
@@ -235,9 +308,10 @@ export function EmailChipInput({
   }, []);
 
   const renderChipPopover = (chip: EmailChip) => {
-    const contact = chip.isContact
-      ? suggestions.find((c) => c.id === chip.contactId)
-      : getContactForEmail(chip.value);
+    const contact =
+      chip.isContact && searchData?.searchContacts
+        ? searchData.searchContacts.find((c) => c.id === chip.contactId)
+        : getContactForEmail(chip.value);
 
     return (
       <Popover id={`chip-popover-${chip.value}`}>
@@ -299,10 +373,7 @@ export function EmailChipInput({
 
   return (
     <>
-      <Container
-        ref={containerRef}
-        onClick={() => inputRef.current?.focus()}
-      >
+      <Container ref={containerRef} onClick={() => inputRef.current?.focus()}>
         {chips.map((chip, index) => (
           <Chip key={index} $isContact={chip.isContact}>
             <OverlayTrigger
@@ -343,24 +414,24 @@ export function EmailChipInput({
           placeholder={chips.length === 0 ? placeholder : ''}
           disabled={disabled}
         />
-        {showDropdown && suggestions.length > 0 && (
+        {showDropdown && emailOptions.length > 0 && (
           <DropdownStyled>
-            {suggestions.map((contact, index) => (
+            {emailOptions.map((option, index) => (
               <DropdownItem
-                key={contact.id}
+                key={`${option.contactId}-${option.email}`}
                 $isHighlighted={index === highlightedIndex}
-                onClick={() => handleSuggestionClick(contact)}
+                onClick={() => handleSuggestionClick(option)}
               >
                 <FontAwesomeIcon icon={faUser} />
                 <ContactInfo>
                   <ContactName>
-                    {contact.name ||
-                      [contact.firstName, contact.lastName]
-                        .filter(Boolean)
-                        .join(' ') ||
-                      contact.email}
+                    {option.contactName || option.email}
+                    {option.emailLabel && ` (${option.emailLabel})`}
+                    {option.isPrimary && !option.emailLabel && ' (Primary)'}
                   </ContactName>
-                  {contact.name && <ContactEmail>{contact.email}</ContactEmail>}
+                  {option.contactName && (
+                    <ContactEmail>{option.email}</ContactEmail>
+                  )}
                 </ContactInfo>
               </DropdownItem>
             ))}

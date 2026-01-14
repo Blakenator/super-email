@@ -3,11 +3,8 @@ import {
   Route,
   Routes,
   useLocation,
-  useNavigate,
   useSearchParams,
 } from 'react-router';
-import { Nav, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
-import { Link } from 'react-router';
 import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/auth/Login';
 import { SignUp } from './pages/auth/SignUp';
@@ -16,54 +13,18 @@ import { StarredInbox } from './pages/inbox/StarredInbox';
 import { Compose } from './pages/compose/Compose';
 import { Settings } from './pages/settings/Settings';
 import { Contacts } from './pages/contacts/Contacts';
+import { Triage } from './pages/triage';
 import { EmailFolder } from './__generated__/graphql';
 import { useQuery } from '@apollo/client/react';
 import { GET_EMAIL_COUNT_QUERY } from './pages/inbox/queries';
 import { PageErrorBoundary } from './core/components/ErrorBoundary';
 import { LoadingSpinner } from './core/components';
 import { useMailboxSubscription } from './hooks';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faInbox,
-  faStar,
-  faPaperPlane,
-  faFileAlt,
-  faTrash,
-  faCog,
-  faPen,
-  faEnvelope,
-  faAddressBook,
-  faArchive,
-  faChevronLeft,
-  faChevronRight,
-  faSignOutAlt,
-} from '@fortawesome/free-solid-svg-icons';
-import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-import {
-  AppWrapper,
-  Sidebar,
-  Logo,
-  ComposeButton,
-  NavSection,
-  StyledNavLink,
-  NavIcon,
-  NavLabel,
-  MainContent,
-  SidebarFooter,
-  UserSection,
-  UserAvatar,
-  UserInfo,
-  UserName,
-  UserEmail,
-  SidebarActions,
-  CollapseButton,
-  LogoutButton,
-  UnreadBadge,
-} from './App.wrappers';
+import { Sidebar, MobileNavbar } from './components';
+import { AppWrapper, MainContent } from './App.wrappers';
 
 function AuthenticatedApp() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, logout, updatePreferences } = useAuth();
 
   // Start the mailbox subscription for real-time updates
@@ -89,226 +50,21 @@ function AuthenticatedApp() {
     await logout(location.pathname);
   };
 
-  const navItems: {
-    path: string;
-    label: string;
-    icon: IconDefinition;
-    folder: EmailFolder | undefined;
-    showBadge?: boolean;
-  }[] = [
-    {
-      path: '/inbox',
-      label: 'Inbox',
-      icon: faInbox,
-      folder: EmailFolder.Inbox,
-      showBadge: true,
-    },
-    { path: '/starred', label: 'Starred', icon: faStar, folder: undefined },
-    {
-      path: '/sent',
-      label: 'Sent',
-      icon: faPaperPlane,
-      folder: EmailFolder.Sent,
-    },
-    {
-      path: '/drafts',
-      label: 'Drafts',
-      icon: faFileAlt,
-      folder: EmailFolder.Drafts,
-    },
-    {
-      path: '/trash',
-      label: 'Trash',
-      icon: faTrash,
-      folder: EmailFolder.Trash,
-    },
-    {
-      path: '/archive',
-      label: 'Archive',
-      icon: faArchive,
-      folder: EmailFolder.Archive,
-    },
-  ];
-
-  // Check if current path is under one of the nav items (including nested routes)
-  const isPathActive = (basePath: string) => {
-    return (
-      location.pathname === basePath ||
-      location.pathname.startsWith(`${basePath}/`)
-    );
-  };
-
-  const renderNavLink = (
-    path: string,
-    label: string,
-    icon: IconDefinition,
-    showBadge?: boolean,
-  ) => {
-    const content = (
-      <StyledNavLink
-        as={Link}
-        to={path}
-        $active={isPathActive(path)}
-        $collapsed={isCollapsed}
-      >
-        <span style={{ display: 'flex', alignItems: 'center' }}>
-          <NavIcon $collapsed={isCollapsed}>
-            <FontAwesomeIcon icon={icon} />
-          </NavIcon>
-          <NavLabel $collapsed={isCollapsed}>{label}</NavLabel>
-        </span>
-        {showBadge && unreadCount > 0 && (
-          <UnreadBadge $collapsed={isCollapsed}>
-            <Badge bg="secondary" pill>
-              {unreadCount}
-            </Badge>
-          </UnreadBadge>
-        )}
-      </StyledNavLink>
-    );
-
-    if (isCollapsed) {
-      return (
-        <OverlayTrigger
-          placement="right"
-          overlay={
-            <Tooltip id={`tooltip-${path}`}>
-              {label}
-              {showBadge && unreadCount > 0 && ` (${unreadCount})`}
-            </Tooltip>
-          }
-        >
-          {content}
-        </OverlayTrigger>
-      );
-    }
-
-    return content;
-  };
-
   return (
     <AppWrapper>
-      <Sidebar $collapsed={isCollapsed}>
-        <Logo $collapsed={isCollapsed}>
-          <FontAwesomeIcon
-            icon={faEnvelope}
-            className={isCollapsed ? '' : 'me-2'}
-          />
-          {!isCollapsed && 'StacksMail'}
-        </Logo>
-
-        <OverlayTrigger
-          placement="right"
-          overlay={
-            isCollapsed ? (
-              <Tooltip id="compose-tooltip">Compose</Tooltip>
-            ) : (
-              <></>
-            )
-          }
-        >
-          <ComposeButton
-            $collapsed={isCollapsed}
-            onClick={() => navigate('/compose')}
-          >
-            <FontAwesomeIcon
-              icon={faPen}
-              className={isCollapsed ? '' : 'me-2'}
-            />
-            {!isCollapsed && 'Compose'}
-          </ComposeButton>
-        </OverlayTrigger>
-
-        <NavSection>
-          <Nav className="flex-column">
-            {navItems.map((item) => (
-              <Nav.Item key={item.path}>
-                {renderNavLink(
-                  item.path,
-                  item.label,
-                  item.icon,
-                  item.showBadge,
-                )}
-              </Nav.Item>
-            ))}
-          </Nav>
-
-          <hr style={{ margin: isCollapsed ? '1rem 0.5rem' : '1rem' }} />
-
-          <Nav className="flex-column">
-            <Nav.Item>
-              {renderNavLink('/contacts', 'Contacts', faAddressBook)}
-            </Nav.Item>
-            <Nav.Item>{renderNavLink('/settings', 'Settings', faCog)}</Nav.Item>
-          </Nav>
-        </NavSection>
-
-        <SidebarFooter $collapsed={isCollapsed}>
-          {user && (
-            <UserSection $collapsed={isCollapsed}>
-              <OverlayTrigger
-                placement="right"
-                overlay={
-                  isCollapsed ? (
-                    <Tooltip id="user-tooltip">
-                      {user.firstName} {user.lastName}
-                      <br />
-                      {user.email}
-                    </Tooltip>
-                  ) : (
-                    <></>
-                  )
-                }
-              >
-                <UserAvatar>
-                  {user.firstName[0]}
-                  {user.lastName[0]}
-                </UserAvatar>
-              </OverlayTrigger>
-              <UserInfo $collapsed={isCollapsed}>
-                <UserName>
-                  {user.firstName} {user.lastName}
-                </UserName>
-                <UserEmail>{user.email}</UserEmail>
-              </UserInfo>
-            </UserSection>
-          )}
-          <SidebarActions $collapsed={isCollapsed}>
-            <OverlayTrigger
-              placement="right"
-              overlay={
-                <Tooltip id="collapse-tooltip">
-                  {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                </Tooltip>
-              }
-            >
-              <CollapseButton
-                variant="ghost"
-                size="sm"
-                onClick={handleToggleCollapse}
-              >
-                <FontAwesomeIcon
-                  icon={isCollapsed ? faChevronRight : faChevronLeft}
-                />
-              </CollapseButton>
-            </OverlayTrigger>
-            <OverlayTrigger
-              placement="right"
-              overlay={<Tooltip id="logout-tooltip">Sign out</Tooltip>}
-            >
-              <LogoutButton
-                variant="outline-danger"
-                size="sm"
-                onClick={handleLogout}
-              >
-                <FontAwesomeIcon icon={faSignOutAlt} />
-              </LogoutButton>
-            </OverlayTrigger>
-          </SidebarActions>
-        </SidebarFooter>
-      </Sidebar>
-
+      <Sidebar
+        user={user}
+        isCollapsed={isCollapsed}
+        unreadCount={unreadCount}
+        onToggleCollapse={handleToggleCollapse}
+        onLogout={handleLogout}
+      />
       <MainContent>
+        <MobileNavbar
+          user={user}
+          unreadCount={unreadCount}
+          onLogout={handleLogout}
+        />
         <PageErrorBoundary>
           <Routes>
             <Route path="/" element={<Navigate to="/inbox" replace />} />
@@ -395,6 +151,7 @@ function AuthenticatedApp() {
 
             <Route path="/compose" element={<Compose />} />
             <Route path="/contacts" element={<Contacts />} />
+            <Route path="/triage" element={<Triage />} />
 
             {/* Settings routes with tabs */}
             <Route

@@ -236,6 +236,13 @@ export enum EmailFolder {
   Trash = 'TRASH'
 }
 
+export type EmailSource = {
+  __typename?: 'EmailSource';
+  count: Scalars['Int']['output'];
+  fromAddress: Scalars['String']['output'];
+  fromName?: Maybe<Scalars['String']['output']>;
+};
+
 export type ForwardEmailInput = {
   additionalText?: InputMaybe<Scalars['String']['input']>;
   bccAddresses?: InputMaybe<Array<Scalars['String']['input']>>;
@@ -257,6 +264,7 @@ export type GetEmailsInput = {
   emailAccountId?: InputMaybe<Scalars['String']['input']>;
   folder?: InputMaybe<EmailFolder>;
   fromContains?: InputMaybe<Scalars['String']['input']>;
+  includeAllFolders?: InputMaybe<Scalars['Boolean']['input']>;
   isRead?: InputMaybe<Scalars['Boolean']['input']>;
   isStarred?: InputMaybe<Scalars['Boolean']['input']>;
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -512,7 +520,7 @@ export enum NotificationDetailLevel {
 }
 
 export type NukeOldEmailsInput = {
-  olderThan: Scalars['Date']['input'];
+  olderThan?: InputMaybe<Scalars['Date']['input']>;
 };
 
 export type Query = {
@@ -533,6 +541,7 @@ export type Query = {
   getSmtpProfiles: Array<SmtpProfile>;
   getTag?: Maybe<Tag>;
   getTags: Array<Tag>;
+  getTopEmailSources: Array<EmailSource>;
   previewMailRule: Scalars['Int']['output'];
   searchContacts: Array<Contact>;
 };
@@ -580,6 +589,11 @@ export type QueryGetSmtpProfileArgs = {
 
 export type QueryGetTagArgs = {
   id: Scalars['String']['input'];
+};
+
+
+export type QueryGetTopEmailSourcesArgs = {
+  limit?: InputMaybe<Scalars['Int']['input']>;
 };
 
 
@@ -781,6 +795,8 @@ export type UpdateTagInput = {
 };
 
 export type UpdateUserPreferencesInput = {
+  inboxDensity?: InputMaybe<Scalars['Boolean']['input']>;
+  inboxGroupByDate?: InputMaybe<Scalars['Boolean']['input']>;
   navbarCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
   notificationDetailLevel?: InputMaybe<NotificationDetailLevel>;
   themePreference?: InputMaybe<ThemePreference>;
@@ -794,6 +810,8 @@ export type User = BaseEntityProps & {
   emailAccounts: Array<EmailAccount>;
   firstName: Scalars['String']['output'];
   id: Scalars['String']['output'];
+  inboxDensity: Scalars['Boolean']['output'];
+  inboxGroupByDate: Scalars['Boolean']['output'];
   lastName: Scalars['String']['output'];
   navbarCollapsed: Scalars['Boolean']['output'];
   notificationDetailLevel: NotificationDetailLevel;
@@ -911,6 +929,7 @@ export type ResolversTypes = ResolversObject<{
   EmailAccount: ResolverTypeWrapper<EmailAccount>;
   EmailAccountType: EmailAccountType;
   EmailFolder: EmailFolder;
+  EmailSource: ResolverTypeWrapper<EmailSource>;
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
@@ -969,6 +988,7 @@ export type ResolversParentTypes = ResolversObject<{
   Date: Scalars['Date']['output'];
   Email: Email;
   EmailAccount: EmailAccount;
+  EmailSource: EmailSource;
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
@@ -1109,6 +1129,12 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type EmailSourceResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['EmailSource'] = ResolversParentTypes['EmailSource']> = ResolversObject<{
+  count?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  fromAddress?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  fromName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+}>;
+
 export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['JSON'], any> {
   name: 'JSON';
 }
@@ -1191,6 +1217,7 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getSmtpProfiles?: Resolver<Array<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
   getTag?: Resolver<Maybe<ResolversTypes['Tag']>, ParentType, ContextType, RequireFields<QueryGetTagArgs, 'id'>>;
   getTags?: Resolver<Array<ResolversTypes['Tag']>, ParentType, ContextType>;
+  getTopEmailSources?: Resolver<Array<ResolversTypes['EmailSource']>, ParentType, ContextType, Partial<QueryGetTopEmailSourcesArgs>>;
   previewMailRule?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<QueryPreviewMailRuleArgs, 'id'>>;
   searchContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QuerySearchContactsArgs, 'query'>>;
 }>;
@@ -1262,6 +1289,8 @@ export type UserResolvers<ContextType = MyContext, ParentType extends ResolversP
   emailAccounts?: Resolver<Array<ResolversTypes['EmailAccount']>, ParentType, ContextType>;
   firstName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  inboxDensity?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  inboxGroupByDate?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   navbarCollapsed?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   notificationDetailLevel?: Resolver<ResolversTypes['NotificationDetailLevel'], ParentType, ContextType>;
@@ -1279,6 +1308,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   Date?: GraphQLScalarType;
   Email?: EmailResolvers<ContextType>;
   EmailAccount?: EmailAccountResolvers<ContextType>;
+  EmailSource?: EmailSourceResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   MailRule?: MailRuleResolvers<ContextType>;
   MailboxUpdate?: MailboxUpdateResolvers<ContextType>;

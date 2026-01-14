@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, Button, Alert, Badge, ListGroup, Form } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -23,6 +23,40 @@ import {
   StatusValue,
 } from './NotificationSettings.wrappers';
 
+type BrowserType = 'chrome' | 'firefox' | 'safari' | 'edge' | 'other';
+
+function detectBrowser(): BrowserType {
+  const ua = navigator.userAgent.toLowerCase();
+  
+  // Check Safari first (but not Chrome-based browsers pretending to be Safari)
+  if (ua.includes('safari') && !ua.includes('chrome') && !ua.includes('chromium')) {
+    return 'safari';
+  }
+  // Edge (Chromium-based)
+  if (ua.includes('edg/') || ua.includes('edge/')) {
+    return 'edge';
+  }
+  // Firefox
+  if (ua.includes('firefox') || ua.includes('fxios')) {
+    return 'firefox';
+  }
+  // Chrome (and Chromium-based browsers)
+  if (ua.includes('chrome') || ua.includes('chromium') || ua.includes('crios')) {
+    return 'chrome';
+  }
+  
+  return 'other';
+}
+
+function isIOSSafari(): boolean {
+  const ua = navigator.userAgent;
+  return /iPad|iPhone|iPod/.test(ua) && !('MSStream' in window);
+}
+
+function isMacOS(): boolean {
+  return navigator.platform.toLowerCase().includes('mac');
+}
+
 interface PWAStatus {
   isInstalled: boolean;
   isInstallable: boolean;
@@ -43,6 +77,11 @@ export function NotificationSettings() {
   const [requestingPermission, setRequestingPermission] = useState(false);
   const [notificationDetailLevel, setDetailLevel] =
     useState<NotificationDetailLevel>(getNotificationDetailLevel());
+
+  // Browser and platform detection
+  const browser = useMemo(() => detectBrowser(), []);
+  const isIOS = useMemo(() => isIOSSafari(), []);
+  const isMac = useMemo(() => isMacOS(), []);
 
   const handleDetailLevelChange = (level: NotificationDetailLevel) => {
     setDetailLevel(level);
@@ -333,10 +372,46 @@ export function NotificationSettings() {
           <FontAwesomeIcon icon={faBellSlash} className="me-2" />
           <strong>Notifications are blocked.</strong> To enable them:
           <ol className="mb-0 mt-2">
-            <li>Click the lock/info icon in your browser's address bar</li>
-            <li>Find "Notifications" in the permissions list</li>
-            <li>Change the setting to "Allow"</li>
-            <li>Refresh this page</li>
+            {browser === 'chrome' && (
+              <>
+                <li>Click the lock icon (🔒) in the address bar</li>
+                <li>Click "Site settings"</li>
+                <li>Find "Notifications" and change to "Allow"</li>
+                <li>Refresh this page</li>
+              </>
+            )}
+            {browser === 'edge' && (
+              <>
+                <li>Click the lock icon in the address bar</li>
+                <li>Find "Notifications" in the dropdown</li>
+                <li>Change the setting to "Allow"</li>
+                <li>Refresh this page</li>
+              </>
+            )}
+            {browser === 'firefox' && (
+              <>
+                <li>Click the info icon (ⓘ) in the address bar</li>
+                <li>Click "Connection secure" → "More Information"</li>
+                <li>Go to "Permissions" tab → Find "Send Notifications"</li>
+                <li>Uncheck "Use Default" and select "Allow"</li>
+                <li>Refresh this page</li>
+              </>
+            )}
+            {browser === 'safari' && (
+              <>
+                <li>Open Safari → Settings → Websites → Notifications</li>
+                <li>Find this site and change to "Allow"</li>
+                <li>Refresh this page</li>
+              </>
+            )}
+            {browser === 'other' && (
+              <>
+                <li>Click the lock/info icon in your browser's address bar</li>
+                <li>Find "Notifications" in the permissions list</li>
+                <li>Change the setting to "Allow"</li>
+                <li>Refresh this page</li>
+              </>
+            )}
           </ol>
         </Alert>
       )}
@@ -345,29 +420,47 @@ export function NotificationSettings() {
         <Alert variant="info">
           <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
           <strong>Install as an App:</strong> You can install this email client
-          as a standalone app on your device. Look for the install button in
-          your browser's address bar or menu.
+          as a standalone app on your device.
           <br />
           <small className="text-muted mt-2 d-block">
-            <strong>Chrome/Edge:</strong> Click the install icon (⊕) in the
-            address bar, or Menu (⋮) → "Install StacksMail..."
-            <br />
-            <strong>Firefox:</strong> Firefox does not support PWA installation
-            natively. You can use the{' '}
-            <a
-              href="https://addons.mozilla.org/en-US/firefox/addon/pwas-for-firefox/"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              PWAs for Firefox
-            </a>{' '}
-            extension, or bookmark this page for quick access.
-            <br />
-            <strong>Safari (iOS):</strong> Tap the Share button (⬆) → "Add to
-            Home Screen"
-            <br />
-            <strong>Safari (macOS):</strong> File → "Add to Dock" (macOS Sonoma
-            14+)
+            {browser === 'chrome' && (
+              <>
+                Click the install icon (⊕) in the address bar, or Menu (⋮) → "Install StacksMail..."
+              </>
+            )}
+            {browser === 'edge' && (
+              <>
+                Click the install icon in the address bar, or Menu (···) → Apps → "Install StacksMail"
+              </>
+            )}
+            {browser === 'firefox' && (
+              <>
+                Firefox does not support PWA installation natively. You can use the{' '}
+                <a
+                  href="https://addons.mozilla.org/en-US/firefox/addon/pwas-for-firefox/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  PWAs for Firefox
+                </a>{' '}
+                extension, or bookmark this page for quick access.
+              </>
+            )}
+            {browser === 'safari' && isIOS && (
+              <>
+                Tap the Share button (⬆) → "Add to Home Screen"
+              </>
+            )}
+            {browser === 'safari' && isMac && (
+              <>
+                File → "Add to Dock" (macOS Sonoma 14+)
+              </>
+            )}
+            {browser === 'other' && (
+              <>
+                Look for the install button in your browser's address bar or menu.
+              </>
+            )}
           </small>
         </Alert>
       )}

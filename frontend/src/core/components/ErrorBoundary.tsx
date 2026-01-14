@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from 'react';
-import { Container, Button, Alert } from 'react-bootstrap';
+import { Container, Button, Alert, Card } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faDizzy,

@@ -6,7 +6,7 @@ import {
   Tooltip,
 } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSync, faTrash, faEdit } from '@fortawesome/free-solid-svg-icons';
+import { faSync, faTrash, faEdit, faCheck } from '@fortawesome/free-solid-svg-icons';
 import {
   AccountCardStyled,
   AccountCardHeader,
@@ -35,6 +35,7 @@ export interface EmailAccountData {
   syncStatus?: string | null;
   lastSyncedAt?: string | null;
   defaultSmtpProfile?: { name: string } | null;
+  isDefault?: boolean;
 }
 
 interface EmailAccountCardProps {
@@ -53,7 +54,15 @@ export function EmailAccountCard({
   return (
     <AccountCardStyled $isSyncing={account.isSyncing}>
       <AccountCardHeader>
-        <AccountCardTitle>{account.name}</AccountCardTitle>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <AccountCardTitle>{account.name}</AccountCardTitle>
+          {account.isDefault && (
+            <Badge bg="success" style={{ fontSize: '0.65rem' }}>
+              <FontAwesomeIcon icon={faCheck} className="me-1" />
+              Default
+            </Badge>
+          )}
+        </div>
         <AccountCardSubtitle>{account.email}</AccountCardSubtitle>
       </AccountCardHeader>
       <AccountCardBody>

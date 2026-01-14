@@ -12,6 +12,23 @@
     <meta name="apple-mobile-web-app-title" content="StacksMail" />
     <title>StacksMail - Email Client</title>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      /* Prevent white flash by setting initial background based on system preference */
+      :root {
+        --initial-bg: #f8f9fa;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --initial-bg: #1a1a2e;
+        }
+      }
+      html, body, #root {
+        background-color: var(--initial-bg);
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

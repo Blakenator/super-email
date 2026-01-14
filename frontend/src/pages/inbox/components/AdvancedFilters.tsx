@@ -1,13 +1,14 @@
-import { useState, useCallback } from 'react';
-import { Button, Form, Collapse, Row, Col, Badge } from 'react-bootstrap';
+import { useState, useCallback, useEffect } from 'react';
+import { Form, Collapse, Row, Col, Badge } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faFilter,
   faChevronDown,
   faChevronUp,
   faTimes,
+  faGavel,
 } from '@fortawesome/free-solid-svg-icons';
-import { EmailChipInput } from '../../../core/components';
+import { EmailChipInput, TagSelector, Button } from '../../../core/components';
 import {
   FilterWrapper,
   FilterToggle,
@@ -41,21 +42,38 @@ interface AdvancedFiltersProps {
   filters: EmailFilters;
   onFiltersChange: (filters: EmailFilters) => void;
   availableTags?: Array<{ id: string; name: string; color: string }>;
+  onCreateRule?: () => void;
+  onClearFilters?: () => void;
 }
 
 export function AdvancedFilters({
   filters,
   onFiltersChange,
   availableTags = [],
+  onCreateRule,
+  onClearFilters,
 }: AdvancedFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [localFilters, setLocalFilters] = useState<EmailFilters>(filters);
+  const [localFilters, setLocalFilters] = useState<EmailFilters>(() => ({
+    ...emptyFilters,
+    ...filters,
+    tagIds: filters.tagIds || [],
+  }));
 
   const activeFilterCount =
     Object.entries(filters).filter(([key, v]) => {
-      if (key === 'tagIds') return (v as string[]).length > 0;
+      if (key === 'tagIds') return ((v as string[]) || []).length > 0;
       return typeof v === 'string' && v.trim() !== '';
     }).length;
+
+  // Sync localFilters when filters prop changes
+  useEffect(() => {
+    setLocalFilters({
+      ...emptyFilters,
+      ...filters,
+      tagIds: filters.tagIds || [],
+    });
+  }, [filters]);
 
   const handleApply = useCallback(() => {
     onFiltersChange(localFilters);
@@ -64,7 +82,8 @@ export function AdvancedFilters({
   const handleClear = useCallback(() => {
     setLocalFilters(emptyFilters);
     onFiltersChange(emptyFilters);
-  }, [onFiltersChange]);
+    onClearFilters?.();
+  }, [onFiltersChange, onClearFilters]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -81,7 +100,7 @@ export function AdvancedFilters({
 
   const toggleTag = (tagId: string) => {
     setLocalFilters((prev) => {
-      const currentTags = prev.tagIds;
+      const currentTags = prev.tagIds || [];
       if (currentTags.includes(tagId)) {
         return { ...prev, tagIds: currentTags.filter((id) => id !== tagId) };
       } else {
@@ -96,9 +115,9 @@ export function AdvancedFilters({
         <Button
           variant={activeFilterCount > 0 ? 'primary' : 'outline-secondary'}
           size="sm"
+          icon={<FontAwesomeIcon icon={faFilter} />}
           onClick={() => setIsOpen(!isOpen)}
         >
-          <FontAwesomeIcon icon={faFilter} className="me-1" />
           Advanced Filters
           {activeFilterCount > 0 && (
             <ActiveFilterBadge bg="light" text="primary">
@@ -107,17 +126,17 @@ export function AdvancedFilters({
           )}
           <FontAwesomeIcon
             icon={isOpen ? faChevronUp : faChevronDown}
-            className="ms-2"
+            style={{ marginLeft: '0.5rem' }}
           />
         </Button>
         {activeFilterCount > 0 && (
           <Button
             variant="link"
             size="sm"
+            icon={<FontAwesomeIcon icon={faTimes} />}
             onClick={handleClear}
             className="text-danger p-0"
           >
-            <FontAwesomeIcon icon={faTimes} className="me-1" />
             Clear all
           </Button>
         )}
@@ -197,25 +216,11 @@ export function AdvancedFilters({
           {availableTags.length > 0 && (
             <Form.Group className="mb-3">
               <FilterLabel>Tags</FilterLabel>
-              <div className="d-flex flex-wrap gap-2">
-                {availableTags.map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    bg={localFilters.tagIds.includes(tag.id) ? undefined : 'light'}
-                    text={localFilters.tagIds.includes(tag.id) ? 'white' : 'dark'}
-                    style={{
-                      backgroundColor: localFilters.tagIds.includes(tag.id)
-                        ? tag.color
-                        : undefined,
-                      cursor: 'pointer',
-                      border: `1px solid ${tag.color}`,
-                    }}
-                    onClick={() => toggleTag(tag.id)}
-                  >
-                    {tag.name}
-                  </Badge>
-                ))}
-              </div>
+              <TagSelector
+                tags={availableTags}
+                selectedTagIds={localFilters.tagIds || []}
+                onToggleTag={toggleTag}
+              />
             </Form.Group>
           )}
 
@@ -223,6 +228,17 @@ export function AdvancedFilters({
             <Button variant="outline-secondary" size="sm" onClick={handleClear}>
               Clear
             </Button>
+            {onCreateRule && (
+              <Button
+                variant="outline-primary"
+                size="sm"
+                icon={<FontAwesomeIcon icon={faGavel} />}
+                onClick={onCreateRule}
+                title="Create rule from current filters"
+              >
+                Create Rule
+              </Button>
+            )}
             <Button variant="primary" size="sm" onClick={handleApply}>
               Apply Filters
             </Button>
