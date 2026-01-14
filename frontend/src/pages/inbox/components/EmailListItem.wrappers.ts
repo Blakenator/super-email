@@ -111,6 +111,15 @@ export const ThreadBadge = styled(Badge)`
   background-color: ${({ theme }) => theme.colors.textSecondary} !important;
 `;
 
+export const AttachmentBadge = styled(Badge)`
+  font-size: 0.65rem;
+  margin-left: ${({ theme }) => theme.spacing.xs};
+  background-color: ${({ theme }) => theme.colors.textSecondary} !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+`;
+
 export const QuickActions = styled.div`
   position: absolute;
   right: ${({ theme }) => theme.spacing.lg};

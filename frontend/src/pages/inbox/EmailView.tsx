@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { Button, Modal, Alert, Dropdown } from 'react-bootstrap';
+import { Modal, Alert, Dropdown } from 'react-bootstrap';
+import { Button } from '../../core/components/Button';
 import { DateTime } from 'luxon';
 import {
   GET_EMAIL_QUERY,
@@ -40,6 +41,9 @@ import {
 } from '../../core/components';
 import toast from 'react-hot-toast';
 import { useEmailStore } from '../../stores/emailStore';
+import { AttachmentList, AttachmentPreview } from '../../components';
+import type { Attachment } from '../../__generated__/graphql';
+import { supabase } from '../../contexts/AuthContext';
 import {
   Wrapper,
   Toolbar,
@@ -100,9 +104,90 @@ export function EmailView({
   const [activeEmailForModal, setActiveEmailForModal] = useState<string | null>(
     null,
   );
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(
+    null,
+  );
 
   // Track the current emailId to detect changes
   const currentEmailIdRef = useRef(emailId);
+
+  // Helper function to download an attachment with authentication
+  const downloadAttachment = async (attachment: Attachment) => {
+    try {
+      // Get token from Supabase session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      console.log('[EmailView] downloadAttachment:', {
+        attachmentId: attachment.id,
+        hasToken: !!token,
+      });
+
+      if (!token) {
+        toast.error('Authentication required');
+        return;
+      }
+
+      // Fetch download URL from GraphQL
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: `query GetAttachmentDownloadUrl($id: String!) { getAttachmentDownloadUrl(id: $id) }`,
+          variables: { id: attachment.id },
+        }),
+      });
+
+      const result = await response.json();
+      const downloadUrl = result.data?.getAttachmentDownloadUrl;
+
+      console.log('[EmailView] Got download URL:', downloadUrl);
+
+      if (!downloadUrl) {
+        throw new Error('Failed to get download URL');
+      }
+
+      // Fetch the actual file with auth header
+      console.log('[EmailView] Fetching file from:', downloadUrl);
+      const fileResponse = await fetch(downloadUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log('[EmailView] File response:', {
+        status: fileResponse.status,
+        ok: fileResponse.ok,
+      });
+
+      if (!fileResponse.ok) {
+        const errorText = await fileResponse.text();
+        console.error('[EmailView] File fetch error:', errorText);
+        throw new Error(`Failed to download file: ${fileResponse.status}`);
+      }
+
+      // Create a blob and trigger download
+      const blob = await fileResponse.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = attachment.filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+
+      toast.success('Download started');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download attachment');
+    }
+  };
 
   const { data, loading, refetch } = useQuery(GET_EMAIL_QUERY, {
     variables: { input: { id: emailId } },
@@ -623,6 +708,14 @@ export function EmailView({
                       ) : (
                         <Body>{threadEmail.textBody || '(No content)'}</Body>
                       )}
+                      {threadEmail.attachments &&
+                        threadEmail.attachments.length > 0 && (
+                          <AttachmentList
+                            attachments={threadEmail.attachments}
+                            onPreview={(att) => setPreviewAttachment(att)}
+                            onDownload={downloadAttachment}
+                          />
+                        )}
                     </>
                   )}
                 </ThreadEmail>
@@ -677,10 +770,29 @@ export function EmailView({
             ) : (
               <Body>{email.textBody || '(No content)'}</Body>
             )}
+            {email.attachments && email.attachments.length > 0 && (
+              <AttachmentList
+                attachments={email.attachments}
+                onPreview={(att) => setPreviewAttachment(att)}
+                onDownload={downloadAttachment}
+              />
+            )}
           </>
         )}
       </EmailContent>
       {loading && <LoadingSpinner message="Loading email..." />}
+
+      {/* Attachment Preview Modal */}
+      {previewAttachment && (
+        <AttachmentPreview
+          attachment={previewAttachment}
+          onClose={() => {
+            console.log('[EmailView] Closing preview');
+            setPreviewAttachment(null);
+          }}
+          onDownload={() => downloadAttachment(previewAttachment)}
+        />
+      )}
 
       {/* Unsubscribe Confirmation Modal */}
       <Modal
@@ -771,8 +883,9 @@ export function EmailView({
               }
             }}
             disabled={unsubscribing}
+            loading={unsubscribing}
           >
-            {unsubscribing ? 'Unsubscribing...' : 'Unsubscribe'}
+            Unsubscribe
           </Button>
         </Modal.Footer>
       </Modal>

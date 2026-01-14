@@ -9,6 +9,7 @@ import { Contact } from './models/contact.model.js';
 import { Tag } from './models/tag.model.js';
 import { EmailTag } from './models/email-tag.model.js';
 import { MailRule } from './models/mail-rule.model.js';
+import { Attachment } from './models/attachment.model.js';
 
 export const sequelize = new Sequelize({
   dialect: 'postgres',
@@ -28,6 +29,7 @@ export const sequelize = new Sequelize({
     Tag,
     EmailTag,
     MailRule,
+    Attachment,
   ],
   logging: false,
 });

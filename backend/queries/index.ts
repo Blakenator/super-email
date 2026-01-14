@@ -18,6 +18,8 @@ import { getTag } from './tag/getTag.js';
 import { getMailRules } from './mail-rule/getMailRules.js';
 import { getMailRule } from './mail-rule/getMailRule.js';
 import { previewMailRule } from './mail-rule/previewMailRule.js';
+import { getAttachment } from './attachment/getAttachment.js';
+import { getAttachmentDownloadUrl } from './attachment/getAttachmentDownloadUrl.js';
 
 export const QueryResolvers: AllQueries = {
   fetchProfile,
@@ -39,4 +41,6 @@ export const QueryResolvers: AllQueries = {
   getMailRules,
   getMailRule,
   previewMailRule,
+  getAttachment,
+  getAttachmentDownloadUrl,
 };

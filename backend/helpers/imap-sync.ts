@@ -1,9 +1,17 @@
 import { ImapFlow } from 'imapflow';
-import { simpleParser, type ParsedMail, type Headers } from 'mailparser';
+import {
+  simpleParser,
+  type ParsedMail,
+  type Headers,
+  type Attachment as MailAttachment,
+} from 'mailparser';
 import { EmailAccount } from '../db/models/email-account.model.js';
 import { Email, EmailFolder } from '../db/models/email.model.js';
+import { Attachment, AttachmentType } from '../db/models/attachment.model.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
+import { uploadAttachment } from './attachment-storage.js';
+import { Readable } from 'stream';
 
 export interface SyncResult {
   synced: number;
@@ -501,11 +509,93 @@ async function syncSentFolder(
 }
 
 /**
+ * Process attachments from a parsed email and save to storage
+ */
+async function processEmailAttachments(
+  emailId: string,
+  parsedEmail: ParsedMail,
+): Promise<void> {
+  if (!parsedEmail.attachments || parsedEmail.attachments.length === 0) {
+    return;
+  }
+
+  // Upload attachments in parallel with concurrency control
+  const CONCURRENCY_LIMIT = 5; // Upload max 5 attachments simultaneously
+
+  const uploadPromises = parsedEmail.attachments.map(async (attachment) => {
+    try {
+      // Generate a UUID for this attachment (used as storage key)
+      const attachmentId = uuidv4();
+
+      // Determine if inline or regular attachment
+      const isInline =
+        attachment.contentDisposition === 'inline' || !!attachment.cid;
+
+      // Get file extension from filename
+      const extension = attachment.filename
+        ? attachment.filename.split('.').pop()?.toLowerCase() || null
+        : null;
+
+      // Create a readable stream from the attachment content
+      const stream = Readable.from(attachment.content);
+
+      // Upload to storage (S3 or local disk) using the attachment UUID
+      const uploadResult = await uploadAttachment({
+        attachmentId,
+        mimeType: attachment.contentType || 'application/octet-stream',
+        stream,
+      });
+
+      return {
+        id: attachmentId,
+        emailId,
+        filename: attachment.filename || 'untitled',
+        mimeType: attachment.contentType || 'application/octet-stream',
+        extension,
+        size: uploadResult.size,
+        storageKey: uploadResult.storageKey,
+        attachmentType: isInline
+          ? AttachmentType.INLINE
+          : AttachmentType.ATTACHMENT,
+        contentId: attachment.cid || null,
+        contentDisposition: attachment.contentDisposition || null,
+        isSafe: true, // TODO: Add virus scanning in the future
+      };
+    } catch (error) {
+      console.error(
+        `[IMAP] Failed to process attachment: ${attachment.filename}`,
+        error,
+      );
+      return null; // Return null for failed uploads
+    }
+  });
+
+  // Process uploads with concurrency control
+  const attachmentsToCreate: Array<Partial<Attachment>> = [];
+  for (let i = 0; i < uploadPromises.length; i += CONCURRENCY_LIMIT) {
+    const batch = uploadPromises.slice(i, i + CONCURRENCY_LIMIT);
+    const results = await Promise.all(batch);
+    attachmentsToCreate.push(...results.filter((r) => r !== null));
+  }
+
+  // Bulk create successfully uploaded attachments
+  if (attachmentsToCreate.length > 0) {
+    // TypeScript doesn't recognize Sequelize model static methods from base Model class
+    // @ts-expect-error - bulkCreate exists on all Sequelize models
+    await Attachment.bulkCreate(attachmentsToCreate);
+    console.log(
+      `[IMAP] Saved ${attachmentsToCreate.length} attachments for email ${emailId}`,
+    );
+  }
+}
+
+/**
  * Insert parsed emails into the database, skipping duplicates
  */
 async function insertEmailBatch(
   emailAccountId: string,
   emailsToCreate: Array<Record<string, unknown>>,
+  parsedEmails: ParsedMail[],
   messageIdsInBatch: string[],
   userId?: string,
 ): Promise<{
@@ -535,20 +625,46 @@ async function insertEmailBatch(
   });
   const existingIds = new Set(existingEmails.map((e) => e.messageId));
 
-  // Filter out existing emails
-  const newEmails = emailsToCreate.filter(
-    (e) => !existingIds.has(e.messageId as string),
-  );
-  result.skipped = emailsToCreate.length - newEmails.length;
+  // Filter out existing emails and their corresponding parsed emails
+  const newEmailsData: Array<{
+    emailData: Record<string, unknown>;
+    parsed: ParsedMail;
+  }> = [];
+  for (let i = 0; i < emailsToCreate.length; i++) {
+    if (!existingIds.has(emailsToCreate[i].messageId as string)) {
+      newEmailsData.push({
+        emailData: emailsToCreate[i],
+        parsed: parsedEmails[i],
+      });
+    }
+  }
+  result.skipped = emailsToCreate.length - newEmailsData.length;
 
   // Bulk insert new emails
-  if (newEmails.length > 0) {
-    for (let j = 0; j < newEmails.length; j += DB_BATCH_SIZE) {
-      const dbBatch = newEmails.slice(j, j + DB_BATCH_SIZE);
+  if (newEmailsData.length > 0) {
+    for (let j = 0; j < newEmailsData.length; j += DB_BATCH_SIZE) {
+      const dbBatch = newEmailsData.slice(j, j + DB_BATCH_SIZE);
       try {
-        const createdEmails = await Email.bulkCreate(dbBatch as any);
+        const createdEmails = await Email.bulkCreate(
+          dbBatch.map((d) => d.emailData) as any,
+        );
         result.synced += dbBatch.length;
         result.newEmailIds.push(...createdEmails.map((e) => e.id));
+
+        // Process attachments for newly created emails
+        for (let k = 0; k < createdEmails.length; k++) {
+          const email = createdEmails[k];
+          const parsed = dbBatch[k].parsed;
+          try {
+            await processEmailAttachments(email.id, parsed);
+          } catch (err) {
+            console.error(
+              `[IMAP] Failed to process attachments for email ${email.id}:`,
+              err,
+            );
+            // Don't fail the whole batch, just log the error
+          }
+        }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         result.errors.push(`Failed to insert batch: ${errorMsg}`);
@@ -590,6 +706,7 @@ async function processBatch(
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
   const batchResult = { synced: 0, skipped: 0, errors: [] as string[] };
   const emailsToCreate: Array<Record<string, unknown>> = [];
+  const parsedEmails: ParsedMail[] = [];
   const messageIdsInBatch: string[] = [];
 
   const fetchOptions = {
@@ -617,7 +734,7 @@ async function processBatch(
         const envelopeMessageId = envelope?.messageId || `uid-${message.uid}`;
         messageIdsInBatch.push(envelopeMessageId);
 
-        // Parse the message (includes headers)
+        // Parse the message (includes headers and attachments)
         const parsed = await simpleParser(message.source);
 
         // Use IMAP internalDate (when server received email) as receivedAt
@@ -638,6 +755,7 @@ async function processBatch(
         );
 
         emailsToCreate.push(emailData);
+        parsedEmails.push(parsed);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         batchResult.errors.push(
@@ -651,6 +769,7 @@ async function processBatch(
     const insertResult = await insertEmailBatch(
       emailAccountId,
       emailsToCreate,
+      parsedEmails,
       messageIdsInBatch,
       userId,
     );

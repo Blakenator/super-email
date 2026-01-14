@@ -120,6 +120,7 @@ import {
   AuthenticationMethod as AuthMethodModel,
   Tag,
   EmailTag,
+  Attachment,
 } from './db/models/index.js';
 
 const resolvers: AllBackendResolvers = {
@@ -179,6 +180,26 @@ const resolvers: AllBackendResolvers = {
         where: { id: tagIds },
       });
       return tags.map((t) => t.get({ plain: true }));
+    },
+    // Fetch attachments for email
+    attachments: async (parent: any) => {
+      const attachments = await Attachment.findAll({
+        where: { emailId: parent.id },
+      });
+      return attachments.map((a) => a.get({ plain: true }));
+    },
+    // Check if email has attachments
+    hasAttachments: async (parent: any) => {
+      const count = await Attachment.count({
+        where: { emailId: parent.id },
+      });
+      return count > 0;
+    },
+    // Get attachment count
+    attachmentCount: async (parent: any) => {
+      return await Attachment.count({
+        where: { emailId: parent.id },
+      });
     },
   },
   Tag: {
@@ -437,6 +458,86 @@ app.use(
 // Health check endpoint
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Attachment download endpoint (for development - serves local files)
+app.get('/api/attachments/download/:id', async (req, res) => {
+  try {
+    const attachmentId = req.params.id;
+    logger.info('[Attachment] Download request', {
+      attachmentId,
+      hasAuth: !!req.headers.authorization,
+    });
+
+    const token = req.headers.authorization?.replace('Bearer ', '') ?? '';
+    if (!token) {
+      logger.warn('[Attachment] No auth token provided');
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const payload = await verifyToken(token);
+    if (!payload?.userId) {
+      logger.warn('[Attachment] Invalid token');
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+
+    logger.info('[Attachment] Token verified', {
+      userId: payload.userId,
+      attachmentId,
+    });
+
+    // Verify user has access to this attachment by looking it up by ID
+    // @ts-expect-error - Sequelize-TypeScript typing issue with findByPk
+    const attachment = await Attachment.findByPk(attachmentId, {
+      include: [
+        {
+          model: Email,
+          include: [
+            {
+              model: EmailAccountModel,
+              where: { userId: payload.userId },
+              required: true,
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!attachment) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    // In development, serve from local disk
+    if (process.env.NODE_ENV !== 'production') {
+      const { getLocalAttachmentPath } = await import(
+        './helpers/attachment-storage.js'
+      );
+      const filePath = getLocalAttachmentPath(attachmentId);
+
+      res.setHeader('Content-Type', attachment.mimeType);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${attachment.filename}"`,
+      );
+      res.setHeader('Content-Length', attachment.size.toString());
+      console.log({ attachment });
+
+      const { createReadStream } = await import('fs');
+      const stream = createReadStream(filePath);
+      stream.pipe(res);
+    } else {
+      // In production, redirect to S3 presigned URL
+      const { getAttachmentDownloadUrl } = await import(
+        './helpers/attachment-storage.js'
+      );
+      const url = await getAttachmentDownloadUrl(attachmentId);
+      console.log({ url });
+      res.redirect(url);
+    }
+  } catch (error: any) {
+    logger.error('Attachment Download', error.message);
+    res.status(500).json({ error: 'Failed to download attachment' });
+  }
 });
 
 // Start HTTP server

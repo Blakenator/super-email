@@ -8,3 +8,4 @@ export * from './contact.model.js';
 export * from './tag.model.js';
 export * from './email-tag.model.js';
 export * from './mail-rule.model.js';
+export * from './attachment.model.js';

@@ -237,6 +237,27 @@ enum EmailFolder {
   ARCHIVE
 }
 
+enum AttachmentType {
+  INLINE
+  ATTACHMENT
+}
+
+type Attachment implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  emailId: String!
+  filename: String!
+  mimeType: String!
+  extension: String
+  size: Int!
+  storageKey: String!
+  attachmentType: AttachmentType!
+  contentId: String
+  contentDisposition: String
+  isSafe: Boolean!
+}
+
 type Email implements BaseEntityProps {
   id: String!
   createdAt: Date
@@ -268,6 +289,9 @@ type Email implements BaseEntityProps {
   unsubscribeUrl: String
   unsubscribeEmail: String
   tags: [Tag!]!
+  attachments: [Attachment!]!
+  hasAttachments: Boolean!
+  attachmentCount: Int!
 }
 
 # ============ Tags ============
@@ -411,6 +435,13 @@ input GetEmailInput {
   id: String!
 }
 
+input AttachmentInput {
+  filename: String!
+  mimeType: String!
+  size: Int!
+  data: String!
+}
+
 input ComposeEmailInput {
   emailAccountId: String!
   smtpProfileId: String!
@@ -422,6 +453,7 @@ input ComposeEmailInput {
   htmlBody: String
   inReplyTo: String
   draftId: String
+  attachments: [AttachmentInput!]
 }
 
 input SaveDraftInput {
@@ -435,6 +467,7 @@ input SaveDraftInput {
   textBody: String
   htmlBody: String
   inReplyTo: String
+  attachments: [AttachmentInput!]
 }
 
 input BulkUpdateEmailsInput {
@@ -452,6 +485,7 @@ input ForwardEmailInput {
   ccAddresses: [String!]
   bccAddresses: [String!]
   additionalText: String
+  includeAttachments: Boolean
 }
 
 input SyncEmailAccountInput {
@@ -515,6 +549,10 @@ type Query {
   getEmailCount(input: GetEmailsInput!): Int!
   getEmailsByThread(threadId: String!): [Email!]!
   getTopEmailSources(limit: Int): [EmailSource!]!
+
+  # Attachments
+  getAttachment(id: String!): Attachment
+  getAttachmentDownloadUrl(id: String!): String!
 
   # Contacts
   getContacts: [Contact!]!

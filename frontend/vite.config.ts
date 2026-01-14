@@ -88,7 +88,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api/graphql': {
+      '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
         ws: true, // Enable WebSocket proxying

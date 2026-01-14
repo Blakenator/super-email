@@ -37,6 +37,7 @@
     "graphql": "^16.11.0",
     "graphql-ws": "^5.16.0",
     "lexical": "^0.39.0",
+    "lucide-react": "^0.469.0",
     "react": "^19.1.1",
     "react-bootstrap": "^3.0.0-beta.5",
     "react-dom": "^19.1.1",

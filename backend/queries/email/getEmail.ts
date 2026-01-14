@@ -1,5 +1,5 @@
 import { makeQuery } from '../../types.js';
-import { Email, EmailAccount } from '../../db/models/index.js';
+import { Email, EmailAccount, Attachment } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const getEmail = makeQuery(
@@ -8,7 +8,7 @@ export const getEmail = makeQuery(
     const userId = requireAuth(context);
 
     const email = await Email.findByPk(input.id, {
-      include: [EmailAccount],
+      include: [EmailAccount, Attachment],
     });
 
     if (!email) {

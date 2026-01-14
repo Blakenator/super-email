@@ -171,6 +171,75 @@ const database = new aws.rds.Instance(`${stackName}-db`, {
 });
 
 // =============================================================================
+// S3 Bucket for Email Attachments
+// =============================================================================
+
+const attachmentsBucket = new aws.s3.Bucket(`${stackName}-attachments`, {
+  bucket: `${stackName}-attachments`,
+  acl: 'private',
+  versioning: {
+    enabled: false,
+  },
+  serverSideEncryptionConfiguration: {
+    rule: {
+      applyServerSideEncryptionByDefault: {
+        sseAlgorithm: 'AES256',
+      },
+    },
+  },
+  lifecycleRules: [
+    {
+      id: 'transition-to-infrequent-access',
+      enabled: true,
+      transitions: [
+        {
+          // Move to Infrequent Access after 30 days
+          days: 30,
+          storageClass: 'STANDARD_IA',
+        },
+        {
+          // Move to Glacier after 90 days
+          days: 90,
+          storageClass: 'GLACIER',
+        },
+        {
+          // Move to Deep Archive after 180 days (6 months)
+          days: 180,
+          storageClass: 'DEEP_ARCHIVE',
+        },
+      ],
+    },
+  ],
+  tags: {
+    Name: `${stackName}-attachments`,
+    Environment: environment,
+  },
+});
+
+// Block all public access to attachments bucket
+new aws.s3.BucketPublicAccessBlock(`${stackName}-attachments-public-access-block`, {
+  bucket: attachmentsBucket.id,
+  blockPublicAcls: true,
+  blockPublicPolicy: true,
+  ignorePublicAcls: true,
+  restrictPublicBuckets: true,
+});
+
+// CORS configuration for attachments bucket (for direct uploads if needed)
+new aws.s3.BucketCorsConfigurationV2(`${stackName}-attachments-cors`, {
+  bucket: attachmentsBucket.id,
+  corsRules: [
+    {
+      allowedHeaders: ['*'],
+      allowedMethods: ['GET', 'PUT', 'POST'],
+      allowedOrigins: ['*'], // TODO: Restrict to your domain in production
+      exposeHeaders: ['ETag'],
+      maxAgeSeconds: 3000,
+    },
+  ],
+});
+
+// =============================================================================
 // ECR Repositories
 // =============================================================================
 
@@ -263,6 +332,40 @@ const taskRole = new aws.iam.Role(`${stackName}-task-role`, {
   },
 });
 
+// Policy for S3 attachments bucket access
+const s3AttachmentsPolicy = new aws.iam.Policy(`${stackName}-s3-attachments-policy`, {
+  name: `${stackName}-s3-attachments-policy`,
+  description: 'Policy for accessing email attachments S3 bucket',
+  policy: attachmentsBucket.arn.apply((bucketArn) => JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          's3:PutObject',
+          's3:GetObject',
+          's3:DeleteObject',
+          's3:ListBucket',
+        ],
+        Resource: [
+          bucketArn,
+          `${bucketArn}/*`,
+        ],
+      },
+    ],
+  })),
+  tags: {
+    Name: `${stackName}-s3-attachments-policy`,
+    Environment: environment,
+  },
+});
+
+// Attach S3 policy to task role
+new aws.iam.RolePolicyAttachment(`${stackName}-task-s3-policy`, {
+  role: taskRole.name,
+  policyArn: s3AttachmentsPolicy.arn,
+});
+
 // CloudWatch Log Groups
 const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`, {
   name: `/ecs/${stackName}/backend`,
@@ -296,7 +399,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
     database.address,
     database.port,
     dbPassword,
-  ]).apply(([repoUrl, dbHost, dbPort, dbPass]) => JSON.stringify([
+    attachmentsBucket.bucket,
+  ]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName]) => JSON.stringify([
     {
       name: 'backend',
       image: `${repoUrl}:latest`,
@@ -315,6 +419,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
         { name: 'DB_USER', value: 'emailclient' },
         { name: 'DB_PASSWORD', value: dbPass },
         { name: 'PORT', value: '4000' },
+        { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
+        { name: 'AWS_REGION', value: aws.config.region || 'us-east-1' },
       ],
       logConfiguration: {
         logDriver: 'awslogs',
@@ -532,3 +638,5 @@ export const frontendRepoUrl = frontendRepo.repositoryUrl;
 export const databaseEndpoint = database.endpoint;
 export const databaseAddress = database.address;
 export const clusterArn = cluster.arn;
+export const attachmentsBucketName = attachmentsBucket.bucket;
+export const attachmentsBucketArn = attachmentsBucket.arn;

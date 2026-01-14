@@ -38,6 +38,7 @@ import {
   faExchangeAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import { PageWrapper, StickyHeader } from '../../core/components';
+import { AttachmentUploader, type AttachmentFile } from '../../components';
 import {
   Title,
   HeaderActions,
@@ -140,6 +141,9 @@ export function Compose() {
 
   // Track whether sender selector is in read-only or edit mode
   const [senderEditMode, setSenderEditMode] = useState(false);
+
+  // Track attachments
+  const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
 
   // Track if content has changed for auto-save
   const initialContentRef = useRef({
@@ -420,22 +424,54 @@ ${quotedHtml}
       .map((s) => s.trim())
       .filter(Boolean);
 
-    sendEmail({
-      variables: {
-        input: {
-          emailAccountId,
-          smtpProfileId,
-          toAddresses: toList,
-          ccAddresses: ccList.length > 0 ? ccList : undefined,
-          bccAddresses: bccList.length > 0 ? bccList : undefined,
-          subject: subject || '(No Subject)',
-          textBody,
-          htmlBody,
-          inReplyTo: originalInfo?.inReplyTo,
-          draftId: draftId || undefined,
-        },
-      },
+    // Convert attachments to base64
+    const attachmentInputs = attachments.map((att) => {
+      return new Promise<{
+        filename: string;
+        mimeType: string;
+        size: number;
+        data: string;
+      }>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve({
+            filename: att.name,
+            mimeType: att.mimeType,
+            size: att.size,
+            data: base64,
+          });
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(att.file);
+      });
     });
+
+    Promise.all(attachmentInputs)
+      .then((attachmentData) => {
+        sendEmail({
+          variables: {
+            input: {
+              emailAccountId,
+              smtpProfileId,
+              toAddresses: toList,
+              ccAddresses: ccList.length > 0 ? ccList : undefined,
+              bccAddresses: bccList.length > 0 ? bccList : undefined,
+              subject: subject || '(No Subject)',
+              textBody,
+              htmlBody,
+              inReplyTo: originalInfo?.inReplyTo,
+              draftId: draftId || undefined,
+              attachments:
+                attachmentData.length > 0 ? attachmentData : undefined,
+            },
+          },
+        });
+      })
+      .catch((error) => {
+        setError('Failed to process attachments');
+        console.error('Attachment processing error:', error);
+      });
   };
 
   if (accountsLoading || profilesLoading) {
@@ -737,6 +773,28 @@ ${quotedHtml}
                       </MarkdownHelpIcon>
                     </OverlayTrigger>
                   </MarkdownHint>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Attachments</Form.Label>
+                  <AttachmentUploader
+                    attachments={attachments}
+                    onAdd={(files) => {
+                      const newAttachments = files.map((file) => ({
+                        id: crypto.randomUUID(),
+                        file,
+                        name: file.name,
+                        size: file.size,
+                        mimeType: file.type || 'application/octet-stream',
+                      }));
+                      setAttachments([...attachments, ...newAttachments]);
+                    }}
+                    onRemove={(id) => {
+                      setAttachments(attachments.filter((a) => a.id !== id));
+                    }}
+                    maxSize={25}
+                    maxFiles={10}
+                  />
                 </Form.Group>
               </Form>
             </Card.Body>

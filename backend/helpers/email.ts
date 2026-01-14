@@ -10,6 +10,12 @@ import {
   type SyncResult,
 } from './imap-sync.js';
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
 export interface SendEmailOptions {
   to: string[];
   cc?: string[];
@@ -19,6 +25,7 @@ export interface SendEmailOptions {
   html?: string;
   inReplyTo?: string;
   references?: string[];
+  attachments?: EmailAttachment[];
 }
 
 export interface TestConnectionResult {
@@ -87,6 +94,11 @@ export async function sendEmail(
     html: options.html,
     inReplyTo: options.inReplyTo,
     references: options.references?.join(' '),
+    attachments: options.attachments?.map((att) => ({
+      filename: att.filename,
+      content: att.content,
+      contentType: att.contentType,
+    })),
   });
 
   return { messageId: result.messageId };

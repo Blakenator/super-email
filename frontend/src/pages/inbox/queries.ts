@@ -21,6 +21,8 @@ export const GET_EMAILS_QUERY = gql(`
       inReplyTo
       threadId
       threadCount
+      hasAttachments
+      attachmentCount
       tags {
         id
         name
@@ -48,6 +50,18 @@ export const GET_EMAILS_BY_THREAD_QUERY = gql(`
       isRead
       isStarred
       emailAccountId
+      hasAttachments
+      attachmentCount
+      attachments {
+        id
+        filename
+        mimeType
+        extension
+        size
+        attachmentType
+        contentId
+        isSafe
+      }
       inReplyTo
       threadId
     }
@@ -79,6 +93,18 @@ export const GET_EMAIL_QUERY = gql(`
       isUnsubscribed
       unsubscribeUrl
       unsubscribeEmail
+      hasAttachments
+      attachmentCount
+      attachments {
+        id
+        filename
+        mimeType
+        extension
+        size
+        attachmentType
+        contentId
+        isSafe
+      }
       tags {
         id
         name

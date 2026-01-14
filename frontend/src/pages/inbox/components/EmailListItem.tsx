@@ -13,6 +13,7 @@ import {
   faPaperPlane,
   faFileAlt,
   faExclamationTriangle,
+  faPaperclip,
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 import {
@@ -27,6 +28,7 @@ import {
   StarButton,
   AccountBadge,
   ThreadBadge,
+  AttachmentBadge,
   QuickActions,
   ActionButton,
   FolderBadge,
@@ -69,6 +71,8 @@ interface Email {
   inReplyTo?: string | null;
   threadId?: string | null;
   threadCount?: number | null;
+  hasAttachments?: boolean | null;
+  attachmentCount?: number | null;
   tags?: EmailTag[] | null;
 }
 
@@ -225,6 +229,12 @@ export function EmailListItem({
             {email.subject}
             {email.threadCount && email.threadCount > 1 && (
               <ThreadBadge>{email.threadCount}</ThreadBadge>
+            )}
+            {email.hasAttachments && email.attachmentCount && email.attachmentCount > 0 && (
+              <AttachmentBadge>
+                <FontAwesomeIcon icon={faPaperclip} />
+                {email.attachmentCount}
+              </AttachmentBadge>
             )}
           </Subject>
           <Preview>

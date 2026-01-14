@@ -31,6 +31,35 @@ export type AddTagsToEmailsInput = {
   tagIds: Array<Scalars['String']['input']>;
 };
 
+export type Attachment = BaseEntityProps & {
+  __typename?: 'Attachment';
+  attachmentType: AttachmentType;
+  contentDisposition?: Maybe<Scalars['String']['output']>;
+  contentId?: Maybe<Scalars['String']['output']>;
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  emailId: Scalars['String']['output'];
+  extension?: Maybe<Scalars['String']['output']>;
+  filename: Scalars['String']['output'];
+  id: Scalars['String']['output'];
+  isSafe: Scalars['Boolean']['output'];
+  mimeType: Scalars['String']['output'];
+  size: Scalars['Int']['output'];
+  storageKey: Scalars['String']['output'];
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+};
+
+export type AttachmentInput = {
+  data: Scalars['String']['input'];
+  filename: Scalars['String']['input'];
+  mimeType: Scalars['String']['input'];
+  size: Scalars['Int']['input'];
+};
+
+export enum AttachmentType {
+  Attachment = 'ATTACHMENT',
+  Inline = 'INLINE'
+}
+
 export enum AuthProvider {
   Apple = 'APPLE',
   EmailPassword = 'EMAIL_PASSWORD',
@@ -66,6 +95,7 @@ export type BulkUpdateEmailsInput = {
 };
 
 export type ComposeEmailInput = {
+  attachments?: InputMaybe<Array<AttachmentInput>>;
   bccAddresses?: InputMaybe<Array<Scalars['String']['input']>>;
   ccAddresses?: InputMaybe<Array<Scalars['String']['input']>>;
   draftId?: InputMaybe<Scalars['String']['input']>;
@@ -168,6 +198,8 @@ export type CreateTagInput = {
 
 export type Email = BaseEntityProps & {
   __typename?: 'Email';
+  attachmentCount: Scalars['Int']['output'];
+  attachments: Array<Attachment>;
   bccAddresses?: Maybe<Array<Scalars['String']['output']>>;
   ccAddresses?: Maybe<Array<Scalars['String']['output']>>;
   createdAt?: Maybe<Scalars['Date']['output']>;
@@ -176,6 +208,7 @@ export type Email = BaseEntityProps & {
   folder: EmailFolder;
   fromAddress: Scalars['String']['output'];
   fromName?: Maybe<Scalars['String']['output']>;
+  hasAttachments: Scalars['Boolean']['output'];
   headers?: Maybe<Scalars['JSON']['output']>;
   htmlBody?: Maybe<Scalars['String']['output']>;
   id: Scalars['String']['output'];
@@ -249,6 +282,7 @@ export type ForwardEmailInput = {
   ccAddresses?: InputMaybe<Array<Scalars['String']['input']>>;
   emailAccountId: Scalars['String']['input'];
   emailId: Scalars['String']['input'];
+  includeAttachments?: InputMaybe<Scalars['Boolean']['input']>;
   smtpProfileId: Scalars['String']['input'];
   toAddresses: Array<Scalars['String']['input']>;
 };
@@ -526,6 +560,8 @@ export type NukeOldEmailsInput = {
 export type Query = {
   __typename?: 'Query';
   fetchProfile?: Maybe<User>;
+  getAttachment?: Maybe<Attachment>;
+  getAttachmentDownloadUrl: Scalars['String']['output'];
   getAuthenticationMethods: Array<AuthenticationMethod>;
   getContact?: Maybe<Contact>;
   getContacts: Array<Contact>;
@@ -544,6 +580,16 @@ export type Query = {
   getTopEmailSources: Array<EmailSource>;
   previewMailRule: Scalars['Int']['output'];
   searchContacts: Array<Contact>;
+};
+
+
+export type QueryGetAttachmentArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type QueryGetAttachmentDownloadUrlArgs = {
+  id: Scalars['String']['input'];
 };
 
 
@@ -656,6 +702,7 @@ export type RunRuleResult = {
 };
 
 export type SaveDraftInput = {
+  attachments?: InputMaybe<Array<AttachmentInput>>;
   bccAddresses?: InputMaybe<Array<Scalars['String']['input']>>;
   ccAddresses?: InputMaybe<Array<Scalars['String']['input']>>;
   emailAccountId: Scalars['String']['input'];
@@ -894,6 +941,7 @@ export type DirectiveResolverFn<TResult = Record<PropertyKey, never>, TParent = 
 /** Mapping of interface types */
 export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = ResolversObject<{
   BaseEntityProps:
+    | ( Attachment )
     | ( AuthenticationMethod )
     | ( Contact )
     | ( ContactEmail )
@@ -910,6 +958,9 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
 export type ResolversTypes = ResolversObject<{
   AddEmailToContactInput: AddEmailToContactInput;
   AddTagsToEmailsInput: AddTagsToEmailsInput;
+  Attachment: ResolverTypeWrapper<Attachment>;
+  AttachmentInput: AttachmentInput;
+  AttachmentType: AttachmentType;
   AuthProvider: AuthProvider;
   AuthenticationMethod: ResolverTypeWrapper<AuthenticationMethod>;
   BaseEntityProps: ResolverTypeWrapper<ResolversInterfaceTypes<ResolversTypes>['BaseEntityProps']>;
@@ -972,6 +1023,8 @@ export type ResolversTypes = ResolversObject<{
 export type ResolversParentTypes = ResolversObject<{
   AddEmailToContactInput: AddEmailToContactInput;
   AddTagsToEmailsInput: AddTagsToEmailsInput;
+  Attachment: Attachment;
+  AttachmentInput: AttachmentInput;
   AuthenticationMethod: AuthenticationMethod;
   BaseEntityProps: ResolversInterfaceTypes<ResolversParentTypes>['BaseEntityProps'];
   Boolean: Scalars['Boolean']['output'];
@@ -1024,6 +1077,23 @@ export type ResolversParentTypes = ResolversObject<{
   User: User;
 }>;
 
+export type AttachmentResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Attachment'] = ResolversParentTypes['Attachment']> = ResolversObject<{
+  attachmentType?: Resolver<ResolversTypes['AttachmentType'], ParentType, ContextType>;
+  contentDisposition?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  contentId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  emailId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  extension?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  filename?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isSafe?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  mimeType?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  size?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  storageKey?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export type AuthenticationMethodResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['AuthenticationMethod'] = ResolversParentTypes['AuthenticationMethod']> = ResolversObject<{
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   displayName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -1038,7 +1108,7 @@ export type AuthenticationMethodResolvers<ContextType = MyContext, ParentType ex
 }>;
 
 export type BaseEntityPropsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BaseEntityProps'] = ResolversParentTypes['BaseEntityProps']> = ResolversObject<{
-  __resolveType: TypeResolveFn<'AuthenticationMethod' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
+  __resolveType: TypeResolveFn<'Attachment' | 'AuthenticationMethod' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
 }>;
 
 export type ContactResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Contact'] = ResolversParentTypes['Contact']> = ResolversObject<{
@@ -1074,6 +1144,8 @@ export interface DateScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes
 }
 
 export type EmailResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Email'] = ResolversParentTypes['Email']> = ResolversObject<{
+  attachmentCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  attachments?: Resolver<Array<ResolversTypes['Attachment']>, ParentType, ContextType>;
   bccAddresses?: Resolver<Maybe<Array<ResolversTypes['String']>>, ParentType, ContextType>;
   ccAddresses?: Resolver<Maybe<Array<ResolversTypes['String']>>, ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
@@ -1082,6 +1154,7 @@ export type EmailResolvers<ContextType = MyContext, ParentType extends Resolvers
   folder?: Resolver<ResolversTypes['EmailFolder'], ParentType, ContextType>;
   fromAddress?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   fromName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  hasAttachments?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   headers?: Resolver<Maybe<ResolversTypes['JSON']>, ParentType, ContextType>;
   htmlBody?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1202,6 +1275,8 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
 
 export type QueryResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
   fetchProfile?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
+  getAttachment?: Resolver<Maybe<ResolversTypes['Attachment']>, ParentType, ContextType, RequireFields<QueryGetAttachmentArgs, 'id'>>;
+  getAttachmentDownloadUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QueryGetAttachmentDownloadUrlArgs, 'id'>>;
   getAuthenticationMethods?: Resolver<Array<ResolversTypes['AuthenticationMethod']>, ParentType, ContextType>;
   getContact?: Resolver<Maybe<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QueryGetContactArgs, 'id'>>;
   getContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType>;
@@ -1301,6 +1376,7 @@ export type UserResolvers<ContextType = MyContext, ParentType extends ResolversP
 }>;
 
 export type Resolvers<ContextType = MyContext> = ResolversObject<{
+  Attachment?: AttachmentResolvers<ContextType>;
   AuthenticationMethod?: AuthenticationMethodResolvers<ContextType>;
   BaseEntityProps?: BaseEntityPropsResolvers<ContextType>;
   Contact?: ContactResolvers<ContextType>;

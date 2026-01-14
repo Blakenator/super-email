@@ -4,6 +4,7 @@ import {
   ForeignKey,
   BelongsTo,
   BelongsToMany,
+  HasMany,
   Model,
   Table,
   Index,
@@ -12,6 +13,7 @@ import { EmailAccount } from './email-account.model.js';
 import { SmtpProfile } from './smtp-profile.model.js';
 import { Tag } from './tag.model.js';
 import { EmailTag } from './email-tag.model.js';
+import { Attachment } from './attachment.model.js';
 
 export enum EmailFolder {
   INBOX = 'INBOX',
@@ -140,4 +142,8 @@ export class Email extends Model {
   // Tags relationship via junction table
   @BelongsToMany(() => Tag, () => EmailTag)
   declare tags: Tag[];
+
+  // Attachments relationship
+  @HasMany(() => Attachment)
+  declare attachments: Attachment[];
 }
