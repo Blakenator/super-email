@@ -1,13 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import {
-  Button,
-  Modal,
-  Alert,
-  Badge,
-  Accordion,
-  Dropdown,
-} from 'react-bootstrap';
+import { Button, Modal, Alert, Dropdown } from 'react-bootstrap';
 import { DateTime } from 'luxon';
 import {
   GET_EMAIL_QUERY,

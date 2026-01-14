@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import {
   createContext,
   useContext,
@@ -10,8 +11,6 @@ import { ThemeProvider as StyledThemeProvider } from 'styled-components';
 import { useMutation } from '@apollo/client/react';
 import { gql } from '../__generated__/gql';
 import {
-  lightTheme,
-  darkTheme,
   getTheme,
   type Theme,
   type ThemePreference,

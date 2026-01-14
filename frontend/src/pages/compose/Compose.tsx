@@ -11,7 +11,6 @@ import {
   Col,
   OverlayTrigger,
   Popover,
-  Badge,
 } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router';
 import toast from 'react-hot-toast';

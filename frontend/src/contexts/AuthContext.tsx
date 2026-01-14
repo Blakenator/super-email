@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useCallback,
 } from 'react';
+/* eslint-disable react-refresh/only-export-components */
 import { createClient } from '@supabase/supabase-js';
 import { useApolloClient } from '@apollo/client/react';
 import {
@@ -126,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    initAuth();
+    void initAuth();
 
     // Listen for auth state changes
     const {

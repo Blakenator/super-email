@@ -1,7 +1,8 @@
 import styled, { css } from 'styled-components';
 import type { ButtonVariant, ButtonSize } from './Button';
+import type { Theme } from '../../core/theme';
 
-const getVariantStyles = (variant: ButtonVariant, theme: any) => {
+const getVariantStyles = (variant: ButtonVariant, theme: Theme) => {
   const isOutline = variant.startsWith('outline-');
   const baseVariant = isOutline ? variant.replace('outline-', '') : variant;
 
@@ -169,7 +170,7 @@ const getVariantStyles = (variant: ButtonVariant, theme: any) => {
   }
 };
 
-const getSizeStyles = (size: ButtonSize, theme: any) => {
+const getSizeStyles = (size: ButtonSize, theme: Theme) => {
   switch (size) {
     case 'sm':
       return css`

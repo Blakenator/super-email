@@ -1,10 +1,9 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { Button } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faMoon, faSun } from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../../contexts/ThemeContext';
-import { ViewerContainer, IframeContainer, ThemeToggleButton } from './HtmlViewer.wrappers';
+import { IframeContainer, ThemeToggleButton } from './HtmlViewer.wrappers';
 
 interface HtmlViewerProps {
   html: string;
@@ -13,7 +12,7 @@ interface HtmlViewerProps {
 
 /**
  * Safe HTML viewer using both DOMPurify sanitization AND iframe sandboxing
- * 
+ *
  * Security benefits of iframe approach:
  * 1. Origin isolation - iframe content cannot access parent DOM, cookies, or JS context
  * 2. Defense in depth - even if sanitization misses something, sandbox blocks execution
@@ -26,7 +25,7 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
   const [iframeHeight, setIframeHeight] = useState(200);
   const { isDarkMode } = useTheme();
   const [emailDarkMode, setEmailDarkMode] = useState<boolean | null>(null);
-  
+
   // Use page dark mode as default, but allow override
   const effectiveDarkMode = emailDarkMode !== null ? emailDarkMode : isDarkMode;
 
@@ -34,32 +33,126 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
     // Configure DOMPurify for email viewing
     return DOMPurify.sanitize(html, {
       ALLOWED_TAGS: [
-        'a', 'abbr', 'address', 'article', 'aside', 'b', 'bdi', 'bdo',
-        'blockquote', 'br', 'caption', 'cite', 'code', 'col', 'colgroup',
-        'data', 'dd', 'del', 'details', 'dfn', 'div', 'dl', 'dt', 'em',
-        'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-        'header', 'hgroup', 'hr', 'i', 'img', 'ins', 'kbd', 'li', 'main',
-        'mark', 'nav', 'ol', 'p', 'pre', 'q', 'rp', 'rt', 'ruby', 's',
-        'samp', 'section', 'small', 'span', 'strong', 'sub', 'summary',
-        'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'time',
-        'tr', 'u', 'ul', 'var', 'wbr', 'center', 'font',
+        'a',
+        'abbr',
+        'address',
+        'article',
+        'aside',
+        'b',
+        'bdi',
+        'bdo',
+        'blockquote',
+        'br',
+        'caption',
+        'cite',
+        'code',
+        'col',
+        'colgroup',
+        'data',
+        'dd',
+        'del',
+        'details',
+        'dfn',
+        'div',
+        'dl',
+        'dt',
+        'em',
+        'figcaption',
+        'figure',
+        'footer',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'header',
+        'hgroup',
+        'hr',
+        'i',
+        'img',
+        'ins',
+        'kbd',
+        'li',
+        'main',
+        'mark',
+        'nav',
+        'ol',
+        'p',
+        'pre',
+        'q',
+        'rp',
+        'rt',
+        'ruby',
+        's',
+        'samp',
+        'section',
+        'small',
+        'span',
+        'strong',
+        'sub',
+        'summary',
+        'sup',
+        'table',
+        'tbody',
+        'td',
+        'tfoot',
+        'th',
+        'thead',
+        'time',
+        'tr',
+        'u',
+        'ul',
+        'var',
+        'wbr',
+        'center',
+        'font',
       ],
       ALLOWED_ATTR: [
-        'href', 'src', 'alt', 'title', 'class', 'id', 'name', 'width', 'height',
-        'style', 'target', 'rel', 'colspan', 'rowspan', 'scope', 'border',
-        'cellpadding', 'cellspacing', 'align', 'valign', 'bgcolor', 'color',
-        'face', 'size',
+        'href',
+        'src',
+        'alt',
+        'title',
+        'class',
+        'id',
+        'name',
+        'width',
+        'height',
+        'style',
+        'target',
+        'rel',
+        'colspan',
+        'rowspan',
+        'scope',
+        'border',
+        'cellpadding',
+        'cellspacing',
+        'align',
+        'valign',
+        'bgcolor',
+        'color',
+        'face',
+        'size',
       ],
       ALLOW_DATA_ATTR: false,
       ADD_ATTR: ['target'],
-      FORBID_TAGS: ['script', 'object', 'embed', 'form', 'input', 'button', 'textarea', 'select'],
+      FORBID_TAGS: [
+        'script',
+        'object',
+        'embed',
+        'form',
+        'input',
+        'button',
+        'textarea',
+        'select',
+      ],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
     });
   }, [html]);
 
   // Check if the email dark mode setting matches the app's dark mode
   const colorSchemeMatchesApp = emailDarkMode === null;
-  
+
   // Build the complete HTML document for the iframe
   const iframeContent = useMemo(() => {
     const textColor = effectiveDarkMode ? '#e8eaed' : '#202124';
@@ -69,8 +162,12 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
     const codeBgColor = effectiveDarkMode ? '#2d2d2d' : '#f6f8fa';
     const codeTextColor = effectiveDarkMode ? '#e8eaed' : '#24292e';
     // Use transparent when matching app theme, otherwise use explicit color
-    const bgColor = colorSchemeMatchesApp ? 'transparent' : (effectiveDarkMode ? '#1a1a1a' : '#ffffff');
-    
+    const bgColor = colorSchemeMatchesApp
+      ? 'transparent'
+      : effectiveDarkMode
+        ? '#1a1a1a'
+        : '#ffffff';
+
     return `
 <!DOCTYPE html>
 <html>
@@ -174,14 +271,18 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
       margin-top: 0.25em;
     }
     /* Override inline styles that might conflict with dark mode */
-    ${effectiveDarkMode ? `
+    ${
+      effectiveDarkMode
+        ? `
       [bgcolor="#ffffff"], [bgcolor="white"] {
         background-color: transparent !important;
       }
       [color="#000000"], [color="black"] {
         color: ${textColor} !important;
       }
-    ` : ''}
+    `
+        : ''
+    }
   </style>
 </head>
 <body>${sanitizedHtml}</body>
@@ -214,7 +315,7 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
           const height = doc.body.scrollHeight + 16;
           setIframeHeight(Math.max(100, Math.min(height, 2000))); // Cap at 2000px
         }
-      } catch (e) {
+      } catch {
         // Cross-origin error - can't access iframe content
         // This shouldn't happen with blob URLs but handle gracefully
         setIframeHeight(400);
@@ -230,8 +331,12 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
       <ThemeToggleButton
         variant="outline-secondary"
         size="sm"
-        onClick={() => setEmailDarkMode(prev => prev === null ? !isDarkMode : !prev)}
-        title={effectiveDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+        onClick={() =>
+          setEmailDarkMode((prev) => (prev === null ? !isDarkMode : !prev))
+        }
+        title={
+          effectiveDarkMode ? 'Switch to light mode' : 'Switch to dark mode'
+        }
       >
         <FontAwesomeIcon icon={effectiveDarkMode ? faSun : faMoon} />
       </ThemeToggleButton>

@@ -17,7 +17,6 @@ import {
   faSignOutAlt,
   faPalette,
   faBell,
-  faUser,
   faTag,
   faFilter,
   faShieldAlt,

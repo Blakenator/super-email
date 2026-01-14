@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import App from './App.tsx';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 import {
@@ -17,11 +16,9 @@ import { getMainDefinition } from '@apollo/client/utilities';
 import { createClient } from 'graphql-ws';
 import { BrowserRouter } from 'react-router';
 import { ThemeProvider } from 'styled-components';
-import { Toaster } from 'react-hot-toast';
 import { AuthProvider, supabase } from './contexts/AuthContext.tsx';
 import { ErrorBoundary } from './core/components/ErrorBoundary.tsx';
 import { lightTheme } from './core/theme.ts';
-import { ThemeContextProvider } from './contexts/ThemeContext.tsx';
 import { ThemedApp } from './ThemedApp.tsx';
 
 const httpLink = new HttpLink({ uri: '/api/graphql' });

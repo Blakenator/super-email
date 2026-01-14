@@ -107,7 +107,7 @@ export function MobileNavbar({ user, unreadCount, onLogout }: MobileNavbarProps)
   );
 
   const handleNavigate = (path: string) => {
-    navigate(path);
+    void navigate(path);
   };
 
   return (

@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { Navbar, Nav, Dropdown } from 'react-bootstrap';
+import { Navbar, Dropdown } from 'react-bootstrap';
 
 export const MobileNavbarContainer = styled(Navbar)`
   display: none;

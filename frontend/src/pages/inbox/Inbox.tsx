@@ -56,8 +56,6 @@ import {
   faTimes,
   faLayerGroup,
   faTag,
-  faFilter,
-  faPlus,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faSquare,
@@ -69,11 +67,7 @@ import {
   ADD_TAGS_TO_EMAILS_MUTATION,
 } from './queries';
 
-import {
-  RecencyGroup,
-  RECENCY_GROUP_LABELS,
-  groupEmailsByRecency,
-} from './utils';
+import { RECENCY_GROUP_LABELS, groupEmailsByRecency } from './utils';
 
 import { PageWrapper, PageToolbar, PageTitle } from '../../core/components';
 import {
@@ -89,8 +83,6 @@ import {
   GroupTitle,
   GroupCount,
   GroupCardBody,
-  GroupHeader,
-  FiltersBanner,
 } from './Inbox.wrappers';
 
 type ViewMode = 'spacious' | 'dense';
