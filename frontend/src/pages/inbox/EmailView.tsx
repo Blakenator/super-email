@@ -1,12 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
-import { Button, Modal, Alert, Badge, Accordion } from 'react-bootstrap';
-import styled from 'styled-components';
+import {
+  Button,
+  Modal,
+  Alert,
+  Badge,
+  Accordion,
+  Dropdown,
+} from 'react-bootstrap';
 import { DateTime } from 'luxon';
 import {
   GET_EMAIL_QUERY,
   GET_EMAILS_BY_THREAD_QUERY,
   UNSUBSCRIBE_MUTATION,
+  GET_TAGS_FOR_INBOX_QUERY,
+  ADD_TAGS_TO_EMAILS_MUTATION,
+  REMOVE_TAGS_FROM_EMAILS_MUTATION,
 } from './queries';
 import { useNavigate } from 'react-router';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -22,6 +31,10 @@ import {
   faChevronUp,
   faArchive,
   faInbox,
+  faTag,
+  faTimes,
+  faPlus,
+  faStar,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   LoadingSpinner,
@@ -31,195 +44,34 @@ import {
   EmailContactCard,
 } from '../../core/components';
 import toast from 'react-hot-toast';
-
-const Wrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-`;
-
-const Toolbar = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.sm};
-  padding: ${({ theme }) => theme.spacing.md};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  flex-shrink: 0;
-  flex-wrap: wrap;
-`;
-
-const ToolbarSpacer = styled.div`
-  flex: 1;
-`;
-
-const EmailContent = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  padding: ${({ theme }) => theme.spacing.lg};
-`;
-
-const Subject = styled.h2`
-  font-size: ${({ theme }) => theme.fontSizes.xl};
-  font-weight: 600;
-  margin-bottom: ${({ theme }) => theme.spacing.md};
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const MetaRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: ${({ theme }) => theme.spacing.lg};
-  padding-bottom: ${({ theme }) => theme.spacing.md};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-`;
-
-const SenderInfo = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-const SenderRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-`;
-
-const SenderName = styled.strong`
-  font-size: ${({ theme }) => theme.fontSizes.md};
-`;
-
-const SenderEmail = styled.span`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-`;
-
-const Recipients = styled.div`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  margin-top: ${({ theme }) => theme.spacing.xs};
-`;
-
-const EmailDate = styled.div`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  text-align: right;
-`;
-
-const Body = styled.div`
-  white-space: pre-wrap;
-  line-height: 1.7;
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const HtmlBodyContainer = styled.div`
-  max-height: calc(100vh - 300px);
-  overflow: auto;
-  border: 1px solid ${({ theme }) => theme.colors.borderLight};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
-  padding: ${({ theme }) => theme.spacing.md};
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-`;
-
-const UnsubscribeBanner = styled(Alert)`
-  margin-bottom: ${({ theme }) => theme.spacing.md};
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-`;
-
-const ThreadContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${({ theme }) => theme.spacing.md};
-`;
-
-const ThreadEmail = styled.div<{ $isSelected?: boolean }>`
-  border: ${(props) => (props.$isSelected ? '2px' : '1px')} solid
-    ${(props) =>
-      props.$isSelected
-        ? props.theme.colors.primary
-        : props.theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
-  padding: ${({ theme }) => theme.spacing.md};
-  position: relative;
-  background: ${(props) =>
-    props.$isSelected
-      ? `${props.theme.colors.primary}08`
-      : props.theme.colors.backgroundWhite};
-`;
-
-const CurrentEmailBadge = styled(Badge)`
-  position: absolute;
-  top: -8px;
-  right: 12px;
-  font-size: ${({ theme }) => theme.fontSizes.xs};
-  padding: 4px 8px;
-`;
-
-const ThreadEmailHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  cursor: pointer;
-  padding-bottom: ${({ theme }) => theme.spacing.sm};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.borderLight};
-  margin-bottom: ${({ theme }) => theme.spacing.sm};
-`;
-
-const ThreadEmailMeta = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-`;
-
-const CollapsedPreview = styled.div`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 400px;
-`;
-
-const HeadersTable = styled.table`
-  width: 100%;
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  border-collapse: collapse;
-
-  th,
-  td {
-    padding: ${({ theme }) => theme.spacing.sm};
-    border-bottom: 1px solid ${({ theme }) => theme.colors.borderLight};
-    text-align: left;
-    vertical-align: top;
-  }
-
-  th {
-    width: 140px;
-    font-weight: 600;
-    color: ${({ theme }) => theme.colors.textSecondary};
-    white-space: nowrap;
-    background: ${({ theme }) => theme.colors.background};
-  }
-
-  td {
-    word-break: break-word;
-  }
-`;
-
-const HeaderValue = styled.pre`
-  margin: 0;
-  padding: ${({ theme }) => theme.spacing.xs} ${({ theme }) => theme.spacing.sm};
-  background: ${({ theme }) => theme.colors.background};
-  border-radius: ${({ theme }) => theme.borderRadius.sm};
-  font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
-  font-size: 0.75rem;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 200px;
-  overflow-y: auto;
-`;
+import { useEmailStore } from '../../stores/emailStore';
+import {
+  Wrapper,
+  Toolbar,
+  ToolbarSpacer,
+  EmailContent,
+  Subject,
+  MetaRow,
+  SenderInfo,
+  SenderRow,
+  Recipients,
+  EmailDate,
+  Body,
+  HtmlBodyContainer,
+  UnsubscribeBanner,
+  ThreadContainer,
+  ThreadEmail,
+  CurrentEmailBadge,
+  NewEmailBadge,
+  ThreadEmailHeader,
+  ThreadEmailMeta,
+  CollapsedPreview,
+  HeadersTable,
+  HeaderValue,
+  TagsContainer,
+  TagBadge,
+  TagRemoveBtn,
+} from './EmailView.wrappers';
 
 interface EmailViewProps {
   emailId: string;
@@ -246,20 +98,77 @@ export function EmailView({
 
   const { data, loading, refetch } = useQuery(GET_EMAIL_QUERY, {
     variables: { input: { id: emailId } },
+    fetchPolicy: 'cache-and-network',
+    notifyOnNetworkStatusChange: true,
   });
 
   // Fetch thread emails if this email is part of a thread
   const email = data?.getEmail;
-  const { data: threadData, loading: threadLoading } = useQuery(
-    GET_EMAILS_BY_THREAD_QUERY,
-    {
-      variables: { threadId: email?.threadId || '' },
-      skip: !email?.threadId || (email?.threadCount ?? 1) <= 1,
-    },
-  );
+  const {
+    data: threadData,
+    loading: threadLoading,
+    refetch: refetchThread,
+  } = useQuery(GET_EMAILS_BY_THREAD_QUERY, {
+    variables: { threadId: email?.threadId || '' },
+    skip: !email?.threadId || (email?.threadCount ?? 1) <= 1,
+    fetchPolicy: 'cache-and-network',
+    nextFetchPolicy: 'cache-first',
+    notifyOnNetworkStatusChange: true,
+  });
 
   const threadEmails = threadData?.getEmailsByThread ?? [];
   const hasThread = threadEmails.length > 1;
+
+  // Track which email IDs were present when the component loaded
+  // to identify new emails added via real-time updates
+  const initialThreadIdsRef = useRef<Set<string>>(new Set());
+  const [newEmailIds, setNewEmailIds] = useState<Set<string>>(new Set());
+
+  // Initialize the initial thread IDs on first load
+  useEffect(() => {
+    if (threadEmails.length > 0 && initialThreadIdsRef.current.size === 0) {
+      initialThreadIdsRef.current = new Set(threadEmails.map((e) => e.id));
+    }
+  }, [threadEmails]);
+
+  // Subscribe to real-time email updates
+  const lastUpdate = useEmailStore((state) => state.lastUpdate);
+  const lastRefetchRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // When we receive new emails via subscription, refetch thread data
+    if (lastUpdate && lastUpdate !== lastRefetchRef.current) {
+      lastRefetchRef.current = lastUpdate;
+
+      // Refetch thread to get any new emails
+      if (email?.threadId && hasThread) {
+        refetchThread().then((result) => {
+          // Identify which emails are new
+          const newIds = new Set<string>();
+          const updatedEmails = result.data?.getEmailsByThread ?? [];
+          for (const threadEmail of updatedEmails) {
+            if (!initialThreadIdsRef.current.has(threadEmail.id)) {
+              newIds.add(threadEmail.id);
+              // Auto-expand new emails
+              setExpandedThreadEmails(
+                (prev) => new Set([...prev, threadEmail.id]),
+              );
+            }
+          }
+          if (newIds.size > 0) {
+            setNewEmailIds((prev) => new Set([...prev, ...newIds]));
+            toast.success(
+              `${newIds.size} new message${newIds.size > 1 ? 's' : ''} in this thread!`,
+              { icon: '💬' },
+            );
+          }
+        });
+      }
+
+      // Also refetch the main email
+      refetch();
+    }
+  }, [lastUpdate, email?.threadId, hasThread, refetchThread, refetch]);
 
   const [unsubscribe, { loading: unsubscribing }] = useMutation(
     UNSUBSCRIBE_MUTATION,
@@ -274,6 +183,52 @@ export function EmailView({
       },
     },
   );
+
+  // Tags functionality
+  const { data: tagsData } = useQuery(GET_TAGS_FOR_INBOX_QUERY);
+  const availableTags = tagsData?.getTags ?? [];
+  const emailTags = email?.tags ?? [];
+  const unassignedTags = availableTags.filter(
+    (tag) => !emailTags.some((et) => et.id === tag.id),
+  );
+
+  const [addTagsToEmails] = useMutation(ADD_TAGS_TO_EMAILS_MUTATION, {
+    refetchQueries: [
+      { query: GET_EMAIL_QUERY, variables: { input: { id: emailId } } },
+    ],
+    onCompleted: () => toast.success('Tag added'),
+    onError: (err) => toast.error(`Failed to add tag: ${err.message}`),
+  });
+
+  const [removeTagsFromEmails] = useMutation(REMOVE_TAGS_FROM_EMAILS_MUTATION, {
+    refetchQueries: [
+      { query: GET_EMAIL_QUERY, variables: { input: { id: emailId } } },
+    ],
+    onCompleted: () => toast.success('Tag removed'),
+    onError: (err) => toast.error(`Failed to remove tag: ${err.message}`),
+  });
+
+  const handleAddTag = (tagId: string) => {
+    addTagsToEmails({
+      variables: {
+        input: {
+          emailIds: [emailId],
+          tagIds: [tagId],
+        },
+      },
+    });
+  };
+
+  const handleRemoveTag = (tagId: string) => {
+    removeTagsFromEmails({
+      variables: {
+        input: {
+          emailIds: [emailId],
+          tagIds: [tagId],
+        },
+      },
+    });
+  };
 
   // Handle escape key to go back
   const handleKeyDown = useCallback(
@@ -481,14 +436,81 @@ export function EmailView({
           )}
         </Subject>
 
+        {/* Tags Section */}
+        <TagsContainer>
+          <FontAwesomeIcon
+            icon={faTag}
+            style={{ color: '#6c757d', marginRight: 4 }}
+          />
+          {emailTags.map((tag) => (
+            <TagBadge key={tag.id} $bgColor={tag.color}>
+              {tag.name}
+              <TagRemoveBtn
+                onClick={() => handleRemoveTag(tag.id)}
+                title="Remove tag"
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </TagRemoveBtn>
+            </TagBadge>
+          ))}
+          {unassignedTags.length > 0 && (
+            <Dropdown>
+              <Dropdown.Toggle
+                variant="outline-secondary"
+                size="sm"
+                id="add-tag-dropdown"
+                style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+              >
+                <FontAwesomeIcon icon={faPlus} className="me-1" />
+                Add Tag
+              </Dropdown.Toggle>
+              <Dropdown.Menu>
+                {unassignedTags.map((tag) => (
+                  <Dropdown.Item
+                    key={tag.id}
+                    onClick={() => handleAddTag(tag.id)}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        width: 12,
+                        height: 12,
+                        borderRadius: '50%',
+                        backgroundColor: tag.color,
+                        marginRight: 8,
+                      }}
+                    />
+                    {tag.name}
+                  </Dropdown.Item>
+                ))}
+              </Dropdown.Menu>
+            </Dropdown>
+          )}
+          {emailTags.length === 0 && unassignedTags.length === 0 && (
+            <span className="text-muted" style={{ fontSize: '0.85rem' }}>
+              No tags available
+            </span>
+          )}
+        </TagsContainer>
+
         {hasThread ? (
           <ThreadContainer>
             {threadEmails.map((threadEmail) => {
               const isExpanded = expandedThreadEmails.has(threadEmail.id);
               const isCurrentEmail = threadEmail.id === emailId;
+              const isNewEmail = newEmailIds.has(threadEmail.id);
 
               return (
-                <ThreadEmail key={threadEmail.id} $isSelected={isCurrentEmail}>
+                <ThreadEmail
+                  key={threadEmail.id}
+                  $isSelected={isCurrentEmail || isNewEmail}
+                >
+                  {isNewEmail && (
+                    <NewEmailBadge bg="success">
+                      <FontAwesomeIcon icon={faStar} className="me-1" />
+                      New
+                    </NewEmailBadge>
+                  )}
                   {isCurrentEmail && (
                     <CurrentEmailBadge bg="primary">
                       Current Email

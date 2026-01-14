@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Modal, Form } from 'react-bootstrap';
-import styled from 'styled-components';
+import { Modal, Form } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { DateTime } from 'luxon';
 import {
@@ -10,125 +9,51 @@ import {
   faEnvelope,
   faEnvelopeOpen,
   faArchive,
+  faInbox,
+  faPaperPlane,
+  faFileAlt,
+  faExclamationTriangle,
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
+import {
+  EmailItemWrapper,
+  SelectionCheckbox,
+  EmailContent,
+  EmailMeta,
+  SenderName,
+  EmailDate,
+  Subject,
+  Preview,
+  StarButton,
+  AccountBadge,
+  ThreadBadge,
+  QuickActions,
+  ActionButton,
+  FolderBadge,
+  TagsRow,
+  TagBadge,
+} from './EmailListItem.wrappers';
 
-const EmailItemWrapper = styled.div<{ $isUnread: boolean; $isSelected: boolean }>`
-  cursor: pointer;
-  display: flex;
-  align-items: flex-start;
-  gap: ${({ theme }) => theme.spacing.sm};
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${(props) =>
-    props.$isSelected
-      ? `${props.theme.colors.primary}15`
-      : props.$isUnread
-        ? props.theme.colors.unreadBackground
-        : props.theme.colors.backgroundWhite};
-  font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
-  position: relative;
+// Folder config for badges
+const FOLDER_BADGE_CONFIG: Record<string, { icon: any; label: string; variant: string }> = {
+  INBOX: { icon: faInbox, label: 'Inbox', variant: 'primary' },
+  SENT: { icon: faPaperPlane, label: 'Sent', variant: 'success' },
+  DRAFTS: { icon: faFileAlt, label: 'Drafts', variant: 'warning' },
+  TRASH: { icon: faTrash, label: 'Trash', variant: 'danger' },
+  SPAM: { icon: faExclamationTriangle, label: 'Spam', variant: 'secondary' },
+  ARCHIVE: { icon: faArchive, label: 'Archive', variant: 'info' },
+};
 
-  &:hover {
-    background: ${({ theme, $isSelected }) =>
-      $isSelected ? `${theme.colors.primary}20` : theme.colors.backgroundHover};
-  }
-
-  &:hover .quick-actions {
-    opacity: 1;
-  }
-`;
-
-const SelectionCheckbox = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  padding-top: 2px;
-`;
-
-const EmailContent = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const EmailMeta = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: ${({ theme }) => theme.spacing.xs};
-`;
-
-const SenderName = styled.span`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const EmailDate = styled.span`
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-weight: 400;
-`;
-
-const Subject = styled.div`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const Preview = styled.div`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 400;
-`;
-
-const StarButton = styled.span<{ $isStarred: boolean }>`
-  color: ${(props) =>
-    props.$isStarred
-      ? props.theme.colors.star
-      : props.theme.colors.starInactive};
-  cursor: pointer;
-  margin-right: ${({ theme }) => theme.spacing.sm};
-  font-size: 1.2rem;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.star};
-  }
-`;
-
-const AccountBadge = styled(Badge)`
-  font-size: 0.7rem;
-  margin-left: ${({ theme }) => theme.spacing.sm};
-`;
-
-const ThreadBadge = styled(Badge)`
-  font-size: 0.65rem;
-  margin-left: ${({ theme }) => theme.spacing.xs};
-  background-color: ${({ theme }) => theme.colors.primary} !important;
-`;
-
-const QuickActions = styled.div`
-  position: absolute;
-  right: ${({ theme }) => theme.spacing.lg};
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.xs};
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  padding: ${({ theme }) => theme.spacing.xs};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
-  box-shadow: ${({ theme }) => theme.shadows.sm};
-`;
-
-const ActionButton = styled(Button)`
-  padding: 0.25rem 0.5rem;
-  font-size: 0.75rem;
-`;
+interface EmailTag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Email {
   id: string;
   messageId: string;
+  folder: string;
   fromAddress: string;
   fromName?: string | null;
   subject: string;
@@ -144,6 +69,7 @@ interface Email {
   inReplyTo?: string | null;
   threadId?: string | null;
   threadCount?: number | null;
+  tags?: EmailTag[] | null;
 }
 
 interface Account {
@@ -156,6 +82,8 @@ interface EmailListItemProps {
   email: Email;
   account?: Account;
   showAccount: boolean;
+  showFolderBadge?: boolean;
+  showTags?: boolean;
   isSelected: boolean;
   onSelect: (selected: boolean) => void;
   onEmailClick: (email: Email) => void;
@@ -164,6 +92,7 @@ interface EmailListItemProps {
   onReply: (email: Email) => void;
   onDelete: (emailId: string) => void;
   onArchive?: (emailId: string) => void;
+  onUnarchive?: (emailId: string) => void;
 }
 
 function formatDate(dateStr: string) {
@@ -195,6 +124,8 @@ export function EmailListItem({
   email,
   account,
   showAccount,
+  showFolderBadge = false,
+  showTags = false,
   isSelected,
   onSelect,
   onEmailClick,
@@ -203,6 +134,7 @@ export function EmailListItem({
   onReply,
   onDelete,
   onArchive,
+  onUnarchive,
 }: EmailListItemProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -233,10 +165,19 @@ export function EmailListItem({
     }
   };
 
+  const handleUnarchiveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onUnarchive) {
+      onUnarchive(email.id);
+    }
+  };
+
   const confirmDelete = () => {
     onDelete(email.id);
     setShowDeleteConfirm(false);
   };
+
+  const folderConfig = FOLDER_BADGE_CONFIG[email.folder];
 
   return (
     <>
@@ -245,17 +186,24 @@ export function EmailListItem({
         $isSelected={isSelected}
         onClick={() => onEmailClick(email)}
       >
-        <SelectionCheckbox>
+        <SelectionCheckbox
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(!isSelected);
+          }}
+        >
           <Form.Check
             type="checkbox"
             checked={isSelected}
-            onChange={(e) => {
-              e.stopPropagation();
-              onSelect(e.target.checked);
-            }}
-            onClick={(e) => e.stopPropagation()}
+            readOnly
           />
         </SelectionCheckbox>
+        {showFolderBadge && folderConfig && (
+          <FolderBadge bg={folderConfig.variant}>
+            <FontAwesomeIcon icon={folderConfig.icon} />
+            {folderConfig.label}
+          </FolderBadge>
+        )}
         <EmailContent>
           <EmailMeta>
             <div>
@@ -282,6 +230,15 @@ export function EmailListItem({
           <Preview>
             {email.textBody?.substring(0, 100) || '(No content)'}
           </Preview>
+          {showTags && email.tags && email.tags.length > 0 && (
+            <TagsRow>
+              {email.tags.map((tag) => (
+                <TagBadge key={tag.id} $color={tag.color}>
+                  {tag.name}
+                </TagBadge>
+              ))}
+            </TagsRow>
+          )}
         </EmailContent>
 
         <QuickActions className="quick-actions">
@@ -309,6 +266,16 @@ export function EmailListItem({
               title="Archive"
             >
               <FontAwesomeIcon icon={faArchive} />
+            </ActionButton>
+          )}
+          {onUnarchive && (
+            <ActionButton
+              variant="outline-info"
+              size="sm"
+              onClick={handleUnarchiveClick}
+              title="Move to Inbox"
+            >
+              <FontAwesomeIcon icon={faInbox} />
             </ActionButton>
           )}
           <ActionButton

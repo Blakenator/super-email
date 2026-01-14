@@ -214,10 +214,7 @@ export async function syncEmailsFromImapAccount(
 
   try {
     await emailAccount.update({ syncStatus: 'Connecting to server...' });
-    await withRetry(
-      () => client.connect(),
-      `Connect to ${emailAccount.host}`,
-    );
+    await withRetry(() => client.connect(), `Connect to ${emailAccount.host}`);
     console.log(`[IMAP] Connected to ${emailAccount.host}`);
 
     await emailAccount.update({ syncStatus: 'Opening mailbox...' });
@@ -277,6 +274,7 @@ export async function syncEmailsFromImapAccount(
           seqRange,
           false,
           EmailFolder.INBOX,
+          emailAccount.userId,
         );
 
         result.synced += batchResult.synced;
@@ -329,6 +327,7 @@ export async function syncEmailsFromImapAccount(
           emailAccount.id,
           batchUids,
           EmailFolder.INBOX,
+          emailAccount.userId,
         );
 
         result.synced += batchResult.synced;
@@ -446,6 +445,7 @@ async function syncSentFolder(
         seqRange,
         false,
         EmailFolder.SENT,
+        emailAccount.userId,
       );
 
       result.synced += batchResult.synced;
@@ -483,6 +483,7 @@ async function syncSentFolder(
           emailAccount.id,
           batchUids,
           EmailFolder.SENT,
+          emailAccount.userId,
         );
 
         result.synced += batchResult.synced;
@@ -506,8 +507,19 @@ async function insertEmailBatch(
   emailAccountId: string,
   emailsToCreate: Array<Record<string, unknown>>,
   messageIdsInBatch: string[],
-): Promise<{ synced: number; skipped: number; errors: string[] }> {
-  const result = { synced: 0, skipped: 0, errors: [] as string[] };
+  userId?: string,
+): Promise<{
+  synced: number;
+  skipped: number;
+  errors: string[];
+  newEmailIds: string[];
+}> {
+  const result = {
+    synced: 0,
+    skipped: 0,
+    errors: [] as string[],
+    newEmailIds: [] as string[],
+  };
 
   if (messageIdsInBatch.length === 0) {
     return result;
@@ -534,13 +546,29 @@ async function insertEmailBatch(
     for (let j = 0; j < newEmails.length; j += DB_BATCH_SIZE) {
       const dbBatch = newEmails.slice(j, j + DB_BATCH_SIZE);
       try {
-        await Email.bulkCreate(dbBatch as any);
+        const createdEmails = await Email.bulkCreate(dbBatch as any);
         result.synced += dbBatch.length;
+        result.newEmailIds.push(...createdEmails.map((e) => e.id));
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         result.errors.push(`Failed to insert batch: ${errorMsg}`);
         console.error('[IMAP] Batch insert failed:', err);
       }
+    }
+  }
+
+  // Apply mail rules to newly created emails
+  if (result.newEmailIds.length > 0 && userId) {
+    try {
+      const { applyRulesToEmail } = await import('./rule-matcher.js');
+      const newlyCreatedEmails = await Email.findAll({
+        where: { id: { [Op.in]: result.newEmailIds } },
+      });
+      for (const email of newlyCreatedEmails) {
+        await applyRulesToEmail(email, userId);
+      }
+    } catch (err) {
+      console.error('[IMAP] Error applying rules to new emails:', err);
     }
   }
 
@@ -558,6 +586,7 @@ async function processBatch(
   range: string | number[],
   useUid: boolean,
   folder: EmailFolder = EmailFolder.INBOX,
+  userId?: string,
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
   const batchResult = { synced: 0, skipped: 0, errors: [] as string[] };
   const emailsToCreate: Array<Record<string, unknown>> = [];
@@ -618,11 +647,12 @@ async function processBatch(
       }
     }
 
-    // Insert emails into database
+    // Insert emails into database and apply rules
     const insertResult = await insertEmailBatch(
       emailAccountId,
       emailsToCreate,
       messageIdsInBatch,
+      userId,
     );
     batchResult.synced = insertResult.synced;
     batchResult.skipped = insertResult.skipped;
@@ -644,8 +674,9 @@ async function processBatchByUids(
   emailAccountId: string,
   uids: number[],
   folder: EmailFolder = EmailFolder.INBOX,
+  userId?: string,
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
-  return processBatch(client, emailAccountId, uids, true, folder);
+  return processBatch(client, emailAccountId, uids, true, folder, userId);
 }
 
 /**
@@ -882,10 +913,7 @@ export async function listImapMailboxes(
       () => client.connect(),
       `Connect to ${emailAccount.host} for listing`,
     );
-    const mailboxes = await withRetry(
-      () => client.list(),
-      'List mailboxes',
-    );
+    const mailboxes = await withRetry(() => client.list(), 'List mailboxes');
     await client.logout();
 
     return mailboxes.map((mb) => mb.path);

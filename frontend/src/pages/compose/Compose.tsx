@@ -11,7 +11,6 @@ import {
   Col,
 } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router';
-import styled from 'styled-components';
 import toast from 'react-hot-toast';
 import {
   GET_SMTP_PROFILES_QUERY,
@@ -34,61 +33,15 @@ import {
   faTimes,
   faShare,
 } from '@fortawesome/free-solid-svg-icons';
-
-const PageWrapper = styled.div`
-  height: 100vh;
-  overflow-y: auto;
-  background: ${({ theme }) => theme.colors.background};
-`;
-
-const StickyHeader = styled.div`
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: ${({ theme }) => theme.spacing.sm};
-`;
-
-const Title = styled.h2`
-  font-size: ${({ theme }) => theme.fontSizes.lg};
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.textPrimary};
-  margin: 0;
-`;
-
-const HeaderActions = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-`;
-
-const ContentArea = styled.div`
-  padding: ${({ theme }) => theme.spacing.lg};
-  padding-bottom: ${({ theme }) => theme.spacing.xxl};
-`;
-
-const ComposeCard = styled(Card)`
-  border: none;
-  box-shadow: ${({ theme }) => theme.shadows.md};
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-`;
-
-const CcBccToggle = styled.span`
-  color: ${({ theme }) => theme.colors.primary};
-  cursor: pointer;
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  margin-left: ${({ theme }) => theme.spacing.sm};
-
-  &:hover {
-    text-decoration: underline;
-  }
-`;
+import {
+  PageWrapper,
+  StickyHeader,
+  Title,
+  HeaderActions,
+  ContentArea,
+  ComposeCard,
+  CcBccToggle,
+} from './Compose.wrappers';
 
 interface ThreadEmailInfo {
   from: string;

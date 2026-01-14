@@ -5,3 +5,6 @@ export * from './smtp-profile.model.js';
 export * from './email.model.js';
 export * from './contact-email.model.js';
 export * from './contact.model.js';
+export * from './tag.model.js';
+export * from './email-tag.model.js';
+export * from './mail-rule.model.js';

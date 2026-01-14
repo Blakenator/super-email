@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Badge,
   Button,
@@ -14,12 +14,11 @@ import {
   Card,
   Modal,
 } from 'react-bootstrap';
-import { useMutation } from '@apollo/client/react';
+import { useQuery, useMutation } from '@apollo/client/react';
 import toast from 'react-hot-toast';
-import styled from 'styled-components';
 import { DateTime } from 'luxon';
 import { getProviderById, getProviderByHost } from '../../core/emailProviders';
-import { useNavigate } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { EmailFolder } from '../../__generated__/graphql';
 import { EmailView } from './EmailView';
 import {
@@ -27,8 +26,9 @@ import {
   EmailListItemDense,
   InboxPagination,
   AdvancedFilters,
+  type EmailFilters,
 } from './components';
-import { useInboxEmails } from './hooks';
+import { useInboxEmails, emptyFilters } from './hooks';
 import { LoadingSpinner, EmptyState } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -49,12 +49,19 @@ import {
   faEnvelope,
   faTimes,
   faLayerGroup,
+  faTag,
+  faFilter,
+  faPlus,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faSquare,
   faCheckSquare as faCheckSquareRegular,
 } from '@fortawesome/free-regular-svg-icons';
-import { NUKE_OLD_EMAILS_MUTATION } from './queries.ts';
+import {
+  NUKE_OLD_EMAILS_MUTATION,
+  GET_TAGS_FOR_INBOX_QUERY,
+  ADD_TAGS_TO_EMAILS_MUTATION,
+} from './queries';
 
 import {
   RecencyGroup,
@@ -62,137 +69,79 @@ import {
   groupEmailsByRecency,
 } from './utils';
 
+import {
+  PageWrapper,
+  PageToolbar,
+  PageTitle,
+  SearchWrapper,
+  ToolbarActions,
+  TabsWrapper,
+  BulkActionsBar,
+  SelectAllCheckbox,
+  TrashWarning,
+  EmailListContainer,
+  GroupCard,
+  GroupCardHeader,
+  GroupTitle,
+  GroupCount,
+  GroupCardBody,
+  GroupHeader,
+  FiltersBanner,
+} from './Inbox.wrappers';
+
 type ViewMode = 'spacious' | 'dense';
 
-// Styled components
-const PageWrapper = styled.div`
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-`;
-
-const PageToolbar = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  flex-shrink: 0;
-  gap: ${({ theme }) => theme.spacing.md};
-  flex-wrap: wrap;
-`;
-
-const PageTitle = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-  font-size: ${({ theme }) => theme.fontSizes.lg};
-  font-weight: 600;
-`;
-
-const SearchWrapper = styled.div`
-  flex: 1;
-  max-width: 400px;
-`;
-
-const ToolbarActions = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.sm};
-  align-items: center;
-`;
-
-const TabsWrapper = styled.div`
-  padding: 0 ${({ theme }) => theme.spacing.md};
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  flex-shrink: 0;
-`;
-
-const BulkActionsBar = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.md};
-  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.lg};
-  background: ${({ theme }) => theme.colors.primary}10;
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  flex-shrink: 0;
-`;
-
-const SelectAllCheckbox = styled.div`
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  padding: ${({ theme }) => theme.spacing.xs};
-  color: ${({ theme }) => theme.colors.primary};
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.primaryDark};
+// Helper to get the folder base path
+function getFolderBasePath(folder: EmailFolder): string {
+  switch (folder) {
+    case EmailFolder.Inbox:
+      return '/inbox';
+    case EmailFolder.Sent:
+      return '/sent';
+    case EmailFolder.Drafts:
+      return '/drafts';
+    case EmailFolder.Trash:
+      return '/trash';
+    case EmailFolder.Archive:
+      return '/archive';
+    default:
+      return '/inbox';
   }
-`;
+}
 
-const TrashWarning = styled(Alert)`
-  margin: ${({ theme }) => theme.spacing.md};
-  margin-bottom: 0;
-  flex-shrink: 0;
-`;
+// Helper to parse filter from URL search params
+function parseFiltersFromUrl(
+  searchParams: URLSearchParams,
+): EmailFilters | undefined {
+  const filterParam = searchParams.get('filter');
+  if (!filterParam) return undefined;
+  try {
+    return JSON.parse(decodeURIComponent(filterParam)) as EmailFilters;
+  } catch {
+    return undefined;
+  }
+}
 
-const EmailListContainer = styled.div`
-  flex: 1;
-  overflow-y: auto;
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-`;
-
-const GroupCard = styled(Card)`
-  margin-bottom: 1.5rem;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.lg};
-  overflow: hidden;
-  box-shadow: ${({ theme }) => theme.shadows.sm};
-`;
-
-const GroupCardHeader = styled(Card.Header)`
-  background: linear-gradient(
-    135deg,
-    ${({ theme }) => theme.colors.primary}15 0%,
-    ${({ theme }) => theme.colors.primary}05 100%
-  );
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-`;
-
-const GroupTitle = styled.div`
-  font-size: ${({ theme }) => theme.fontSizes.md};
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.textPrimary};
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-`;
-
-const GroupCount = styled(Badge)`
-  font-size: ${({ theme }) => theme.fontSizes.xs};
-  font-weight: 500;
-`;
-
-const GroupCardBody = styled(Card.Body)`
-  padding: 0;
-`;
-
-const GroupHeader = styled.div`
-  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.lg};
-  background: ${({ theme }) => theme.colors.background};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-`;
+// Helper to serialize filters to URL search param
+function serializeFiltersToUrl(filters: EmailFilters): string | null {
+  // Filter out empty values to keep URL short
+  const cleanedFilters: Partial<EmailFilters> = {};
+  
+  for (const [key, value] of Object.entries(filters)) {
+    if (key === 'tagIds') {
+      const tagIds = value as string[];
+      if (tagIds.length > 0) {
+        cleanedFilters[key as keyof EmailFilters] = tagIds as any;
+      }
+    } else if (typeof value === 'string' && value.trim() !== '') {
+      cleanedFilters[key as keyof EmailFilters] = value.trim() as any;
+    }
+  }
+  
+  // Return null if no filters remain
+  if (Object.keys(cleanedFilters).length === 0) return null;
+  return encodeURIComponent(JSON.stringify(cleanedFilters));
+}
 
 // Folder configuration
 const FOLDER_CONFIG = {
@@ -210,12 +159,39 @@ interface InboxProps {
 
 export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const navigate = useNavigate();
-  const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
-  const [searchInput, setSearchInput] = useState('');
+  const { accountId: urlAccountId, emailId: urlEmailId } = useParams<{
+    accountId?: string;
+    emailId?: string;
+  }>();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Parse search and filters from URL
+  const urlSearchQuery = searchParams.get('q') || '';
+  const urlFilters = useMemo(
+    () => parseFiltersFromUrl(searchParams),
+    [searchParams],
+  );
+
+  const [searchInput, setSearchInput] = useState(urlSearchQuery);
+  const [localFilters, setLocalFilters] = useState<EmailFilters>(
+    urlFilters || emptyFilters,
+  );
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('inboxViewMode');
     return (saved as ViewMode) || 'spacious';
   });
+
+  // Sync search input with URL on change
+  useEffect(() => {
+    setSearchInput(urlSearchQuery);
+  }, [urlSearchQuery]);
+
+  // Sync local filters with URL on change
+  useEffect(() => {
+    if (urlFilters) {
+      setLocalFilters(urlFilters);
+    }
+  }, [urlFilters]);
 
   const handleViewModeChange = (val: ViewMode) => {
     if (val) {
@@ -234,10 +210,123 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     localStorage.setItem('inboxGroupByRecency', String(enabled));
   };
 
+  // Show tags toggle
+  const [showTagsOnList, setShowTagsOnList] = useState<boolean>(() => {
+    const saved = localStorage.getItem('inboxShowTags');
+    return saved === 'true';
+  });
+
+  const handleShowTagsChange = (enabled: boolean) => {
+    setShowTagsOnList(enabled);
+    localStorage.setItem('inboxShowTags', String(enabled));
+  };
+
+  // Create rule from filter modal
+  const [showCreateRuleModal, setShowCreateRuleModal] = useState(false);
+
   // Nuke functionality
   const [showNukeModal, setShowNukeModal] = useState(false);
   const [nukePreset, setNukePreset] = useState<string>('1month');
   const [customNukeDate, setCustomNukeDate] = useState('');
+
+  // Tags functionality
+  const { data: tagsData } = useQuery(GET_TAGS_FOR_INBOX_QUERY, {
+    fetchPolicy: 'cache-and-network',
+  });
+  const availableTags = tagsData?.getTags ?? [];
+
+  const [addTagsToEmails] = useMutation(ADD_TAGS_TO_EMAILS_MUTATION, {
+    onCompleted: () => {
+      toast.success('Tags added');
+    },
+    onError: (err) => toast.error(`Failed to add tags: ${err.message}`),
+  });
+
+  const handleBulkAddTag = async (tagId: string) => {
+    if (selectedIds.size === 0) return;
+    await addTagsToEmails({
+      variables: {
+        input: {
+          emailIds: Array.from(selectedIds),
+          tagIds: [tagId],
+        },
+      },
+    });
+  };
+
+  // Build URL for navigation
+  const basePath = getFolderBasePath(folder);
+
+  const buildUrl = (options: {
+    accountId?: string;
+    emailId?: string;
+    search?: string;
+    filters?: EmailFilters;
+  }) => {
+    let path = basePath;
+    const accId = options.accountId ?? urlAccountId;
+    const emlId = options.emailId;
+
+    if (accId && accId !== 'all') {
+      path += `/account/${accId}`;
+    }
+    if (emlId) {
+      path += `/email/${emlId}`;
+    }
+
+    const params = new URLSearchParams();
+    const q = options.search ?? urlSearchQuery;
+    if (q) params.set('q', q);
+    const f = options.filters ?? urlFilters;
+    if (f) {
+      const serialized = serializeFiltersToUrl(f);
+      if (serialized) params.set('filter', serialized);
+    }
+
+    const queryString = params.toString();
+    return queryString ? `${path}?${queryString}` : path;
+  };
+
+  // Navigate to account tab
+  const handleAccountTabSelect = (accountId: string) => {
+    const path =
+      accountId === 'all' ? basePath : `${basePath}/account/${accountId}`;
+    navigate(path);
+  };
+
+  // Navigate to email view
+  const navigateToEmail = (emailId: string) => {
+    navigate(buildUrl({ emailId }));
+  };
+
+  // Navigate back from email view
+  const navigateBack = () => {
+    navigate(buildUrl({}));
+  };
+
+  // Update search in URL
+  const updateSearchInUrl = (query: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (query) {
+      newParams.set('q', query);
+    } else {
+      newParams.delete('q');
+    }
+    setSearchParams(newParams, { replace: true });
+  };
+
+  // Update filters in URL
+  const updateFiltersInUrl = (filters: EmailFilters) => {
+    setLocalFilters(filters);
+    const newParams = new URLSearchParams(searchParams);
+    const serialized = serializeFiltersToUrl(filters);
+    if (serialized) {
+      newParams.set('filter', serialized);
+    } else {
+      newParams.delete('filter');
+    }
+    setSearchParams(newParams, { replace: true });
+  };
 
   const {
     emails,
@@ -255,6 +344,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     selectedIds,
     allSelected,
     someSelected,
+    hasActiveFilters,
     setCurrentPage,
     setActiveAccountTab,
     setPageSize,
@@ -273,7 +363,12 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     handleArchive,
     handleUnarchive,
     handleBulkUnarchive,
-  } = useInboxEmails(folder);
+  } = useInboxEmails({
+    folder,
+    accountId: urlAccountId,
+    searchQuery: urlSearchQuery,
+    filters: urlFilters,
+  });
 
   // Nuke mutation
   const [nukeOldEmails, { loading: nuking }] = useMutation(
@@ -312,18 +407,15 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     nukeOldEmails({ variables: { input: { olderThan } } });
   };
 
-  // Reset selected email when folder or tab changes
-  useEffect(() => {
-    setSelectedEmailId(null);
-  }, [folder, activeAccountTab]);
-
-  // Sync search input with debounced search
+  // Debounced search - update URL after typing stops
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      setSearchQuery(searchInput);
+      if (searchInput !== urlSearchQuery) {
+        updateSearchInUrl(searchInput);
+      }
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [searchInput, setSearchQuery]);
+  }, [searchInput, urlSearchQuery]);
 
   const handleEmailClick = async (email: {
     id: string;
@@ -368,7 +460,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     if (!email.isRead) {
       await handleMarkRead(email.id, true);
     }
-    setSelectedEmailId(email.id);
+    navigateToEmail(email.id);
   };
 
   const handleReply = (email: {
@@ -400,39 +492,39 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   };
 
   const handleBack = () => {
-    setSelectedEmailId(null);
+    navigateBack();
   };
 
   const handleDeleteFromView = async (emailId: string) => {
     await handleDelete(emailId);
-    setSelectedEmailId(null);
+    navigateBack();
   };
 
   const clearSearch = () => {
     setSearchInput('');
-    setSearchQuery('');
+    updateSearchInUrl('');
   };
 
-  // Show email view when an email is selected
-  if (selectedEmailId) {
+  // Show email view when an email is selected via URL
+  if (urlEmailId) {
     return (
       <EmailView
-        emailId={selectedEmailId}
+        emailId={urlEmailId}
         onBack={handleBack}
-        onDelete={() => handleDeleteFromView(selectedEmailId)}
+        onDelete={() => handleDeleteFromView(urlEmailId)}
         onArchive={
           folder !== EmailFolder.Archive
             ? () => {
-                handleArchive(selectedEmailId);
-                setSelectedEmailId(null);
+                handleArchive(urlEmailId);
+                navigateBack();
               }
             : undefined
         }
         onUnarchive={
           folder === EmailFolder.Archive
             ? () => {
-                handleUnarchive(selectedEmailId);
-                setSelectedEmailId(null);
+                handleUnarchive(urlEmailId);
+                navigateBack();
               }
             : undefined
         }
@@ -506,6 +598,14 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
             <FontAwesomeIcon icon={faLayerGroup} />
           </Button>
           <Button
+            variant={showTagsOnList ? 'primary' : 'outline-secondary'}
+            size="sm"
+            onClick={() => handleShowTagsChange(!showTagsOnList)}
+            title={showTagsOnList ? 'Hide tags' : 'Show tags'}
+          >
+            <FontAwesomeIcon icon={faTag} />
+          </Button>
+          <Button
             variant="outline-secondary"
             size="sm"
             onClick={handleRefresh}
@@ -531,8 +631,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       {showTabs && (
         <TabsWrapper>
           <Tabs
-            activeKey={activeAccountTab}
-            onSelect={(k) => setActiveAccountTab(k || 'all')}
+            activeKey={urlAccountId || 'all'}
+            onSelect={(k) => handleAccountTabSelect(k || 'all')}
             className="mb-0"
           >
             <Tab eventKey="all" title="All Inboxes" />
@@ -565,9 +665,35 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
 
       {/* Advanced Filters */}
       <AdvancedFilters
-        filters={advancedFilters}
-        onFiltersChange={setAdvancedFilters}
+        filters={localFilters}
+        onFiltersChange={updateFiltersInUrl}
+        availableTags={availableTags}
       />
+
+      {/* Create Rule from Filter Button */}
+      {hasActiveFilters && (
+        <div
+          style={{
+            padding: '8px 16px',
+            background: 'linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%)',
+            borderBottom: '1px solid #ddd',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <FontAwesomeIcon icon={faFilter} />
+          <span style={{ fontSize: '0.875rem' }}>Filters active -</span>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setShowCreateRuleModal(true)}
+          >
+            <FontAwesomeIcon icon={faPlus} className="me-1" />
+            Create Mail Rule from Filters
+          </Button>
+        </div>
+      )}
 
       {/* Bulk Actions Bar */}
       <BulkActionsBar>
@@ -641,6 +767,38 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                 Delete
               </Button>
             </ButtonGroup>
+            {availableTags.length > 0 && (
+              <Dropdown>
+                <Dropdown.Toggle
+                  variant="outline-secondary"
+                  size="sm"
+                  id="bulk-tag-dropdown"
+                >
+                  <FontAwesomeIcon icon={faTag} className="me-1" />
+                  Add Tag
+                </Dropdown.Toggle>
+                <Dropdown.Menu>
+                  {availableTags.map((tag) => (
+                    <Dropdown.Item
+                      key={tag.id}
+                      onClick={() => handleBulkAddTag(tag.id)}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          width: 12,
+                          height: 12,
+                          borderRadius: '50%',
+                          backgroundColor: tag.color,
+                          marginRight: 8,
+                        }}
+                      />
+                      {tag.name}
+                    </Dropdown.Item>
+                  ))}
+                </Dropdown.Menu>
+              </Dropdown>
+            )}
           </>
         ) : (
           <span className="text-muted">
@@ -709,6 +867,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                         email={email}
                         account={account}
                         showAccount={activeAccountTab === 'all'}
+                        showFolderBadge={hasActiveFilters}
+                        showTags={showTagsOnList}
                         isSelected={selectedIds.has(email.id)}
                         onSelect={(selected) =>
                           handleSelectEmail(email.id, selected)
@@ -721,6 +881,11 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                         onArchive={
                           folder !== EmailFolder.Archive
                             ? handleArchive
+                            : undefined
+                        }
+                        onUnarchive={
+                          email.folder === 'ARCHIVE'
+                            ? handleUnarchive
                             : undefined
                         }
                       />
@@ -742,6 +907,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                 email={email}
                 account={account}
                 showAccount={activeAccountTab === 'all'}
+                showFolderBadge={hasActiveFilters}
+                showTags={showTagsOnList}
                 isSelected={selectedIds.has(email.id)}
                 onSelect={(selected) => handleSelectEmail(email.id, selected)}
                 onEmailClick={handleEmailClick}
@@ -751,6 +918,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                 onDelete={handleDelete}
                 onArchive={
                   folder !== EmailFolder.Archive ? handleArchive : undefined
+                }
+                onUnarchive={
+                  email.folder === 'ARCHIVE' ? handleUnarchive : undefined
                 }
               />
             );
@@ -852,6 +1022,100 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
           >
             <FontAwesomeIcon icon={faBomb} className="me-1" />
             {nuking ? 'Archiving...' : 'Archive Old Emails'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Create Rule from Filter Modal */}
+      <Modal
+        show={showCreateRuleModal}
+        onHide={() => setShowCreateRuleModal(false)}
+        centered
+        size="lg"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <FontAwesomeIcon icon={faFilter} className="me-2" />
+            Create Mail Rule from Filters
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Create a new mail rule based on your current filter settings:</p>
+          <Card className="mb-3">
+            <Card.Body>
+              <h6>Current Filters:</h6>
+              <div className="d-flex flex-wrap gap-2 mt-2">
+                {searchQuery && (
+                  <Badge bg="primary">Search: {searchQuery}</Badge>
+                )}
+                {advancedFilters.fromContains && (
+                  <Badge bg="secondary">
+                    From: {advancedFilters.fromContains}
+                  </Badge>
+                )}
+                {advancedFilters.toContains && (
+                  <Badge bg="secondary">To: {advancedFilters.toContains}</Badge>
+                )}
+                {advancedFilters.ccContains && (
+                  <Badge bg="secondary">CC: {advancedFilters.ccContains}</Badge>
+                )}
+                {advancedFilters.bccContains && (
+                  <Badge bg="secondary">
+                    BCC: {advancedFilters.bccContains}
+                  </Badge>
+                )}
+                {advancedFilters.subjectContains && (
+                  <Badge bg="secondary">
+                    Subject: {advancedFilters.subjectContains}
+                  </Badge>
+                )}
+                {advancedFilters.bodyContains && (
+                  <Badge bg="secondary">
+                    Body: {advancedFilters.bodyContains}
+                  </Badge>
+                )}
+                {advancedFilters.tagIds.length > 0 && (
+                  <Badge bg="info">
+                    Tags: {advancedFilters.tagIds.length} selected
+                  </Badge>
+                )}
+              </div>
+            </Card.Body>
+          </Card>
+          <Alert variant="info">
+            <FontAwesomeIcon icon={faFilter} className="me-2" />
+            To create the rule, go to <strong>Settings → Mail Rules</strong> and
+            create a new rule with these conditions. The rule will automatically
+            apply to new emails as they arrive.
+          </Alert>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="secondary"
+            onClick={() => setShowCreateRuleModal(false)}
+          >
+            Close
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              // Store filter state in sessionStorage for the settings page to pick up
+              sessionStorage.setItem(
+                'createRuleFromFilter',
+                JSON.stringify({
+                  fromContains: advancedFilters.fromContains,
+                  toContains: advancedFilters.toContains,
+                  ccContains: advancedFilters.ccContains,
+                  bccContains: advancedFilters.bccContains,
+                  subjectContains: advancedFilters.subjectContains,
+                  bodyContains: advancedFilters.bodyContains,
+                }),
+              );
+              window.open('/settings#mail-rules', '_blank');
+              setShowCreateRuleModal(false);
+            }}
+          >
+            Open Settings
           </Button>
         </Modal.Footer>
       </Modal>

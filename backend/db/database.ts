@@ -6,6 +6,9 @@ import { SmtpProfile } from './models/smtp-profile.model.js';
 import { Email } from './models/email.model.js';
 import { ContactEmail } from './models/contact-email.model.js';
 import { Contact } from './models/contact.model.js';
+import { Tag } from './models/tag.model.js';
+import { EmailTag } from './models/email-tag.model.js';
+import { MailRule } from './models/mail-rule.model.js';
 
 export const sequelize = new Sequelize({
   dialect: 'postgres',
@@ -22,6 +25,9 @@ export const sequelize = new Sequelize({
     Email,
     ContactEmail,
     Contact,
+    Tag,
+    EmailTag,
+    MailRule,
   ],
   logging: false,
 });

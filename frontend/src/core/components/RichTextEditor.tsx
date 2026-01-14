@@ -18,7 +18,6 @@ import { TableNode, TableCellNode, TableRowNode } from '@lexical/table';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import {
-  TRANSFORMERS,
   type TextMatchTransformer,
   TEXT_FORMAT_TRANSFORMERS,
   TEXT_MATCH_TRANSFORMERS,
@@ -28,10 +27,8 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
-  $createParagraphNode,
   $createTextNode,
   FORMAT_TEXT_COMMAND,
-  FORMAT_ELEMENT_COMMAND,
   INDENT_CONTENT_COMMAND,
   OUTDENT_CONTENT_COMMAND,
   KEY_TAB_COMMAND,
@@ -40,16 +37,14 @@ import {
   type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
-import { $isLinkNode, TOGGLE_LINK_COMMAND } from '@lexical/link';
+import { TOGGLE_LINK_COMMAND } from '@lexical/link';
 import {
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
-  REMOVE_LIST_COMMAND,
 } from '@lexical/list';
 import { $setBlocksType } from '@lexical/selection';
 import { $createQuoteNode } from '@lexical/rich-text';
 import { $createCodeNode } from '@lexical/code';
-import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBold,
@@ -63,189 +58,17 @@ import {
   faCode,
   faIndent,
   faOutdent,
-  faTable,
-  faPalette,
-  faTextHeight,
-  faFont,
 } from '@fortawesome/free-solid-svg-icons';
-import { Dropdown, DropdownButton, Form } from 'react-bootstrap';
-
-const EditorContainer = styled.div`
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  overflow: hidden;
-`;
-
-const ToolbarRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${({ theme }) => theme.spacing.xs};
-  padding: ${({ theme }) => theme.spacing.sm};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) => theme.colors.background};
-  align-items: center;
-`;
-
-const ToolbarDivider = styled.div`
-  width: 1px;
-  height: 20px;
-  background: ${({ theme }) => theme.colors.border};
-  margin: 0 ${({ theme }) => theme.spacing.xs};
-`;
-
-// Using a wrapper to ensure type="button" is always set
-const ToolbarButtonBase = styled.button.attrs({ type: 'button' })<{
-  $active?: boolean;
-}>`
-  padding: 4px 8px;
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.sm};
-  background: ${(props) =>
-    props.$active ? props.theme.colors.primary : 'transparent'};
-  color: ${(props) =>
-    props.$active ? 'white' : props.theme.colors.textSecondary};
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.875rem;
-
-  &:hover {
-    background: ${(props) =>
-      props.$active
-        ? props.theme.colors.primaryDark
-        : props.theme.colors.backgroundHover};
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-`;
-
-const ToolbarButton = ToolbarButtonBase;
-
-const ToolbarSelect = styled.select`
-  padding: 4px 8px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm};
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  font-size: 0.75rem;
-  cursor: pointer;
-
-  &:focus {
-    outline: none;
-    border-color: ${({ theme }) => theme.colors.primary};
-  }
-`;
-
-const ColorInput = styled.input`
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.sm};
-  cursor: pointer;
-
-  &::-webkit-color-swatch-wrapper {
-    padding: 2px;
-  }
-`;
-
-const EditorContent = styled.div`
-  min-height: 200px;
-  max-height: 400px;
-  overflow-y: auto;
-  padding: ${({ theme }) => theme.spacing.md};
-
-  .editor-input {
-    outline: none;
-    min-height: 180px;
-  }
-
-  .editor-placeholder {
-    color: ${({ theme }) => theme.colors.textMuted};
-    position: absolute;
-    pointer-events: none;
-    top: 0;
-    left: 0;
-    padding: ${({ theme }) => theme.spacing.md};
-  }
-
-  p {
-    margin: 0 0 0.5rem;
-  }
-
-  h1,
-  h2,
-  h3 {
-    margin: 1rem 0 0.5rem;
-  }
-
-  ul,
-  ol {
-    margin: 0.5rem 0;
-    padding-left: 1.5rem;
-  }
-
-  blockquote {
-    margin: 0.5rem 0;
-    padding: 0.5rem 1rem;
-    border-left: 3px solid ${({ theme }) => theme.colors.primary};
-    background: ${({ theme }) => theme.colors.background};
-    color: ${({ theme }) => theme.colors.textSecondary};
-  }
-
-  a {
-    color: ${({ theme }) => theme.colors.primary};
-  }
-
-  code {
-    background: ${({ theme }) => theme.colors.background};
-    padding: 0.125rem 0.25rem;
-    border-radius: 3px;
-    font-family: 'Fira Code', 'Consolas', monospace;
-    font-size: 0.9em;
-  }
-
-  pre {
-    background: #282c34;
-    color: #abb2bf;
-    padding: 1rem;
-    border-radius: ${({ theme }) => theme.borderRadius.md};
-    overflow-x: auto;
-    font-family: 'Fira Code', 'Consolas', monospace;
-    font-size: 0.9em;
-    margin: 0.5rem 0;
-  }
-
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 0.5rem 0;
-  }
-
-  th,
-  td {
-    border: 1px solid ${({ theme }) => theme.colors.border};
-    padding: 0.5rem;
-    text-align: left;
-  }
-
-  th {
-    background: ${({ theme }) => theme.colors.background};
-    font-weight: 600;
-  }
-
-  s {
-    text-decoration: line-through;
-  }
-`;
-
-const ContentEditableWrapper = styled.div`
-  position: relative;
-`;
+import {
+  EditorContainer,
+  ToolbarRow,
+  ToolbarDivider,
+  ToolbarButton,
+  ToolbarSelect,
+  ColorInput,
+  EditorContent,
+  ContentEditableWrapper,
+} from './RichTextEditor.wrappers';
 
 const FONT_FAMILIES = [
   { value: 'inherit', label: 'Default' },

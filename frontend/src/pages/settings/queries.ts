@@ -1,5 +1,7 @@
 import { gql } from '../../__generated__/gql';
 
+// ============ Email Accounts ============
+
 export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
   query GetEmailAccounts {
     getEmailAccounts {
@@ -53,6 +55,31 @@ export const SYNC_ALL_ACCOUNTS_MUTATION = gql(`
   }
 `);
 
+export const UPDATE_EMAIL_ACCOUNT_MUTATION = gql(`
+  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {
+    updateEmailAccount(input: $input) {
+      id
+      name
+      email
+      host
+      port
+      useSsl
+      defaultSmtpProfileId
+    }
+  }
+`);
+
+export const TEST_EMAIL_ACCOUNT_CONNECTION_MUTATION = gql(`
+  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {
+    testEmailAccountConnection(input: $input) {
+      success
+      message
+    }
+  }
+`);
+
+// ============ SMTP Profiles ============
+
 export const GET_SMTP_PROFILES_FULL_QUERY = gql(`
   query GetSmtpProfilesFull {
     getSmtpProfiles {
@@ -85,38 +112,6 @@ export const DELETE_SMTP_PROFILE_MUTATION = gql(`
   }
 `);
 
-export const TEST_EMAIL_ACCOUNT_CONNECTION_MUTATION = gql(`
-  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {
-    testEmailAccountConnection(input: $input) {
-      success
-      message
-    }
-  }
-`);
-
-export const TEST_SMTP_CONNECTION_MUTATION = gql(`
-  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {
-    testSmtpConnection(input: $input) {
-      success
-      message
-    }
-  }
-`);
-
-export const UPDATE_EMAIL_ACCOUNT_MUTATION = gql(`
-  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {
-    updateEmailAccount(input: $input) {
-      id
-      name
-      email
-      host
-      port
-      useSsl
-      defaultSmtpProfileId
-    }
-  }
-`);
-
 export const UPDATE_SMTP_PROFILE_MUTATION = gql(`
   mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {
     updateSmtpProfile(input: $input) {
@@ -131,6 +126,17 @@ export const UPDATE_SMTP_PROFILE_MUTATION = gql(`
     }
   }
 `);
+
+export const TEST_SMTP_CONNECTION_MUTATION = gql(`
+  mutation TestSmtpConnection($input: TestSmtpConnectionInput!) {
+    testSmtpConnection(input: $input) {
+      success
+      message
+    }
+  }
+`);
+
+// ============ Authentication Methods ============
 
 export const GET_AUTHENTICATION_METHODS_QUERY = gql(`
   query GetAuthenticationMethods {
@@ -151,8 +157,162 @@ export const DELETE_AUTHENTICATION_METHOD_MUTATION = gql(`
   }
 `);
 
+// ============ Inbox Zero ============
+
 export const NUKE_OLD_EMAILS_MUTATION = gql(`
   mutation NukeOldEmails($input: NukeOldEmailsInput!) {
     nukeOldEmails(input: $input)
+  }
+`);
+
+// ============ Tags ============
+
+export const GET_TAGS_QUERY = gql(`
+  query GetTags {
+    getTags {
+      id
+      name
+      color
+      description
+      emailCount
+    }
+  }
+`);
+
+export const CREATE_TAG_MUTATION = gql(`
+  mutation CreateTag($input: CreateTagInput!) {
+    createTag(input: $input) {
+      id
+      name
+      color
+      description
+      emailCount
+    }
+  }
+`);
+
+export const UPDATE_TAG_MUTATION = gql(`
+  mutation UpdateTag($input: UpdateTagInput!) {
+    updateTag(input: $input) {
+      id
+      name
+      color
+      description
+      emailCount
+    }
+  }
+`);
+
+export const DELETE_TAG_MUTATION = gql(`
+  mutation DeleteTag($id: String!) {
+    deleteTag(id: $id)
+  }
+`);
+
+export const ADD_TAGS_TO_EMAILS_MUTATION = gql(`
+  mutation AddTagsToEmails($input: AddTagsToEmailsInput!) {
+    addTagsToEmails(input: $input) {
+      id
+      tags {
+        id
+        name
+        color
+      }
+    }
+  }
+`);
+
+export const REMOVE_TAGS_FROM_EMAILS_MUTATION = gql(`
+  mutation RemoveTagsFromEmails($input: RemoveTagsFromEmailsInput!) {
+    removeTagsFromEmails(input: $input) {
+      id
+      tags {
+        id
+        name
+        color
+      }
+    }
+  }
+`);
+
+// ============ Mail Rules ============
+
+export const GET_MAIL_RULES_QUERY = gql(`
+  query GetMailRules {
+    getMailRules {
+      id
+      name
+      description
+      emailAccountId
+      emailAccount {
+        id
+        name
+        email
+      }
+      conditions {
+        fromContains
+        toContains
+        ccContains
+        bccContains
+        subjectContains
+        bodyContains
+      }
+      actions {
+        archive
+        star
+        delete
+        markRead
+        addTagIds
+        forwardTo
+      }
+      isEnabled
+      priority
+      stopProcessing
+    }
+  }
+`);
+
+export const CREATE_MAIL_RULE_MUTATION = gql(`
+  mutation CreateMailRule($input: CreateMailRuleInput!) {
+    createMailRule(input: $input) {
+      id
+      name
+      description
+      isEnabled
+      priority
+    }
+  }
+`);
+
+export const UPDATE_MAIL_RULE_MUTATION = gql(`
+  mutation UpdateMailRule($input: UpdateMailRuleInput!) {
+    updateMailRule(input: $input) {
+      id
+      name
+      description
+      isEnabled
+      priority
+    }
+  }
+`);
+
+export const DELETE_MAIL_RULE_MUTATION = gql(`
+  mutation DeleteMailRule($id: String!) {
+    deleteMailRule(id: $id)
+  }
+`);
+
+export const PREVIEW_MAIL_RULE_QUERY = gql(`
+  query PreviewMailRule($id: String!) {
+    previewMailRule(id: $id)
+  }
+`);
+
+export const RUN_MAIL_RULE_MUTATION = gql(`
+  mutation RunMailRule($id: String!) {
+    runMailRule(id: $id) {
+      matchedCount
+      processedCount
+    }
   }
 `);

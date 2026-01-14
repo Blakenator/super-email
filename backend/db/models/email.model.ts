@@ -3,12 +3,15 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  BelongsToMany,
   Model,
   Table,
   Index,
 } from 'sequelize-typescript';
 import { EmailAccount } from './email-account.model.js';
 import { SmtpProfile } from './smtp-profile.model.js';
+import { Tag } from './tag.model.js';
+import { EmailTag } from './email-tag.model.js';
 
 export enum EmailFolder {
   INBOX = 'INBOX',
@@ -133,4 +136,8 @@ export class Email extends Model {
   // Store mailto unsubscribe address if present
   @Column({ type: DataType.TEXT, allowNull: true })
   declare unsubscribeEmail: string | null;
+
+  // Tags relationship via junction table
+  @BelongsToMany(() => Tag, () => EmailTag)
+  declare tags: Tag[];
 }

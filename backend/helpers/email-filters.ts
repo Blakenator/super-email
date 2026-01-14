@@ -14,6 +14,7 @@ export interface EmailFilterInput {
   bccContains?: string;
   subjectContains?: string;
   bodyContains?: string;
+  tagIds?: string[];
 }
 
 /**
@@ -115,6 +116,18 @@ export function buildEmailWhereClause(
     );
   }
 
+  // Tag filtering - emails must have ALL specified tags
+  if (input.tagIds && input.tagIds.length > 0) {
+    const tagIdList = input.tagIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+    andConditions.push(
+      literal(`(
+        SELECT COUNT(DISTINCT "tagId") FROM email_tags 
+        WHERE email_tags."emailId" = "Email"."id" 
+        AND email_tags."tagId" IN (${tagIdList})
+      ) = ${input.tagIds.length}`),
+    );
+  }
+
   if (andConditions.length > 0) {
     where[Op.and as any] = andConditions;
   }
@@ -132,6 +145,7 @@ export function hasAdvancedFilters(input: EmailFilterInput): boolean {
     input.ccContains?.trim() ||
     input.bccContains?.trim() ||
     input.subjectContains?.trim() ||
-    input.bodyContains?.trim()
+    input.bodyContains?.trim() ||
+    (input.tagIds && input.tagIds.length > 0)
   );
 }

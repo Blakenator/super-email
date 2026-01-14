@@ -11,30 +11,50 @@ import {
 } from '../queries';
 import { EmailFolder } from '../../../__generated__/graphql';
 import type { EmailFilters } from '../components';
+import { useEmailStore } from '../../../stores/emailStore';
 
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_KEY = 'inboxPageSize';
-const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
+const POLL_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes (subscriptions handle real-time updates)
 
-const emptyFilters: EmailFilters = {
+export const emptyFilters: EmailFilters = {
   fromContains: '',
   toContains: '',
   ccContains: '',
   bccContains: '',
   subjectContains: '',
   bodyContains: '',
+  tagIds: [],
 };
 
-export function useInboxEmails(folder: EmailFolder) {
-  const [activeAccountTab, setActiveAccountTab] = useState<string>('all');
+export interface UseInboxEmailsOptions {
+  folder: EmailFolder;
+  accountId?: string; // From URL params
+  searchQuery?: string; // From URL params
+  filters?: EmailFilters; // From URL params
+}
+
+export function useInboxEmails({
+  folder,
+  accountId,
+  searchQuery: externalSearchQuery,
+  filters: externalFilters,
+}: UseInboxEmailsOptions) {
+  // Use external values if provided, otherwise use internal state
+  const [internalAccountTab, setInternalAccountTab] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [advancedFilters, setAdvancedFilters] = useState<EmailFilters>(emptyFilters);
+  const [internalFilters, setInternalFilters] = useState<EmailFilters>(emptyFilters);
   const [pageSize, setPageSize] = useState(() => {
     const saved = localStorage.getItem(PAGE_SIZE_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_PAGE_SIZE;
   });
+
+  // Determine active values (external takes precedence)
+  const activeAccountTab = accountId || internalAccountTab;
+  const searchQuery = externalSearchQuery ?? internalSearchQuery;
+  const advancedFilters = externalFilters ?? internalFilters;
 
   // Track previous email count for notifications
   const prevEmailCountRef = useRef<number | null>(null);
@@ -53,7 +73,9 @@ export function useInboxEmails(folder: EmailFolder) {
   }, [folder, activeAccountTab, searchQuery, advancedFilters]);
 
   // Load email accounts for tabs
-  const { data: accountsData } = useQuery(GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY);
+  const { data: accountsData } = useQuery(GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY, {
+    fetchPolicy: 'cache-and-network',
+  });
   const accounts = accountsData?.getEmailAccounts ?? [];
 
   // Determine which account to filter by
@@ -63,7 +85,10 @@ export function useInboxEmails(folder: EmailFolder) {
   const offset = (currentPage - 1) * pageSize;
 
   // Check if any advanced filters are active
-  const hasActiveFilters = Object.values(advancedFilters).some((v) => v.trim() !== '');
+  const hasActiveFilters = Object.entries(advancedFilters).some(([key, v]) => {
+    if (key === 'tagIds') return (v as string[]).length > 0;
+    return typeof v === 'string' && v.trim() !== '';
+  });
 
   const queryInput = useMemo(
     () => ({
@@ -78,6 +103,7 @@ export function useInboxEmails(folder: EmailFolder) {
       bccContains: advancedFilters.bccContains.trim() || undefined,
       subjectContains: advancedFilters.subjectContains.trim() || undefined,
       bodyContains: advancedFilters.bodyContains.trim() || undefined,
+      tagIds: advancedFilters.tagIds.length > 0 ? advancedFilters.tagIds : undefined,
     }),
     [folder, emailAccountId, pageSize, offset, searchQuery, advancedFilters],
   );
@@ -93,6 +119,7 @@ export function useInboxEmails(folder: EmailFolder) {
       bccContains: advancedFilters.bccContains.trim() || undefined,
       subjectContains: advancedFilters.subjectContains.trim() || undefined,
       bodyContains: advancedFilters.bodyContains.trim() || undefined,
+      tagIds: advancedFilters.tagIds.length > 0 ? advancedFilters.tagIds : undefined,
     }),
     [folder, emailAccountId, searchQuery, advancedFilters],
   );
@@ -100,19 +127,38 @@ export function useInboxEmails(folder: EmailFolder) {
   const { data, loading, refetch } = useQuery(GET_EMAILS_QUERY, {
     variables: { input: queryInput },
     fetchPolicy: 'cache-and-network',
-    // Poll every minute for inbox folder when not filtering
+    nextFetchPolicy: 'cache-first', // After first fetch, use cache with network updates
+    notifyOnNetworkStatusChange: true, // Ensure loading state updates on refetch
+    // Poll every 10 minutes for inbox folder when not filtering
     pollInterval: folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery ? POLL_INTERVAL_MS : 0,
   });
 
   // Get total count for pagination
   const { data: countData } = useQuery(GET_EMAIL_COUNT_QUERY, {
     variables: { input: countInput },
+    fetchPolicy: 'cache-and-network',
     // Also poll the count
     pollInterval: folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery ? POLL_INTERVAL_MS : 0,
   });
 
   const totalCount = countData?.getEmailCount ?? 0;
   const totalPages = Math.ceil(totalCount / pageSize);
+
+  // Subscribe to real-time email updates from the store
+  const lastUpdate = useEmailStore((state) => state.lastUpdate);
+  const lastRefetchRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    // When we receive a new email via subscription, refetch the list
+    if (lastUpdate && lastUpdate !== lastRefetchRef.current) {
+      lastRefetchRef.current = lastUpdate;
+      // Only refetch if we're on page 1 or viewing inbox
+      // (new emails typically appear at the top)
+      if (folder === EmailFolder.Inbox || currentPage === 1) {
+        refetch();
+      }
+    }
+  }, [lastUpdate, folder, currentPage, refetch]);
 
   // Track document visibility for notifications
   useEffect(() => {
@@ -178,6 +224,7 @@ export function useInboxEmails(folder: EmailFolder) {
   const [syncAllAccounts, { loading: syncing }] = useMutation(
     SYNC_ALL_ACCOUNTS_MUTATION,
     {
+      fetchPolicy: 'no-cache', // Always make a network request
       onCompleted: () => {
         toast.success('Sync started');
         refetch();
@@ -321,6 +368,13 @@ export function useInboxEmails(folder: EmailFolder) {
     }
   }, [data?.getEmails, selectedIds.size]);
 
+  // Account tab change handler
+  const handleAccountTabChange = useCallback((tab: string) => {
+    setInternalAccountTab(tab);
+    setInternalSearchQuery('');
+    setInternalFilters(emptyFilters);
+  }, []);
+
   const emails = data?.getEmails ?? [];
   const showTabs = folder === EmailFolder.Inbox && accounts.length > 1;
   const allSelected = emails.length > 0 && selectedIds.size === emails.length;
@@ -339,14 +393,15 @@ export function useInboxEmails(folder: EmailFolder) {
     showTabs,
     searchQuery,
     advancedFilters,
+    hasActiveFilters: hasActiveFilters || searchQuery.trim() !== '',
     selectedIds,
     allSelected,
     someSelected,
     setCurrentPage,
-    setActiveAccountTab,
+    setActiveAccountTab: handleAccountTabChange,
     setPageSize: handlePageSizeChange,
-    setSearchQuery,
-    setAdvancedFilters,
+    setSearchQuery: setInternalSearchQuery,
+    setAdvancedFilters: setInternalFilters,
     handleStarToggle,
     handleMarkRead,
     handleDelete,
@@ -360,6 +415,7 @@ export function useInboxEmails(folder: EmailFolder) {
     handleArchive,
     handleUnarchive,
     handleBulkUnarchive,
+    refetch,
   };
 }
 

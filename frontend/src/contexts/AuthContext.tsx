@@ -34,7 +34,7 @@ interface AuthContextType {
     firstName: string,
     lastName: string,
   ) => Promise<void>;
-  logout: () => Promise<void>;
+  logout: (redirectPath?: string) => Promise<void>;
   refetchProfile: () => Promise<void>;
 }
 
@@ -107,6 +107,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(session.access_token);
         // Fetch profile from backend to ensure user exists in our DB
         await fetchProfileFromBackend(session.access_token);
+
+        // Check for redirect path in URL after OAuth login
+        if (event === 'SIGNED_IN') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const redirectPath = urlParams.get('redirect');
+          if (redirectPath && window.location.pathname === '/login') {
+            // Navigate to the redirect path
+            window.location.href = redirectPath;
+          }
+        }
       } else {
         setToken(null);
         setUser(null);
@@ -169,13 +179,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [fetchProfileFromBackend],
   );
 
-  const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    setToken(null);
-    setUser(null);
-    // Clear Apollo cache on logout
-    await apolloClient.clearStore();
-  }, [apolloClient]);
+  const logout = useCallback(
+    async (redirectPath?: string) => {
+      await supabase.auth.signOut();
+      setToken(null);
+      setUser(null);
+      // Clear Apollo cache on logout
+      await apolloClient.clearStore();
+
+      // If a redirect path is provided, add it as a search param
+      if (
+        redirectPath &&
+        redirectPath !== '/login' &&
+        redirectPath !== '/signup'
+      ) {
+        window.location.href = `/login?redirect=${encodeURIComponent(redirectPath)}`;
+      }
+    },
+    [apolloClient],
+  );
 
   const refetchProfile = useCallback(async () => {
     if (token) {

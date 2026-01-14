@@ -22,6 +22,15 @@ import { updateContact } from './contact/updateContact.js';
 import { deleteContact } from './contact/deleteContact.js';
 import { createContactFromEmail } from './contact/createContactFromEmail.js';
 import { addEmailToContact } from './contact/addEmailToContact.js';
+import { createTag } from './tag/createTag.js';
+import { updateTag } from './tag/updateTag.js';
+import { deleteTag } from './tag/deleteTag.js';
+import { addTagsToEmails } from './tag/addTagsToEmails.js';
+import { removeTagsFromEmails } from './tag/removeTagsFromEmails.js';
+import { createMailRule } from './mail-rule/createMailRule.js';
+import { updateMailRule } from './mail-rule/updateMailRule.js';
+import { deleteMailRule } from './mail-rule/deleteMailRule.js';
+import { runMailRule } from './mail-rule/runMailRule.js';
 
 export const MutationResolvers: AllMutations = {
   deleteAuthenticationMethod,
@@ -47,4 +56,13 @@ export const MutationResolvers: AllMutations = {
   deleteContact,
   createContactFromEmail,
   addEmailToContact,
+  createTag,
+  updateTag,
+  deleteTag,
+  addTagsToEmails,
+  removeTagsFromEmails,
+  createMailRule,
+  updateMailRule,
+  deleteMailRule,
+  runMailRule,
 };

@@ -12,6 +12,11 @@ import { getEmailsByThread } from './email/getEmailsByThread.js';
 import { getContacts } from './contact/getContacts.js';
 import { getContact } from './contact/getContact.js';
 import { searchContacts } from './contact/searchContacts.js';
+import { getTags } from './tag/getTags.js';
+import { getTag } from './tag/getTag.js';
+import { getMailRules } from './mail-rule/getMailRules.js';
+import { getMailRule } from './mail-rule/getMailRule.js';
+import { previewMailRule } from './mail-rule/previewMailRule.js';
 
 export const QueryResolvers: AllQueries = {
   fetchProfile,
@@ -27,4 +32,9 @@ export const QueryResolvers: AllQueries = {
   getContacts,
   getContact,
   searchContacts,
+  getTags,
+  getTag,
+  getMailRules,
+  getMailRule,
+  previewMailRule,
 };

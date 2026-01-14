@@ -72,7 +72,9 @@ export default defineConfig({
         ],
       },
       devOptions: {
-        enabled: false, // Disable in development
+        enabled: true, // Enable in development for testing
+        type: 'module',
+        navigateFallback: 'index.html',
       },
     }),
   ],
@@ -89,6 +91,7 @@ export default defineConfig({
       '/api/graphql': {
         target: 'http://localhost:4000',
         changeOrigin: true,
+        ws: true, // Enable WebSocket proxying
       },
     },
   },

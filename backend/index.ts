@@ -14,6 +14,21 @@ import { GraphQLScalarType, Kind } from 'graphql';
 import { verifyToken } from './helpers/auth.js';
 import { logger } from './helpers/logger.js';
 import type { ApolloServerPlugin } from '@apollo/server';
+import { WebSocketServer } from 'ws';
+import { useServer } from 'graphql-ws/lib/use/ws';
+import { makeExecutableSchema } from '@graphql-tools/schema';
+import { PubSub } from 'graphql-subscriptions';
+import {
+  startIdleForUser,
+  stopIdleForUser,
+  type MailboxUpdateEvent,
+} from './helpers/imap-idle.js';
+
+// Log startup immediately so we know the server is restarting
+console.log('\n====================================');
+console.log('🔄 Email Client API Starting...');
+console.log(`⏰ ${new Date().toISOString()}`);
+console.log('====================================\n');
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -103,6 +118,8 @@ import {
   EmailAccount as EmailAccountModel,
   SmtpProfile as SmtpProfileModel,
   AuthenticationMethod as AuthMethodModel,
+  Tag,
+  EmailTag,
 } from './db/models/index.js';
 
 const resolvers: AllBackendResolvers = {
@@ -150,13 +167,228 @@ const resolvers: AllBackendResolvers = {
       });
       return count;
     },
+    // Fetch tags for email via junction table
+    tags: async (parent: any) => {
+      const emailTags = await EmailTag.findAll({
+        where: { emailId: parent.id },
+        attributes: ['tagId'],
+      });
+      if (emailTags.length === 0) return [];
+      const tagIds = emailTags.map((et) => et.tagId);
+      const tags = await Tag.findAll({
+        where: { id: tagIds },
+      });
+      return tags.map((t) => t.get({ plain: true }));
+    },
   },
+  Tag: {
+    // Email count is already computed in the query with literal
+    emailCount: (parent: any) => parent.emailCount ?? 0,
+  },
+  // Subscription resolvers - cast to any to avoid complex type issues
+  Subscription: {
+    mailboxUpdates: {
+      subscribe: async (_parent: any, _args: any, context: BackendContext) => {
+        if (!context.userId) {
+          throw new Error('Authentication required');
+        }
+
+        const userId = context.userId;
+        logger.info(
+          'Subscription',
+          `Starting mailboxUpdates subscription for user ${userId}`,
+        );
+
+        // Create an async iterator using a more robust pattern
+        const updates: MailboxUpdateEvent[] = [];
+        let resolveWaiting:
+          | ((
+              value: IteratorResult<{ mailboxUpdates: MailboxUpdateEvent }>,
+            ) => void)
+          | null = null;
+        let isComplete = false;
+        let cleanedUp = false;
+
+        const onUpdate = (update: MailboxUpdateEvent) => {
+          logger.info(
+            'Subscription',
+            `[User ${userId}] Received IDLE event: type=${update.type}, account=${update.emailAccountId}, message=${update.message || 'none'}`,
+          );
+
+          const wrappedUpdate = { mailboxUpdates: update };
+
+          if (resolveWaiting) {
+            const resolve = resolveWaiting;
+            resolveWaiting = null;
+            resolve({ value: wrappedUpdate, done: false });
+          } else {
+            updates.push(update);
+          }
+
+          // Mark as complete if connection closed
+          if (update.type === 'CONNECTION_CLOSED') {
+            isComplete = true;
+          }
+        };
+
+        const cleanup = async () => {
+          if (cleanedUp) return;
+          cleanedUp = true;
+          logger.info(
+            'Subscription',
+            `Cleaning up mailboxUpdates subscription for user ${userId}`,
+          );
+          await stopIdleForUser(userId);
+        };
+
+        // Start IDLE connections
+        try {
+          await startIdleForUser(userId, onUpdate);
+        } catch (error: any) {
+          logger.error(
+            'Subscription',
+            `Failed to start IDLE: ${error.message}`,
+          );
+          throw error;
+        }
+
+        // Create a proper AsyncIterator
+        const asyncIterator: AsyncIterator<{
+          mailboxUpdates: MailboxUpdateEvent;
+        }> = {
+          async next(): Promise<
+            IteratorResult<{ mailboxUpdates: MailboxUpdateEvent }>
+          > {
+            // Check if there are queued updates
+            if (updates.length > 0) {
+              const update = updates.shift()!;
+              return { value: { mailboxUpdates: update }, done: false };
+            }
+
+            // Check if we're done
+            if (isComplete) {
+              await cleanup();
+              return { value: undefined as any, done: true };
+            }
+
+            // Wait for the next update
+            return new Promise((resolve) => {
+              resolveWaiting = resolve;
+            });
+          },
+
+          async return(): Promise<
+            IteratorResult<{ mailboxUpdates: MailboxUpdateEvent }>
+          > {
+            logger.info(
+              'Subscription',
+              `[User ${userId}] Iterator return() called`,
+            );
+            isComplete = true;
+            await cleanup();
+            if (resolveWaiting) {
+              resolveWaiting({ value: undefined as any, done: true });
+              resolveWaiting = null;
+            }
+            return { value: undefined as any, done: true };
+          },
+
+          async throw(
+            error: any,
+          ): Promise<IteratorResult<{ mailboxUpdates: MailboxUpdateEvent }>> {
+            logger.error(
+              'Subscription',
+              `[User ${userId}] Iterator throw() called: ${error?.message || error}`,
+            );
+            isComplete = true;
+            await cleanup();
+            return { value: undefined as any, done: true };
+          },
+        };
+
+        // Return an object with Symbol.asyncIterator
+        return {
+          [Symbol.asyncIterator]() {
+            return asyncIterator;
+          },
+        };
+      },
+    },
+  } as any,
 };
 
-const server = new ApolloServer<BackendContext>({
+// Create executable schema for WebSocket server
+const schema = makeExecutableSchema({
   typeDefs,
   resolvers,
-  plugins: [ApolloServerPluginDrainHttpServer({ httpServer }), loggingPlugin],
+});
+
+// Create WebSocket server for subscriptions
+const wsServer = new WebSocketServer({
+  server: httpServer,
+  path: '/api/graphql',
+}) as any; // Cast to any to avoid WS type version mismatch
+
+// Set up graphql-ws server for subscriptions
+const serverCleanup = useServer(
+  {
+    schema,
+    context: async (ctx) => {
+      // Extract auth token from connection params
+      const token =
+        (ctx.connectionParams?.authorization as string)?.replace(
+          'Bearer ',
+          '',
+        ) ??
+        (ctx.connectionParams?.Authorization as string)?.replace(
+          'Bearer ',
+          '',
+        ) ??
+        '';
+
+      let userId: string | undefined;
+      let supabaseUserId: string | undefined;
+
+      if (token) {
+        const payload = await verifyToken(token);
+        userId = payload?.userId || undefined;
+        supabaseUserId = payload?.supabaseUserId;
+      }
+
+      return {
+        token,
+        userId,
+        supabaseUserId,
+        sequelize,
+      } satisfies BackendContext;
+    },
+    onConnect: async (ctx) => {
+      logger.info('WebSocket', 'Client connected');
+      return true;
+    },
+    onDisconnect: async (ctx, code, reason) => {
+      logger.info('WebSocket', `Client disconnected: ${code} ${reason}`);
+    },
+  },
+  wsServer,
+);
+
+const server = new ApolloServer<BackendContext>({
+  schema,
+  plugins: [
+    ApolloServerPluginDrainHttpServer({ httpServer }),
+    // Proper WebSocket cleanup plugin
+    {
+      async serverWillStart() {
+        return {
+          async drainServer() {
+            await serverCleanup.dispose();
+          },
+        };
+      },
+    },
+    loggingPlugin,
+  ],
   formatError: (formattedError, error) => {
     logger.error(
       'GraphQL',

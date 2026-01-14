@@ -4,10 +4,10 @@ import {
   Routes,
   useLocation,
   useNavigate,
+  useSearchParams,
 } from 'react-router';
-import { Nav, Button, Badge } from 'react-bootstrap';
+import { Nav, Badge } from 'react-bootstrap';
 import { Link } from 'react-router';
-import styled from 'styled-components';
 import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/auth/Login';
 import { SignUp } from './pages/auth/SignUp';
@@ -21,6 +21,7 @@ import { useQuery } from '@apollo/client/react';
 import { GET_EMAIL_COUNT_QUERY } from './pages/inbox/queries';
 import { PageErrorBoundary } from './core/components/ErrorBoundary';
 import { LoadingSpinner } from './core/components';
+import { useMailboxSubscription } from './hooks';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faInbox,
@@ -35,83 +36,23 @@ import {
   faArchive,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-
-const AppWrapper = styled.div`
-  display: flex;
-  height: 100vh;
-  background: var(--background-color);
-`;
-
-const Sidebar = styled.div`
-  width: 240px;
-  background: white;
-  border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  padding: 1rem 0;
-`;
-
-const Logo = styled.div`
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #667eea;
-  padding: 0.5rem 1.5rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 1rem;
-`;
-
-const ComposeButton = styled(Button)`
-  margin: 0 1rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  border: none !important;
-  border-radius: 24px !important;
-  padding: 0.75rem 1.5rem !important;
-  font-weight: 600 !important;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-
-  &:hover {
-    box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-    transform: translateY(-1px);
-  }
-`;
-
-const NavSection = styled.div`
-  flex: 1;
-  overflow-y: auto;
-`;
-
-const StyledNavLink = styled(Nav.Link)<{ $active?: boolean }>`
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.5rem !important;
-  color: ${(props) => (props.$active ? '#667eea' : 'var(--text-primary)')} !important;
-  background: ${(props) => (props.$active ? '#e8f0fe' : 'transparent')};
-  font-weight: ${(props) => (props.$active ? '600' : '400')};
-  border-radius: 0 24px 24px 0;
-  margin-right: 0.75rem;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: var(--hover-bg);
-  }
-`;
-
-const NavIcon = styled.span`
-  margin-right: 0.75rem;
-  font-size: 1.1rem;
-`;
-
-const MainContent = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-`;
+import {
+  AppWrapper,
+  Sidebar,
+  Logo,
+  ComposeButton,
+  NavSection,
+  StyledNavLink,
+  NavIcon,
+  MainContent,
+} from './App.wrappers';
 
 function AuthenticatedApp() {
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Start the mailbox subscription for real-time updates
+  useMailboxSubscription();
 
   const { data: unreadData } = useQuery(GET_EMAIL_COUNT_QUERY, {
     variables: { input: { folder: EmailFolder.Inbox, isRead: false } },
@@ -161,6 +102,14 @@ function AuthenticatedApp() {
     },
   ];
 
+  // Check if current path is under one of the nav items (including nested routes)
+  const isPathActive = (basePath: string) => {
+    return (
+      location.pathname === basePath ||
+      location.pathname.startsWith(`${basePath}/`)
+    );
+  };
+
   return (
     <AppWrapper>
       <Sidebar>
@@ -181,7 +130,7 @@ function AuthenticatedApp() {
                 <StyledNavLink
                   as={Link}
                   to={item.path}
-                  $active={location.pathname === item.path}
+                  $active={isPathActive(item.path)}
                 >
                   <span>
                     <NavIcon>
@@ -206,7 +155,7 @@ function AuthenticatedApp() {
               <StyledNavLink
                 as={Link}
                 to="/contacts"
-                $active={location.pathname === '/contacts'}
+                $active={isPathActive('/contacts')}
               >
                 <span>
                   <NavIcon>
@@ -220,7 +169,7 @@ function AuthenticatedApp() {
               <StyledNavLink
                 as={Link}
                 to="/settings"
-                $active={location.pathname === '/settings'}
+                $active={isPathActive('/settings')}
               >
                 <span>
                   <NavIcon>
@@ -238,27 +187,97 @@ function AuthenticatedApp() {
         <PageErrorBoundary>
           <Routes>
             <Route path="/" element={<Navigate to="/inbox" replace />} />
+            {/* Inbox routes with optional account and email params */}
             <Route
               path="/inbox"
               element={<Inbox folder={EmailFolder.Inbox} />}
             />
+            <Route
+              path="/inbox/account/:accountId"
+              element={<Inbox folder={EmailFolder.Inbox} />}
+            />
+            <Route
+              path="/inbox/email/:emailId"
+              element={<Inbox folder={EmailFolder.Inbox} />}
+            />
+            <Route
+              path="/inbox/account/:accountId/email/:emailId"
+              element={<Inbox folder={EmailFolder.Inbox} />}
+            />
+
             <Route path="/starred" element={<StarredInbox />} />
+
+            {/* Sent routes */}
             <Route path="/sent" element={<Inbox folder={EmailFolder.Sent} />} />
+            <Route
+              path="/sent/account/:accountId"
+              element={<Inbox folder={EmailFolder.Sent} />}
+            />
+            <Route
+              path="/sent/email/:emailId"
+              element={<Inbox folder={EmailFolder.Sent} />}
+            />
+            <Route
+              path="/sent/account/:accountId/email/:emailId"
+              element={<Inbox folder={EmailFolder.Sent} />}
+            />
+
+            {/* Drafts routes */}
             <Route
               path="/drafts"
               element={<Inbox folder={EmailFolder.Drafts} />}
             />
             <Route
+              path="/drafts/account/:accountId"
+              element={<Inbox folder={EmailFolder.Drafts} />}
+            />
+
+            {/* Trash routes */}
+            <Route
               path="/trash"
               element={<Inbox folder={EmailFolder.Trash} />}
             />
             <Route
+              path="/trash/account/:accountId"
+              element={<Inbox folder={EmailFolder.Trash} />}
+            />
+            <Route
+              path="/trash/email/:emailId"
+              element={<Inbox folder={EmailFolder.Trash} />}
+            />
+            <Route
+              path="/trash/account/:accountId/email/:emailId"
+              element={<Inbox folder={EmailFolder.Trash} />}
+            />
+
+            {/* Archive routes */}
+            <Route
               path="/archive"
               element={<Inbox folder={EmailFolder.Archive} />}
             />
+            <Route
+              path="/archive/account/:accountId"
+              element={<Inbox folder={EmailFolder.Archive} />}
+            />
+            <Route
+              path="/archive/email/:emailId"
+              element={<Inbox folder={EmailFolder.Archive} />}
+            />
+            <Route
+              path="/archive/account/:accountId/email/:emailId"
+              element={<Inbox folder={EmailFolder.Archive} />}
+            />
+
             <Route path="/compose" element={<Compose />} />
             <Route path="/contacts" element={<Contacts />} />
-            <Route path="/settings" element={<Settings />} />
+
+            {/* Settings routes with tabs */}
+            <Route
+              path="/settings"
+              element={<Navigate to="/settings/accounts" replace />}
+            />
+            <Route path="/settings/:tab" element={<Settings />} />
+
             <Route path="*" element={<Navigate to="/inbox" replace />} />
           </Routes>
         </PageErrorBoundary>
@@ -270,6 +289,7 @@ function AuthenticatedApp() {
 function App() {
   const { isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   if (isLoading) {
     return <LoadingSpinner fullPage message="Loading StacksMail..." />;
@@ -278,7 +298,9 @@ function App() {
   // Public routes
   if (location.pathname === '/login' || location.pathname === '/signup') {
     if (isAuthenticated) {
-      return <Navigate to="/inbox" replace />;
+      // Check for redirect param
+      const redirectPath = searchParams.get('redirect');
+      return <Navigate to={redirectPath || '/inbox'} replace />;
     }
     return (
       <Routes>
@@ -288,9 +310,14 @@ function App() {
     );
   }
 
-  // Protected routes
+  // Protected routes - redirect to login with current path for post-login redirect
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    const currentPath = location.pathname + location.search;
+    const redirectTo =
+      currentPath !== '/'
+        ? `/login?redirect=${encodeURIComponent(currentPath)}`
+        : '/login';
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <AuthenticatedApp />;

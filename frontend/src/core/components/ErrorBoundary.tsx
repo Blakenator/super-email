@@ -1,6 +1,5 @@
 import { Component, type ReactNode } from 'react';
-import { Container, Card, Button, Alert } from 'react-bootstrap';
-import styled from 'styled-components';
+import { Container, Button, Alert } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faDizzy,
@@ -8,29 +7,12 @@ import {
   faHome,
   faExclamationTriangle,
 } from '@fortawesome/free-solid-svg-icons';
-
-const ErrorWrapper = styled.div`
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: ${({ theme }) => theme.colors.gradient};
-  padding: ${({ theme }) => theme.spacing.xl};
-`;
-
-const ErrorCard = styled(Card)`
-  max-width: 500px;
-  border: none;
-  border-radius: ${({ theme }) => theme.borderRadius.xl};
-  box-shadow: ${({ theme }) => theme.shadows.lg};
-`;
-
-const ErrorIcon = styled.div`
-  font-size: 4rem;
-  text-align: center;
-  margin-bottom: ${({ theme }) => theme.spacing.md};
-  color: ${({ theme }) => theme.colors.textSecondary};
-`;
+import {
+  ErrorWrapper,
+  ErrorCard,
+  ErrorIcon,
+  InlineErrorWrapper,
+} from './ErrorBoundary.wrappers';
 
 interface Props {
   children: ReactNode;
@@ -126,16 +108,6 @@ export class ErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
-
-// Smaller inline error boundary for scoped sections
-const InlineErrorWrapper = styled.div`
-  padding: ${({ theme }) => theme.spacing.xl};
-  text-align: center;
-  background: #fff3cd;
-  border: 1px solid ${({ theme }) => theme.colors.warning};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
-  margin: ${({ theme }) => theme.spacing.md} 0;
-`;
 
 interface InlineErrorFallbackProps {
   error: Error;

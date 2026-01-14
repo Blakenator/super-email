@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { ListGroup, Badge, Button, ButtonGroup } from 'react-bootstrap';
-import styled from 'styled-components';
 import {
   GET_STARRED_EMAILS_QUERY,
   BULK_UPDATE_EMAILS_MUTATION,
@@ -20,64 +19,15 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSync, faStar as faStarSolid } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 import toast from 'react-hot-toast';
-
-const EmailItem = styled(ListGroup.Item)<{ $isUnread: boolean }>`
-  cursor: pointer;
-  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
-  border-left: none;
-  border-right: none;
-  background: ${(props) =>
-    props.$isUnread
-      ? props.theme.colors.unreadBackground
-      : props.theme.colors.backgroundWhite};
-  font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.backgroundHover};
-  }
-`;
-
-const EmailMeta = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: ${({ theme }) => theme.spacing.xs};
-`;
-
-const SenderName = styled.span`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const EmailDate = styled.span`
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-weight: 400;
-`;
-
-const Subject = styled.div`
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const Preview = styled.div`
-  color: ${({ theme }) => theme.colors.textSecondary};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 400;
-`;
-
-const StarButton = styled.span<{ $isStarred: boolean }>`
-  color: ${(props) =>
-    props.$isStarred ? props.theme.colors.star : props.theme.colors.starInactive};
-  cursor: pointer;
-  margin-right: ${({ theme }) => theme.spacing.sm};
-  font-size: 1.2rem;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.star};
-  }
-`;
+import {
+  EmailItem,
+  EmailMeta,
+  SenderName,
+  EmailDate,
+  Subject,
+  Preview,
+  StarButton,
+} from './StarredInbox.wrappers';
 
 export function StarredInbox() {
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);

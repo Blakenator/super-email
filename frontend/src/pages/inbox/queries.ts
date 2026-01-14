@@ -21,6 +21,11 @@ export const GET_EMAILS_QUERY = gql(`
       inReplyTo
       threadId
       threadCount
+      tags {
+        id
+        name
+        color
+      }
     }
   }
 `);
@@ -74,6 +79,11 @@ export const GET_EMAIL_QUERY = gql(`
       isUnsubscribed
       unsubscribeUrl
       unsubscribeEmail
+      tags {
+        id
+        name
+        color
+      }
     }
   }
 `);
@@ -171,5 +181,42 @@ export const FORWARD_EMAIL_MUTATION = gql(`
 export const NUKE_OLD_EMAILS_MUTATION = gql(`
   mutation NukeOldEmails($input: NukeOldEmailsInput!) {
     nukeOldEmails(input: $input)
+  }
+`);
+
+export const GET_TAGS_FOR_INBOX_QUERY = gql(`
+  query GetTagsForInbox {
+    getTags {
+      id
+      name
+      color
+      emailCount
+    }
+  }
+`);
+
+export const ADD_TAGS_TO_EMAILS_MUTATION = gql(`
+  mutation AddTagsToEmailsInbox($input: AddTagsToEmailsInput!) {
+    addTagsToEmails(input: $input) {
+      id
+      tags {
+        id
+        name
+        color
+      }
+    }
+  }
+`);
+
+export const REMOVE_TAGS_FROM_EMAILS_MUTATION = gql(`
+  mutation RemoveTagsFromEmailsInbox($input: RemoveTagsFromEmailsInput!) {
+    removeTagsFromEmails(input: $input) {
+      id
+      tags {
+        id
+        name
+        color
+      }
+    }
   }
 `);

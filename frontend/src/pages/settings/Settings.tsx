@@ -12,7 +12,7 @@ import {
   Tab,
 } from 'react-bootstrap';
 import toast from 'react-hot-toast';
-import styled from 'styled-components';
+import { useParams, useNavigate } from 'react-router';
 import {
   GET_EMAIL_ACCOUNTS_QUERY,
   CREATE_EMAIL_ACCOUNT_MUTATION,
@@ -38,6 +38,9 @@ import {
   type SmtpProfileFormData,
   EmailAccountCard,
   SmtpProfileCard,
+  TagsManager,
+  MailRulesManager,
+  NotificationSettings,
 } from './components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -53,6 +56,9 @@ import {
   faCircle,
   faKey,
   faShieldAlt,
+  faTag,
+  faFilter,
+  faBell,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faGoogle,
@@ -60,217 +66,28 @@ import {
   faApple,
   faMicrosoft,
 } from '@fortawesome/free-brands-svg-icons';
-
-const PageWrapper = styled.div`
-  padding: 1.5rem;
-  height: 100%;
-  overflow-y: auto;
-`;
-
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-`;
-
-const Title = styled.h2`
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-`;
-
-const SectionCard = styled(Card)`
-  border: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  margin-bottom: 1.5rem;
-`;
-
-const UserInfo = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background: #f6f8fc;
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-`;
-
-const Avatar = styled.div`
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 1.5rem;
-  font-weight: 600;
-`;
-
-const ProgressStepList = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding: 1rem 0;
-`;
-
-const ProgressStep = styled.div<{
-  $status: 'pending' | 'active' | 'success' | 'error';
-}>`
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  background: ${(props) => {
-    switch (props.$status) {
-      case 'active':
-        return '#e3f2fd';
-      case 'success':
-        return '#e8f5e9';
-      case 'error':
-        return '#ffebee';
-      default:
-        return '#f5f5f5';
-    }
-  }};
-  transition: all 0.3s ease;
-`;
-
-const StepIcon = styled.div<{
-  $status: 'pending' | 'active' | 'success' | 'error';
-}>`
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  color: ${(props) => {
-    switch (props.$status) {
-      case 'active':
-        return '#1976d2';
-      case 'success':
-        return '#2e7d32';
-      case 'error':
-        return '#c62828';
-      default:
-        return '#9e9e9e';
-    }
-  }};
-`;
-
-const StepContent = styled.div`
-  flex: 1;
-`;
-
-const StepTitle = styled.div`
-  font-weight: 600;
-  font-size: 0.95rem;
-`;
-
-const StepSubtitle = styled.div`
-  font-size: 0.85rem;
-  color: #666;
-  margin-top: 0.25rem;
-`;
-
-// Card grids for accounts and profiles
-const AccountCardGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-`;
-
-const SmtpCardGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-`;
-
-// Authentication Method styles
-const AuthMethodCard = styled.div`
-  display: flex;
-  align-items: center;
-  padding: 1rem;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
-  margin-bottom: 0.75rem;
-  background: white;
-  transition: box-shadow 0.2s ease;
-
-  &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  }
-`;
-
-const AuthMethodIcon = styled.div<{ $provider: string }>`
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.5rem;
-  margin-right: 1rem;
-  background: ${({ $provider }) => {
-    switch ($provider) {
-      case 'GOOGLE':
-        return '#fff';
-      case 'GITHUB':
-        return '#24292e';
-      case 'APPLE':
-        return '#000';
-      case 'MICROSOFT':
-        return '#00a4ef';
-      default:
-        return 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-    }
-  }};
-  color: ${({ $provider }) => {
-    switch ($provider) {
-      case 'GOOGLE':
-        return '#4285f4';
-      case 'GITHUB':
-        return '#fff';
-      case 'APPLE':
-        return '#fff';
-      case 'MICROSOFT':
-        return '#fff';
-      default:
-        return '#fff';
-    }
-  }};
-  border: ${({ $provider }) => ($provider === 'GOOGLE' ? '1px solid #e0e0e0' : 'none')};
-`;
-
-const AuthMethodInfo = styled.div`
-  flex: 1;
-`;
-
-const AuthMethodName = styled.div`
-  font-weight: 600;
-  font-size: 1rem;
-  color: ${({ theme }) => theme.colors.text};
-`;
-
-const AuthMethodEmail = styled.div`
-  font-size: 0.875rem;
-  color: ${({ theme }) => theme.colors.textSecondary};
-`;
-
-const AuthMethodMeta = styled.div`
-  font-size: 0.75rem;
-  color: ${({ theme }) => theme.colors.textMuted};
-  margin-top: 0.25rem;
-`;
+import {
+  PageWrapper,
+  Header,
+  Title,
+  SectionCard,
+  UserInfo,
+  Avatar,
+  ProgressStepList,
+  ProgressStep,
+  StepIcon,
+  StepContent,
+  StepTitle,
+  StepSubtitle,
+  AccountCardGrid,
+  SmtpCardGrid,
+  AuthMethodCard,
+  AuthMethodIcon,
+  AuthMethodInfo,
+  AuthMethodName,
+  AuthMethodEmail,
+  AuthMethodMeta,
+} from './Settings.wrappers';
 
 type SaveStep = {
   id: string;
@@ -279,7 +96,23 @@ type SaveStep = {
   message?: string;
 };
 
+// Map URL tab slugs to internal tab keys
+const TAB_MAPPING: Record<string, string> = {
+  accounts: 'email-accounts',
+  smtp: 'smtp-profiles',
+  auth: 'auth-methods',
+  tags: 'tags',
+  rules: 'rules',
+  notifications: 'notifications',
+};
+
+const REVERSE_TAB_MAPPING = Object.fromEntries(
+  Object.entries(TAB_MAPPING).map(([k, v]) => [v, k]),
+);
+
 export function Settings() {
+  const { tab } = useParams<{ tab: string }>();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [showEmailAccountModal, setShowEmailAccountModal] = useState(false);
   const [showSmtpProfileModal, setShowSmtpProfileModal] = useState(false);
@@ -289,6 +122,17 @@ export function Settings() {
     message: string;
   } | null>(null);
   const [connectionTested, setConnectionTested] = useState(false);
+
+  // Determine active tab from URL
+  const activeTab =
+    tab && TAB_MAPPING[tab] ? TAB_MAPPING[tab] : 'email-accounts';
+
+  const handleTabSelect = (key: string | null) => {
+    if (key) {
+      const urlTab = REVERSE_TAB_MAPPING[key] || 'accounts';
+      navigate(`/settings/${urlTab}`, { replace: true });
+    }
+  };
 
   // Progress modal state
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -1057,7 +901,7 @@ export function Settings() {
           </UserInfo>
         )}
 
-        <Tabs defaultActiveKey="email-accounts" className="mb-3">
+        <Tabs activeKey={activeTab} onSelect={handleTabSelect} className="mb-3">
           <Tab
             eventKey="email-accounts"
             title={
@@ -1302,6 +1146,42 @@ export function Settings() {
                 )}
               </Card.Body>
             </SectionCard>
+          </Tab>
+
+          <Tab
+            eventKey="tags"
+            title={
+              <>
+                <FontAwesomeIcon icon={faTag} className="me-1" />
+                Tags
+              </>
+            }
+          >
+            <TagsManager />
+          </Tab>
+
+          <Tab
+            eventKey="rules"
+            title={
+              <>
+                <FontAwesomeIcon icon={faFilter} className="me-1" />
+                Mail Rules
+              </>
+            }
+          >
+            <MailRulesManager />
+          </Tab>
+
+          <Tab
+            eventKey="notifications"
+            title={
+              <>
+                <FontAwesomeIcon icon={faBell} className="me-1" />
+                Notifications
+              </>
+            }
+          >
+            <NotificationSettings />
           </Tab>
         </Tabs>
 

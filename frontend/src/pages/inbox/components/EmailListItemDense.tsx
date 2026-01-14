@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Badge, Button, Modal, Form } from 'react-bootstrap';
-import styled from 'styled-components';
+import { Button, Modal, Form } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { DateTime } from 'luxon';
 import {
@@ -10,125 +9,48 @@ import {
   faEnvelope,
   faEnvelopeOpen,
   faArchive,
+  faInbox,
+  faPaperPlane,
+  faFileAlt,
+  faExclamationTriangle,
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
+import {
+  DenseRow,
+  SelectionCell,
+  StarCell,
+  SenderCell,
+  SubjectCell,
+  PreviewCell,
+  DateCell,
+  DenseAccountBadge as AccountBadge,
+  DenseThreadBadge as ThreadBadge,
+  DenseQuickActions as QuickActions,
+  DenseActionButton as ActionButton,
+  DenseFolderBadge as FolderBadge,
+  DenseTagBadge as TagBadge,
+} from './EmailListItem.wrappers';
 
-const DenseRow = styled.div<{ $isUnread: boolean; $isSelected: boolean }>`
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${(props) =>
-    props.$isSelected
-      ? `${props.theme.colors.primary}15`
-      : props.$isUnread
-        ? props.theme.colors.unreadBackground
-        : props.theme.colors.backgroundWhite};
-  font-weight: ${(props) => (props.$isUnread ? '600' : '400')};
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  gap: ${({ theme }) => theme.spacing.sm};
-  position: relative;
+// Folder config for badges
+const FOLDER_BADGE_CONFIG: Record<string, { icon: any; label: string; variant: string }> = {
+  INBOX: { icon: faInbox, label: 'Inbox', variant: 'primary' },
+  SENT: { icon: faPaperPlane, label: 'Sent', variant: 'success' },
+  DRAFTS: { icon: faFileAlt, label: 'Drafts', variant: 'warning' },
+  TRASH: { icon: faTrash, label: 'Trash', variant: 'danger' },
+  SPAM: { icon: faExclamationTriangle, label: 'Spam', variant: 'secondary' },
+  ARCHIVE: { icon: faArchive, label: 'Archive', variant: 'info' },
+};
 
-  &:hover {
-    background: ${({ theme, $isSelected }) =>
-      $isSelected ? `${theme.colors.primary}20` : theme.colors.backgroundHover};
-  }
-
-  &:hover .quick-actions {
-    opacity: 1;
-  }
-`;
-
-const SelectionCell = styled.div`
-  flex-shrink: 0;
-  width: 20px;
-`;
-
-const StarCell = styled.span<{ $isStarred: boolean }>`
-  color: ${(props) =>
-    props.$isStarred
-      ? props.theme.colors.star
-      : props.theme.colors.starInactive};
-  cursor: pointer;
-  flex-shrink: 0;
-  width: 20px;
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.star};
-  }
-`;
-
-const SenderCell = styled.span`
-  width: 180px;
-  flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const SubjectCell = styled.span`
-  flex: 1;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.textPrimary};
-`;
-
-const PreviewCell = styled.span`
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  margin-left: ${({ theme }) => theme.spacing.sm};
-`;
-
-const DateCell = styled.span`
-  width: 80px;
-  flex-shrink: 0;
-  text-align: right;
-  color: ${({ theme }) => theme.colors.textSecondary};
-`;
-
-const AccountBadge = styled(Badge)`
-  font-size: 0.65rem;
-  margin-left: ${({ theme }) => theme.spacing.xs};
-`;
-
-const ThreadBadge = styled(Badge)`
-  font-size: 0.55rem;
-  margin-left: ${({ theme }) => theme.spacing.xs};
-  background-color: ${({ theme }) => theme.colors.primary} !important;
-  flex-shrink: 0;
-`;
-
-const QuickActions = styled.div`
-  position: absolute;
-  right: ${({ theme }) => theme.spacing.md};
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  background: ${({ theme }) => theme.colors.backgroundWhite};
-  padding: 2px;
-  border-radius: 4px;
-  box-shadow: ${({ theme }) => theme.shadows.sm};
-`;
-
-const ActionButton = styled(Button)`
-  padding: 0.15rem 0.35rem;
-  font-size: 0.65rem;
-`;
+interface EmailTag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Email {
   id: string;
   messageId: string;
+  folder: string;
   fromAddress: string;
   fromName?: string | null;
   subject: string;
@@ -144,6 +66,7 @@ interface Email {
   inReplyTo?: string | null;
   threadId?: string | null;
   threadCount?: number | null;
+  tags?: EmailTag[] | null;
 }
 
 interface Account {
@@ -156,6 +79,8 @@ interface EmailListItemDenseProps {
   email: Email;
   account?: Account;
   showAccount: boolean;
+  showFolderBadge?: boolean;
+  showTags?: boolean;
   isSelected: boolean;
   onSelect: (selected: boolean) => void;
   onEmailClick: (email: Email) => void;
@@ -164,6 +89,7 @@ interface EmailListItemDenseProps {
   onReply: (email: Email) => void;
   onDelete: (emailId: string) => void;
   onArchive?: (emailId: string) => void;
+  onUnarchive?: (emailId: string) => void;
 }
 
 function formatDate(dateStr: string) {
@@ -195,6 +121,8 @@ export function EmailListItemDense({
   email,
   account,
   showAccount,
+  showFolderBadge = false,
+  showTags = false,
   isSelected,
   onSelect,
   onEmailClick,
@@ -203,6 +131,7 @@ export function EmailListItemDense({
   onReply,
   onDelete,
   onArchive,
+  onUnarchive,
 }: EmailListItemDenseProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -233,10 +162,19 @@ export function EmailListItemDense({
     }
   };
 
+  const handleUnarchiveClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onUnarchive) {
+      onUnarchive(email.id);
+    }
+  };
+
   const confirmDelete = () => {
     onDelete(email.id);
     setShowDeleteConfirm(false);
   };
+
+  const folderConfig = FOLDER_BADGE_CONFIG[email.folder];
 
   return (
     <>
@@ -245,17 +183,24 @@ export function EmailListItemDense({
         $isSelected={isSelected}
         onClick={() => onEmailClick(email)}
       >
-        <SelectionCell>
+        <SelectionCell
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(!isSelected);
+          }}
+        >
           <Form.Check
             type="checkbox"
             checked={isSelected}
-            onChange={(e) => {
-              e.stopPropagation();
-              onSelect(e.target.checked);
-            }}
-            onClick={(e) => e.stopPropagation()}
+            readOnly
           />
         </SelectionCell>
+        {showFolderBadge && folderConfig && (
+          <FolderBadge bg={folderConfig.variant}>
+            <FontAwesomeIcon icon={folderConfig.icon} />
+            {folderConfig.label}
+          </FolderBadge>
+        )}
         <StarCell $isStarred={email.isStarred} onClick={handleStarClick}>
           <FontAwesomeIcon
             icon={email.isStarred ? faStarSolid : faStarRegular}
@@ -273,6 +218,14 @@ export function EmailListItemDense({
           {email.subject}
           {email.threadCount && email.threadCount > 1 && (
             <ThreadBadge>{email.threadCount}</ThreadBadge>
+          )}
+          {showTags && email.tags && email.tags.slice(0, 2).map((tag) => (
+            <TagBadge key={tag.id} $color={tag.color}>
+              {tag.name}
+            </TagBadge>
+          ))}
+          {showTags && email.tags && email.tags.length > 2 && (
+            <TagBadge $color="#6c757d">+{email.tags.length - 2}</TagBadge>
           )}
         </SubjectCell>
         <PreviewCell>
@@ -305,6 +258,16 @@ export function EmailListItemDense({
               title="Archive"
             >
               <FontAwesomeIcon icon={faArchive} />
+            </ActionButton>
+          )}
+          {onUnarchive && (
+            <ActionButton
+              variant="outline-info"
+              size="sm"
+              onClick={handleUnarchiveClick}
+              title="Move to Inbox"
+            >
+              <FontAwesomeIcon icon={faInbox} />
             </ActionButton>
           )}
           <ActionButton

@@ -240,6 +240,125 @@ type Email implements BaseEntityProps {
   isUnsubscribed: Boolean!
   unsubscribeUrl: String
   unsubscribeEmail: String
+  tags: [Tag!]!
+}
+
+# ============ Tags ============
+
+type Tag implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  userId: String!
+  name: String!
+  color: String!
+  description: String
+  emailCount: Int!
+}
+
+input CreateTagInput {
+  name: String!
+  color: String
+  description: String
+}
+
+input UpdateTagInput {
+  id: String!
+  name: String
+  color: String
+  description: String
+}
+
+input AddTagsToEmailsInput {
+  emailIds: [String!]!
+  tagIds: [String!]!
+}
+
+input RemoveTagsFromEmailsInput {
+  emailIds: [String!]!
+  tagIds: [String!]!
+}
+
+# ============ Mail Rules ============
+
+type RuleConditions {
+  fromContains: String
+  toContains: String
+  ccContains: String
+  bccContains: String
+  subjectContains: String
+  bodyContains: String
+}
+
+type RuleActions {
+  archive: Boolean
+  star: Boolean
+  delete: Boolean
+  markRead: Boolean
+  addTagIds: [String!]
+  forwardTo: String
+}
+
+type MailRule implements BaseEntityProps {
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  userId: String!
+  emailAccountId: String
+  emailAccount: EmailAccount
+  name: String!
+  description: String
+  conditions: RuleConditions!
+  actions: RuleActions!
+  isEnabled: Boolean!
+  priority: Int!
+  stopProcessing: Boolean!
+}
+
+input RuleConditionsInput {
+  fromContains: String
+  toContains: String
+  ccContains: String
+  bccContains: String
+  subjectContains: String
+  bodyContains: String
+}
+
+input RuleActionsInput {
+  archive: Boolean
+  star: Boolean
+  delete: Boolean
+  markRead: Boolean
+  addTagIds: [String!]
+  forwardTo: String
+}
+
+input CreateMailRuleInput {
+  emailAccountId: String
+  name: String!
+  description: String
+  conditions: RuleConditionsInput!
+  actions: RuleActionsInput!
+  isEnabled: Boolean
+  priority: Int
+  stopProcessing: Boolean
+}
+
+input UpdateMailRuleInput {
+  id: String!
+  emailAccountId: String
+  name: String
+  description: String
+  conditions: RuleConditionsInput
+  actions: RuleActionsInput
+  isEnabled: Boolean
+  priority: Int
+  stopProcessing: Boolean
+}
+
+type RunRuleResult {
+  matchedCount: Int!
+  processedCount: Int!
 }
 
 input GetEmailsInput {
@@ -257,6 +376,7 @@ input GetEmailsInput {
   bccContains: String
   subjectContains: String
   bodyContains: String
+  tagIds: [String!]
 }
 
 input GetEmailInput {
@@ -363,6 +483,15 @@ type Query {
   getContacts: [Contact!]!
   getContact(id: String!): Contact
   searchContacts(query: String!): [Contact!]!
+
+  # Tags
+  getTags: [Tag!]!
+  getTag(id: String!): Tag
+
+  # Mail Rules
+  getMailRules: [MailRule!]!
+  getMailRule(id: String!): MailRule
+  previewMailRule(id: String!): Int!
 }
 
 # ============ Mutations ============
@@ -406,6 +535,19 @@ type Mutation {
 
   # Inbox Zero
   nukeOldEmails(input: NukeOldEmailsInput!): Int!
+
+  # Tags
+  createTag(input: CreateTagInput!): Tag!
+  updateTag(input: UpdateTagInput!): Tag!
+  deleteTag(id: String!): Boolean!
+  addTagsToEmails(input: AddTagsToEmailsInput!): [Email!]!
+  removeTagsFromEmails(input: RemoveTagsFromEmailsInput!): [Email!]!
+
+  # Mail Rules
+  createMailRule(input: CreateMailRuleInput!): MailRule!
+  updateMailRule(input: UpdateMailRuleInput!): MailRule!
+  deleteMailRule(id: String!): Boolean!
+  runMailRule(id: String!): RunRuleResult!
 }
 
 input NukeOldEmailsInput {
@@ -414,7 +556,27 @@ input NukeOldEmailsInput {
 
 # ============ Subscriptions ============
 
+type MailboxUpdate {
+  type: MailboxUpdateType!
+  emailAccountId: String!
+  emails: [Email!]
+  message: String
+}
+
+enum MailboxUpdateType {
+  NEW_EMAILS
+  EMAIL_UPDATED
+  EMAIL_DELETED
+  SYNC_STARTED
+  SYNC_COMPLETED
+  CONNECTION_ESTABLISHED
+  CONNECTION_CLOSED
+  ERROR
+}
+
 type Subscription {
-  emailCreated: Email!
-  emailUpdated: Email!
+  # Subscribe to mailbox updates for all user's email accounts
+  # The connection will use IMAP IDLE to listen for new emails
+  # Connection expires after 4.5 minutes - client should reconnect
+  mailboxUpdates: MailboxUpdate!
 }

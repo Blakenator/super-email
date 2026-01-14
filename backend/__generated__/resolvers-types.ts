@@ -26,6 +26,11 @@ export type AddEmailToContactInput = {
   label?: InputMaybe<Scalars['String']['input']>;
 };
 
+export type AddTagsToEmailsInput = {
+  emailIds: Array<Scalars['String']['input']>;
+  tagIds: Array<Scalars['String']['input']>;
+};
+
 export enum AuthProvider {
   Apple = 'APPLE',
   EmailPassword = 'EMAIL_PASSWORD',
@@ -130,6 +135,17 @@ export type CreateEmailAccountInput = {
   username: Scalars['String']['input'];
 };
 
+export type CreateMailRuleInput = {
+  actions: RuleActionsInput;
+  conditions: RuleConditionsInput;
+  description?: InputMaybe<Scalars['String']['input']>;
+  emailAccountId?: InputMaybe<Scalars['String']['input']>;
+  isEnabled?: InputMaybe<Scalars['Boolean']['input']>;
+  name: Scalars['String']['input'];
+  priority?: InputMaybe<Scalars['Int']['input']>;
+  stopProcessing?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
 export type CreateSmtpProfileInput = {
   alias?: InputMaybe<Scalars['String']['input']>;
   email: Scalars['String']['input'];
@@ -141,6 +157,12 @@ export type CreateSmtpProfileInput = {
   providerId?: InputMaybe<Scalars['String']['input']>;
   useSsl: Scalars['Boolean']['input'];
   username: Scalars['String']['input'];
+};
+
+export type CreateTagInput = {
+  color?: InputMaybe<Scalars['String']['input']>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  name: Scalars['String']['input'];
 };
 
 export type Email = BaseEntityProps & {
@@ -167,6 +189,7 @@ export type Email = BaseEntityProps & {
   smtpProfile?: Maybe<SmtpProfile>;
   smtpProfileId?: Maybe<Scalars['String']['output']>;
   subject: Scalars['String']['output'];
+  tags: Array<Tag>;
   textBody?: Maybe<Scalars['String']['output']>;
   threadCount?: Maybe<Scalars['Int']['output']>;
   threadId?: Maybe<Scalars['String']['output']>;
@@ -238,24 +261,68 @@ export type GetEmailsInput = {
   offset?: InputMaybe<Scalars['Int']['input']>;
   searchQuery?: InputMaybe<Scalars['String']['input']>;
   subjectContains?: InputMaybe<Scalars['String']['input']>;
+  tagIds?: InputMaybe<Array<Scalars['String']['input']>>;
   toContains?: InputMaybe<Scalars['String']['input']>;
 };
+
+export type MailRule = BaseEntityProps & {
+  __typename?: 'MailRule';
+  actions: RuleActions;
+  conditions: RuleConditions;
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  description?: Maybe<Scalars['String']['output']>;
+  emailAccount?: Maybe<EmailAccount>;
+  emailAccountId?: Maybe<Scalars['String']['output']>;
+  id: Scalars['String']['output'];
+  isEnabled: Scalars['Boolean']['output'];
+  name: Scalars['String']['output'];
+  priority: Scalars['Int']['output'];
+  stopProcessing: Scalars['Boolean']['output'];
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  userId: Scalars['String']['output'];
+};
+
+export type MailboxUpdate = {
+  __typename?: 'MailboxUpdate';
+  emailAccountId: Scalars['String']['output'];
+  emails?: Maybe<Array<Email>>;
+  message?: Maybe<Scalars['String']['output']>;
+  type: MailboxUpdateType;
+};
+
+export enum MailboxUpdateType {
+  ConnectionClosed = 'CONNECTION_CLOSED',
+  ConnectionEstablished = 'CONNECTION_ESTABLISHED',
+  EmailDeleted = 'EMAIL_DELETED',
+  EmailUpdated = 'EMAIL_UPDATED',
+  Error = 'ERROR',
+  NewEmails = 'NEW_EMAILS',
+  SyncCompleted = 'SYNC_COMPLETED',
+  SyncStarted = 'SYNC_STARTED'
+}
 
 export type Mutation = {
   __typename?: 'Mutation';
   addEmailToContact: Contact;
+  addTagsToEmails: Array<Email>;
   bulkDeleteEmails: Scalars['Int']['output'];
   bulkUpdateEmails: Array<Email>;
   createContact: Contact;
   createContactFromEmail: Contact;
   createEmailAccount: EmailAccount;
+  createMailRule: MailRule;
   createSmtpProfile: SmtpProfile;
+  createTag: Tag;
   deleteAuthenticationMethod: Scalars['Boolean']['output'];
   deleteContact: Scalars['Boolean']['output'];
   deleteEmailAccount: Scalars['Boolean']['output'];
+  deleteMailRule: Scalars['Boolean']['output'];
   deleteSmtpProfile: Scalars['Boolean']['output'];
+  deleteTag: Scalars['Boolean']['output'];
   forwardEmail: Email;
   nukeOldEmails: Scalars['Int']['output'];
+  removeTagsFromEmails: Array<Email>;
+  runMailRule: RunRuleResult;
   saveDraft: Email;
   sendEmail: Email;
   syncAllAccounts: Scalars['Boolean']['output'];
@@ -265,12 +332,19 @@ export type Mutation = {
   unsubscribe: Email;
   updateContact: Contact;
   updateEmailAccount: EmailAccount;
+  updateMailRule: MailRule;
   updateSmtpProfile: SmtpProfile;
+  updateTag: Tag;
 };
 
 
 export type MutationAddEmailToContactArgs = {
   input: AddEmailToContactInput;
+};
+
+
+export type MutationAddTagsToEmailsArgs = {
+  input: AddTagsToEmailsInput;
 };
 
 
@@ -299,8 +373,18 @@ export type MutationCreateEmailAccountArgs = {
 };
 
 
+export type MutationCreateMailRuleArgs = {
+  input: CreateMailRuleInput;
+};
+
+
 export type MutationCreateSmtpProfileArgs = {
   input: CreateSmtpProfileInput;
+};
+
+
+export type MutationCreateTagArgs = {
+  input: CreateTagInput;
 };
 
 
@@ -319,7 +403,17 @@ export type MutationDeleteEmailAccountArgs = {
 };
 
 
+export type MutationDeleteMailRuleArgs = {
+  id: Scalars['String']['input'];
+};
+
+
 export type MutationDeleteSmtpProfileArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type MutationDeleteTagArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -331,6 +425,16 @@ export type MutationForwardEmailArgs = {
 
 export type MutationNukeOldEmailsArgs = {
   input: NukeOldEmailsInput;
+};
+
+
+export type MutationRemoveTagsFromEmailsArgs = {
+  input: RemoveTagsFromEmailsInput;
+};
+
+
+export type MutationRunMailRuleArgs = {
+  id: Scalars['String']['input'];
 };
 
 
@@ -374,8 +478,18 @@ export type MutationUpdateEmailAccountArgs = {
 };
 
 
+export type MutationUpdateMailRuleArgs = {
+  input: UpdateMailRuleInput;
+};
+
+
 export type MutationUpdateSmtpProfileArgs = {
   input: UpdateSmtpProfileInput;
+};
+
+
+export type MutationUpdateTagArgs = {
+  input: UpdateTagInput;
 };
 
 export type NukeOldEmailsInput = {
@@ -394,8 +508,13 @@ export type Query = {
   getEmailCount: Scalars['Int']['output'];
   getEmails: Array<Email>;
   getEmailsByThread: Array<Email>;
+  getMailRule?: Maybe<MailRule>;
+  getMailRules: Array<MailRule>;
   getSmtpProfile?: Maybe<SmtpProfile>;
   getSmtpProfiles: Array<SmtpProfile>;
+  getTag?: Maybe<Tag>;
+  getTags: Array<Tag>;
+  previewMailRule: Scalars['Int']['output'];
   searchContacts: Array<Contact>;
 };
 
@@ -430,13 +549,77 @@ export type QueryGetEmailsByThreadArgs = {
 };
 
 
+export type QueryGetMailRuleArgs = {
+  id: Scalars['String']['input'];
+};
+
+
 export type QueryGetSmtpProfileArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type QueryGetTagArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+export type QueryPreviewMailRuleArgs = {
   id: Scalars['String']['input'];
 };
 
 
 export type QuerySearchContactsArgs = {
   query: Scalars['String']['input'];
+};
+
+export type RemoveTagsFromEmailsInput = {
+  emailIds: Array<Scalars['String']['input']>;
+  tagIds: Array<Scalars['String']['input']>;
+};
+
+export type RuleActions = {
+  __typename?: 'RuleActions';
+  addTagIds?: Maybe<Array<Scalars['String']['output']>>;
+  archive?: Maybe<Scalars['Boolean']['output']>;
+  delete?: Maybe<Scalars['Boolean']['output']>;
+  forwardTo?: Maybe<Scalars['String']['output']>;
+  markRead?: Maybe<Scalars['Boolean']['output']>;
+  star?: Maybe<Scalars['Boolean']['output']>;
+};
+
+export type RuleActionsInput = {
+  addTagIds?: InputMaybe<Array<Scalars['String']['input']>>;
+  archive?: InputMaybe<Scalars['Boolean']['input']>;
+  delete?: InputMaybe<Scalars['Boolean']['input']>;
+  forwardTo?: InputMaybe<Scalars['String']['input']>;
+  markRead?: InputMaybe<Scalars['Boolean']['input']>;
+  star?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+export type RuleConditions = {
+  __typename?: 'RuleConditions';
+  bccContains?: Maybe<Scalars['String']['output']>;
+  bodyContains?: Maybe<Scalars['String']['output']>;
+  ccContains?: Maybe<Scalars['String']['output']>;
+  fromContains?: Maybe<Scalars['String']['output']>;
+  subjectContains?: Maybe<Scalars['String']['output']>;
+  toContains?: Maybe<Scalars['String']['output']>;
+};
+
+export type RuleConditionsInput = {
+  bccContains?: InputMaybe<Scalars['String']['input']>;
+  bodyContains?: InputMaybe<Scalars['String']['input']>;
+  ccContains?: InputMaybe<Scalars['String']['input']>;
+  fromContains?: InputMaybe<Scalars['String']['input']>;
+  subjectContains?: InputMaybe<Scalars['String']['input']>;
+  toContains?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type RunRuleResult = {
+  __typename?: 'RunRuleResult';
+  matchedCount: Scalars['Int']['output'];
+  processedCount: Scalars['Int']['output'];
 };
 
 export type SaveDraftInput = {
@@ -470,12 +653,23 @@ export type SmtpProfile = BaseEntityProps & {
 
 export type Subscription = {
   __typename?: 'Subscription';
-  emailCreated: Email;
-  emailUpdated: Email;
+  mailboxUpdates: MailboxUpdate;
 };
 
 export type SyncEmailAccountInput = {
   emailAccountId: Scalars['String']['input'];
+};
+
+export type Tag = BaseEntityProps & {
+  __typename?: 'Tag';
+  color: Scalars['String']['output'];
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  description?: Maybe<Scalars['String']['output']>;
+  emailCount: Scalars['Int']['output'];
+  id: Scalars['String']['output'];
+  name: Scalars['String']['output'];
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  userId: Scalars['String']['output'];
 };
 
 export type TestConnectionResult = {
@@ -528,6 +722,18 @@ export type UpdateEmailAccountInput = {
   username?: InputMaybe<Scalars['String']['input']>;
 };
 
+export type UpdateMailRuleInput = {
+  actions?: InputMaybe<RuleActionsInput>;
+  conditions?: InputMaybe<RuleConditionsInput>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  emailAccountId?: InputMaybe<Scalars['String']['input']>;
+  id: Scalars['String']['input'];
+  isEnabled?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
+  priority?: InputMaybe<Scalars['Int']['input']>;
+  stopProcessing?: InputMaybe<Scalars['Boolean']['input']>;
+};
+
 export type UpdateSmtpProfileInput = {
   alias?: InputMaybe<Scalars['String']['input']>;
   host?: InputMaybe<Scalars['String']['input']>;
@@ -539,6 +745,13 @@ export type UpdateSmtpProfileInput = {
   providerId?: InputMaybe<Scalars['String']['input']>;
   useSsl?: InputMaybe<Scalars['Boolean']['input']>;
   username?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type UpdateTagInput = {
+  color?: InputMaybe<Scalars['String']['input']>;
+  description?: InputMaybe<Scalars['String']['input']>;
+  id: Scalars['String']['input'];
+  name?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type User = BaseEntityProps & {
@@ -633,7 +846,9 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
     | ( ContactEmail )
     | ( Email )
     | ( EmailAccount )
+    | ( MailRule )
     | ( SmtpProfile )
+    | ( Tag )
     | ( User )
   ;
 }>;
@@ -641,6 +856,7 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
 /** Mapping between all available schema types and the resolvers types */
 export type ResolversTypes = ResolversObject<{
   AddEmailToContactInput: AddEmailToContactInput;
+  AddTagsToEmailsInput: AddTagsToEmailsInput;
   AuthProvider: AuthProvider;
   AuthenticationMethod: ResolverTypeWrapper<AuthenticationMethod>;
   BaseEntityProps: ResolverTypeWrapper<ResolversInterfaceTypes<ResolversTypes>['BaseEntityProps']>;
@@ -652,7 +868,9 @@ export type ResolversTypes = ResolversObject<{
   ContactEmailInput: ContactEmailInput;
   CreateContactInput: CreateContactInput;
   CreateEmailAccountInput: CreateEmailAccountInput;
+  CreateMailRuleInput: CreateMailRuleInput;
   CreateSmtpProfileInput: CreateSmtpProfileInput;
+  CreateTagInput: CreateTagInput;
   Date: ResolverTypeWrapper<Scalars['Date']['output']>;
   Email: ResolverTypeWrapper<Email>;
   EmailAccount: ResolverTypeWrapper<EmailAccount>;
@@ -663,27 +881,40 @@ export type ResolversTypes = ResolversObject<{
   GetEmailsInput: GetEmailsInput;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
+  MailRule: ResolverTypeWrapper<MailRule>;
+  MailboxUpdate: ResolverTypeWrapper<MailboxUpdate>;
+  MailboxUpdateType: MailboxUpdateType;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   NukeOldEmailsInput: NukeOldEmailsInput;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  RemoveTagsFromEmailsInput: RemoveTagsFromEmailsInput;
+  RuleActions: ResolverTypeWrapper<RuleActions>;
+  RuleActionsInput: RuleActionsInput;
+  RuleConditions: ResolverTypeWrapper<RuleConditions>;
+  RuleConditionsInput: RuleConditionsInput;
+  RunRuleResult: ResolverTypeWrapper<RunRuleResult>;
   SaveDraftInput: SaveDraftInput;
   SmtpProfile: ResolverTypeWrapper<SmtpProfile>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
   SyncEmailAccountInput: SyncEmailAccountInput;
+  Tag: ResolverTypeWrapper<Tag>;
   TestConnectionResult: ResolverTypeWrapper<TestConnectionResult>;
   TestEmailAccountConnectionInput: TestEmailAccountConnectionInput;
   TestSmtpConnectionInput: TestSmtpConnectionInput;
   UnsubscribeInput: UnsubscribeInput;
   UpdateContactInput: UpdateContactInput;
   UpdateEmailAccountInput: UpdateEmailAccountInput;
+  UpdateMailRuleInput: UpdateMailRuleInput;
   UpdateSmtpProfileInput: UpdateSmtpProfileInput;
+  UpdateTagInput: UpdateTagInput;
   User: ResolverTypeWrapper<User>;
 }>;
 
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = ResolversObject<{
   AddEmailToContactInput: AddEmailToContactInput;
+  AddTagsToEmailsInput: AddTagsToEmailsInput;
   AuthenticationMethod: AuthenticationMethod;
   BaseEntityProps: ResolversInterfaceTypes<ResolversParentTypes>['BaseEntityProps'];
   Boolean: Scalars['Boolean']['output'];
@@ -694,7 +925,9 @@ export type ResolversParentTypes = ResolversObject<{
   ContactEmailInput: ContactEmailInput;
   CreateContactInput: CreateContactInput;
   CreateEmailAccountInput: CreateEmailAccountInput;
+  CreateMailRuleInput: CreateMailRuleInput;
   CreateSmtpProfileInput: CreateSmtpProfileInput;
+  CreateTagInput: CreateTagInput;
   Date: Scalars['Date']['output'];
   Email: Email;
   EmailAccount: EmailAccount;
@@ -703,21 +936,32 @@ export type ResolversParentTypes = ResolversObject<{
   GetEmailsInput: GetEmailsInput;
   Int: Scalars['Int']['output'];
   JSON: Scalars['JSON']['output'];
+  MailRule: MailRule;
+  MailboxUpdate: MailboxUpdate;
   Mutation: Record<PropertyKey, never>;
   NukeOldEmailsInput: NukeOldEmailsInput;
   Query: Record<PropertyKey, never>;
+  RemoveTagsFromEmailsInput: RemoveTagsFromEmailsInput;
+  RuleActions: RuleActions;
+  RuleActionsInput: RuleActionsInput;
+  RuleConditions: RuleConditions;
+  RuleConditionsInput: RuleConditionsInput;
+  RunRuleResult: RunRuleResult;
   SaveDraftInput: SaveDraftInput;
   SmtpProfile: SmtpProfile;
   String: Scalars['String']['output'];
   Subscription: Record<PropertyKey, never>;
   SyncEmailAccountInput: SyncEmailAccountInput;
+  Tag: Tag;
   TestConnectionResult: TestConnectionResult;
   TestEmailAccountConnectionInput: TestEmailAccountConnectionInput;
   TestSmtpConnectionInput: TestSmtpConnectionInput;
   UnsubscribeInput: UnsubscribeInput;
   UpdateContactInput: UpdateContactInput;
   UpdateEmailAccountInput: UpdateEmailAccountInput;
+  UpdateMailRuleInput: UpdateMailRuleInput;
   UpdateSmtpProfileInput: UpdateSmtpProfileInput;
+  UpdateTagInput: UpdateTagInput;
   User: User;
 }>;
 
@@ -735,7 +979,7 @@ export type AuthenticationMethodResolvers<ContextType = MyContext, ParentType ex
 }>;
 
 export type BaseEntityPropsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BaseEntityProps'] = ResolversParentTypes['BaseEntityProps']> = ResolversObject<{
-  __resolveType: TypeResolveFn<'AuthenticationMethod' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'SmtpProfile' | 'User', ParentType, ContextType>;
+  __resolveType: TypeResolveFn<'AuthenticationMethod' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
 }>;
 
 export type ContactResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Contact'] = ResolversParentTypes['Contact']> = ResolversObject<{
@@ -793,6 +1037,7 @@ export type EmailResolvers<ContextType = MyContext, ParentType extends Resolvers
   smtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
   smtpProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   subject?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  tags?: Resolver<Array<ResolversTypes['Tag']>, ParentType, ContextType>;
   textBody?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   threadCount?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   threadId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -828,20 +1073,51 @@ export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes
   name: 'JSON';
 }
 
+export type MailRuleResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['MailRule'] = ResolversParentTypes['MailRule']> = ResolversObject<{
+  actions?: Resolver<ResolversTypes['RuleActions'], ParentType, ContextType>;
+  conditions?: Resolver<ResolversTypes['RuleConditions'], ParentType, ContextType>;
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  emailAccount?: Resolver<Maybe<ResolversTypes['EmailAccount']>, ParentType, ContextType>;
+  emailAccountId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isEnabled?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  priority?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  stopProcessing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type MailboxUpdateResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['MailboxUpdate'] = ResolversParentTypes['MailboxUpdate']> = ResolversObject<{
+  emailAccountId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  emails?: Resolver<Maybe<Array<ResolversTypes['Email']>>, ParentType, ContextType>;
+  message?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['MailboxUpdateType'], ParentType, ContextType>;
+}>;
+
 export type MutationResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
   addEmailToContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationAddEmailToContactArgs, 'input'>>;
+  addTagsToEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationAddTagsToEmailsArgs, 'input'>>;
   bulkDeleteEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationBulkDeleteEmailsArgs, 'ids'>>;
   bulkUpdateEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationBulkUpdateEmailsArgs, 'input'>>;
   createContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactArgs, 'input'>>;
   createContactFromEmail?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactFromEmailArgs, 'emailId'>>;
   createEmailAccount?: Resolver<ResolversTypes['EmailAccount'], ParentType, ContextType, RequireFields<MutationCreateEmailAccountArgs, 'input'>>;
+  createMailRule?: Resolver<ResolversTypes['MailRule'], ParentType, ContextType, RequireFields<MutationCreateMailRuleArgs, 'input'>>;
   createSmtpProfile?: Resolver<ResolversTypes['SmtpProfile'], ParentType, ContextType, RequireFields<MutationCreateSmtpProfileArgs, 'input'>>;
+  createTag?: Resolver<ResolversTypes['Tag'], ParentType, ContextType, RequireFields<MutationCreateTagArgs, 'input'>>;
   deleteAuthenticationMethod?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteAuthenticationMethodArgs, 'id'>>;
   deleteContact?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteContactArgs, 'id'>>;
   deleteEmailAccount?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteEmailAccountArgs, 'id'>>;
+  deleteMailRule?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteMailRuleArgs, 'id'>>;
   deleteSmtpProfile?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSmtpProfileArgs, 'id'>>;
+  deleteTag?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteTagArgs, 'id'>>;
   forwardEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationForwardEmailArgs, 'input'>>;
   nukeOldEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationNukeOldEmailsArgs, 'input'>>;
+  removeTagsFromEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationRemoveTagsFromEmailsArgs, 'input'>>;
+  runMailRule?: Resolver<ResolversTypes['RunRuleResult'], ParentType, ContextType, RequireFields<MutationRunMailRuleArgs, 'id'>>;
   saveDraft?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSaveDraftArgs, 'input'>>;
   sendEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSendEmailArgs, 'input'>>;
   syncAllAccounts?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -851,7 +1127,9 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   unsubscribe?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'input'>>;
   updateContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationUpdateContactArgs, 'input'>>;
   updateEmailAccount?: Resolver<ResolversTypes['EmailAccount'], ParentType, ContextType, RequireFields<MutationUpdateEmailAccountArgs, 'input'>>;
+  updateMailRule?: Resolver<ResolversTypes['MailRule'], ParentType, ContextType, RequireFields<MutationUpdateMailRuleArgs, 'input'>>;
   updateSmtpProfile?: Resolver<ResolversTypes['SmtpProfile'], ParentType, ContextType, RequireFields<MutationUpdateSmtpProfileArgs, 'input'>>;
+  updateTag?: Resolver<ResolversTypes['Tag'], ParentType, ContextType, RequireFields<MutationUpdateTagArgs, 'input'>>;
 }>;
 
 export type QueryResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
@@ -865,9 +1143,37 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getEmailCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<QueryGetEmailCountArgs, 'input'>>;
   getEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<QueryGetEmailsArgs, 'input'>>;
   getEmailsByThread?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<QueryGetEmailsByThreadArgs, 'threadId'>>;
+  getMailRule?: Resolver<Maybe<ResolversTypes['MailRule']>, ParentType, ContextType, RequireFields<QueryGetMailRuleArgs, 'id'>>;
+  getMailRules?: Resolver<Array<ResolversTypes['MailRule']>, ParentType, ContextType>;
   getSmtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType, RequireFields<QueryGetSmtpProfileArgs, 'id'>>;
   getSmtpProfiles?: Resolver<Array<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
+  getTag?: Resolver<Maybe<ResolversTypes['Tag']>, ParentType, ContextType, RequireFields<QueryGetTagArgs, 'id'>>;
+  getTags?: Resolver<Array<ResolversTypes['Tag']>, ParentType, ContextType>;
+  previewMailRule?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<QueryPreviewMailRuleArgs, 'id'>>;
   searchContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QuerySearchContactsArgs, 'query'>>;
+}>;
+
+export type RuleActionsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['RuleActions'] = ResolversParentTypes['RuleActions']> = ResolversObject<{
+  addTagIds?: Resolver<Maybe<Array<ResolversTypes['String']>>, ParentType, ContextType>;
+  archive?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  delete?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  forwardTo?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  markRead?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+  star?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
+}>;
+
+export type RuleConditionsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['RuleConditions'] = ResolversParentTypes['RuleConditions']> = ResolversObject<{
+  bccContains?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  bodyContains?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  ccContains?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  fromContains?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  subjectContains?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  toContains?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+}>;
+
+export type RunRuleResultResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['RunRuleResult'] = ResolversParentTypes['RunRuleResult']> = ResolversObject<{
+  matchedCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  processedCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 }>;
 
 export type SmtpProfileResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['SmtpProfile'] = ResolversParentTypes['SmtpProfile']> = ResolversObject<{
@@ -887,8 +1193,19 @@ export type SmtpProfileResolvers<ContextType = MyContext, ParentType extends Res
 }>;
 
 export type SubscriptionResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
-  emailCreated?: SubscriptionResolver<ResolversTypes['Email'], "emailCreated", ParentType, ContextType>;
-  emailUpdated?: SubscriptionResolver<ResolversTypes['Email'], "emailUpdated", ParentType, ContextType>;
+  mailboxUpdates?: SubscriptionResolver<ResolversTypes['MailboxUpdate'], "mailboxUpdates", ParentType, ContextType>;
+}>;
+
+export type TagResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Tag'] = ResolversParentTypes['Tag']> = ResolversObject<{
+  color?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  emailCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
 export type TestConnectionResultResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['TestConnectionResult'] = ResolversParentTypes['TestConnectionResult']> = ResolversObject<{
@@ -918,10 +1235,16 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   Email?: EmailResolvers<ContextType>;
   EmailAccount?: EmailAccountResolvers<ContextType>;
   JSON?: GraphQLScalarType;
+  MailRule?: MailRuleResolvers<ContextType>;
+  MailboxUpdate?: MailboxUpdateResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
+  RuleActions?: RuleActionsResolvers<ContextType>;
+  RuleConditions?: RuleConditionsResolvers<ContextType>;
+  RunRuleResult?: RunRuleResultResolvers<ContextType>;
   SmtpProfile?: SmtpProfileResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
+  Tag?: TagResolvers<ContextType>;
   TestConnectionResult?: TestConnectionResultResolvers<ContextType>;
   User?: UserResolvers<ContextType>;
 }>;

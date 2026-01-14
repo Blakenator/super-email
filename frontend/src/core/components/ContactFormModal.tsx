@@ -11,11 +11,19 @@ import {
 } from 'react-bootstrap';
 import { useMutation, useQuery } from '@apollo/client/react';
 import toast from 'react-hot-toast';
-import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faPlus, faSearch } from '@fortawesome/free-solid-svg-icons';
 import { gql } from '../../__generated__/gql';
 import { GET_CONTACTS_QUERY as CONTACTS_PAGE_QUERY } from '../../pages/contacts/queries';
+import {
+  SearchInput,
+  ContactListItem,
+  ContactAvatar,
+  ContactInfo,
+  ContactName,
+  ContactEmails,
+  NoContacts,
+} from './ContactFormModal.wrappers';
 
 // Use the same query for fetching contacts in the modal
 const GET_CONTACTS_QUERY = gql(`
@@ -81,80 +89,6 @@ const ADD_EMAIL_TO_CONTACT_MUTATION = gql(`
     }
   }
 `);
-
-const SearchInput = styled.div`
-  position: relative;
-  margin-bottom: 1rem;
-
-  .search-icon {
-    position: absolute;
-    left: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: ${({ theme }) => theme.colors.textMuted};
-  }
-
-  input {
-    padding-left: 36px;
-  }
-`;
-
-const ContactListItem = styled(ListGroup.Item)<{ $selected?: boolean }>`
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-
-  ${({ $selected, theme }) =>
-    $selected &&
-    `
-    background: ${theme.colors.primary}10;
-    border-color: ${theme.colors.primary};
-  `}
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.backgroundHover};
-  }
-`;
-
-const ContactAvatar = styled.div`
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: ${({ theme }) => theme.colors.primary}20;
-  color: ${({ theme }) => theme.colors.primary};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-`;
-
-const ContactInfo = styled.div`
-  flex: 1;
-  min-width: 0;
-`;
-
-const ContactName = styled.div`
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const ContactEmails = styled.div`
-  font-size: 0.85rem;
-  color: ${({ theme }) => theme.colors.textSecondary};
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const NoContacts = styled.div`
-  text-align: center;
-  padding: 2rem;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
 
 export interface ContactFormData {
   email: string;

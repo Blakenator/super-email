@@ -2,3 +2,6 @@ export * from './EmailAccountForm';
 export * from './SmtpProfileForm';
 export * from './EmailAccountCard';
 export * from './SmtpProfileCard';
+export * from './TagsManager';
+export * from './MailRulesManager';
+export * from './NotificationSettings';

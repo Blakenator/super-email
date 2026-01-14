@@ -1,40 +1,15 @@
 import { useState } from 'react';
-import { Container, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router';
-import styled from 'styled-components';
+import { Container, Form, Button, Alert, Spinner } from 'react-bootstrap';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope } from '@fortawesome/free-solid-svg-icons';
-
-const PageWrapper = styled.div`
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-`;
-
-const LoginCard = styled(Card)`
-  width: 100%;
-  max-width: 420px;
-  border: none;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
-`;
-
-const Logo = styled.h1`
-  font-size: 2rem;
-  font-weight: 700;
-  color: #667eea;
-  text-align: center;
-  margin-bottom: 0.5rem;
-`;
-
-const Tagline = styled.p`
-  color: #6c757d;
-  text-align: center;
-  margin-bottom: 2rem;
-`;
+import {
+  PageWrapper,
+  AuthCard as LoginCard,
+  Logo,
+  Tagline,
+} from './auth.wrappers';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -43,6 +18,10 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Get redirect path from URL params (set when session expired)
+  const redirectPath = searchParams.get('redirect');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +30,8 @@ export function Login() {
 
     try {
       await login(email, password);
-      navigate('/inbox');
+      // Navigate to the redirect path if set, otherwise inbox
+      navigate(redirectPath || '/inbox');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {

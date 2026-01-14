@@ -1,6 +1,5 @@
 import { useState, useCallback } from 'react';
 import { useLazyQuery } from '@apollo/client/react';
-import styled from 'styled-components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faUser,
@@ -9,9 +8,20 @@ import {
   faBuilding,
   faPhone,
 } from '@fortawesome/free-solid-svg-icons';
-import { Popover, OverlayTrigger, Button, Badge } from 'react-bootstrap';
+import { Popover, OverlayTrigger, Button } from 'react-bootstrap';
 import { gql } from '../../__generated__/gql';
 import { ContactFormModal } from './ContactFormModal';
+import {
+  EmailLink,
+  EmailChip,
+  PopoverContent,
+  PopoverHeader,
+  Avatar,
+  ContactName,
+  PopoverBody,
+  DetailRow,
+  ActionRow,
+} from './EmailContactCard.wrappers';
 
 const SEARCH_CONTACTS_BY_EMAIL = gql(`
   query SearchContactByEmail($query: String!) {
@@ -27,111 +37,6 @@ const SEARCH_CONTACTS_BY_EMAIL = gql(`
     }
   }
 `);
-
-const EmailLink = styled.span<{ $isClickable?: boolean; $isContact?: boolean }>`
-  cursor: ${({ $isClickable }) => ($isClickable ? 'pointer' : 'default')};
-  color: ${({ theme, $isContact }) =>
-    $isContact ? theme.colors.primary : theme.colors.textPrimary};
-  display: inline-flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.xs};
-
-  &:hover {
-    text-decoration: ${({ $isClickable }) =>
-      $isClickable ? 'underline' : 'none'};
-  }
-
-  .contact-icon {
-    font-size: 0.75em;
-    opacity: 0.7;
-  }
-`;
-
-const EmailChip = styled.span<{ $isClickable?: boolean; $isContact?: boolean }>`
-  cursor: ${({ $isClickable }) => ($isClickable ? 'pointer' : 'default')};
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 16px;
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  background: ${({ theme, $isContact }) =>
-    $isContact ? `${theme.colors.primary}15` : theme.colors.background};
-  border: 1px solid
-    ${({ theme, $isContact }) =>
-      $isContact ? theme.colors.primary : theme.colors.border};
-  color: ${({ theme, $isContact }) =>
-    $isContact ? theme.colors.primary : theme.colors.textPrimary};
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: ${({ theme, $isContact }) =>
-      $isContact ? `${theme.colors.primary}25` : theme.colors.backgroundHover};
-  }
-
-  .chip-icon {
-    font-size: 0.75em;
-  }
-`;
-
-const PopoverContent = styled.div`
-  min-width: 250px;
-`;
-
-const PopoverHeader = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-  padding: ${({ theme }) => theme.spacing.md};
-  background: ${({ theme }) => theme.colors.primary};
-  color: white;
-  border-radius: 4px 4px 0 0;
-  margin: -0.5rem -0.5rem 0.5rem -0.5rem;
-`;
-
-const Avatar = styled.div`
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-  flex-shrink: 0;
-`;
-
-const ContactName = styled.div`
-  font-weight: 600;
-  font-size: ${({ theme }) => theme.fontSizes.md};
-`;
-
-const PopoverBody = styled.div`
-  padding: ${({ theme }) => theme.spacing.sm};
-`;
-
-const DetailRow = styled.div`
-  display: flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing.sm};
-  padding: ${({ theme }) => theme.spacing.xs} 0;
-  font-size: ${({ theme }) => theme.fontSizes.sm};
-  color: ${({ theme }) => theme.colors.textSecondary};
-
-  .icon {
-    width: 16px;
-    text-align: center;
-    color: ${({ theme }) => theme.colors.textMuted};
-  }
-`;
-
-const ActionRow = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.spacing.xs};
-  margin-top: ${({ theme }) => theme.spacing.sm};
-  padding-top: ${({ theme }) => theme.spacing.sm};
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-`;
 
 interface EmailContactCardProps {
   email: string;
