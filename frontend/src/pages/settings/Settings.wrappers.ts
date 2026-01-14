@@ -1,10 +1,94 @@
-import styled from 'styled-components';
+import styled, { css } from 'styled-components';
 import { Card } from 'react-bootstrap';
 
 export const PageWrapper = styled.div`
   padding: 1.5rem;
   height: 100%;
   overflow-y: auto;
+`;
+
+// Responsive tabs wrapper that switches between horizontal, vertical, and dropdown
+export const ResponsiveTabsWrapper = styled.div`
+  /* Desktop: Horizontal tabs */
+  .nav-tabs {
+    border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+    margin-bottom: ${({ theme }) => theme.spacing.lg};
+    flex-wrap: wrap;
+  }
+
+  .nav-link {
+    color: ${({ theme }) => theme.colors.textSecondary};
+    border: none;
+    padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+    margin-bottom: -1px;
+    white-space: nowrap;
+    
+    &:hover {
+      color: ${({ theme }) => theme.colors.primary};
+      border-color: transparent;
+    }
+    
+    &.active {
+      color: ${({ theme }) => theme.colors.primary};
+      background: transparent;
+      border-bottom: 2px solid ${({ theme }) => theme.colors.primary};
+    }
+  }
+
+  /* Tablet: Vertical tabs on the left */
+  @media (max-width: 991px) and (min-width: 576px) {
+    display: flex;
+    gap: ${({ theme }) => theme.spacing.lg};
+    
+    .nav-tabs {
+      flex-direction: column;
+      border-bottom: none;
+      border-right: 1px solid ${({ theme }) => theme.colors.border};
+      margin-bottom: 0;
+      padding-right: ${({ theme }) => theme.spacing.md};
+      width: 180px;
+      flex-shrink: 0;
+    }
+
+    .nav-link {
+      text-align: left;
+      border-radius: ${({ theme }) => theme.borderRadius.md};
+      margin-bottom: ${({ theme }) => theme.spacing.xs};
+      
+      &.active {
+        background: ${({ theme }) => theme.colors.primary}15;
+        border-bottom: none;
+        border-left: 3px solid ${({ theme }) => theme.colors.primary};
+      }
+    }
+
+    .tab-content {
+      flex: 1;
+      min-width: 0;
+    }
+  }
+
+  /* Mobile: Dropdown-like tabs */
+  @media (max-width: 575px) {
+    .nav-tabs {
+      flex-direction: column;
+      border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+      margin-bottom: ${({ theme }) => theme.spacing.md};
+      padding-bottom: ${({ theme }) => theme.spacing.sm};
+      gap: 4px;
+    }
+
+    .nav-link {
+      padding: ${({ theme }) => theme.spacing.sm};
+      border-radius: ${({ theme }) => theme.borderRadius.sm};
+      font-size: ${({ theme }) => theme.fontSizes.sm};
+      
+      &.active {
+        background: ${({ theme }) => theme.colors.primary}15;
+        border-bottom: none;
+      }
+    }
+  }
 `;
 
 export const Header = styled.div`

@@ -127,6 +127,7 @@ export type CreateEmailAccountInput = {
   defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
   email: Scalars['String']['input'];
   host: Scalars['String']['input'];
+  isDefault?: InputMaybe<Scalars['Boolean']['input']>;
   name: Scalars['String']['input'];
   password: Scalars['String']['input'];
   port: Scalars['Int']['input'];
@@ -208,6 +209,7 @@ export type EmailAccount = BaseEntityProps & {
   email: Scalars['String']['output'];
   host: Scalars['String']['output'];
   id: Scalars['String']['output'];
+  isDefault: Scalars['Boolean']['output'];
   isSyncing: Scalars['Boolean']['output'];
   lastSyncedAt?: Maybe<Scalars['Date']['output']>;
   name: Scalars['String']['output'];
@@ -335,6 +337,8 @@ export type Mutation = {
   updateMailRule: MailRule;
   updateSmtpProfile: SmtpProfile;
   updateTag: Tag;
+  updateThemePreference: User;
+  updateUserPreferences: User;
 };
 
 
@@ -491,6 +495,21 @@ export type MutationUpdateSmtpProfileArgs = {
 export type MutationUpdateTagArgs = {
   input: UpdateTagInput;
 };
+
+
+export type MutationUpdateThemePreferenceArgs = {
+  themePreference: ThemePreference;
+};
+
+
+export type MutationUpdateUserPreferencesArgs = {
+  input: UpdateUserPreferencesInput;
+};
+
+export enum NotificationDetailLevel {
+  Full = 'FULL',
+  Minimal = 'MINIMAL'
+}
 
 export type NukeOldEmailsInput = {
   olderThan: Scalars['Date']['input'];
@@ -695,6 +714,12 @@ export type TestSmtpConnectionInput = {
   username: Scalars['String']['input'];
 };
 
+export enum ThemePreference {
+  Auto = 'AUTO',
+  Dark = 'DARK',
+  Light = 'LIGHT'
+}
+
 export type UnsubscribeInput = {
   emailId: Scalars['String']['input'];
 };
@@ -714,6 +739,7 @@ export type UpdateEmailAccountInput = {
   defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
   host?: InputMaybe<Scalars['String']['input']>;
   id: Scalars['String']['input'];
+  isDefault?: InputMaybe<Scalars['Boolean']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
   password?: InputMaybe<Scalars['String']['input']>;
   port?: InputMaybe<Scalars['Int']['input']>;
@@ -754,6 +780,12 @@ export type UpdateTagInput = {
   name?: InputMaybe<Scalars['String']['input']>;
 };
 
+export type UpdateUserPreferencesInput = {
+  navbarCollapsed?: InputMaybe<Scalars['Boolean']['input']>;
+  notificationDetailLevel?: InputMaybe<NotificationDetailLevel>;
+  themePreference?: InputMaybe<ThemePreference>;
+};
+
 export type User = BaseEntityProps & {
   __typename?: 'User';
   authenticationMethods: Array<AuthenticationMethod>;
@@ -763,7 +795,10 @@ export type User = BaseEntityProps & {
   firstName: Scalars['String']['output'];
   id: Scalars['String']['output'];
   lastName: Scalars['String']['output'];
+  navbarCollapsed: Scalars['Boolean']['output'];
+  notificationDetailLevel: NotificationDetailLevel;
   smtpProfiles: Array<SmtpProfile>;
+  themePreference: ThemePreference;
   updatedAt?: Maybe<Scalars['Date']['output']>;
 };
 
@@ -885,6 +920,7 @@ export type ResolversTypes = ResolversObject<{
   MailboxUpdate: ResolverTypeWrapper<MailboxUpdate>;
   MailboxUpdateType: MailboxUpdateType;
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  NotificationDetailLevel: NotificationDetailLevel;
   NukeOldEmailsInput: NukeOldEmailsInput;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
   RemoveTagsFromEmailsInput: RemoveTagsFromEmailsInput;
@@ -902,12 +938,14 @@ export type ResolversTypes = ResolversObject<{
   TestConnectionResult: ResolverTypeWrapper<TestConnectionResult>;
   TestEmailAccountConnectionInput: TestEmailAccountConnectionInput;
   TestSmtpConnectionInput: TestSmtpConnectionInput;
+  ThemePreference: ThemePreference;
   UnsubscribeInput: UnsubscribeInput;
   UpdateContactInput: UpdateContactInput;
   UpdateEmailAccountInput: UpdateEmailAccountInput;
   UpdateMailRuleInput: UpdateMailRuleInput;
   UpdateSmtpProfileInput: UpdateSmtpProfileInput;
   UpdateTagInput: UpdateTagInput;
+  UpdateUserPreferencesInput: UpdateUserPreferencesInput;
   User: ResolverTypeWrapper<User>;
 }>;
 
@@ -962,6 +1000,7 @@ export type ResolversParentTypes = ResolversObject<{
   UpdateMailRuleInput: UpdateMailRuleInput;
   UpdateSmtpProfileInput: UpdateSmtpProfileInput;
   UpdateTagInput: UpdateTagInput;
+  UpdateUserPreferencesInput: UpdateUserPreferencesInput;
   User: User;
 }>;
 
@@ -1056,6 +1095,7 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastSyncedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1130,6 +1170,8 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   updateMailRule?: Resolver<ResolversTypes['MailRule'], ParentType, ContextType, RequireFields<MutationUpdateMailRuleArgs, 'input'>>;
   updateSmtpProfile?: Resolver<ResolversTypes['SmtpProfile'], ParentType, ContextType, RequireFields<MutationUpdateSmtpProfileArgs, 'input'>>;
   updateTag?: Resolver<ResolversTypes['Tag'], ParentType, ContextType, RequireFields<MutationUpdateTagArgs, 'input'>>;
+  updateThemePreference?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateThemePreferenceArgs, 'themePreference'>>;
+  updateUserPreferences?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateUserPreferencesArgs, 'input'>>;
 }>;
 
 export type QueryResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
@@ -1221,7 +1263,10 @@ export type UserResolvers<ContextType = MyContext, ParentType extends ResolversP
   firstName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   lastName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  navbarCollapsed?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  notificationDetailLevel?: Resolver<ResolversTypes['NotificationDetailLevel'], ParentType, ContextType>;
   smtpProfiles?: Resolver<Array<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
+  themePreference?: Resolver<ResolversTypes['ThemePreference'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;

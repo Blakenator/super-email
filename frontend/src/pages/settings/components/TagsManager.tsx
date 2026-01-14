@@ -32,22 +32,8 @@ import {
   TagDescription,
   EmailCount,
   TagActions,
-  ColorPicker,
-  ColorOption,
 } from './TagsManager.wrappers';
-
-const PRESET_COLORS = [
-  '#dc3545', // red
-  '#fd7e14', // orange
-  '#ffc107', // yellow
-  '#28a745', // green
-  '#17a2b8', // teal
-  '#007bff', // blue
-  '#6f42c1', // purple
-  '#e83e8c', // pink
-  '#6c757d', // gray
-  '#343a40', // dark
-];
+import { ColorPicker, DEFAULT_COLORS } from '../../../core/components';
 
 interface TagFormData {
   name: string;
@@ -65,7 +51,7 @@ export function TagsManager() {
   } | null>(null);
   const [formData, setFormData] = useState<TagFormData>({
     name: '',
-    color: PRESET_COLORS[5],
+    color: DEFAULT_COLORS[5],
     description: '',
   });
 
@@ -98,7 +84,7 @@ export function TagsManager() {
 
   const handleOpenCreateModal = () => {
     setEditingTag(null);
-    setFormData({ name: '', color: PRESET_COLORS[5], description: '' });
+    setFormData({ name: '', color: DEFAULT_COLORS[5], description: '' });
     setShowModal(true);
   };
 
@@ -115,7 +101,7 @@ export function TagsManager() {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingTag(null);
-    setFormData({ name: '', color: PRESET_COLORS[5], description: '' });
+    setFormData({ name: '', color: DEFAULT_COLORS[5], description: '' });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -245,17 +231,11 @@ export function TagsManager() {
 
             <Form.Group className="mb-3">
               <Form.Label>Color</Form.Label>
-              <ColorPicker>
-                {PRESET_COLORS.map((color) => (
-                  <ColorOption
-                    key={color}
-                    type="button"
-                    $color={color}
-                    $selected={formData.color === color}
-                    onClick={() => setFormData({ ...formData, color })}
-                  />
-                ))}
-              </ColorPicker>
+              <ColorPicker
+                value={formData.color}
+                onChange={(color) => setFormData({ ...formData, color })}
+                mode="full"
+              />
             </Form.Group>
 
             <Form.Group className="mb-3">

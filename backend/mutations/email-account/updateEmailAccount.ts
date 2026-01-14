@@ -15,6 +15,14 @@ export const updateEmailAccount = makeMutation(
       throw new Error('Email account not found');
     }
 
+    // If setting as default, unset any existing default for this user
+    if (input.isDefault) {
+      await EmailAccount.update(
+        { isDefault: false },
+        { where: { userId, isDefault: true } },
+      );
+    }
+
     await emailAccount.update({
       ...(input.name !== undefined && { name: input.name }),
       ...(input.host !== undefined && { host: input.host }),
@@ -25,6 +33,7 @@ export const updateEmailAccount = makeMutation(
       ...(input.defaultSmtpProfileId !== undefined && {
         defaultSmtpProfileId: input.defaultSmtpProfileId,
       }),
+      ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
     });
 
     return emailAccount;

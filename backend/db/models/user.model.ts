@@ -1,5 +1,16 @@
 import { Column, DataType, Model, Table } from 'sequelize-typescript';
 
+export enum ThemePreference {
+  LIGHT = 'LIGHT',
+  DARK = 'DARK',
+  AUTO = 'AUTO',
+}
+
+export enum NotificationDetailLevel {
+  MINIMAL = 'MINIMAL',
+  FULL = 'FULL',
+}
+
 @Table({ timestamps: true, tableName: 'users' })
 export class User extends Model {
   @Column({
@@ -18,6 +29,27 @@ export class User extends Model {
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare lastName: string;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(ThemePreference)),
+    allowNull: false,
+    defaultValue: ThemePreference.AUTO,
+  })
+  declare themePreference: ThemePreference;
+
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare navbarCollapsed: boolean;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(NotificationDetailLevel)),
+    allowNull: false,
+    defaultValue: NotificationDetailLevel.FULL,
+  })
+  declare notificationDetailLevel: NotificationDetailLevel;
 
   // Note: HasMany associations are not defined here to avoid circular dependencies.
   // The ForeignKey/BelongsTo decorators on child models are sufficient for Sequelize

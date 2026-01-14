@@ -108,7 +108,7 @@ export const AccountBadge = styled(Badge)`
 export const ThreadBadge = styled(Badge)`
   font-size: 0.65rem;
   margin-left: ${({ theme }) => theme.spacing.xs};
-  background-color: ${({ theme }) => theme.colors.primary} !important;
+  background-color: ${({ theme }) => theme.colors.textSecondary} !important;
 `;
 
 export const QuickActions = styled.div`
@@ -262,7 +262,7 @@ export const DenseAccountBadge = styled(Badge)`
 export const DenseThreadBadge = styled(Badge)`
   font-size: 0.55rem;
   margin-left: ${({ theme }) => theme.spacing.xs};
-  background-color: ${({ theme }) => theme.colors.primary} !important;
+  background-color: ${({ theme }) => theme.colors.textSecondary} !important;
   flex-shrink: 0;
 `;
 

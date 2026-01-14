@@ -90,4 +90,7 @@ export class EmailAccount extends Model {
   // Provider ID for icon display (gmail, outlook, yahoo, etc.)
   @Column({ type: DataType.TEXT, allowNull: true })
   declare providerId: string | null;
+
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare isDefault: boolean;
 }

@@ -7,6 +7,14 @@ export const createEmailAccount = makeMutation(
   async (_parent, { input }, context) => {
     const userId = requireAuth(context);
 
+    // If setting as default, unset any existing default for this user
+    if (input.isDefault) {
+      await EmailAccount.update(
+        { isDefault: false },
+        { where: { userId, isDefault: true } },
+      );
+    }
+
     const emailAccount = await EmailAccount.create({
       userId,
       name: input.name,
@@ -18,6 +26,7 @@ export const createEmailAccount = makeMutation(
       accountType: input.accountType,
       useSsl: input.useSsl,
       defaultSmtpProfileId: input.defaultSmtpProfileId || null,
+      isDefault: input.isDefault ?? false,
     });
 
     return emailAccount;

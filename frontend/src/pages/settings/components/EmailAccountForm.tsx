@@ -40,6 +40,7 @@ export interface EmailAccountFormData {
   useSsl: boolean;
   defaultSmtpProfileId: string;
   providerId: string;
+  isDefault: boolean;
 }
 
 const defaultFormData: EmailAccountFormData = {
@@ -53,6 +54,7 @@ const defaultFormData: EmailAccountFormData = {
   useSsl: true,
   defaultSmtpProfileId: '',
   providerId: 'custom',
+  isDefault: false,
 };
 
 interface SmtpProfile {
@@ -76,6 +78,7 @@ interface EmailAccountFormProps {
     useSsl: boolean;
     defaultSmtpProfileId?: string | null;
     providerId?: string | null;
+    isDefault?: boolean;
   } | null;
   smtpProfiles: SmtpProfile[];
   isSubmitting: boolean;
@@ -111,6 +114,7 @@ export function EmailAccountForm({
           useSsl: editingAccount.useSsl,
           defaultSmtpProfileId: editingAccount.defaultSmtpProfileId || '',
           providerId: editingAccount.providerId || 'custom',
+          isDefault: editingAccount.isDefault || false,
         });
       } else {
         setFormData(defaultFormData);
@@ -323,6 +327,18 @@ export function EmailAccountForm({
                 </option>
               ))}
             </Form.Select>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Check
+              type="checkbox"
+              id="isDefault"
+              label="Set as default account for composing new emails"
+              checked={formData.isDefault}
+              onChange={(e) =>
+                setFormData({ ...formData, isDefault: e.target.checked })
+              }
+            />
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>

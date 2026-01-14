@@ -1,5 +1,7 @@
 import type { AllMutations } from '../types.js';
 import { deleteAuthenticationMethod } from './auth/deleteAuthenticationMethod.js';
+import { updateThemePreference } from './auth/updateThemePreference.js';
+import { updateUserPreferences } from './auth/updateUserPreferences.js';
 import { createEmailAccount } from './email-account/createEmailAccount.js';
 import { updateEmailAccount } from './email-account/updateEmailAccount.js';
 import { deleteEmailAccount } from './email-account/deleteEmailAccount.js';
@@ -34,6 +36,8 @@ import { runMailRule } from './mail-rule/runMailRule.js';
 
 export const MutationResolvers: AllMutations = {
   deleteAuthenticationMethod,
+  updateThemePreference,
+  updateUserPreferences,
   createEmailAccount,
   updateEmailAccount,
   deleteEmailAccount,

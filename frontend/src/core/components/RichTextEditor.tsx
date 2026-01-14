@@ -492,11 +492,11 @@ export function RichTextEditor({
     namespace: 'EmailEditor',
     theme: {
       text: {
-        bold: 'font-bold',
-        italic: 'font-italic',
-        underline: 'underline',
-        strikethrough: 'line-through',
-        code: 'editor-code',
+        bold: 'editor-text-bold',
+        italic: 'editor-text-italic',
+        underline: 'editor-text-underline',
+        strikethrough: 'editor-text-strikethrough',
+        code: 'editor-text-code',
       },
       quote: 'editor-quote',
       code: 'editor-code-block',

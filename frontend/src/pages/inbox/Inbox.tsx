@@ -126,7 +126,7 @@ function parseFiltersFromUrl(
 function serializeFiltersToUrl(filters: EmailFilters): string | null {
   // Filter out empty values to keep URL short
   const cleanedFilters: Partial<EmailFilters> = {};
-  
+
   for (const [key, value] of Object.entries(filters)) {
     if (key === 'tagIds') {
       const tagIds = value as string[];
@@ -137,7 +137,7 @@ function serializeFiltersToUrl(filters: EmailFilters): string | null {
       cleanedFilters[key as keyof EmailFilters] = value.trim() as any;
     }
   }
-  
+
   // Return null if no filters remain
   if (Object.keys(cleanedFilters).length === 0) return null;
   return encodeURIComponent(JSON.stringify(cleanedFilters));

@@ -20,7 +20,9 @@ import { ThemeProvider } from 'styled-components';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, supabase } from './contexts/AuthContext.tsx';
 import { ErrorBoundary } from './core/components/ErrorBoundary.tsx';
-import { theme } from './core/theme.ts';
+import { lightTheme } from './core/theme.ts';
+import { ThemeContextProvider } from './contexts/ThemeContext.tsx';
+import { ThemedApp } from './ThemedApp.tsx';
 
 const httpLink = new HttpLink({ uri: '/api/graphql' });
 
@@ -93,34 +95,13 @@ const client = new ApolloClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider theme={theme}>
+    {/* Initial light theme for loading state, ThemedApp will apply actual theme */}
+    <ThemeProvider theme={lightTheme}>
       <ErrorBoundary>
         <ApolloProvider client={client}>
           <AuthProvider>
             <BrowserRouter>
-              <App />
-              <Toaster
-                position="bottom-right"
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                  },
-                  success: {
-                    iconTheme: {
-                      primary: '#22c55e',
-                      secondary: '#fff',
-                    },
-                  },
-                  error: {
-                    iconTheme: {
-                      primary: '#ef4444',
-                      secondary: '#fff',
-                    },
-                  },
-                }}
-              />
+              <ThemedApp />
             </BrowserRouter>
           </AuthProvider>
         </ApolloProvider>

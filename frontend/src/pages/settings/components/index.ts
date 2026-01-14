@@ -5,3 +5,4 @@ export * from './SmtpProfileCard';
 export * from './TagsManager';
 export * from './MailRulesManager';
 export * from './NotificationSettings';
+export * from './ThemeSettings';

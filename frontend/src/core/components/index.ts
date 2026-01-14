@@ -1,5 +1,6 @@
 // Core UI Components
 export * from './BackButton';
+export * from './ColorPicker';
 export * from './ContactFormModal';
 export * from './EmailChipInput';
 export * from './EmailContactCard';
@@ -8,4 +9,5 @@ export * from './ErrorBoundary';
 export * from './HtmlViewer';
 export * from './LoadingSpinner';
 export * from './PageWrapper';
+export * from './ResponsiveTabs';
 export * from './RichTextEditor';

@@ -14,6 +14,7 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
+    "\n  mutation UpdateThemePreference($themePreference: ThemePreference!) {\n    updateThemePreference(themePreference: $themePreference) {\n      id\n      themePreference\n    }\n  }\n": typeof types.UpdateThemePreferenceDocument,
     "\n  query GetContactsForModal {\n    getContacts {\n      id\n      email\n      emails {\n        id\n        email\n        isPrimary\n        label\n      }\n      name\n      firstName\n      lastName\n      company\n    }\n  }\n": typeof types.GetContactsForModalDocument,
     "\n  mutation CreateContactFromModal($input: CreateContactInput!) {\n    createContact(input: $input) {\n      id\n      email\n      name\n      emails {\n        id\n        email\n        isPrimary\n      }\n    }\n  }\n": typeof types.CreateContactFromModalDocument,
     "\n  mutation UpdateContactFromModal($input: UpdateContactInput!) {\n    updateContact(input: $input) {\n      id\n      email\n      name\n      emails {\n        id\n        email\n        isPrimary\n      }\n    }\n  }\n": typeof types.UpdateContactFromModalDocument,
@@ -21,9 +22,10 @@ type Documents = {
     "\n  query SearchContactsForChipInput($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n    }\n  }\n": typeof types.SearchContactsForChipInputDocument,
     "\n  query SearchContactByEmail($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n    }\n  }\n": typeof types.SearchContactByEmailDocument,
     "\n  subscription MailboxUpdates {\n    mailboxUpdates {\n      type\n      emailAccountId\n      message\n      emails {\n        id\n        messageId\n        folder\n        fromAddress\n        fromName\n        subject\n        textBody\n        receivedAt\n        isRead\n        isStarred\n        emailAccountId\n        toAddresses\n        ccAddresses\n        bccAddresses\n        threadId\n        threadCount\n        tags {\n          id\n          name\n          color\n        }\n      }\n    }\n  }\n": typeof types.MailboxUpdatesDocument,
-    "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n": typeof types.FetchProfileDocument,
+    "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n": typeof types.FetchProfileDocument,
+    "\n  mutation UpdateUserPreferences($input: UpdateUserPreferencesInput!) {\n    updateUserPreferences(input: $input) {\n      id\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n": typeof types.UpdateUserPreferencesDocument,
     "\n  query GetSmtpProfiles {\n    getSmtpProfiles {\n      id\n      name\n      email\n      alias\n      isDefault\n    }\n  }\n": typeof types.GetSmtpProfilesDocument,
-    "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n    }\n  }\n": typeof types.GetEmailAccountsForComposeDocument,
+    "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n": typeof types.GetEmailAccountsForComposeDocument,
     "\n  mutation SendEmail($input: ComposeEmailInput!) {\n    sendEmail(input: $input) {\n      id\n      messageId\n      subject\n    }\n  }\n": typeof types.SendEmailDocument,
     "\n  mutation SaveDraft($input: SaveDraftInput!) {\n    saveDraft(input: $input) {\n      id\n      subject\n    }\n  }\n": typeof types.SaveDraftDocument,
     "\n  query GetContacts {\n    getContacts {\n      id\n      email\n      emails {\n        id\n        email\n        isPrimary\n        label\n      }\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n      isAutoCreated\n      createdAt\n    }\n  }\n": typeof types.GetContactsDocument,
@@ -47,12 +49,12 @@ type Documents = {
     "\n  query GetTagsForInbox {\n    getTags {\n      id\n      name\n      color\n      emailCount\n    }\n  }\n": typeof types.GetTagsForInboxDocument,
     "\n  mutation AddTagsToEmailsInbox($input: AddTagsToEmailsInput!) {\n    addTagsToEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": typeof types.AddTagsToEmailsInboxDocument,
     "\n  mutation RemoveTagsFromEmailsInbox($input: RemoveTagsFromEmailsInput!) {\n    removeTagsFromEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": typeof types.RemoveTagsFromEmailsInboxDocument,
-    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n    }\n  }\n": typeof types.GetEmailAccountsDocument,
+    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n      isDefault\n    }\n  }\n": typeof types.GetEmailAccountsDocument,
     "\n  mutation CreateEmailAccount($input: CreateEmailAccountInput!) {\n    createEmailAccount(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": typeof types.CreateEmailAccountDocument,
     "\n  mutation DeleteEmailAccount($id: String!) {\n    deleteEmailAccount(id: $id)\n  }\n": typeof types.DeleteEmailAccountDocument,
     "\n  mutation SyncEmailAccount($input: SyncEmailAccountInput!) {\n    syncEmailAccount(input: $input)\n  }\n": typeof types.SyncEmailAccountDocument,
     "\n  mutation SyncAllAccountsSettings {\n    syncAllAccounts\n  }\n": typeof types.SyncAllAccountsSettingsDocument,
-    "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n": typeof types.UpdateEmailAccountDocument,
+    "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n": typeof types.UpdateEmailAccountDocument,
     "\n  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {\n    testEmailAccountConnection(input: $input) {\n      success\n      message\n    }\n  }\n": typeof types.TestEmailAccountConnectionDocument,
     "\n  query GetSmtpProfilesFull {\n    getSmtpProfiles {\n      id\n      name\n      email\n      alias\n      host\n      port\n      useSsl\n      isDefault\n      providerId\n    }\n  }\n": typeof types.GetSmtpProfilesFullDocument,
     "\n  mutation CreateSmtpProfile($input: CreateSmtpProfileInput!) {\n    createSmtpProfile(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": typeof types.CreateSmtpProfileDocument,
@@ -75,6 +77,7 @@ type Documents = {
     "\n  mutation RunMailRule($id: String!) {\n    runMailRule(id: $id) {\n      matchedCount\n      processedCount\n    }\n  }\n": typeof types.RunMailRuleDocument,
 };
 const documents: Documents = {
+    "\n  mutation UpdateThemePreference($themePreference: ThemePreference!) {\n    updateThemePreference(themePreference: $themePreference) {\n      id\n      themePreference\n    }\n  }\n": types.UpdateThemePreferenceDocument,
     "\n  query GetContactsForModal {\n    getContacts {\n      id\n      email\n      emails {\n        id\n        email\n        isPrimary\n        label\n      }\n      name\n      firstName\n      lastName\n      company\n    }\n  }\n": types.GetContactsForModalDocument,
     "\n  mutation CreateContactFromModal($input: CreateContactInput!) {\n    createContact(input: $input) {\n      id\n      email\n      name\n      emails {\n        id\n        email\n        isPrimary\n      }\n    }\n  }\n": types.CreateContactFromModalDocument,
     "\n  mutation UpdateContactFromModal($input: UpdateContactInput!) {\n    updateContact(input: $input) {\n      id\n      email\n      name\n      emails {\n        id\n        email\n        isPrimary\n      }\n    }\n  }\n": types.UpdateContactFromModalDocument,
@@ -82,9 +85,10 @@ const documents: Documents = {
     "\n  query SearchContactsForChipInput($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n    }\n  }\n": types.SearchContactsForChipInputDocument,
     "\n  query SearchContactByEmail($query: String!) {\n    searchContacts(query: $query) {\n      id\n      email\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n    }\n  }\n": types.SearchContactByEmailDocument,
     "\n  subscription MailboxUpdates {\n    mailboxUpdates {\n      type\n      emailAccountId\n      message\n      emails {\n        id\n        messageId\n        folder\n        fromAddress\n        fromName\n        subject\n        textBody\n        receivedAt\n        isRead\n        isStarred\n        emailAccountId\n        toAddresses\n        ccAddresses\n        bccAddresses\n        threadId\n        threadCount\n        tags {\n          id\n          name\n          color\n        }\n      }\n    }\n  }\n": types.MailboxUpdatesDocument,
-    "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n": types.FetchProfileDocument,
+    "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n": types.FetchProfileDocument,
+    "\n  mutation UpdateUserPreferences($input: UpdateUserPreferencesInput!) {\n    updateUserPreferences(input: $input) {\n      id\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n": types.UpdateUserPreferencesDocument,
     "\n  query GetSmtpProfiles {\n    getSmtpProfiles {\n      id\n      name\n      email\n      alias\n      isDefault\n    }\n  }\n": types.GetSmtpProfilesDocument,
-    "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n    }\n  }\n": types.GetEmailAccountsForComposeDocument,
+    "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n": types.GetEmailAccountsForComposeDocument,
     "\n  mutation SendEmail($input: ComposeEmailInput!) {\n    sendEmail(input: $input) {\n      id\n      messageId\n      subject\n    }\n  }\n": types.SendEmailDocument,
     "\n  mutation SaveDraft($input: SaveDraftInput!) {\n    saveDraft(input: $input) {\n      id\n      subject\n    }\n  }\n": types.SaveDraftDocument,
     "\n  query GetContacts {\n    getContacts {\n      id\n      email\n      emails {\n        id\n        email\n        isPrimary\n        label\n      }\n      name\n      firstName\n      lastName\n      company\n      phone\n      notes\n      isAutoCreated\n      createdAt\n    }\n  }\n": types.GetContactsDocument,
@@ -108,12 +112,12 @@ const documents: Documents = {
     "\n  query GetTagsForInbox {\n    getTags {\n      id\n      name\n      color\n      emailCount\n    }\n  }\n": types.GetTagsForInboxDocument,
     "\n  mutation AddTagsToEmailsInbox($input: AddTagsToEmailsInput!) {\n    addTagsToEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": types.AddTagsToEmailsInboxDocument,
     "\n  mutation RemoveTagsFromEmailsInbox($input: RemoveTagsFromEmailsInput!) {\n    removeTagsFromEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": types.RemoveTagsFromEmailsInboxDocument,
-    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n    }\n  }\n": types.GetEmailAccountsDocument,
+    "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n      isDefault\n    }\n  }\n": types.GetEmailAccountsDocument,
     "\n  mutation CreateEmailAccount($input: CreateEmailAccountInput!) {\n    createEmailAccount(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": types.CreateEmailAccountDocument,
     "\n  mutation DeleteEmailAccount($id: String!) {\n    deleteEmailAccount(id: $id)\n  }\n": types.DeleteEmailAccountDocument,
     "\n  mutation SyncEmailAccount($input: SyncEmailAccountInput!) {\n    syncEmailAccount(input: $input)\n  }\n": types.SyncEmailAccountDocument,
     "\n  mutation SyncAllAccountsSettings {\n    syncAllAccounts\n  }\n": types.SyncAllAccountsSettingsDocument,
-    "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n": types.UpdateEmailAccountDocument,
+    "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n": types.UpdateEmailAccountDocument,
     "\n  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {\n    testEmailAccountConnection(input: $input) {\n      success\n      message\n    }\n  }\n": types.TestEmailAccountConnectionDocument,
     "\n  query GetSmtpProfilesFull {\n    getSmtpProfiles {\n      id\n      name\n      email\n      alias\n      host\n      port\n      useSsl\n      isDefault\n      providerId\n    }\n  }\n": types.GetSmtpProfilesFullDocument,
     "\n  mutation CreateSmtpProfile($input: CreateSmtpProfileInput!) {\n    createSmtpProfile(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": types.CreateSmtpProfileDocument,
@@ -153,6 +157,10 @@ export function gql(source: string): unknown;
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
+export function gql(source: "\n  mutation UpdateThemePreference($themePreference: ThemePreference!) {\n    updateThemePreference(themePreference: $themePreference) {\n      id\n      themePreference\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateThemePreference($themePreference: ThemePreference!) {\n    updateThemePreference(themePreference: $themePreference) {\n      id\n      themePreference\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
 export function gql(source: "\n  query GetContactsForModal {\n    getContacts {\n      id\n      email\n      emails {\n        id\n        email\n        isPrimary\n        label\n      }\n      name\n      firstName\n      lastName\n      company\n    }\n  }\n"): (typeof documents)["\n  query GetContactsForModal {\n    getContacts {\n      id\n      email\n      emails {\n        id\n        email\n        isPrimary\n        label\n      }\n      name\n      firstName\n      lastName\n      company\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
@@ -181,7 +189,11 @@ export function gql(source: "\n  subscription MailboxUpdates {\n    mailboxUpdat
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n"): (typeof documents)["\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n    }\n  }\n"];
+export function gql(source: "\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n"): (typeof documents)["\n  query FetchProfile {\n    fetchProfile {\n      id\n      email\n      firstName\n      lastName\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation UpdateUserPreferences($input: UpdateUserPreferencesInput!) {\n    updateUserPreferences(input: $input) {\n      id\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateUserPreferences($input: UpdateUserPreferencesInput!) {\n    updateUserPreferences(input: $input) {\n      id\n      themePreference\n      navbarCollapsed\n      notificationDetailLevel\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -189,7 +201,7 @@ export function gql(source: "\n  query GetSmtpProfiles {\n    getSmtpProfiles {\
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n    }\n  }\n"): (typeof documents)["\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n    }\n  }\n"];
+export function gql(source: "\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n"): (typeof documents)["\n  query GetEmailAccountsForCompose {\n    getEmailAccounts {\n      id\n      name\n      email\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -285,7 +297,7 @@ export function gql(source: "\n  mutation RemoveTagsFromEmailsInbox($input: Remo
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n    }\n  }\n"): (typeof documents)["\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n    }\n  }\n"];
+export function gql(source: "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n      isDefault\n    }\n  }\n"): (typeof documents)["\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n      isDefault\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
@@ -305,7 +317,7 @@ export function gql(source: "\n  mutation SyncAllAccountsSettings {\n    syncAll
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function gql(source: "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n    }\n  }\n"];
+export function gql(source: "\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n"): (typeof documents)["\n  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {\n    updateEmailAccount(input: $input) {\n      id\n      name\n      email\n      host\n      port\n      useSsl\n      defaultSmtpProfileId\n      isDefault\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

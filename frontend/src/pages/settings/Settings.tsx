@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   Container,
@@ -41,13 +41,14 @@ import {
   TagsManager,
   MailRulesManager,
   NotificationSettings,
+  ThemeSettings,
 } from './components';
+import { ResponsiveTabs } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCog,
   faInbox,
   faPaperPlane,
-  faSignOutAlt,
   faPlus,
   faSync,
   faTrash,
@@ -59,6 +60,8 @@ import {
   faTag,
   faFilter,
   faBell,
+  faPalette,
+  faSignOutAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faGoogle,
@@ -87,6 +90,7 @@ import {
   AuthMethodName,
   AuthMethodEmail,
   AuthMethodMeta,
+  ResponsiveTabsWrapper,
 } from './Settings.wrappers';
 
 type SaveStep = {
@@ -104,6 +108,7 @@ const TAB_MAPPING: Record<string, string> = {
   tags: 'tags',
   rules: 'rules',
   notifications: 'notifications',
+  appearance: 'appearance',
 };
 
 const REVERSE_TAB_MAPPING = Object.fromEntries(
@@ -470,6 +475,7 @@ export function Settings() {
             useSsl: formData.useSsl,
             defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
             providerId: formData.providerId || undefined,
+            isDefault: formData.isDefault,
           },
         },
       });
@@ -489,6 +495,7 @@ export function Settings() {
             useSsl: formData.useSsl,
             defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
             providerId: formData.providerId || undefined,
+            isDefault: formData.isDefault,
           },
         },
       });
@@ -901,289 +908,309 @@ export function Settings() {
           </UserInfo>
         )}
 
-        <Tabs activeKey={activeTab} onSelect={handleTabSelect} className="mb-3">
-          <Tab
-            eventKey="email-accounts"
-            title={
-              <>
-                <FontAwesomeIcon icon={faInbox} className="me-1" />
-                Email Accounts (IMAP/POP)
-              </>
-            }
+        <ResponsiveTabsWrapper>
+          <Tabs
+            activeKey={activeTab}
+            onSelect={handleTabSelect}
+            className="mb-3"
           >
-            <SectionCard>
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h5 className="mb-0">Incoming Email Accounts</h5>
-                  <div className="d-flex gap-2">
-                    <Button
-                      variant="outline-primary"
-                      size="sm"
-                      onClick={() => syncAllAccounts()}
-                      disabled={syncingAll || emailAccounts.length === 0}
-                    >
-                      {syncingAll ? (
-                        <Spinner
-                          animation="border"
-                          size="sm"
-                          className="me-1"
+            <Tab
+              eventKey="email-accounts"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faInbox} className="me-1" />
+                  Email Accounts (IMAP/POP)
+                </>
+              }
+            >
+              <SectionCard>
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="mb-0">Incoming Email Accounts</h5>
+                    <div className="d-flex gap-2">
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        onClick={() => syncAllAccounts()}
+                        disabled={syncingAll || emailAccounts.length === 0}
+                      >
+                        {syncingAll ? (
+                          <Spinner
+                            animation="border"
+                            size="sm"
+                            className="me-1"
+                          />
+                        ) : (
+                          <FontAwesomeIcon icon={faSync} className="me-1" />
+                        )}
+                        Sync All
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setShowEmailAccountModal(true)}
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-1" />
+                        Add Account
+                      </Button>
+                    </div>
+                  </div>
+
+                  {emailAccountsLoading && emailAccounts.length === 0 ? (
+                    <div className="text-center py-4">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : emailAccounts.length === 0 ? (
+                    <p className="text-muted text-center py-4">
+                      No email accounts configured. Add one to start receiving
+                      emails.
+                    </p>
+                  ) : (
+                    <AccountCardGrid>
+                      {emailAccounts.map((account) => (
+                        <EmailAccountCard
+                          key={account.id}
+                          account={account}
+                          onEdit={handleEditEmailAccount}
+                          onSync={(id) =>
+                            syncEmailAccount({
+                              variables: { input: { emailAccountId: id } },
+                            })
+                          }
+                          onDelete={(id) =>
+                            deleteEmailAccount({ variables: { id } })
+                          }
                         />
-                      ) : (
-                        <FontAwesomeIcon icon={faSync} className="me-1" />
-                      )}
-                      Sync All
-                    </Button>
+                      ))}
+                    </AccountCardGrid>
+                  )}
+                </Card.Body>
+              </SectionCard>
+            </Tab>
+
+            <Tab
+              eventKey="smtp-profiles"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faPaperPlane} className="me-1" />
+                  SMTP Profiles
+                </>
+              }
+            >
+              <SectionCard>
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="mb-0">Outgoing Email Profiles</h5>
                     <Button
                       variant="primary"
                       size="sm"
-                      onClick={() => setShowEmailAccountModal(true)}
+                      onClick={() => setShowSmtpProfileModal(true)}
                     >
                       <FontAwesomeIcon icon={faPlus} className="me-1" />
-                      Add Account
+                      Add Profile
                     </Button>
                   </div>
-                </div>
 
-                {emailAccountsLoading && emailAccounts.length === 0 ? (
-                  <div className="text-center py-4">
-                    <Spinner animation="border" size="sm" />
+                  {smtpProfilesLoading ? (
+                    <div className="text-center py-4">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : smtpProfiles.length === 0 ? (
+                    <p className="text-muted text-center py-4">
+                      No SMTP profiles configured. Add one to start sending
+                      emails.
+                    </p>
+                  ) : (
+                    <SmtpCardGrid>
+                      {smtpProfiles.map((profile) => (
+                        <SmtpProfileCard
+                          key={profile.id}
+                          profile={profile}
+                          onEdit={handleEditSmtpProfile}
+                          onDelete={(id) =>
+                            deleteSmtpProfile({ variables: { id } })
+                          }
+                        />
+                      ))}
+                    </SmtpCardGrid>
+                  )}
+                </Card.Body>
+              </SectionCard>
+            </Tab>
+
+            <Tab
+              eventKey="auth-methods"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faShieldAlt} className="me-1" />
+                  Login Methods
+                </>
+              }
+            >
+              <SectionCard>
+                <Card.Body>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h5 className="mb-0">Authentication Methods</h5>
                   </div>
-                ) : emailAccounts.length === 0 ? (
-                  <p className="text-muted text-center py-4">
-                    No email accounts configured. Add one to start receiving
-                    emails.
+                  <p className="text-muted mb-4">
+                    Manage the ways you can sign in to your account. You can
+                    link multiple email addresses or social accounts.
                   </p>
-                ) : (
-                  <AccountCardGrid>
-                    {emailAccounts.map((account) => (
-                      <EmailAccountCard
-                        key={account.id}
-                        account={account}
-                        onEdit={handleEditEmailAccount}
-                        onSync={(id) =>
-                          syncEmailAccount({
-                            variables: { input: { emailAccountId: id } },
-                          })
-                        }
-                        onDelete={(id) =>
-                          deleteEmailAccount({ variables: { id } })
-                        }
-                      />
-                    ))}
-                  </AccountCardGrid>
-                )}
-              </Card.Body>
-            </SectionCard>
-          </Tab>
 
-          <Tab
-            eventKey="smtp-profiles"
-            title={
-              <>
-                <FontAwesomeIcon icon={faPaperPlane} className="me-1" />
-                SMTP Profiles
-              </>
-            }
-          >
-            <SectionCard>
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h5 className="mb-0">Outgoing Email Profiles</h5>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowSmtpProfileModal(true)}
-                  >
-                    <FontAwesomeIcon icon={faPlus} className="me-1" />
-                    Add Profile
-                  </Button>
-                </div>
-
-                {smtpProfilesLoading ? (
-                  <div className="text-center py-4">
-                    <Spinner animation="border" size="sm" />
-                  </div>
-                ) : smtpProfiles.length === 0 ? (
-                  <p className="text-muted text-center py-4">
-                    No SMTP profiles configured. Add one to start sending
-                    emails.
-                  </p>
-                ) : (
-                  <SmtpCardGrid>
-                    {smtpProfiles.map((profile) => (
-                      <SmtpProfileCard
-                        key={profile.id}
-                        profile={profile}
-                        onEdit={handleEditSmtpProfile}
-                        onDelete={(id) =>
-                          deleteSmtpProfile({ variables: { id } })
-                        }
-                      />
-                    ))}
-                  </SmtpCardGrid>
-                )}
-              </Card.Body>
-            </SectionCard>
-          </Tab>
-
-          <Tab
-            eventKey="auth-methods"
-            title={
-              <>
-                <FontAwesomeIcon icon={faShieldAlt} className="me-1" />
-                Login Methods
-              </>
-            }
-          >
-            <SectionCard>
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h5 className="mb-0">Authentication Methods</h5>
-                </div>
-                <p className="text-muted mb-4">
-                  Manage the ways you can sign in to your account. You can link
-                  multiple email addresses or social accounts.
-                </p>
-
-                {authMethodsLoading ? (
-                  <div className="text-center py-4">
-                    <Spinner animation="border" size="sm" />
-                  </div>
-                ) : authMethods.length === 0 ? (
-                  <Alert variant="warning">
-                    No authentication methods found. This may indicate an issue
-                    with your account.
-                  </Alert>
-                ) : (
-                  <>
-                    {authMethods.map((method) => {
-                      const getProviderIcon = () => {
-                        switch (method.provider) {
-                          case 'GOOGLE':
-                            return faGoogle;
-                          case 'GITHUB':
-                            return faGithub;
-                          case 'APPLE':
-                            return faApple;
-                          case 'MICROSOFT':
-                            return faMicrosoft;
-                          default:
-                            return faKey;
-                        }
-                      };
-
-                      const getProviderName = () => {
-                        switch (method.provider) {
-                          case 'EMAIL_PASSWORD':
-                            return 'Email & Password';
-                          case 'GOOGLE':
-                            return 'Google';
-                          case 'GITHUB':
-                            return 'GitHub';
-                          case 'APPLE':
-                            return 'Apple';
-                          case 'MICROSOFT':
-                            return 'Microsoft';
-                          default:
-                            return method.provider;
-                        }
-                      };
-
-                      return (
-                        <AuthMethodCard key={method.id}>
-                          <AuthMethodIcon $provider={method.provider}>
-                            <FontAwesomeIcon icon={getProviderIcon()} />
-                          </AuthMethodIcon>
-                          <AuthMethodInfo>
-                            <AuthMethodName>{getProviderName()}</AuthMethodName>
-                            <AuthMethodEmail>{method.email}</AuthMethodEmail>
-                            <AuthMethodMeta>
-                              Added{' '}
-                              {method.createdAt
-                                ? new Date(
-                                    method.createdAt,
-                                  ).toLocaleDateString()
-                                : 'Unknown'}
-                              {method.lastUsedAt && (
-                                <>
-                                  {' · '}Last used{' '}
-                                  {new Date(
-                                    method.lastUsedAt,
-                                  ).toLocaleDateString()}
-                                </>
-                              )}
-                            </AuthMethodMeta>
-                          </AuthMethodInfo>
-                          {authMethods.length > 1 && (
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() =>
-                                deleteAuthMethod({
-                                  variables: { id: method.id },
-                                })
-                              }
-                              disabled={deletingAuthMethod}
-                            >
-                              <FontAwesomeIcon
-                                icon={faTrash}
-                                className="me-1"
-                              />
-                              Remove
-                            </Button>
-                          )}
-                        </AuthMethodCard>
-                      );
-                    })}
-
-                    <Alert variant="info" className="mt-4">
-                      <FontAwesomeIcon icon={faShieldAlt} className="me-2" />
-                      <strong>Coming Soon:</strong> Link additional sign-in
-                      methods like Google, GitHub, Apple, or Microsoft to your
-                      account.
+                  {authMethodsLoading ? (
+                    <div className="text-center py-4">
+                      <Spinner animation="border" size="sm" />
+                    </div>
+                  ) : authMethods.length === 0 ? (
+                    <Alert variant="warning">
+                      No authentication methods found. This may indicate an
+                      issue with your account.
                     </Alert>
-                  </>
-                )}
-              </Card.Body>
-            </SectionCard>
-          </Tab>
+                  ) : (
+                    <>
+                      {authMethods.map((method) => {
+                        const getProviderIcon = () => {
+                          switch (method.provider) {
+                            case 'GOOGLE':
+                              return faGoogle;
+                            case 'GITHUB':
+                              return faGithub;
+                            case 'APPLE':
+                              return faApple;
+                            case 'MICROSOFT':
+                              return faMicrosoft;
+                            default:
+                              return faKey;
+                          }
+                        };
 
-          <Tab
-            eventKey="tags"
-            title={
-              <>
-                <FontAwesomeIcon icon={faTag} className="me-1" />
-                Tags
-              </>
-            }
-          >
-            <TagsManager />
-          </Tab>
+                        const getProviderName = () => {
+                          switch (method.provider) {
+                            case 'EMAIL_PASSWORD':
+                              return 'Email & Password';
+                            case 'GOOGLE':
+                              return 'Google';
+                            case 'GITHUB':
+                              return 'GitHub';
+                            case 'APPLE':
+                              return 'Apple';
+                            case 'MICROSOFT':
+                              return 'Microsoft';
+                            default:
+                              return method.provider;
+                          }
+                        };
 
-          <Tab
-            eventKey="rules"
-            title={
-              <>
-                <FontAwesomeIcon icon={faFilter} className="me-1" />
-                Mail Rules
-              </>
-            }
-          >
-            <MailRulesManager />
-          </Tab>
+                        return (
+                          <AuthMethodCard key={method.id}>
+                            <AuthMethodIcon $provider={method.provider}>
+                              <FontAwesomeIcon icon={getProviderIcon()} />
+                            </AuthMethodIcon>
+                            <AuthMethodInfo>
+                              <AuthMethodName>
+                                {getProviderName()}
+                              </AuthMethodName>
+                              <AuthMethodEmail>{method.email}</AuthMethodEmail>
+                              <AuthMethodMeta>
+                                Added{' '}
+                                {method.createdAt
+                                  ? new Date(
+                                      method.createdAt,
+                                    ).toLocaleDateString()
+                                  : 'Unknown'}
+                                {method.lastUsedAt && (
+                                  <>
+                                    {' · '}Last used{' '}
+                                    {new Date(
+                                      method.lastUsedAt,
+                                    ).toLocaleDateString()}
+                                  </>
+                                )}
+                              </AuthMethodMeta>
+                            </AuthMethodInfo>
+                            {authMethods.length > 1 && (
+                              <Button
+                                variant="outline-danger"
+                                size="sm"
+                                onClick={() =>
+                                  deleteAuthMethod({
+                                    variables: { id: method.id },
+                                  })
+                                }
+                                disabled={deletingAuthMethod}
+                              >
+                                <FontAwesomeIcon
+                                  icon={faTrash}
+                                  className="me-1"
+                                />
+                                Remove
+                              </Button>
+                            )}
+                          </AuthMethodCard>
+                        );
+                      })}
 
-          <Tab
-            eventKey="notifications"
-            title={
-              <>
-                <FontAwesomeIcon icon={faBell} className="me-1" />
-                Notifications
-              </>
-            }
-          >
-            <NotificationSettings />
-          </Tab>
-        </Tabs>
+                      <Alert variant="info" className="mt-4">
+                        <FontAwesomeIcon icon={faShieldAlt} className="me-2" />
+                        <strong>Coming Soon:</strong> Link additional sign-in
+                        methods like Google, GitHub, Apple, or Microsoft to your
+                        account.
+                      </Alert>
+                    </>
+                  )}
+                </Card.Body>
+              </SectionCard>
+            </Tab>
+
+            <Tab
+              eventKey="tags"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faTag} className="me-1" />
+                  Tags
+                </>
+              }
+            >
+              <TagsManager />
+            </Tab>
+
+            <Tab
+              eventKey="rules"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faFilter} className="me-1" />
+                  Mail Rules
+                </>
+              }
+            >
+              <MailRulesManager />
+            </Tab>
+
+            <Tab
+              eventKey="notifications"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faBell} className="me-1" />
+                  Notifications
+                </>
+              }
+            >
+              <NotificationSettings />
+            </Tab>
+
+            <Tab
+              eventKey="appearance"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faPalette} className="me-1" />
+                  Appearance
+                </>
+              }
+            >
+              <ThemeSettings />
+            </Tab>
+          </Tabs>
+        </ResponsiveTabsWrapper>
 
         {/* Email Account Modal */}
         <EmailAccountForm

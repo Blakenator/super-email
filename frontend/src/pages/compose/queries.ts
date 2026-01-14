@@ -19,6 +19,7 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       name
       email
       defaultSmtpProfileId
+      isDefault
     }
   }
 `);

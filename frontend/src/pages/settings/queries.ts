@@ -23,6 +23,7 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
         email
       }
       providerId
+      isDefault
     }
   }
 `);
@@ -65,6 +66,7 @@ export const UPDATE_EMAIL_ACCOUNT_MUTATION = gql(`
       port
       useSsl
       defaultSmtpProfileId
+      isDefault
     }
   }
 `);

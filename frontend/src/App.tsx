@@ -6,7 +6,7 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router';
-import { Nav, Badge } from 'react-bootstrap';
+import { Nav, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { Link } from 'react-router';
 import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/auth/Login';
@@ -34,6 +34,9 @@ import {
   faEnvelope,
   faAddressBook,
   faArchive,
+  faChevronLeft,
+  faChevronRight,
+  faSignOutAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
@@ -44,12 +47,24 @@ import {
   NavSection,
   StyledNavLink,
   NavIcon,
+  NavLabel,
   MainContent,
+  SidebarFooter,
+  UserSection,
+  UserAvatar,
+  UserInfo,
+  UserName,
+  UserEmail,
+  SidebarActions,
+  CollapseButton,
+  LogoutButton,
+  UnreadBadge,
 } from './App.wrappers';
 
 function AuthenticatedApp() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout, updatePreferences } = useAuth();
 
   // Start the mailbox subscription for real-time updates
   useMailboxSubscription();
@@ -60,6 +75,19 @@ function AuthenticatedApp() {
   });
 
   const unreadCount = unreadData?.getEmailCount ?? 0;
+  const isCollapsed = user?.navbarCollapsed ?? false;
+
+  const handleToggleCollapse = async () => {
+    try {
+      await updatePreferences({ navbarCollapsed: !isCollapsed });
+    } catch (error) {
+      console.error('Failed to update navbar state:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout(location.pathname);
+  };
 
   const navItems: {
     path: string;
@@ -110,77 +138,174 @@ function AuthenticatedApp() {
     );
   };
 
+  const renderNavLink = (
+    path: string,
+    label: string,
+    icon: IconDefinition,
+    showBadge?: boolean,
+  ) => {
+    const content = (
+      <StyledNavLink
+        as={Link}
+        to={path}
+        $active={isPathActive(path)}
+        $collapsed={isCollapsed}
+      >
+        <span style={{ display: 'flex', alignItems: 'center' }}>
+          <NavIcon $collapsed={isCollapsed}>
+            <FontAwesomeIcon icon={icon} />
+          </NavIcon>
+          <NavLabel $collapsed={isCollapsed}>{label}</NavLabel>
+        </span>
+        {showBadge && unreadCount > 0 && (
+          <UnreadBadge $collapsed={isCollapsed}>
+            <Badge bg="secondary" pill>
+              {unreadCount}
+            </Badge>
+          </UnreadBadge>
+        )}
+      </StyledNavLink>
+    );
+
+    if (isCollapsed) {
+      return (
+        <OverlayTrigger
+          placement="right"
+          overlay={
+            <Tooltip id={`tooltip-${path}`}>
+              {label}
+              {showBadge && unreadCount > 0 && ` (${unreadCount})`}
+            </Tooltip>
+          }
+        >
+          {content}
+        </OverlayTrigger>
+      );
+    }
+
+    return content;
+  };
+
   return (
     <AppWrapper>
-      <Sidebar>
-        <Logo>
-          <FontAwesomeIcon icon={faEnvelope} className="me-2" />
-          StacksMail
+      <Sidebar $collapsed={isCollapsed}>
+        <Logo $collapsed={isCollapsed}>
+          <FontAwesomeIcon
+            icon={faEnvelope}
+            className={isCollapsed ? '' : 'me-2'}
+          />
+          {!isCollapsed && 'StacksMail'}
         </Logo>
 
-        <ComposeButton onClick={() => navigate('/compose')}>
-          <FontAwesomeIcon icon={faPen} className="me-2" />
-          Compose
-        </ComposeButton>
+        <OverlayTrigger
+          placement="right"
+          overlay={
+            isCollapsed ? (
+              <Tooltip id="compose-tooltip">Compose</Tooltip>
+            ) : (
+              <></>
+            )
+          }
+        >
+          <ComposeButton
+            $collapsed={isCollapsed}
+            onClick={() => navigate('/compose')}
+          >
+            <FontAwesomeIcon
+              icon={faPen}
+              className={isCollapsed ? '' : 'me-2'}
+            />
+            {!isCollapsed && 'Compose'}
+          </ComposeButton>
+        </OverlayTrigger>
 
         <NavSection>
           <Nav className="flex-column">
             {navItems.map((item) => (
               <Nav.Item key={item.path}>
-                <StyledNavLink
-                  as={Link}
-                  to={item.path}
-                  $active={isPathActive(item.path)}
-                >
-                  <span>
-                    <NavIcon>
-                      <FontAwesomeIcon icon={item.icon} />
-                    </NavIcon>
-                    {item.label}
-                  </span>
-                  {item.showBadge && unreadCount > 0 && (
-                    <Badge bg="primary" pill>
-                      {unreadCount}
-                    </Badge>
-                  )}
-                </StyledNavLink>
+                {renderNavLink(
+                  item.path,
+                  item.label,
+                  item.icon,
+                  item.showBadge,
+                )}
               </Nav.Item>
             ))}
           </Nav>
 
-          <hr style={{ margin: '1rem' }} />
+          <hr style={{ margin: isCollapsed ? '1rem 0.5rem' : '1rem' }} />
 
           <Nav className="flex-column">
             <Nav.Item>
-              <StyledNavLink
-                as={Link}
-                to="/contacts"
-                $active={isPathActive('/contacts')}
-              >
-                <span>
-                  <NavIcon>
-                    <FontAwesomeIcon icon={faAddressBook} />
-                  </NavIcon>
-                  Contacts
-                </span>
-              </StyledNavLink>
+              {renderNavLink('/contacts', 'Contacts', faAddressBook)}
             </Nav.Item>
-            <Nav.Item>
-              <StyledNavLink
-                as={Link}
-                to="/settings"
-                $active={isPathActive('/settings')}
-              >
-                <span>
-                  <NavIcon>
-                    <FontAwesomeIcon icon={faCog} />
-                  </NavIcon>
-                  Settings
-                </span>
-              </StyledNavLink>
-            </Nav.Item>
+            <Nav.Item>{renderNavLink('/settings', 'Settings', faCog)}</Nav.Item>
           </Nav>
         </NavSection>
+
+        <SidebarFooter $collapsed={isCollapsed}>
+          {user && (
+            <UserSection $collapsed={isCollapsed}>
+              <OverlayTrigger
+                placement="right"
+                overlay={
+                  isCollapsed ? (
+                    <Tooltip id="user-tooltip">
+                      {user.firstName} {user.lastName}
+                      <br />
+                      {user.email}
+                    </Tooltip>
+                  ) : (
+                    <></>
+                  )
+                }
+              >
+                <UserAvatar>
+                  {user.firstName[0]}
+                  {user.lastName[0]}
+                </UserAvatar>
+              </OverlayTrigger>
+              <UserInfo $collapsed={isCollapsed}>
+                <UserName>
+                  {user.firstName} {user.lastName}
+                </UserName>
+                <UserEmail>{user.email}</UserEmail>
+              </UserInfo>
+            </UserSection>
+          )}
+          <SidebarActions $collapsed={isCollapsed}>
+            <OverlayTrigger
+              placement="right"
+              overlay={
+                <Tooltip id="collapse-tooltip">
+                  {isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                </Tooltip>
+              }
+            >
+              <CollapseButton
+                variant="ghost"
+                size="sm"
+                onClick={handleToggleCollapse}
+              >
+                <FontAwesomeIcon
+                  icon={isCollapsed ? faChevronRight : faChevronLeft}
+                />
+              </CollapseButton>
+            </OverlayTrigger>
+            <OverlayTrigger
+              placement="right"
+              overlay={<Tooltip id="logout-tooltip">Sign out</Tooltip>}
+            >
+              <LogoutButton
+                variant="outline-danger"
+                size="sm"
+                onClick={handleLogout}
+              >
+                <FontAwesomeIcon icon={faSignOutAlt} />
+              </LogoutButton>
+            </OverlayTrigger>
+          </SidebarActions>
+        </SidebarFooter>
       </Sidebar>
 
       <MainContent>

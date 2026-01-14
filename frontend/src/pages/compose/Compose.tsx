@@ -9,6 +9,9 @@ import {
   Spinner,
   Row,
   Col,
+  OverlayTrigger,
+  Popover,
+  Badge,
 } from 'react-bootstrap';
 import { useNavigate, useLocation } from 'react-router';
 import toast from 'react-hot-toast';
@@ -32,6 +35,8 @@ import {
   faSave,
   faTimes,
   faShare,
+  faInfoCircle,
+  faExchangeAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   PageWrapper,
@@ -41,6 +46,14 @@ import {
   ContentArea,
   ComposeCard,
   CcBccToggle,
+  MarkdownHint,
+  MarkdownHelpIcon,
+  SenderDisplay,
+  SenderInfo,
+  SenderIdentity,
+  SenderEmail,
+  AccountBadge,
+  ChangeAccountButton,
 } from './Compose.wrappers';
 
 interface ThreadEmailInfo {
@@ -126,6 +139,9 @@ export function Compose() {
   const [showCcBcc, setShowCcBcc] = useState(
     !!(existingDraft?.cc || existingDraft?.bcc),
   );
+
+  // Track whether sender selector is in read-only or edit mode
+  const [senderEditMode, setSenderEditMode] = useState(false);
 
   // Track if content has changed for auto-save
   const initialContentRef = useRef({
@@ -264,10 +280,11 @@ ${quotedHtml}
   const accounts = accountsData?.getEmailAccounts ?? [];
   const profiles = profilesData?.getSmtpProfiles ?? [];
 
-  // Set default email account
+  // Set default email account - prefer the one marked as default
   useEffect(() => {
     if (accounts.length && !emailAccountId) {
-      setEmailAccountId(accounts[0].id);
+      const defaultAccount = accounts.find((a) => a.isDefault);
+      setEmailAccountId(defaultAccount?.id || accounts[0].id);
     }
   }, [accounts, emailAccountId]);
 
@@ -519,48 +536,88 @@ ${quotedHtml}
           <ComposeCard>
             <Card.Body className="p-4">
               <Form onSubmit={handleSubmit}>
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Send from Account</Form.Label>
-                      <Form.Select
-                        value={emailAccountId}
-                        onChange={(e) => {
-                          setEmailAccountId(e.target.value);
-                          setSmtpProfileId('');
-                        }}
-                        disabled={noAccounts}
-                      >
-                        <option value="">Select an account...</option>
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name} ({account.email})
-                          </option>
-                        ))}
-                      </Form.Select>
-                    </Form.Group>
-                  </Col>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label>SMTP Profile</Form.Label>
-                      <Form.Select
-                        value={smtpProfileId}
-                        onChange={(e) => setSmtpProfileId(e.target.value)}
-                        disabled={noProfiles}
-                      >
-                        <option value="">Select a profile...</option>
-                        {profiles.map((profile) => (
-                          <option key={profile.id} value={profile.id}>
-                            {profile.name}
-                            {profile.alias && ` (${profile.alias})`} &lt;
-                            {profile.email}&gt;
-                            {profile.isDefault && ' (Default)'}
-                          </option>
-                        ))}
-                      </Form.Select>
-                    </Form.Group>
-                  </Col>
-                </Row>
+                <Form.Group className="mb-3">
+                  <Form.Label>From</Form.Label>
+                  {!senderEditMode && emailAccountId && smtpProfileId ? (
+                    (() => {
+                      const selectedAccount = accounts.find(
+                        (a) => a.id === emailAccountId,
+                      );
+                      const selectedProfile = profiles.find(
+                        (p) => p.id === smtpProfileId,
+                      );
+                      if (!selectedAccount || !selectedProfile) return null;
+
+                      // Format as it would appear to recipient
+                      const displayName =
+                        selectedProfile.alias || selectedProfile.name;
+
+                      return (
+                        <SenderDisplay>
+                          <SenderInfo>
+                            <SenderIdentity>
+                              {displayName} &lt;{selectedProfile.email}&gt;
+                            </SenderIdentity>
+                            <AccountBadge>
+                              via {selectedAccount.name}
+                            </AccountBadge>
+                          </SenderInfo>
+                          <ChangeAccountButton
+                            type="button"
+                            onClick={() => setSenderEditMode(true)}
+                            title="Change sending account"
+                          >
+                            <FontAwesomeIcon icon={faExchangeAlt} />
+                            Change
+                          </ChangeAccountButton>
+                        </SenderDisplay>
+                      );
+                    })()
+                  ) : (
+                    <Row>
+                      <Col md={6}>
+                        <Form.Select
+                          value={emailAccountId}
+                          onChange={(e) => {
+                            setEmailAccountId(e.target.value);
+                            setSmtpProfileId('');
+                          }}
+                          disabled={noAccounts}
+                          className="mb-2 mb-md-0"
+                        >
+                          <option value="">Select an account...</option>
+                          {accounts.map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.name} ({account.email})
+                              {account.isDefault && ' (Default)'}
+                            </option>
+                          ))}
+                        </Form.Select>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Select
+                          value={smtpProfileId}
+                          onChange={(e) => {
+                            setSmtpProfileId(e.target.value);
+                            if (e.target.value && emailAccountId) {
+                              setSenderEditMode(false);
+                            }
+                          }}
+                          disabled={noProfiles}
+                        >
+                          <option value="">Select SMTP profile...</option>
+                          {profiles.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.alias || profile.name} &lt;
+                              {profile.email}&gt;
+                              {profile.isDefault && ' (Default)'}
+                            </option>
+                          ))}
+                        </Form.Select>
+                      </Col>
+                    </Row>
+                  )}
+                </Form.Group>
 
                 <Form.Group className="mb-3">
                   <Form.Label>
@@ -621,10 +678,67 @@ ${quotedHtml}
                     initialHtml={initialEditorHtml}
                     autoFocus
                   />
-                  <Form.Text className="text-muted">
-                    Format with toolbar or markdown: **bold**, *italic*, #
-                    heading
-                  </Form.Text>
+                  <MarkdownHint>
+                    Markdown syntax supported
+                    <OverlayTrigger
+                      trigger={['hover', 'focus', 'click']}
+                      placement="top"
+                      overlay={
+                        <Popover id="markdown-help-popover">
+                          <Popover.Header as="h3">
+                            Markdown Shortcuts
+                          </Popover.Header>
+                          <Popover.Body>
+                            <strong>Text Formatting:</strong>
+                            <br />
+                            <code>**bold**</code> → <strong>bold</strong>
+                            <br />
+                            <code>*italic*</code> → <em>italic</em>
+                            <br />
+                            <code>~~strikethrough~~</code> →{' '}
+                            <s>strikethrough</s>
+                            <br />
+                            <code>`inline code`</code> →{' '}
+                            <code
+                              style={{
+                                background: '#f1f3f4',
+                                padding: '0 4px',
+                                borderRadius: '3px',
+                              }}
+                            >
+                              code
+                            </code>
+                            <br />
+                            <br />
+                            <strong>Structure:</strong>
+                            <br />
+                            <code># Heading 1</code>
+                            <br />
+                            <code>## Heading 2</code>
+                            <br />
+                            <code>### Heading 3</code>
+                            <br />
+                            <code>- Bullet list</code>
+                            <br />
+                            <code>1. Numbered list</code>
+                            <br />
+                            <code>&gt; Quote</code>
+                            <br />
+                            <code>---</code> → Horizontal rule
+                            <br />
+                            <br />
+                            <strong>Links:</strong>
+                            <br />
+                            <code>[text](url)</code>
+                          </Popover.Body>
+                        </Popover>
+                      }
+                    >
+                      <MarkdownHelpIcon tabIndex={0}>
+                        <FontAwesomeIcon icon={faInfoCircle} />
+                      </MarkdownHelpIcon>
+                    </OverlayTrigger>
+                  </MarkdownHint>
                 </Form.Group>
               </Form>
             </Card.Body>

@@ -7,7 +7,10 @@ import React, {
 } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useApolloClient } from '@apollo/client/react';
-import { FETCH_PROFILE_QUERY } from '../pages/auth/queries';
+import {
+  FETCH_PROFILE_QUERY,
+  UPDATE_USER_PREFERENCES_MUTATION,
+} from '../pages/auth/queries';
 
 // Supabase client configuration
 const supabaseUrl = 'https://ivqyyttllhpwbducgpih.supabase.co';
@@ -15,11 +18,24 @@ const supabaseAnonKey = 'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+import type { ThemePreference } from '../core/theme';
+
+type NotificationDetailLevel = 'MINIMAL' | 'FULL';
+
 interface User {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
+  themePreference: ThemePreference;
+  navbarCollapsed: boolean;
+  notificationDetailLevel: NotificationDetailLevel;
+}
+
+interface UpdatePreferencesInput {
+  themePreference?: ThemePreference;
+  navbarCollapsed?: boolean;
+  notificationDetailLevel?: NotificationDetailLevel;
 }
 
 interface AuthContextType {
@@ -36,6 +52,7 @@ interface AuthContextType {
   ) => Promise<void>;
   logout: (redirectPath?: string) => Promise<void>;
   refetchProfile: () => Promise<void>;
+  updatePreferences: (input: UpdatePreferencesInput) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -66,6 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: data.fetchProfile.email,
             firstName: data.fetchProfile.firstName,
             lastName: data.fetchProfile.lastName,
+            themePreference:
+              (data.fetchProfile.themePreference as ThemePreference) || 'AUTO',
+            navbarCollapsed: data.fetchProfile.navbarCollapsed ?? false,
+            notificationDetailLevel:
+              (data.fetchProfile
+                .notificationDetailLevel as NotificationDetailLevel) || 'FULL',
           });
           return data.fetchProfile;
         }
@@ -205,6 +228,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [token, fetchProfileFromBackend]);
 
+  const updatePreferences = useCallback(
+    async (input: UpdatePreferencesInput) => {
+      if (!token || !user) {
+        throw new Error('Not authenticated');
+      }
+
+      const { data } = await apolloClient.mutate({
+        mutation: UPDATE_USER_PREFERENCES_MUTATION,
+        variables: { input },
+        context: {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        },
+      });
+
+      if (data?.updateUserPreferences) {
+        setUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...(input.themePreference !== undefined && {
+                  themePreference: input.themePreference,
+                }),
+                ...(input.navbarCollapsed !== undefined && {
+                  navbarCollapsed: input.navbarCollapsed,
+                }),
+                ...(input.notificationDetailLevel !== undefined && {
+                  notificationDetailLevel: input.notificationDetailLevel,
+                }),
+              }
+            : null,
+        );
+      }
+    },
+    [token, user, apolloClient],
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -216,6 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         logout,
         refetchProfile,
+        updatePreferences,
       }}
     >
       {children}

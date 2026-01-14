@@ -118,7 +118,8 @@ export const EditorContent = styled.div`
     padding-left: 1.5rem;
   }
 
-  blockquote {
+  blockquote,
+  .editor-quote {
     margin: 0.5rem 0;
     padding: 0.5rem 1rem;
     border-left: 3px solid ${({ theme }) => theme.colors.primary};
@@ -130,23 +131,83 @@ export const EditorContent = styled.div`
     color: ${({ theme }) => theme.colors.primary};
   }
 
-  code {
-    background: ${({ theme }) => theme.colors.background};
-    padding: 0.125rem 0.25rem;
-    border-radius: 3px;
-    font-family: 'Fira Code', 'Consolas', monospace;
-    font-size: 0.9em;
+  /* Text formatting classes from Lexical theme
+     Using specific class names to avoid conflicts and allow combining */
+  .editor-text-bold {
+    font-weight: bold !important;
   }
 
-  pre {
-    background: #282c34;
-    color: #abb2bf;
+  .editor-text-italic {
+    font-style: italic !important;
+  }
+
+  .editor-text-underline {
+    text-decoration: underline !important;
+  }
+
+  .editor-text-strikethrough {
+    text-decoration: line-through !important;
+  }
+
+  /* Handle multiple text decorations simultaneously */
+  .editor-text-underline.editor-text-strikethrough {
+    text-decoration: underline line-through !important;
+  }
+
+  /* Inline code styling - apply only to the class, not both class and element */
+  .editor-text-code {
+    background: ${({ theme }) => theme.colors.background};
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+    font-size: 0.85em;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    color: ${({ theme }) => theme.colors.danger};
+  }
+
+  /* Prevent double styling when code element has editor-text-code class */
+  code.editor-text-code {
+    /* Reset any default code element styles - the class styles above handle everything */
+  }
+
+  /* Fallback for native code element only when NOT styled by editor */
+  code:not(.editor-text-code):not(pre code):not([class]) {
+    background: ${({ theme }) => theme.colors.background};
+    padding: 0.125rem 0.375rem;
+    border-radius: 3px;
+    font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+    font-size: 0.85em;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    color: ${({ theme }) => theme.colors.danger};
+  }
+
+  /* Code block styling - distinct from inline code */
+  pre,
+  .editor-code-block {
+    display: block;
+    background: #1e1e1e;
+    color: #d4d4d4;
     padding: 1rem;
     border-radius: ${({ theme }) => theme.borderRadius.md};
     overflow-x: auto;
-    font-family: 'Fira Code', 'Consolas', monospace;
+    font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
     font-size: 0.9em;
     margin: 0.5rem 0;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+  }
+
+  /* Ensure code inside pre doesn't double-style */
+  pre code,
+  .editor-code-block code {
+    background: transparent;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    color: inherit;
+    font-size: inherit;
   }
 
   table {

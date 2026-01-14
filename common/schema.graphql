@@ -9,6 +9,17 @@ interface BaseEntityProps {
 
 # ============ User & Authentication ============
 
+enum ThemePreference {
+  LIGHT
+  DARK
+  AUTO
+}
+
+enum NotificationDetailLevel {
+  MINIMAL
+  FULL
+}
+
 type User implements BaseEntityProps {
   id: String!
   createdAt: Date
@@ -16,9 +27,18 @@ type User implements BaseEntityProps {
   email: String!
   firstName: String!
   lastName: String!
+  themePreference: ThemePreference!
+  navbarCollapsed: Boolean!
+  notificationDetailLevel: NotificationDetailLevel!
   emailAccounts: [EmailAccount!]!
   smtpProfiles: [SmtpProfile!]!
   authenticationMethods: [AuthenticationMethod!]!
+}
+
+input UpdateUserPreferencesInput {
+  themePreference: ThemePreference
+  navbarCollapsed: Boolean
+  notificationDetailLevel: NotificationDetailLevel
 }
 
 enum AuthProvider {
@@ -67,6 +87,7 @@ type EmailAccount implements BaseEntityProps {
   defaultSmtpProfileId: String
   defaultSmtpProfile: SmtpProfile
   providerId: String
+  isDefault: Boolean!
 }
 
 input CreateEmailAccountInput {
@@ -80,6 +101,7 @@ input CreateEmailAccountInput {
   useSsl: Boolean!
   defaultSmtpProfileId: String
   providerId: String
+  isDefault: Boolean
 }
 
 input UpdateEmailAccountInput {
@@ -92,6 +114,7 @@ input UpdateEmailAccountInput {
   useSsl: Boolean
   defaultSmtpProfileId: String
   providerId: String
+  isDefault: Boolean
 }
 
 # ============ SMTP Profiles ============
@@ -499,6 +522,8 @@ type Query {
 type Mutation {
   # Auth
   deleteAuthenticationMethod(id: String!): Boolean!
+  updateThemePreference(themePreference: ThemePreference!): User!
+  updateUserPreferences(input: UpdateUserPreferencesInput!): User!
 
   # Email Accounts
   createEmailAccount(input: CreateEmailAccountInput!): EmailAccount!
