@@ -1,9 +1,18 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMoon, faSun } from '@fortawesome/free-solid-svg-icons';
+import {
+  faMoon,
+  faSun,
+  faBolt,
+  faCircle,
+} from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../../contexts/ThemeContext';
-import { IframeContainer, ThemeToggleButton } from './HtmlViewer.wrappers';
+import {
+  IframeContainer,
+  ThemeToggleButton,
+  BackgroundDetectedBadge,
+} from './HtmlViewer.wrappers';
 
 interface HtmlViewerProps {
   html: string;
@@ -26,8 +35,61 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
   const { isDarkMode } = useTheme();
   const [emailDarkMode, setEmailDarkMode] = useState<boolean | null>(null);
 
+  // Detect if the email has explicit background colors
+  const detectedBackground = useMemo(() => {
+    const htmlLower = html.toLowerCase();
+
+    // Use regex to match light background patterns
+    const lightBgPatterns = [
+      /background-color\s*:\s*(#fff|#ffffff|white)/i,
+      /background\s*:\s*(#fff|#ffffff|white)/i,
+      /bgcolor\s*=\s*["'](#fff|#ffffff|white)["']/i,
+    ];
+
+    // Use regex to match dark background patterns
+    const darkBgPatterns = [
+      /background-color\s*:\s*(#000|#1a1a1a|#2d2d2d|black)/i,
+      /background\s*:\s*(#000|#1a1a1a|#2d2d2d|black)/i,
+      /bgcolor\s*=\s*["'](#000|#1a1a1a|#2d2d2d|black)["']/i,
+    ];
+
+    const hasLightBackground = lightBgPatterns.some((pattern) =>
+      pattern.test(htmlLower),
+    );
+    const hasDarkBackground = darkBgPatterns.some((pattern) =>
+      pattern.test(htmlLower),
+    );
+
+    if (hasLightBackground && !hasDarkBackground) {
+      return 'light';
+    }
+    if (hasDarkBackground && !hasLightBackground) {
+      return 'dark';
+    }
+    return null;
+  }, [html]);
+
+  // Initialize emailDarkMode based on detected background (only on first render)
+  const hasInitialized = useRef(false);
+  useEffect(() => {
+    if (
+      !hasInitialized.current &&
+      detectedBackground &&
+      emailDarkMode === null
+    ) {
+      hasInitialized.current = true;
+      setEmailDarkMode(detectedBackground === 'dark');
+    }
+  }, [detectedBackground, emailDarkMode]);
+
   // Use page dark mode as default, but allow override
   const effectiveDarkMode = emailDarkMode !== null ? emailDarkMode : isDarkMode;
+
+  // Check if current scheme matches auto-detected scheme
+  const matchesAutoDetect =
+    detectedBackground &&
+    ((detectedBackground === 'dark' && effectiveDarkMode) ||
+      (detectedBackground === 'light' && !effectiveDarkMode));
 
   const sanitizedHtml = useMemo(() => {
     // Configure DOMPurify for email viewing
@@ -150,9 +212,6 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
     });
   }, [html]);
 
-  // Check if the email dark mode setting matches the app's dark mode
-  const colorSchemeMatchesApp = emailDarkMode === null;
-
   // Build the complete HTML document for the iframe
   const iframeContent = useMemo(() => {
     const textColor = effectiveDarkMode ? '#e8eaed' : '#202124';
@@ -161,7 +220,9 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
     const borderColor = effectiveDarkMode ? '#5f6368' : '#dadce0';
     const codeBgColor = effectiveDarkMode ? '#2d2d2d' : '#f6f8fa';
     const codeTextColor = effectiveDarkMode ? '#e8eaed' : '#24292e';
-    // Use transparent when matching app theme, otherwise use explicit color
+
+    // Use transparent background when scheme matches app theme, otherwise explicit color
+    const colorSchemeMatchesApp = effectiveDarkMode === isDarkMode;
     const bgColor = colorSchemeMatchesApp
       ? 'transparent'
       : effectiveDarkMode
@@ -270,24 +331,11 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
     li > ul, li > ol {
       margin-top: 0.25em;
     }
-    /* Override inline styles that might conflict with dark mode */
-    ${
-      effectiveDarkMode
-        ? `
-      [bgcolor="#ffffff"], [bgcolor="white"] {
-        background-color: transparent !important;
-      }
-      [color="#000000"], [color="black"] {
-        color: ${textColor} !important;
-      }
-    `
-        : ''
-    }
   </style>
 </head>
 <body>${sanitizedHtml}</body>
 </html>`;
-  }, [sanitizedHtml, effectiveDarkMode, colorSchemeMatchesApp]);
+  }, [sanitizedHtml, effectiveDarkMode, isDarkMode]);
 
   // Create blob URL for the iframe
   const blobUrl = useMemo(() => {
@@ -335,10 +383,21 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
           setEmailDarkMode((prev) => (prev === null ? !isDarkMode : !prev))
         }
         title={
-          effectiveDarkMode ? 'Switch to light mode' : 'Switch to dark mode'
+          matchesAutoDetect
+            ? `${effectiveDarkMode ? 'Light' : 'Dark'} mode (auto-detected from email)`
+            : effectiveDarkMode
+              ? 'Switch to light mode'
+              : 'Switch to dark mode'
         }
       >
-        <FontAwesomeIcon icon={effectiveDarkMode ? faSun : faMoon} />
+        <span style={{ position: 'relative', display: 'inline-block' }}>
+          <FontAwesomeIcon icon={effectiveDarkMode ? faMoon : faSun} />
+          {matchesAutoDetect && (
+            <BackgroundDetectedBadge>
+              <FontAwesomeIcon icon={faCircle} />
+            </BackgroundDetectedBadge>
+          )}
+        </span>
       </ThemeToggleButton>
       <iframe
         ref={iframeRef}

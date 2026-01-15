@@ -117,8 +117,7 @@ export async function sendEmail(
  * Check if a sync has expired (expiration time has passed)
  */
 function isSyncExpired(expiresAt: Date | null): boolean {
-  if (!expiresAt) return true;
-  return new Date() > expiresAt;
+  return !expiresAt ? true : new Date() > expiresAt;
 }
 
 /**

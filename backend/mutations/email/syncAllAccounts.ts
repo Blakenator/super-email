@@ -18,14 +18,15 @@ export const syncAllAccounts = makeMutation(
 
     // Start async syncs for all accounts (don't block)
     for (const account of accounts) {
-      if (!account.syncId) {
-        console.log(`[syncAllAccounts] Starting sync for account: ${account.email}`);
-        startAsyncEmailSync(account).catch((err) => {
-          console.error(`[syncAllAccounts] Failed to start sync for ${account.email}:`, err);
-        });
-      } else {
-        console.log(`[syncAllAccounts] Account ${account.email} is already syncing`);
-      }
+      console.log(
+        `[syncAllAccounts] Starting sync for account: ${account.email}`,
+      );
+      startAsyncEmailSync(account).catch((err) => {
+        console.error(
+          `[syncAllAccounts] Failed to start sync for ${account.email}:`,
+          err,
+        );
+      });
     }
 
     return true;

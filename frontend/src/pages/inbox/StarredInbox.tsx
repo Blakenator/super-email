@@ -7,18 +7,13 @@ import {
   BULK_DELETE_EMAILS_MUTATION,
 } from './queries';
 import { EmailView } from './EmailView';
-import {
-  LoadingSpinner,
-  EmptyState,
-  PageWrapper,
-} from '../../core/components';
-import {
-  PageToolbar,
-  PageContent,
-  PageTitle,
-} from '../../core/components';
+import { LoadingSpinner, EmptyState, PageWrapper } from '../../core/components';
+import { PageToolbar, PageContent, PageTitle } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSync, faStar as faStarSolid } from '@fortawesome/free-solid-svg-icons';
+import {
+  faSync,
+  faStar as faStarSolid,
+} from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 import toast from 'react-hot-toast';
 import {
@@ -70,13 +65,18 @@ export function StarredInbox() {
     });
   };
 
-  const handleEmailClick = async (emailId: string, isRead: boolean) => {
+  const handleEmailClick = (emailId: string, isRead: boolean) => {
+    // Navigate immediately - don't wait for mark as read
+    setSelectedEmailId(emailId);
+
+    // Mark as read in parallel (non-blocking)
     if (!isRead) {
-      await bulkUpdateEmails({
+      bulkUpdateEmails({
         variables: { input: { ids: [emailId], isRead: true } },
+      }).catch((error) => {
+        console.error('Failed to mark email as read:', error);
       });
     }
-    setSelectedEmailId(emailId);
   };
 
   const handleBack = () => {
@@ -161,7 +161,9 @@ export function StarredInbox() {
                         icon={email.isStarred ? faStarSolid : faStarRegular}
                       />
                     </StarButton>
-                    <SenderName>{email.fromName || email.fromAddress}</SenderName>
+                    <SenderName>
+                      {email.fromName || email.fromAddress}
+                    </SenderName>
                   </div>
                   <EmailDate>{formatDate(email.receivedAt)}</EmailDate>
                 </EmailMeta>

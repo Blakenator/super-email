@@ -16,10 +16,22 @@ export const ThemeToggleButton = styled(Button)`
   z-index: 10;
   opacity: 0.7;
   transition: opacity 0.2s ease;
-  
+
   &:hover {
     opacity: 1;
   }
+`;
+
+export const BackgroundDetectedBadge = styled.span`
+  position: absolute;
+  top: 0px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: ${({ theme }) => theme.colors.success};
+  font-size: 10px;
+  pointer-events: none;
 `;
 
 export const ViewerContainer = styled.div`
@@ -41,13 +53,19 @@ export const ViewerContainer = styled.div`
   }
 
   /* Headers */
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     margin: 0.5em 0 0.25em;
     padding: 0;
   }
 
   /* Lists - tighter spacing */
-  ul, ol {
+  ul,
+  ol {
     margin: 0.25em 0;
     padding-left: 1.5em;
   }
@@ -102,7 +120,8 @@ export const ViewerContainer = styled.div`
     /* Don't force borders - let inline styles control this */
   }
 
-  td, th {
+  td,
+  th {
     /* Don't add default padding or borders - let inline styles handle it */
     padding: 0;
     margin: 0;
@@ -137,7 +156,8 @@ export const ViewerContainer = styled.div`
   }
 
   /* Spacing utility - common in email HTML */
-  .spacer, [class*="spacer"] {
+  .spacer,
+  [class*='spacer'] {
     display: block;
   }
 `;

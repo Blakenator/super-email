@@ -464,13 +464,12 @@ export function EmailView({
   const hasUnsubscribeOption = email?.unsubscribeUrl || email?.unsubscribeEmail;
 
   // Show loading spinner only when:
-  // 1. No email data exists at all
-  // 2. Email data exists but is stale (wrong ID) AND query is currently loading
-  // Don't show spinner if we have stale data but query is done (prevents infinite spinner)
+  // Only show full page loading spinner if we have absolutely no data
+  // If we have cached data (even if stale), show it with a loading indicator
   const isStaleData = email && email.id !== emailId;
-  const shouldShowLoading = !email || (isStaleData && loading);
+  const shouldShowFullLoading = !email && loading;
 
-  if (shouldShowLoading) {
+  if (shouldShowFullLoading) {
     return (
       <Wrapper>
         <LoadingSpinner message="Loading email..." />
@@ -478,12 +477,21 @@ export function EmailView({
     );
   }
 
-  // If we have stale data but aren't loading, show it anyway
-  // This prevents the case where subscription emails aren't in query cache yet
-  if (isStaleData && !loading) {
-    console.warn('[EmailView] Displaying potentially stale email data', {
-      emailId,
-      loadedEmailId: email?.id,
+  // If we have stale data but no email data at all, show loading
+  if (!email) {
+    return (
+      <Wrapper>
+        <LoadingSpinner message="Loading email..." />
+      </Wrapper>
+    );
+  }
+
+  // If we have stale data, log it but still display it
+  // The loading indicator at the bottom will show refresh is happening
+  if (isStaleData) {
+    console.log('[EmailView] Showing cached email while loading new email', {
+      cachedEmailId: email.id,
+      requestedEmailId: emailId,
     });
   }
 

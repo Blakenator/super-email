@@ -42,5 +42,5 @@ export const sequelize = new Sequelize({
     MailRule,
     Attachment,
   ],
-  logging: config.isDevelopment ? console.log : false,
+  logging: !config.isDevelopment ? console.debug : false,
 });

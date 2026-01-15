@@ -495,10 +495,16 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       return;
     }
 
-    if (!email.isRead) {
-      await handleMarkRead(email.id, true);
-    }
+    // Navigate immediately - don't wait for mark as read
     navigateToEmail(email.id);
+
+    // Mark as read in parallel (non-blocking)
+    if (!email.isRead) {
+      handleMarkRead(email.id, true).catch((error) => {
+        console.error('Failed to mark email as read:', error);
+        // Don't show error toast - email view will still work
+      });
+    }
   };
 
   const handleReply = (email: {

@@ -117,8 +117,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user) {
           setToken(session.access_token);
-          // Fetch profile from backend to ensure user exists in our DB
-          await fetchProfileFromBackend(session.access_token);
+
+          // Fetch profile from backend with a timeout to prevent infinite loading
+          const timeoutPromise = new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 10000),
+          );
+
+          try {
+            await Promise.race([
+              fetchProfileFromBackend(session.access_token),
+              timeoutPromise,
+            ]);
+          } catch (profileError) {
+            console.error(
+              'Error fetching profile (proceeding anyway):',
+              profileError,
+            );
+            // Set minimal user data so app doesn't get stuck
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+              firstName: null,
+              lastName: null,
+              themePreference: 'AUTO',
+              navbarCollapsed: false,
+              notificationDetailLevel: 'FULL',
+              inboxDensity: false,
+              inboxGroupByDate: false,
+            });
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
