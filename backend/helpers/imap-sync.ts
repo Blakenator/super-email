@@ -11,6 +11,7 @@ import { Attachment, AttachmentType } from '../db/models/attachment.model.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
 import { uploadAttachment } from './attachment-storage.js';
+import { getImapCredentials } from './secrets.js';
 import { Readable } from 'stream';
 
 export interface SyncResult {
@@ -19,6 +20,10 @@ export interface SyncResult {
   errors: string[];
   cancelled: boolean;
 }
+
+// Sync expiration settings
+const SYNC_EXPIRATION_MINUTES = 60; // Sync expires after 10 minutes of inactivity
+const SYNC_EXPIRATION_UPDATE_INTERVAL = 30; // Update expiration every 30 seconds during sync
 
 // Larger batch sizes for faster imports
 const BATCH_SIZE = 200; // Messages to fetch from IMAP per batch
@@ -83,8 +88,26 @@ async function withRetry<T>(
 }
 
 /**
+ * Get the expiration time for a sync (now + SYNC_EXPIRATION_MINUTES)
+ */
+function getSyncExpirationTime(): Date {
+  const expiresAt = new Date();
+  expiresAt.setMinutes(expiresAt.getMinutes() + SYNC_EXPIRATION_MINUTES);
+  return expiresAt;
+}
+
+/**
+ * Check if a sync has expired (expiration time has passed)
+ */
+function isSyncExpired(expiresAt: Date | null): boolean {
+  if (!expiresAt) return true;
+  return new Date() > expiresAt;
+}
+
+/**
  * Start an async sync for an email account
  * Uses syncId to prevent overlapping syncs and allow cancellation
+ * Uses syncExpiresAt to detect and recover from stale/stuck syncs
  */
 export async function startAsyncSync(
   emailAccount: EmailAccount,
@@ -94,20 +117,35 @@ export async function startAsyncSync(
 
   // Check if already syncing
   if (emailAccount.syncId) {
-    console.log(
-      `[IMAP] Sync already in progress for ${emailAccount.email} (syncId: ${emailAccount.syncId}), skipping`,
-    );
-    return false;
+    // Check if the sync has expired (stuck/stale)
+    if (isSyncExpired(emailAccount.syncExpiresAt)) {
+      console.log(
+        `[IMAP] Sync for ${emailAccount.email} has expired (syncId: ${emailAccount.syncId}), starting new sync`,
+      );
+      // Clear the stale sync
+      await emailAccount.update({
+        syncId: null,
+        syncProgress: null,
+        syncStatus: null,
+        syncExpiresAt: null,
+      });
+    } else {
+      console.log(
+        `[IMAP] Sync already in progress for ${emailAccount.email} (syncId: ${emailAccount.syncId}), skipping`,
+      );
+      return false;
+    }
   }
 
   // Generate unique sync ID
   const syncId = uuidv4();
 
-  // Mark as syncing with our sync ID
+  // Mark as syncing with our sync ID and initial expiration time
   await emailAccount.update({
     syncId,
     syncProgress: 0,
     syncStatus: 'Starting sync...',
+    syncExpiresAt: getSyncExpirationTime(),
   });
 
   // Run sync in background
@@ -129,6 +167,7 @@ export async function startAsyncSync(
           ? 'Sync cancelled'
           : `Synced ${result.synced} emails`,
         lastSyncedAt: new Date(),
+        syncExpiresAt: null,
       });
       console.log(
         `[IMAP] Sync complete for ${emailAccount.email}: ${result.synced} synced`,
@@ -163,6 +202,7 @@ export async function startAsyncSync(
         syncId: null,
         syncProgress: null,
         syncStatus: `Sync failed: ${errorMsg}`,
+        syncExpiresAt: null,
       });
       console.error(`[IMAP] Sync failed for ${emailAccount.email}:`, err);
 
@@ -196,6 +236,23 @@ async function shouldContinueSync(
 }
 
 /**
+ * Update sync expiration time to keep the sync alive
+ * Should be called periodically during an active sync
+ */
+async function updateSyncExpiration(
+  emailAccount: EmailAccount,
+  syncId: string,
+): Promise<void> {
+  // Only update if we're still the active sync
+  await emailAccount.reload();
+  if (emailAccount.syncId === syncId) {
+    await emailAccount.update({
+      syncExpiresAt: getSyncExpirationTime(),
+    });
+  }
+}
+
+/**
  * Connect to an IMAP server and fetch new emails with memory-efficient streaming
  */
 export async function syncEmailsFromImapAccount(
@@ -209,23 +266,35 @@ export async function syncEmailsFromImapAccount(
     cancelled: false,
   };
 
+  // Get credentials from secure store, fall back to DB during migration
+  const credentials = await getImapCredentials(emailAccount.id);
+  const username = credentials?.username || emailAccount.username;
+  const password = credentials?.password || emailAccount.password;
+
   const client = new ImapFlow({
     host: emailAccount.host,
     port: emailAccount.port,
     secure: emailAccount.useSsl,
     auth: {
-      user: emailAccount.username,
-      pass: emailAccount.password,
+      user: username,
+      pass: password,
     },
     logger: false,
   });
 
+  // Track last expiration update time
+  let lastExpirationUpdate = Date.now();
+
   try {
     await emailAccount.update({ syncStatus: 'Connecting to server...' });
+    await updateSyncExpiration(emailAccount, syncId);
+
     await withRetry(() => client.connect(), `Connect to ${emailAccount.host}`);
     console.log(`[IMAP] Connected to ${emailAccount.host}`);
 
     await emailAccount.update({ syncStatus: 'Opening mailbox...' });
+    await updateSyncExpiration(emailAccount, syncId);
+
     const mailbox = await withRetry(
       () => client.mailboxOpen('INBOX'),
       'Open INBOX mailbox',
@@ -275,6 +344,16 @@ export async function syncEmailsFromImapAccount(
           syncProgress: Math.min(99, progress),
           syncStatus: `Processing messages ${end}-${start} of ${totalToProcess}...`,
         });
+
+        // Update expiration time every SYNC_EXPIRATION_UPDATE_INTERVAL seconds
+        const now = Date.now();
+        if (
+          now - lastExpirationUpdate >
+          SYNC_EXPIRATION_UPDATE_INTERVAL * 1000
+        ) {
+          await updateSyncExpiration(emailAccount, syncId);
+          lastExpirationUpdate = now;
+        }
 
         const batchResult = await processBatch(
           client,
@@ -329,6 +408,16 @@ export async function syncEmailsFromImapAccount(
           syncProgress: Math.min(99, progress),
           syncStatus: `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`,
         });
+
+        // Update expiration time every SYNC_EXPIRATION_UPDATE_INTERVAL seconds
+        const now = Date.now();
+        if (
+          now - lastExpirationUpdate >
+          SYNC_EXPIRATION_UPDATE_INTERVAL * 1000
+        ) {
+          await updateSyncExpiration(emailAccount, syncId);
+          lastExpirationUpdate = now;
+        }
 
         const batchResult = await processBatchByUids(
           client,
@@ -428,6 +517,9 @@ async function syncSentFolder(
   await emailAccount.update({
     syncStatus: 'Syncing sent mail...',
   });
+
+  // Update expiration since we're moving to a new phase
+  await updateSyncExpiration(emailAccount, syncId);
 
   const isFullSync = !emailAccount.lastSyncedAt;
 
@@ -975,7 +1067,7 @@ function createEmailDataFromParsed(
 }
 
 /**
- * Test IMAP connection
+ * Test IMAP connection with provided credentials
  */
 export async function testImapConnection(
   host: string,
@@ -1011,18 +1103,43 @@ export async function testImapConnection(
 }
 
 /**
+ * Test IMAP connection for an existing account using secure credentials
+ */
+export async function testImapConnectionForAccount(
+  emailAccount: EmailAccount,
+): Promise<{ success: boolean; error?: string }> {
+  // Get credentials from secure store, fall back to DB during migration
+  const credentials = await getImapCredentials(emailAccount.id);
+  const username = credentials?.username || emailAccount.username;
+  const password = credentials?.password || emailAccount.password;
+
+  return testImapConnection(
+    emailAccount.host,
+    emailAccount.port,
+    username,
+    password,
+    emailAccount.useSsl,
+  );
+}
+
+/**
  * List mailboxes for an account
  */
 export async function listImapMailboxes(
   emailAccount: EmailAccount,
 ): Promise<string[]> {
+  // Get credentials from secure store, fall back to DB during migration
+  const credentials = await getImapCredentials(emailAccount.id);
+  const username = credentials?.username || emailAccount.username;
+  const password = credentials?.password || emailAccount.password;
+
   const client = new ImapFlow({
     host: emailAccount.host,
     port: emailAccount.port,
     secure: emailAccount.useSsl,
     auth: {
-      user: emailAccount.username,
-      pass: emailAccount.password,
+      user: username,
+      pass: password,
     },
     logger: false,
   });

@@ -193,17 +193,14 @@ const attachmentsBucket = new aws.s3.Bucket(`${stackName}-attachments`, {
       enabled: true,
       transitions: [
         {
-          // Move to Infrequent Access after 30 days
           days: 30,
           storageClass: 'STANDARD_IA',
         },
         {
-          // Move to Glacier after 90 days
           days: 90,
           storageClass: 'GLACIER',
         },
         {
-          // Move to Deep Archive after 180 days (6 months)
           days: 180,
           storageClass: 'DEEP_ARCHIVE',
         },
@@ -225,7 +222,7 @@ new aws.s3.BucketPublicAccessBlock(`${stackName}-attachments-public-access-block
   restrictPublicBuckets: true,
 });
 
-// CORS configuration for attachments bucket (for direct uploads if needed)
+// CORS configuration for attachments bucket
 new aws.s3.BucketCorsConfigurationV2(`${stackName}-attachments-cors`, {
   bucket: attachmentsBucket.id,
   corsRules: [
@@ -240,7 +237,120 @@ new aws.s3.BucketCorsConfigurationV2(`${stackName}-attachments-cors`, {
 });
 
 // =============================================================================
-// ECR Repositories
+// S3 Bucket for Frontend Static Files + CloudFront CDN
+// =============================================================================
+
+const frontendBucket = new aws.s3.BucketV2(`${stackName}-frontend`, {
+  bucket: `${stackName}-frontend`,
+  tags: {
+    Name: `${stackName}-frontend`,
+    Environment: environment,
+  },
+});
+
+// Block public access - CloudFront will access via OAC
+new aws.s3.BucketPublicAccessBlock(`${stackName}-frontend-public-access-block`, {
+  bucket: frontendBucket.id,
+  blockPublicAcls: true,
+  blockPublicPolicy: true,
+  ignorePublicAcls: true,
+  restrictPublicBuckets: true,
+});
+
+// CloudFront Origin Access Control for S3
+const frontendOAC = new aws.cloudfront.OriginAccessControl(`${stackName}-frontend-oac`, {
+  name: `${stackName}-frontend-oac`,
+  description: 'OAC for frontend S3 bucket',
+  originAccessControlOriginType: 's3',
+  signingBehavior: 'always',
+  signingProtocol: 'sigv4',
+});
+
+// CloudFront distribution for frontend
+const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-frontend-cdn`, {
+  enabled: true,
+  isIpv6Enabled: true,
+  defaultRootObject: 'index.html',
+  httpVersion: 'http2and3',
+  priceClass: 'PriceClass_100', // US, Canada, Europe
+
+  origins: [
+    {
+      domainName: frontendBucket.bucketRegionalDomainName,
+      originId: 'S3Origin',
+      originAccessControlId: frontendOAC.id,
+    },
+  ],
+
+  defaultCacheBehavior: {
+    targetOriginId: 'S3Origin',
+    viewerProtocolPolicy: 'redirect-to-https',
+    allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+    cachedMethods: ['GET', 'HEAD'],
+    compress: true,
+    cachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6', // CachingOptimized
+  },
+
+  // SPA routing - return index.html for 404s (client-side routing)
+  customErrorResponses: [
+    {
+      errorCode: 404,
+      responseCode: 200,
+      responsePagePath: '/index.html',
+      errorCachingMinTtl: 0,
+    },
+    {
+      errorCode: 403,
+      responseCode: 200,
+      responsePagePath: '/index.html',
+      errorCachingMinTtl: 0,
+    },
+  ],
+
+  restrictions: {
+    geoRestriction: {
+      restrictionType: 'none',
+    },
+  },
+
+  viewerCertificate: {
+    cloudfrontDefaultCertificate: true,
+  },
+
+  tags: {
+    Name: `${stackName}-frontend-cdn`,
+    Environment: environment,
+  },
+});
+
+// S3 bucket policy to allow CloudFront access
+const frontendBucketPolicy = new aws.s3.BucketPolicy(`${stackName}-frontend-bucket-policy`, {
+  bucket: frontendBucket.id,
+  policy: pulumi.all([frontendBucket.arn, frontendDistribution.arn]).apply(([bucketArn, distArn]) =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Sid: 'AllowCloudFrontServicePrincipal',
+          Effect: 'Allow',
+          Principal: {
+            Service: 'cloudfront.amazonaws.com',
+          },
+          Action: 's3:GetObject',
+          Resource: `${bucketArn}/*`,
+          Condition: {
+            StringEquals: {
+              'AWS:SourceArn': distArn,
+            },
+          },
+        },
+      ],
+    })
+  ),
+});
+
+// =============================================================================
+// ECR Repository (Backend only)
 // =============================================================================
 
 const backendRepo = new aws.ecr.Repository(`${stackName}-backend`, {
@@ -255,20 +365,29 @@ const backendRepo = new aws.ecr.Repository(`${stackName}-backend`, {
   },
 });
 
-const frontendRepo = new aws.ecr.Repository(`${stackName}-frontend`, {
-  name: `${stackName}-frontend`,
-  imageTagMutability: 'MUTABLE',
-  imageScanningConfiguration: {
-    scanOnPush: true,
-  },
-  tags: {
-    Name: `${stackName}-frontend`,
-    Environment: environment,
-  },
+// ECR lifecycle policy to keep only last 10 images
+new aws.ecr.LifecyclePolicy(`${stackName}-backend-lifecycle`, {
+  repository: backendRepo.name,
+  policy: JSON.stringify({
+    rules: [
+      {
+        rulePriority: 1,
+        description: 'Keep last 10 images',
+        selection: {
+          tagStatus: 'any',
+          countType: 'imageCountMoreThan',
+          countNumber: 10,
+        },
+        action: {
+          type: 'expire',
+        },
+      },
+    ],
+  }),
 });
 
 // =============================================================================
-// ECS Cluster and Services
+// ECS Cluster and Backend Service
 // =============================================================================
 
 const cluster = new aws.ecs.Cluster(`${stackName}-cluster`, {
@@ -366,6 +485,40 @@ new aws.iam.RolePolicyAttachment(`${stackName}-task-s3-policy`, {
   policyArn: s3AttachmentsPolicy.arn,
 });
 
+// Policy for Secrets Manager access (IMAP/SMTP credentials)
+const secretsManagerPolicy = new aws.iam.Policy(`${stackName}-secrets-policy`, {
+  name: `${stackName}-secrets-policy`,
+  description: 'Policy for accessing email credentials in Secrets Manager',
+  policy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'secretsmanager:GetSecretValue',
+          'secretsmanager:CreateSecret',
+          'secretsmanager:UpdateSecret',
+          'secretsmanager:DeleteSecret',
+          'secretsmanager:TagResource',
+        ],
+        Resource: [
+          `arn:aws:secretsmanager:*:*:secret:email-client/*`,
+        ],
+      },
+    ],
+  }),
+  tags: {
+    Name: `${stackName}-secrets-policy`,
+    Environment: environment,
+  },
+});
+
+// Attach Secrets Manager policy to task role
+new aws.iam.RolePolicyAttachment(`${stackName}-task-secrets-policy`, {
+  role: taskRole.name,
+  policyArn: secretsManagerPolicy.arn,
+});
+
 // CloudWatch Log Groups
 const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`, {
   name: `/ecs/${stackName}/backend`,
@@ -376,14 +529,8 @@ const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`,
   },
 });
 
-const frontendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-frontend-logs`, {
-  name: `/ecs/${stackName}/frontend`,
-  retentionInDays: 30,
-  tags: {
-    Name: `${stackName}-frontend-logs`,
-    Environment: environment,
-  },
-});
+// Get current AWS region
+const currentRegion = aws.getRegionOutput({});
 
 // Backend Task Definition
 const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-task`, {
@@ -400,7 +547,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
     database.port,
     dbPassword,
     attachmentsBucket.bucket,
-  ]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName]) => JSON.stringify([
+    currentRegion.name,
+  ]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName, region]) => JSON.stringify([
     {
       name: 'backend',
       image: `${repoUrl}:latest`,
@@ -412,7 +560,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
         },
       ],
       environment: [
-        { name: 'NODE_ENV', value: environment },
+        { name: 'NODE_ENV', value: 'production' },
         { name: 'DB_HOST', value: dbHost },
         { name: 'DB_PORT', value: String(dbPort) },
         { name: 'DB_NAME', value: 'emailclient' },
@@ -420,15 +568,23 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
         { name: 'DB_PASSWORD', value: dbPass },
         { name: 'PORT', value: '4000' },
         { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
-        { name: 'AWS_REGION', value: aws.config.region || 'us-east-1' },
+        { name: 'AWS_REGION', value: region },
+        { name: 'SECRETS_BASE_PATH', value: 'email-client' },
       ],
       logConfiguration: {
         logDriver: 'awslogs',
         options: {
           'awslogs-group': `/ecs/${stackName}/backend`,
-          'awslogs-region': aws.config.region,
+          'awslogs-region': region,
           'awslogs-stream-prefix': 'ecs',
         },
+      },
+      healthCheck: {
+        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1'],
+        interval: 30,
+        timeout: 5,
+        retries: 3,
+        startPeriod: 60,
       },
     },
   ])),
@@ -438,47 +594,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
   },
 });
 
-// Frontend Task Definition
-const frontendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-frontend-task`, {
-  family: `${stackName}-frontend`,
-  networkMode: 'awsvpc',
-  requiresCompatibilities: ['FARGATE'],
-  cpu: '256',
-  memory: '512',
-  executionRoleArn: taskExecutionRole.arn,
-  taskRoleArn: taskRole.arn,
-  containerDefinitions: frontendRepo.repositoryUrl.apply((repoUrl) => JSON.stringify([
-    {
-      name: 'frontend',
-      image: `${repoUrl}:latest`,
-      essential: true,
-      portMappings: [
-        {
-          containerPort: 80,
-          protocol: 'tcp',
-        },
-      ],
-      environment: [
-        { name: 'NODE_ENV', value: environment },
-      ],
-      logConfiguration: {
-        logDriver: 'awslogs',
-        options: {
-          'awslogs-group': `/ecs/${stackName}/frontend`,
-          'awslogs-region': aws.config.region,
-          'awslogs-stream-prefix': 'ecs',
-        },
-      },
-    },
-  ])),
-  tags: {
-    Name: `${stackName}-frontend-task`,
-    Environment: environment,
-  },
-});
-
 // =============================================================================
-// Application Load Balancer
+// Application Load Balancer (Backend API only)
 // =============================================================================
 
 const alb = new aws.lb.LoadBalancer(`${stackName}-alb`, {
@@ -503,31 +620,7 @@ const backendTargetGroup = new aws.lb.TargetGroup(`${stackName}-backend-tg`, {
   targetType: 'ip',
   healthCheck: {
     enabled: true,
-    path: '/api/graphql',
-    port: 'traffic-port',
-    protocol: 'HTTP',
-    healthyThreshold: 2,
-    unhealthyThreshold: 3,
-    timeout: 5,
-    interval: 30,
-    matcher: '200-499', // GraphQL returns various status codes
-  },
-  tags: {
-    Name: `${stackName}-backend-tg`,
-    Environment: environment,
-  },
-});
-
-// Target group for frontend
-const frontendTargetGroup = new aws.lb.TargetGroup(`${stackName}-frontend-tg`, {
-  name: `${stackName}-frontend-tg`,
-  port: 80,
-  protocol: 'HTTP',
-  vpcId: vpc.vpcId,
-  targetType: 'ip',
-  healthCheck: {
-    enabled: true,
-    path: '/',
+    path: '/health',
     port: 'traffic-port',
     protocol: 'HTTP',
     healthyThreshold: 2,
@@ -537,7 +630,7 @@ const frontendTargetGroup = new aws.lb.TargetGroup(`${stackName}-frontend-tg`, {
     matcher: '200',
   },
   tags: {
-    Name: `${stackName}-frontend-tg`,
+    Name: `${stackName}-backend-tg`,
     Environment: environment,
   },
 });
@@ -550,32 +643,13 @@ const httpListener = new aws.lb.Listener(`${stackName}-http-listener`, {
   defaultActions: [
     {
       type: 'forward',
-      targetGroupArn: frontendTargetGroup.arn,
-    },
-  ],
-});
-
-// Listener rule for API routes
-const apiListenerRule = new aws.lb.ListenerRule(`${stackName}-api-rule`, {
-  listenerArn: httpListener.arn,
-  priority: 100,
-  conditions: [
-    {
-      pathPattern: {
-        values: ['/api/*'],
-      },
-    },
-  ],
-  actions: [
-    {
-      type: 'forward',
       targetGroupArn: backendTargetGroup.arn,
     },
   ],
 });
 
 // =============================================================================
-// ECS Services
+// ECS Backend Service
 // =============================================================================
 
 const backendService = new aws.ecs.Service(`${stackName}-backend-service`, {
@@ -602,39 +676,16 @@ const backendService = new aws.ecs.Service(`${stackName}-backend-service`, {
   },
 });
 
-const frontendService = new aws.ecs.Service(`${stackName}-frontend-service`, {
-  name: `${stackName}-frontend`,
-  cluster: cluster.arn,
-  taskDefinition: frontendTaskDefinition.arn,
-  desiredCount: environment === 'prod' ? 2 : 1,
-  launchType: 'FARGATE',
-  networkConfiguration: {
-    subnets: vpc.privateSubnetIds,
-    securityGroups: [backendSecurityGroup.id], // Reuse backend SG for simplicity
-    assignPublicIp: false,
-  },
-  loadBalancers: [
-    {
-      targetGroupArn: frontendTargetGroup.arn,
-      containerName: 'frontend',
-      containerPort: 80,
-    },
-  ],
-  tags: {
-    Name: `${stackName}-frontend-service`,
-    Environment: environment,
-  },
-});
-
 // =============================================================================
 // Outputs
 // =============================================================================
 
 export const vpcId = vpc.vpcId;
-export const albDnsName = alb.dnsName;
-export const albUrl = pulumi.interpolate`http://${alb.dnsName}`;
+export const backendApiUrl = pulumi.interpolate`http://${alb.dnsName}`;
+export const frontendUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`;
+export const frontendBucketName = frontendBucket.bucket;
+export const frontendDistributionId = frontendDistribution.id;
 export const backendRepoUrl = backendRepo.repositoryUrl;
-export const frontendRepoUrl = frontendRepo.repositoryUrl;
 export const databaseEndpoint = database.endpoint;
 export const databaseAddress = database.address;
 export const clusterArn = cluster.arn;

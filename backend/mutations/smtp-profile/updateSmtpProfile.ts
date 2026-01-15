@@ -1,6 +1,10 @@
 import { makeMutation } from '../../types.js';
 import { SmtpProfile } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
+import {
+  storeSmtpCredentials,
+  getSmtpCredentials,
+} from '../../helpers/secrets.js';
 
 export const updateSmtpProfile = makeMutation(
   'updateSmtpProfile',
@@ -32,6 +36,21 @@ export const updateSmtpProfile = makeMutation(
       ...(input.useSsl !== undefined && { useSsl: input.useSsl }),
       ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
     });
+
+    // Update credentials in secure secrets store if username or password changed
+    if (input.username !== undefined || input.password !== undefined) {
+      // Get existing credentials to merge with updates
+      const existingCreds = await getSmtpCredentials(smtpProfile.id);
+      const newUsername =
+        input.username ?? existingCreds?.username ?? smtpProfile.username;
+      const newPassword =
+        input.password ?? existingCreds?.password ?? smtpProfile.password;
+
+      await storeSmtpCredentials(smtpProfile.id, {
+        username: newUsername,
+        password: newPassword,
+      });
+    }
 
     return smtpProfile;
   },

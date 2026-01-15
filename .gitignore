@@ -247,5 +247,5 @@ fabric.properties
 #dolt
 options
 
-# Email attachments storage (local development)
-data/attachments/
+# Local data directory (attachments, secrets, etc.)
+data/

@@ -6,16 +6,14 @@ import { pipeline } from 'stream/promises';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './logger.js';
+import { config } from '../config/env.js';
 
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
-const LOCAL_ATTACHMENTS_DIR = path.join(process.cwd(), 'data', 'attachments');
-const S3_BUCKET_NAME = process.env.ATTACHMENTS_S3_BUCKET || 'email-attachments';
-const S3_REGION = process.env.AWS_REGION || 'us-east-1';
+const LOCAL_ATTACHMENTS_DIR = path.join(process.cwd(), config.attachments.localDir);
 
 // Initialize S3 client for production
 let s3Client: S3Client | null = null;
-if (IS_PRODUCTION) {
-  s3Client = new S3Client({ region: S3_REGION });
+if (config.isProduction) {
+  s3Client = new S3Client({ region: config.aws.region });
 }
 
 // Ensure local attachments directory exists
@@ -52,7 +50,7 @@ export async function uploadAttachment(
   // Use the attachment UUID directly as the storage key (flat structure)
   const storageKey = attachmentId;
 
-  if (IS_PRODUCTION && s3Client) {
+  if (config.isProduction && s3Client) {
     return uploadToS3(storageKey, mimeType, stream);
   } else {
     return uploadToLocalDisk(storageKey, stream);
@@ -84,7 +82,7 @@ async function uploadToS3(
   const size = buffer.length;
 
   const command = new PutObjectCommand({
-    Bucket: S3_BUCKET_NAME,
+    Bucket: config.attachments.s3Bucket,
     Key: key,
     Body: buffer,
     ContentType: mimeType,
@@ -126,9 +124,9 @@ export async function getAttachmentDownloadUrl(
   attachmentId: string,
   expiresIn: number = 3600
 ): Promise<string> {
-  if (IS_PRODUCTION && s3Client) {
+  if (config.isProduction && s3Client) {
     const command = new GetObjectCommand({
-      Bucket: S3_BUCKET_NAME,
+      Bucket: config.attachments.s3Bucket,
       Key: attachmentId,
     });
 
@@ -145,7 +143,7 @@ export async function getAttachmentDownloadUrl(
  * Uses the attachment UUID as the filename
  */
 export function getLocalAttachmentPath(attachmentId: string): string {
-  if (IS_PRODUCTION) {
+  if (config.isProduction) {
     throw new Error('Local attachment paths are only available in development');
   }
   return path.join(LOCAL_ATTACHMENTS_DIR, attachmentId);
@@ -156,9 +154,9 @@ export function getLocalAttachmentPath(attachmentId: string): string {
  * Uses the attachment UUID as the storage key
  */
 export async function streamAttachment(attachmentId: string): Promise<Readable> {
-  if (IS_PRODUCTION && s3Client) {
+  if (config.isProduction && s3Client) {
     const command = new GetObjectCommand({
-      Bucket: S3_BUCKET_NAME,
+      Bucket: config.attachments.s3Bucket,
       Key: attachmentId,
     });
 
@@ -179,10 +177,10 @@ export async function streamAttachment(attachmentId: string): Promise<Readable> 
  * Uses the attachment UUID as the storage key
  */
 export async function deleteAttachment(attachmentId: string): Promise<void> {
-  if (IS_PRODUCTION && s3Client) {
+  if (config.isProduction && s3Client) {
     const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
     const command = new DeleteObjectCommand({
-      Bucket: S3_BUCKET_NAME,
+      Bucket: config.attachments.s3Bucket,
       Key: attachmentId,
     });
     await s3Client.send(command);

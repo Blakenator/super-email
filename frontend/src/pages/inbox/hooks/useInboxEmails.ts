@@ -45,7 +45,8 @@ export function useInboxEmails({
   const [currentPage, setCurrentPage] = useState(1);
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [internalFilters, setInternalFilters] = useState<EmailFilters>(emptyFilters);
+  const [internalFilters, setInternalFilters] =
+    useState<EmailFilters>(emptyFilters);
   const [pageSize, setPageSize] = useState(() => {
     const saved = localStorage.getItem(PAGE_SIZE_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_PAGE_SIZE;
@@ -86,7 +87,7 @@ export function useInboxEmails({
 
   // Check if any advanced filters are active
   const hasActiveFilters = Object.entries(advancedFilters).some(([key, v]) => {
-    if (key === 'tagIds') return (v as string[] || []).length > 0;
+    if (key === 'tagIds') return ((v as string[]) || []).length > 0;
     return typeof v === 'string' && v.trim() !== '';
   });
 
@@ -102,9 +103,13 @@ export function useInboxEmails({
       toContains: (advancedFilters.toContains || '').trim() || undefined,
       ccContains: (advancedFilters.ccContains || '').trim() || undefined,
       bccContains: (advancedFilters.bccContains || '').trim() || undefined,
-      subjectContains: (advancedFilters.subjectContains || '').trim() || undefined,
+      subjectContains:
+        (advancedFilters.subjectContains || '').trim() || undefined,
       bodyContains: (advancedFilters.bodyContains || '').trim() || undefined,
-      tagIds: (advancedFilters.tagIds || []).length > 0 ? advancedFilters.tagIds : undefined,
+      tagIds:
+        (advancedFilters.tagIds || []).length > 0
+          ? advancedFilters.tagIds
+          : undefined,
     }),
     [folder, emailAccountId, pageSize, offset, searchQuery, advancedFilters],
   );
@@ -119,9 +124,13 @@ export function useInboxEmails({
       toContains: (advancedFilters.toContains || '').trim() || undefined,
       ccContains: (advancedFilters.ccContains || '').trim() || undefined,
       bccContains: (advancedFilters.bccContains || '').trim() || undefined,
-      subjectContains: (advancedFilters.subjectContains || '').trim() || undefined,
+      subjectContains:
+        (advancedFilters.subjectContains || '').trim() || undefined,
       bodyContains: (advancedFilters.bodyContains || '').trim() || undefined,
-      tagIds: (advancedFilters.tagIds || []).length > 0 ? advancedFilters.tagIds : undefined,
+      tagIds:
+        (advancedFilters.tagIds || []).length > 0
+          ? advancedFilters.tagIds
+          : undefined,
     }),
     [folder, emailAccountId, searchQuery, advancedFilters],
   );
@@ -132,7 +141,10 @@ export function useInboxEmails({
     nextFetchPolicy: 'cache-first', // After first fetch, use cache with network updates
     notifyOnNetworkStatusChange: true, // Ensure loading state updates on refetch
     // Poll every 10 minutes for inbox folder when not filtering
-    pollInterval: folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery ? POLL_INTERVAL_MS : 0,
+    pollInterval:
+      folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery
+        ? POLL_INTERVAL_MS
+        : 0,
   });
 
   // Get total count for pagination
@@ -140,7 +152,10 @@ export function useInboxEmails({
     variables: { input: countInput },
     fetchPolicy: 'cache-and-network',
     // Also poll the count
-    pollInterval: folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery ? POLL_INTERVAL_MS : 0,
+    pollInterval:
+      folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery
+        ? POLL_INTERVAL_MS
+        : 0,
   });
 
   const totalCount = countData?.getEmailCount ?? 0;
@@ -274,7 +289,9 @@ export function useInboxEmails({
       await bulkUpdateEmails({
         variables: { input: { ids: Array.from(selectedIds), isRead } },
       });
-      toast.success(`Marked ${selectedIds.size} email(s) as ${isRead ? 'read' : 'unread'}`);
+      toast.success(
+        `Marked ${selectedIds.size} email(s) as ${isRead ? 'read' : 'unread'}`,
+      );
       setSelectedIds(new Set());
     },
     [selectedIds, bulkUpdateEmails],
@@ -286,7 +303,9 @@ export function useInboxEmails({
       await bulkUpdateEmails({
         variables: { input: { ids: Array.from(selectedIds), isStarred } },
       });
-      toast.success(`${isStarred ? 'Starred' : 'Unstarred'} ${selectedIds.size} email(s)`);
+      toast.success(
+        `${isStarred ? 'Starred' : 'Unstarred'} ${selectedIds.size} email(s)`,
+      );
       setSelectedIds(new Set());
     },
     [selectedIds, bulkUpdateEmails],
@@ -347,17 +366,20 @@ export function useInboxEmails({
   }, [selectedIds, bulkUpdateEmails]);
 
   // Selection handlers
-  const handleSelectEmail = useCallback((emailId: string, selected: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (selected) {
-        next.add(emailId);
-      } else {
-        next.delete(emailId);
-      }
-      return next;
-    });
-  }, []);
+  const handleSelectEmail = useCallback(
+    (emailId: string, selected: boolean) => {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (selected) {
+          next.add(emailId);
+        } else {
+          next.delete(emailId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const handleSelectAll = useCallback(() => {
     const emails = data?.getEmails ?? [];
@@ -431,15 +453,19 @@ function showNewEmailNotification(count: number) {
 
   if (Notification.permission === 'granted') {
     new Notification('New Email', {
-      body: count === 1 ? 'You have 1 new email' : `You have ${count} new emails`,
-      icon: '/icon-192x192.png',
+      body:
+        count === 1 ? 'You have 1 new email' : `You have ${count} new emails`,
+      icon: '/icon-192x192.svg',
       tag: 'new-email',
     });
   } else if (Notification.permission !== 'denied') {
     Notification.requestPermission().then((permission) => {
       if (permission === 'granted') {
         new Notification('New Email', {
-          body: count === 1 ? 'You have 1 new email' : `You have ${count} new emails`,
+          body:
+            count === 1
+              ? 'You have 1 new email'
+              : `You have ${count} new emails`,
           icon: '/icon-192x192.svg',
           tag: 'new-email',
         });

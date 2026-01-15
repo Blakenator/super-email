@@ -9,6 +9,7 @@ import {
   faMobileAlt,
   faDesktop,
   faInfoCircle,
+  faEnvelope,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
 import {
@@ -27,9 +28,13 @@ type BrowserType = 'chrome' | 'firefox' | 'safari' | 'edge' | 'other';
 
 function detectBrowser(): BrowserType {
   const ua = navigator.userAgent.toLowerCase();
-  
+
   // Check Safari first (but not Chrome-based browsers pretending to be Safari)
-  if (ua.includes('safari') && !ua.includes('chrome') && !ua.includes('chromium')) {
+  if (
+    ua.includes('safari') &&
+    !ua.includes('chrome') &&
+    !ua.includes('chromium')
+  ) {
     return 'safari';
   }
   // Edge (Chromium-based)
@@ -41,10 +46,14 @@ function detectBrowser(): BrowserType {
     return 'firefox';
   }
   // Chrome (and Chromium-based browsers)
-  if (ua.includes('chrome') || ua.includes('chromium') || ua.includes('crios')) {
+  if (
+    ua.includes('chrome') ||
+    ua.includes('chromium') ||
+    ua.includes('crios')
+  ) {
     return 'chrome';
   }
-  
+
   return 'other';
 }
 
@@ -63,6 +72,7 @@ interface PWAStatus {
   isStandalone: boolean;
   notificationPermission: NotificationPermission | 'unsupported';
   serviceWorkerActive: boolean;
+  mailtoHandlerRegistered: boolean;
 }
 
 export function NotificationSettings() {
@@ -72,9 +82,11 @@ export function NotificationSettings() {
     isStandalone: false,
     notificationPermission: 'unsupported',
     serviceWorkerActive: false,
+    mailtoHandlerRegistered: false,
   });
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [requestingPermission, setRequestingPermission] = useState(false);
+  const [registeringMailto, setRegisteringMailto] = useState(false);
   const [notificationDetailLevel, setDetailLevel] =
     useState<NotificationDetailLevel>(getNotificationDetailLevel());
 
@@ -93,6 +105,22 @@ export function NotificationSettings() {
     );
   };
 
+  // Check if mailto handler is registered
+  const checkMailtoHandler = () => {
+    try {
+      if ('navigator' in window && 'registerProtocolHandler' in navigator) {
+        // There's no direct way to check if a protocol handler is registered,
+        // so we store it in localStorage when we register it
+        const registered =
+          localStorage.getItem('mailto-handler-registered') === 'true';
+        return registered;
+      }
+    } catch (err) {
+      console.error('Error checking mailto handler:', err);
+    }
+    return false;
+  };
+
   useEffect(() => {
     // Check PWA status
     const checkStatus = async () => {
@@ -109,12 +137,15 @@ export function NotificationSettings() {
         serviceWorkerActive = !!registration?.active;
       }
 
+      const mailtoHandlerRegistered = checkMailtoHandler();
+
       setStatus({
         isInstalled: isStandalone,
         isInstallable: !!deferredPrompt,
         isStandalone,
         notificationPermission,
         serviceWorkerActive,
+        mailtoHandlerRegistered,
       });
     };
 
@@ -192,6 +223,30 @@ export function NotificationSettings() {
       toast.error('Failed to request notification permission');
     } finally {
       setRequestingPermission(false);
+    }
+  };
+
+  const handleRegisterMailtoHandler = () => {
+    setRegisteringMailto(true);
+    try {
+      if ('registerProtocolHandler' in navigator) {
+        const composeUrl = `${window.location.origin}/compose?mailto=%s`;
+        navigator.registerProtocolHandler('mailto', composeUrl);
+        localStorage.setItem('mailto-handler-registered', 'true');
+        setStatus((prev) => ({ ...prev, mailtoHandlerRegistered: true }));
+        toast.success('StacksMail registered as mailto handler!');
+      } else {
+        toast.error(
+          'Protocol handler registration not supported in this browser',
+        );
+      }
+    } catch (err) {
+      console.error('Failed to register mailto handler:', err);
+      toast.error(
+        'Failed to register mailto handler. Try again or check browser permissions.',
+      );
+    } finally {
+      setRegisteringMailto(false);
     }
   };
 
@@ -315,6 +370,37 @@ export function NotificationSettings() {
               )}
             </StatusValue>
           </StatusItem>
+
+          <StatusItem>
+            <StatusLabel>
+              <FontAwesomeIcon icon={faEnvelope} />
+              <span>Mailto Links Handler</span>
+            </StatusLabel>
+            <StatusValue>
+              {status.mailtoHandlerRegistered ? (
+                <Badge bg="success">
+                  <FontAwesomeIcon icon={faCheck} className="me-1" />
+                  Registered
+                </Badge>
+              ) : (
+                <>
+                  <Badge bg="secondary">
+                    <FontAwesomeIcon icon={faTimes} className="me-1" />
+                    Not Registered
+                  </Badge>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleRegisterMailtoHandler}
+                    disabled={registeringMailto}
+                    className="ms-2"
+                  >
+                    {registeringMailto ? 'Registering...' : 'Register'}
+                  </Button>
+                </>
+              )}
+            </StatusValue>
+          </StatusItem>
         </ListGroup>
       </StatusCard>
 
@@ -425,17 +511,20 @@ export function NotificationSettings() {
           <small className="text-muted mt-2 d-block">
             {browser === 'chrome' && (
               <>
-                Click the install icon (⊕) in the address bar, or Menu (⋮) → "Install StacksMail..."
+                Click the install icon (⊕) in the address bar, or Menu (⋮) →
+                "Install StacksMail..."
               </>
             )}
             {browser === 'edge' && (
               <>
-                Click the install icon in the address bar, or Menu (···) → Apps → "Install StacksMail"
+                Click the install icon in the address bar, or Menu (···) → Apps
+                → "Install StacksMail"
               </>
             )}
             {browser === 'firefox' && (
               <>
-                Firefox does not support PWA installation natively. You can use the{' '}
+                Firefox does not support PWA installation natively. You can use
+                the{' '}
                 <a
                   href="https://addons.mozilla.org/en-US/firefox/addon/pwas-for-firefox/"
                   target="_blank"
@@ -447,18 +536,15 @@ export function NotificationSettings() {
               </>
             )}
             {browser === 'safari' && isIOS && (
-              <>
-                Tap the Share button (⬆) → "Add to Home Screen"
-              </>
+              <>Tap the Share button (⬆) → "Add to Home Screen"</>
             )}
             {browser === 'safari' && isMac && (
-              <>
-                File → "Add to Dock" (macOS Sonoma 14+)
-              </>
+              <>File → "Add to Dock" (macOS Sonoma 14+)</>
             )}
             {browser === 'other' && (
               <>
-                Look for the install button in your browser's address bar or menu.
+                Look for the install button in your browser's address bar or
+                menu.
               </>
             )}
           </small>

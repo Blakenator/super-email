@@ -1,4 +1,5 @@
 import { Sequelize } from 'sequelize-typescript';
+import { config, validateEnv } from '../config/env.js';
 import { User } from './models/user.model.js';
 import { AuthenticationMethod } from './models/authentication-method.model.js';
 import { EmailAccount } from './models/email-account.model.js';
@@ -11,13 +12,23 @@ import { EmailTag } from './models/email-tag.model.js';
 import { MailRule } from './models/mail-rule.model.js';
 import { Attachment } from './models/attachment.model.js';
 
+// Validate environment in production
+const envValidation = validateEnv();
+if (!envValidation.valid) {
+  console.error('Environment validation failed:');
+  envValidation.errors.forEach((err) => console.error(`  - ${err}`));
+  if (config.isProduction) {
+    process.exit(1);
+  }
+}
+
 export const sequelize = new Sequelize({
   dialect: 'postgres',
-  database: 'email_client',
-  username: 'postgres',
-  password: 'password',
-  host: 'localhost',
-  port: 5433,
+  database: config.db.name,
+  username: config.db.user,
+  password: config.db.password,
+  host: config.db.host,
+  port: config.db.port,
   models: [
     User,
     AuthenticationMethod,
@@ -31,5 +42,5 @@ export const sequelize = new Sequelize({
     MailRule,
     Attachment,
   ],
-  logging: false,
+  logging: config.isDevelopment ? console.log : false,
 });

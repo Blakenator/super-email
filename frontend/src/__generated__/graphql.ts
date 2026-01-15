@@ -247,6 +247,7 @@ export type EmailAccount = BaseEntityProps & {
   name: Scalars['String']['output'];
   port: Scalars['Int']['output'];
   providerId?: Maybe<Scalars['String']['output']>;
+  syncExpiresAt?: Maybe<Scalars['Date']['output']>;
   syncProgress?: Maybe<Scalars['Int']['output']>;
   syncStatus?: Maybe<Scalars['String']['output']>;
   updatedAt?: Maybe<Scalars['Date']['output']>;

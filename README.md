@@ -8,8 +8,10 @@ A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Su
 - 📤 **Multiple SMTP Profiles**: Send emails from different accounts/identities
 - 📥 **Inbox Management**: View, read, star, and organize your emails
 - ✏️ **Compose & Reply**: Write new emails and reply to received messages
-- 🔐 **Authentication**: User signup and login with JWT tokens
+- 🔐 **Authentication**: User signup and login via Supabase Auth
 - 🎨 **Modern UI**: Clean, responsive interface built with React Bootstrap
+- 📎 **Attachments**: Full attachment support with S3 storage in production
+- 🔒 **Secure Credentials**: IMAP/SMTP passwords stored in AWS Secrets Manager
 
 ## Tech Stack
 
@@ -19,7 +21,8 @@ A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Su
 - **Apollo GraphQL** Server
 - **Sequelize** ORM with PostgreSQL
 - **Nodemailer** for SMTP sending
-- **JWT** for authentication
+- **AWS S3** for attachment storage
+- **AWS Secrets Manager** for credential storage
 
 ### Frontend
 - **React 19** with Vite
@@ -29,19 +32,28 @@ A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Su
 - **Styled Components** for custom styling
 - **React Router** for navigation
 
+### Infrastructure
+- **AWS ECS Fargate** for backend containers
+- **AWS S3 + CloudFront** for frontend hosting
+- **AWS RDS PostgreSQL** for database
+- **AWS Secrets Manager** for secure credential storage
+- **Pulumi** for Infrastructure as Code
+
 ### Database
-- **PostgreSQL 15** (via Docker)
+- **PostgreSQL 15** (Docker locally, RDS in production)
 
 ## Project Structure
 
 ```
 email/
 ├── backend/               # Express + Apollo GraphQL backend
+│   ├── config/           # Centralized configuration
 │   ├── db/
 │   │   └── models/       # Sequelize models
 │   ├── mutations/        # GraphQL mutations
 │   ├── queries/          # GraphQL queries
 │   ├── helpers/          # Utility functions
+│   ├── Dockerfile        # Backend container definition
 │   └── index.ts          # Server entry point
 ├── frontend/             # React + Vite frontend
 │   └── src/
@@ -50,15 +62,23 @@ email/
 │       └── __generated__/ # Generated GraphQL types
 ├── common/               # Shared schema and types
 │   └── schema.graphql    # GraphQL schema
-└── docker-compose.yml    # PostgreSQL container config
+├── infra/                # Pulumi infrastructure code
+│   └── index.ts          # AWS infrastructure definition
+├── scripts/
+│   └── deploy.sh         # Deployment script
+├── .github/
+│   └── workflows/
+│       └── deploy.yml    # GitHub Actions deployment workflow
+└── docker-compose.yml    # Local PostgreSQL container
+
 ```
 
-## Getting Started
+## Local Development
 
 ### Prerequisites
 
-- Node.js 18+
-- pnpm
+- Node.js 20+
+- pnpm 10+
 - Docker (for PostgreSQL)
 
 ### Setup
@@ -87,14 +107,162 @@ email/
    - Backend API at `http://localhost:4000/api/graphql`
    - Frontend at `http://localhost:5173`
 
-### Configuration
+### Local Configuration
 
-The backend expects PostgreSQL at `localhost:5432` with:
-- Database: `email_client`
-- Username: `postgres`
-- Password: `password`
+The backend uses a centralized configuration in `backend/config/env.ts`. Default values work for local development:
 
-Modify `backend/db/database.ts` to change these settings.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NODE_ENV` | `development` | Environment mode |
+| `PORT` | `4000` | Backend server port |
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5433` | PostgreSQL port |
+| `DB_NAME` | `email_client` | Database name |
+| `DB_USER` | `postgres` | Database user |
+| `DB_PASSWORD` | `password` | Database password |
+
+### Local Secrets Storage
+
+In development, IMAP/SMTP credentials are stored in `data/secrets.json` (gitignored). In production, AWS Secrets Manager is used.
+
+## Deployment to AWS
+
+### Prerequisites
+
+1. **AWS CLI** - Configured with appropriate credentials
+2. **Docker** - Installed and running
+3. **Pulumi CLI** - Installed and logged in (`pulumi login`)
+4. **pnpm** - Installed globally
+
+### Required AWS Permissions
+
+The deploying IAM user/role needs permissions for:
+- ECR (create repositories, push images)
+- ECS (create clusters, services, task definitions)
+- EC2 (VPC, security groups, subnets)
+- RDS (create instances, subnet groups)
+- S3 (create buckets, upload objects)
+- CloudFront (create distributions)
+- Secrets Manager (create/read/update secrets)
+- IAM (create roles and policies)
+- CloudWatch (create log groups)
+
+### Environment Variables for Production
+
+These are set automatically by Pulumi in the ECS task definition:
+
+| Variable | Description |
+|----------|-------------|
+| `NODE_ENV` | Set to `production` |
+| `DB_HOST` | RDS endpoint |
+| `DB_PORT` | RDS port (5432) |
+| `DB_NAME` | Database name |
+| `DB_USER` | Database username |
+| `DB_PASSWORD` | Database password (from Secrets Manager) |
+| `ATTACHMENTS_S3_BUCKET` | S3 bucket for attachments |
+| `AWS_REGION` | AWS region |
+| `SECRETS_BASE_PATH` | Base path for Secrets Manager (`email-client`) |
+
+### Manual Deployment
+
+1. **Deploy using the script:**
+   ```bash
+   # Deploy to dev environment
+   pnpm run deploy:dev
+   
+   # Deploy to production
+   pnpm run deploy:prod
+   ```
+
+   Or directly:
+   ```bash
+   ./scripts/deploy.sh dev
+   ```
+
+2. **The script will:**
+   - Check prerequisites
+   - Deploy/update AWS infrastructure via Pulumi
+   - Build and push the backend Docker image to ECR
+   - Build the frontend and upload to S3
+   - Invalidate the CloudFront cache
+   - Force a new ECS deployment
+
+### GitHub Actions Deployment
+
+#### Setup Required Secrets
+
+Go to your GitHub repository → Settings → Secrets and variables → Actions, and add:
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_ACCESS_KEY_ID` | AWS access key with deployment permissions |
+| `AWS_SECRET_ACCESS_KEY` | AWS secret access key |
+| `AWS_REGION` | AWS region (e.g., `us-east-1`) |
+| `PULUMI_ACCESS_TOKEN` | Pulumi access token ([get one here](https://app.pulumi.com/account/tokens)) |
+
+#### Triggering Deployment
+
+1. **Manual trigger:**
+   - Go to Actions → "Deploy to AWS"
+   - Click "Run workflow"
+   - Select the environment (dev/prod)
+
+2. **Automatic trigger (optional):**
+   - Uncomment the `push` trigger in `.github/workflows/deploy.yml`
+   - Deployments will run on every merge to `main`
+
+### Pulumi Stack Setup
+
+1. **Login to Pulumi:**
+   ```bash
+   pulumi login
+   ```
+
+2. **Initialize the stack (first time only):**
+   ```bash
+   cd infra
+   pulumi stack init dev
+   pulumi config set environment dev
+   pulumi config set aws:region us-east-1
+   ```
+
+3. **Preview changes:**
+   ```bash
+   pnpm run infra:preview
+   ```
+
+4. **Apply changes:**
+   ```bash
+   pnpm run infra:up
+   ```
+
+### Infrastructure Outputs
+
+After deployment, Pulumi provides these outputs:
+
+| Output | Description |
+|--------|-------------|
+| `frontendUrl` | CloudFront URL for the frontend |
+| `backendApiUrl` | ALB URL for the backend API |
+| `frontendBucketName` | S3 bucket name for frontend files |
+| `backendRepoUrl` | ECR repository URL for backend images |
+| `databaseEndpoint` | RDS PostgreSQL endpoint |
+
+### Cost Considerations
+
+Approximate monthly costs (us-east-1, dev environment):
+- **ECS Fargate** (1 task, 0.25 vCPU, 0.5GB): ~$10/month
+- **RDS PostgreSQL** (db.t3.micro): ~$15/month
+- **ALB**: ~$16/month + data transfer
+- **S3 + CloudFront**: < $5/month (typical usage)
+- **Secrets Manager**: < $1/month
+
+**Total**: ~$45-50/month for dev environment
+
+For production, consider:
+- Larger RDS instance
+- Multiple ECS tasks for redundancy
+- Reserved capacity for cost savings
 
 ## Usage
 
@@ -145,15 +313,51 @@ docker-compose up -d
 
 The database schema is automatically synced on backend startup.
 
-## Future Improvements
+### Type Checking
 
-- [ ] Implement actual IMAP/POP sync (currently mocked)
-- [ ] Add attachment support
-- [ ] Implement email threading
-- [ ] Add search functionality
-- [ ] Support email labels/folders
-- [ ] Add OAuth authentication for email providers
-- [ ] Implement real-time email notifications
+```bash
+pnpm run typecheck
+```
+
+### Building
+
+```bash
+pnpm run build
+```
+
+## Security
+
+### Credential Storage
+
+- **Local development**: Credentials stored in `data/secrets.json` (gitignored)
+- **Production**: Credentials stored in AWS Secrets Manager
+- Credentials are never logged or exposed in API responses
+- Database still stores credentials for backwards compatibility during migration
+
+### Database Password
+
+- Generated automatically by Pulumi using AWS Secrets Manager
+- 32 characters, no punctuation (for compatibility)
+- Stored in Secrets Manager and passed to ECS via environment variables
+
+## Troubleshooting
+
+### Common Issues
+
+1. **ECS tasks failing to start**
+   - Check CloudWatch logs: `/ecs/email-client-{env}/backend`
+   - Verify RDS security group allows connections from ECS
+   - Ensure ECR image exists and is accessible
+
+2. **Frontend not updating**
+   - CloudFront cache invalidation takes 5-10 minutes
+   - Check S3 bucket contents
+   - Verify CloudFront distribution is deployed
+
+3. **Database connection errors**
+   - Verify RDS is in the same VPC as ECS
+   - Check security group rules
+   - Ensure DB_PASSWORD is correctly set
 
 ## License
 

@@ -3,6 +3,7 @@ import { simpleParser } from 'mailparser';
 import { EmailAccount, Email, EmailFolder } from '../db/models/index.js';
 import { logger } from './logger.js';
 import { applyRulesToEmail } from './rule-matcher.js';
+import { getImapCredentials } from './secrets.js';
 
 // Connection timeout - 4.5 minutes (server will close, client should reconnect)
 const CONNECTION_TIMEOUT_MS = 4.5 * 60 * 1000;
@@ -107,13 +108,18 @@ async function startIdleForAccount(
   const userConnections = userIdleConnections.get(userId);
   if (!userConnections) return;
 
+  // Get credentials from secure store, fall back to DB during migration
+  const credentials = await getImapCredentials(account.id);
+  const username = credentials?.username || account.username;
+  const password = credentials?.password || account.password;
+
   const client = new ImapFlow({
     host: account.host,
     port: account.port,
     secure: account.useSsl,
     auth: {
-      user: account.email,
-      pass: account.password,
+      user: username,
+      pass: password,
     },
     logger: false,
   });

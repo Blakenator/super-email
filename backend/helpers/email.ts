@@ -9,6 +9,8 @@ import {
   startAsyncSync,
   type SyncResult,
 } from './imap-sync.js';
+import { getSmtpCredentials } from './secrets.js';
+import { config } from '../config/env.js';
 
 export interface EmailAttachment {
   filename: string;
@@ -38,23 +40,30 @@ export interface TestConnectionResult {
  * - Port 465: Use immediate TLS (secure: true)
  * - Port 587/25: Use STARTTLS (secure: false)
  */
-function createSmtpTransporter(smtpProfile: SmtpProfile) {
+async function createSmtpTransporter(smtpProfile: SmtpProfile) {
   // Port 465 uses immediate TLS, other ports use STARTTLS
   const useImmediateTls = smtpProfile.port === 465;
+
+  // Get credentials from secure store
+  const credentials = await getSmtpCredentials(smtpProfile.id);
+
+  // Fall back to DB credentials if not in secrets store (migration period)
+  const username = credentials?.username || smtpProfile.username;
+  const password = credentials?.password || smtpProfile.password;
 
   return nodemailer.createTransport({
     host: smtpProfile.host,
     port: smtpProfile.port,
     secure: useImmediateTls,
     auth: {
-      user: smtpProfile.username,
-      pass: smtpProfile.password,
+      user: username,
+      pass: password,
     },
     // For STARTTLS ports, require TLS upgrade if useSsl is true
     requireTLS: !useImmediateTls && smtpProfile.useSsl,
     tls: {
       // Allow self-signed certificates in development
-      rejectUnauthorized: process.env.NODE_ENV === 'production',
+      rejectUnauthorized: config.isProduction,
     },
   });
 }
@@ -66,7 +75,7 @@ export async function testSmtpConnection(
   smtpProfile: SmtpProfile,
 ): Promise<TestConnectionResult> {
   try {
-    const transporter = createSmtpTransporter(smtpProfile);
+    const transporter = await createSmtpTransporter(smtpProfile);
     await transporter.verify();
     return { success: true, message: 'SMTP connection successful' };
   } catch (error: any) {
@@ -82,7 +91,7 @@ export async function sendEmail(
   smtpProfile: SmtpProfile,
   options: SendEmailOptions,
 ): Promise<{ messageId: string }> {
-  const transporter = createSmtpTransporter(smtpProfile);
+  const transporter = await createSmtpTransporter(smtpProfile);
 
   const result = await transporter.sendMail({
     from: `"${smtpProfile.name}" <${smtpProfile.email}>`,
@@ -105,6 +114,14 @@ export async function sendEmail(
 }
 
 /**
+ * Check if a sync has expired (expiration time has passed)
+ */
+function isSyncExpired(expiresAt: Date | null): boolean {
+  if (!expiresAt) return true;
+  return new Date() > expiresAt;
+}
+
+/**
  * Start async sync - returns immediately while sync continues in background
  */
 export async function startAsyncEmailSync(
@@ -112,8 +129,22 @@ export async function startAsyncEmailSync(
 ): Promise<boolean> {
   // Check if already syncing using syncId
   if (emailAccount.syncId) {
-    console.log(`[Email] Account ${emailAccount.email} is already syncing`);
-    return false;
+    // Check if the sync has expired (stuck/stale)
+    if (isSyncExpired(emailAccount.syncExpiresAt)) {
+      console.log(
+        `[Email] Sync for ${emailAccount.email} has expired, clearing stale sync`,
+      );
+      // Clear the stale sync before starting a new one
+      await emailAccount.update({
+        syncId: null,
+        syncProgress: null,
+        syncStatus: null,
+        syncExpiresAt: null,
+      });
+    } else {
+      console.log(`[Email] Account ${emailAccount.email} is already syncing`);
+      return false;
+    }
   }
 
   if (emailAccount.accountType === EmailAccountType.IMAP) {

@@ -105,12 +105,51 @@ interface ForwardState {
   emailAccountId?: string;
 }
 
+// Parse mailto: URL (when registered as handler)
+function parseMailtoUrl(url: string): {
+  to?: string;
+  cc?: string;
+  bcc?: string;
+  subject?: string;
+  body?: string;
+} {
+  try {
+    // mailto: URLs come in format: mailto:address?cc=...&subject=...
+    const mailtoPrefix = 'mailto:';
+    if (!url.includes(mailtoPrefix)) return {};
+
+    const parts = url.substring(mailtoPrefix.length).split('?');
+    const to = decodeURIComponent(parts[0] || '');
+
+    if (parts.length < 2) return { to };
+
+    const params = new URLSearchParams(parts[1]);
+    return {
+      to,
+      cc: params.get('cc') || undefined,
+      bcc: params.get('bcc') || undefined,
+      subject: params.get('subject') || undefined,
+      body: params.get('body') || undefined,
+    };
+  } catch (error) {
+    console.error('Failed to parse mailto URL:', error);
+    return {};
+  }
+}
+
 export function Compose() {
   const navigate = useNavigate();
   const location = useLocation();
   const replyTo = location.state?.replyTo as ReplyToState | undefined;
   const existingDraft = location.state?.draft as DraftState | undefined;
   const forward = location.state?.forward as ForwardState | undefined;
+
+  // Parse mailto: URL if present
+  const mailtoParams = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const mailtoUrl = params.get('mailto');
+    return mailtoUrl ? parseMailtoUrl(mailtoUrl) : null;
+  }, [location.search]);
 
   const [emailAccountId, setEmailAccountId] = useState(
     existingDraft?.emailAccountId ||
@@ -122,21 +161,36 @@ export function Compose() {
     existingDraft?.smtpProfileId || '',
   );
   const [toAddresses, setToAddresses] = useState(
-    existingDraft?.to || replyTo?.to || '',
+    mailtoParams?.to || existingDraft?.to || replyTo?.to || '',
   );
-  const [ccAddresses, setCcAddresses] = useState(existingDraft?.cc || '');
-  const [bccAddresses, setBccAddresses] = useState(existingDraft?.bcc || '');
+  const [ccAddresses, setCcAddresses] = useState(
+    mailtoParams?.cc || existingDraft?.cc || '',
+  );
+  const [bccAddresses, setBccAddresses] = useState(
+    mailtoParams?.bcc || existingDraft?.bcc || '',
+  );
   const [subject, setSubject] = useState(
-    existingDraft?.subject || replyTo?.subject || forward?.subject || '',
+    mailtoParams?.subject ||
+      existingDraft?.subject ||
+      replyTo?.subject ||
+      forward?.subject ||
+      '',
   );
   const [htmlBody, setHtmlBody] = useState(existingDraft?.htmlBody || '');
-  const [textBody, setTextBody] = useState(existingDraft?.body || '');
+  const [textBody, setTextBody] = useState(
+    mailtoParams?.body || existingDraft?.body || '',
+  );
   const [error, setError] = useState<string | null>(null);
   const [draftId, setDraftId] = useState<string | null>(
     existingDraft?.draftId || null,
   );
   const [showCcBcc, setShowCcBcc] = useState(
-    !!(existingDraft?.cc || existingDraft?.bcc),
+    !!(
+      mailtoParams?.cc ||
+      mailtoParams?.bcc ||
+      existingDraft?.cc ||
+      existingDraft?.bcc
+    ),
   );
 
   // Track whether sender selector is in read-only or edit mode

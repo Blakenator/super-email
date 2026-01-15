@@ -80,6 +80,11 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare syncStatus: string | null;
 
+  // Sync expiration time - if current time > this, sync is considered stale
+  // and a new sync can be started. Updated periodically during active syncs.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare syncExpiresAt: Date | null;
+
   @ForeignKey(() => SmtpProfile)
   @Column({ type: DataType.UUID, allowNull: true })
   declare defaultSmtpProfileId: string | null;

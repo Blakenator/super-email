@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import type { BackendContext } from '../types.js';
 import { AuthenticationMethod } from '../db/models/index.js';
+import { config } from '../config/env.js';
 
 // Supabase client configuration
-const supabaseUrl = 'https://ivqyyttllhpwbducgpih.supabase.co';
-const supabaseAnonKey = 'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(
+  config.supabase.url,
+  config.supabase.anonKey,
+);
 
 /**
  * Verify a Supabase JWT token and return the local user ID

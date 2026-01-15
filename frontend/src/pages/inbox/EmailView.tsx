@@ -111,6 +111,11 @@ export function EmailView({
   // Track the current emailId to detect changes
   const currentEmailIdRef = useRef(emailId);
 
+  // Reset current email ID when emailId prop changes
+  useEffect(() => {
+    currentEmailIdRef.current = emailId;
+  }, [emailId]);
+
   // Helper function to download an attachment with authentication
   const downloadAttachment = async (attachment: Attachment) => {
     try {
@@ -458,15 +463,28 @@ export function EmailView({
 
   const hasUnsubscribeOption = email?.unsubscribeUrl || email?.unsubscribeEmail;
 
-  // Show loading spinner only when no email data exists
-  // or when navigating to a different email (stale data from previous email)
+  // Show loading spinner only when:
+  // 1. No email data exists at all
+  // 2. Email data exists but is stale (wrong ID) AND query is currently loading
+  // Don't show spinner if we have stale data but query is done (prevents infinite spinner)
   const isStaleData = email && email.id !== emailId;
-  if (!email || isStaleData) {
+  const shouldShowLoading = !email || (isStaleData && loading);
+
+  if (shouldShowLoading) {
     return (
       <Wrapper>
         <LoadingSpinner message="Loading email..." />
       </Wrapper>
     );
+  }
+
+  // If we have stale data but aren't loading, show it anyway
+  // This prevents the case where subscription emails aren't in query cache yet
+  if (isStaleData && !loading) {
+    console.warn('[EmailView] Displaying potentially stale email data', {
+      emailId,
+      loadedEmailId: email?.id,
+    });
   }
 
   // Helper to render action buttons for an email

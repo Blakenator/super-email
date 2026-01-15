@@ -1,6 +1,10 @@
 import { makeMutation } from '../../types.js';
 import { EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
+import {
+  storeImapCredentials,
+  getImapCredentials,
+} from '../../helpers/secrets.js';
 
 export const updateEmailAccount = makeMutation(
   'updateEmailAccount',
@@ -35,6 +39,21 @@ export const updateEmailAccount = makeMutation(
       }),
       ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
     });
+
+    // Update credentials in secure secrets store if username or password changed
+    if (input.username !== undefined || input.password !== undefined) {
+      // Get existing credentials to merge with updates
+      const existingCreds = await getImapCredentials(emailAccount.id);
+      const newUsername =
+        input.username ?? existingCreds?.username ?? emailAccount.username;
+      const newPassword =
+        input.password ?? existingCreds?.password ?? emailAccount.password;
+
+      await storeImapCredentials(emailAccount.id, {
+        username: newUsername,
+        password: newPassword,
+      });
+    }
 
     return emailAccount;
   },

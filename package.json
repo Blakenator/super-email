@@ -7,8 +7,15 @@
     "start": "pnpm run --parallel -r start",
     "stop": "pnpm run --parallel -r stop",
     "typecheck": "pnpm run --parallel --filter=!@main/infra -r typecheck",
+    "build": "pnpm run --filter @main/backend build && pnpm run --filter @main/frontend build",
     "db:up": "docker-compose up -d",
-    "db:down": "docker-compose down"
+    "db:down": "docker-compose down",
+    "deploy": "./scripts/deploy.sh",
+    "deploy:dev": "./scripts/deploy.sh dev",
+    "deploy:prod": "./scripts/deploy.sh prod",
+    "infra:preview": "cd infra && pulumi preview",
+    "infra:up": "cd infra && pulumi up",
+    "infra:destroy": "cd infra && pulumi destroy"
   },
   "keywords": [
     "email",

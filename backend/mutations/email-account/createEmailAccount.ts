@@ -1,6 +1,7 @@
 import { makeMutation } from '../../types.js';
 import { EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
+import { storeImapCredentials } from '../../helpers/secrets.js';
 
 export const createEmailAccount = makeMutation(
   'createEmailAccount',
@@ -29,11 +30,17 @@ export const createEmailAccount = makeMutation(
       host: input.host,
       port: input.port,
       username: input.username,
-      password: input.password,
+      password: input.password, // Keep in DB for backwards compatibility during migration
       accountType: input.accountType,
       useSsl: input.useSsl,
       defaultSmtpProfileId: input.defaultSmtpProfileId || null,
       isDefault: shouldBeDefault,
+    });
+
+    // Store credentials in secure secrets store
+    await storeImapCredentials(emailAccount.id, {
+      username: input.username,
+      password: input.password,
     });
 
     return emailAccount;

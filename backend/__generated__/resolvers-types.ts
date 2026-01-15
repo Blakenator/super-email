@@ -248,6 +248,7 @@ export type EmailAccount = BaseEntityProps & {
   name: Scalars['String']['output'];
   port: Scalars['Int']['output'];
   providerId?: Maybe<Scalars['String']['output']>;
+  syncExpiresAt?: Maybe<Scalars['Date']['output']>;
   syncProgress?: Maybe<Scalars['Int']['output']>;
   syncStatus?: Maybe<Scalars['String']['output']>;
   updatedAt?: Maybe<Scalars['Date']['output']>;
@@ -1194,6 +1195,7 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  syncExpiresAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   syncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   syncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
