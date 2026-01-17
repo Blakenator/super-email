@@ -22,20 +22,31 @@ import { LoadingSpinner } from './core/components';
 import { useMailboxSubscription } from './hooks';
 import { Sidebar, MobileNavbar } from './components';
 import { AppWrapper, MainContent } from './App.wrappers';
+import { useEmailStore } from './stores/emailStore';
 
 function AuthenticatedApp() {
   const location = useLocation();
   const { user, logout, updatePreferences } = useAuth();
+  const isOnline = useEmailStore((state) => state.isOnline);
+  const cachedEmails = useEmailStore((state) => state.emails);
+  const hasBanner = !isOnline;
 
   // Start the mailbox subscription for real-time updates
   useMailboxSubscription();
 
   const { data: unreadData } = useQuery(GET_EMAIL_COUNT_QUERY, {
     variables: { input: { folder: EmailFolder.Inbox, isRead: false } },
-    pollInterval: 30000,
+    pollInterval: isOnline ? 30000 : 0, // Don't poll when offline
+    fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
   });
 
-  const unreadCount = unreadData?.getEmailCount ?? 0;
+  // Calculate unread count from server or fall back to cached emails when offline
+  const serverUnreadCount = unreadData?.getEmailCount ?? 0;
+  const cachedUnreadCount = Object.values(cachedEmails).filter(
+    (email) => email.folder === 'INBOX' && !email.isRead,
+  ).length;
+  const unreadCount =
+    serverUnreadCount > 0 ? serverUnreadCount : cachedUnreadCount;
   const isCollapsed = user?.navbarCollapsed ?? false;
 
   const handleToggleCollapse = async () => {
@@ -51,7 +62,7 @@ function AuthenticatedApp() {
   };
 
   return (
-    <AppWrapper>
+    <AppWrapper $hasBanner={hasBanner}>
       <Sidebar
         user={user}
         isCollapsed={isCollapsed}

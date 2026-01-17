@@ -2,6 +2,7 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import { useAuth } from './contexts/AuthContext';
 import { ThemeContextProvider } from './contexts/ThemeContext';
+import { OfflineBanner } from './core/components';
 
 /**
  * ThemedApp wraps the main App with ThemeContextProvider
@@ -12,6 +13,7 @@ export function ThemedApp() {
 
   return (
     <ThemeContextProvider userThemePreference={user?.themePreference}>
+      <OfflineBanner />
       <App />
       <Toaster
         position="bottom-right"

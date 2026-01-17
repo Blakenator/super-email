@@ -3,20 +3,33 @@ import { Container, Form, Button, Alert, Spinner, Card } from 'react-bootstrap';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEnvelope } from '@fortawesome/free-solid-svg-icons';
+import { faEnvelope, faWifi, faTimes, faUser } from '@fortawesome/free-solid-svg-icons';
 import {
   PageWrapper,
   AuthCard as LoginCard,
   Logo,
   Tagline,
+  SavedUsersSection,
+  SavedUsersList,
+  SavedUserItem,
+  SavedUserAvatar,
+  SavedUserInfo,
+  SavedUserName,
+  SavedUserEmail,
+  SavedUserRemove,
+  Divider,
+  RememberMeRow,
+  OfflineNotice,
 } from './auth.wrappers';
 
 export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const [showLoginForm, setShowLoginForm] = useState(false);
+  const { login, savedUsers, removeSavedUser, isOffline } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -29,7 +42,7 @@ export function Login() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(email, password, rememberMe);
       // Navigate to the redirect path if set, otherwise inbox
       navigate(redirectPath || '/inbox');
     } catch (err) {
@@ -38,6 +51,43 @@ export function Login() {
       setLoading(false);
     }
   };
+
+  const handleSavedUserClick = (savedUserEmail: string) => {
+    setEmail(savedUserEmail);
+    setShowLoginForm(true);
+    setRememberMe(true);
+  };
+
+  const handleRemoveSavedUser = (e: React.MouseEvent, userId: string) => {
+    e.stopPropagation();
+    removeSavedUser(userId);
+  };
+
+  const getInitials = (firstName?: string | null, lastName?: string | null, email?: string) => {
+    if (firstName && lastName) {
+      return `${firstName[0]}${lastName[0]}`.toUpperCase();
+    }
+    if (firstName) {
+      return firstName[0].toUpperCase();
+    }
+    if (email) {
+      return email[0].toUpperCase();
+    }
+    return '?';
+  };
+
+  const getDisplayName = (firstName?: string | null, lastName?: string | null, email?: string) => {
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`;
+    }
+    if (firstName) {
+      return firstName;
+    }
+    return email || 'Unknown User';
+  };
+
+  const hasSavedUsers = savedUsers.length > 0;
+  const shouldShowSavedUsers = hasSavedUsers && !showLoginForm;
 
   return (
     <PageWrapper>
@@ -48,7 +98,16 @@ export function Login() {
               <FontAwesomeIcon icon={faEnvelope} className="me-2" />
               StacksMail
             </Logo>
-            <Tagline>Sign in to your account</Tagline>
+            <Tagline>
+              {shouldShowSavedUsers ? 'Choose an account' : 'Sign in to your account'}
+            </Tagline>
+
+            {isOffline && (
+              <OfflineNotice>
+                <FontAwesomeIcon icon={faWifi} />
+                You're offline. Sign in requires an internet connection.
+              </OfflineNotice>
+            )}
 
             {error && (
               <Alert
@@ -60,60 +119,132 @@ export function Login() {
               </Alert>
             )}
 
-            <Form onSubmit={handleSubmit}>
-              <Form.Group className="mb-3">
-                <Form.Label>Email address</Form.Label>
-                <Form.Control
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  size="lg"
-                />
-              </Form.Group>
+            {shouldShowSavedUsers && (
+              <>
+                <SavedUsersSection>
+                  <SavedUsersList>
+                    {savedUsers.map((savedUser) => (
+                      <SavedUserItem
+                        key={savedUser.id}
+                        onClick={() => handleSavedUserClick(savedUser.email)}
+                      >
+                        <SavedUserAvatar>
+                          {getInitials(savedUser.firstName, savedUser.lastName, savedUser.email)}
+                        </SavedUserAvatar>
+                        <SavedUserInfo>
+                          <SavedUserName>
+                            {getDisplayName(savedUser.firstName, savedUser.lastName, savedUser.email)}
+                          </SavedUserName>
+                          <SavedUserEmail>{savedUser.email}</SavedUserEmail>
+                        </SavedUserInfo>
+                        <SavedUserRemove
+                          onClick={(e) => handleRemoveSavedUser(e, savedUser.id)}
+                          title="Remove from saved accounts"
+                        >
+                          <FontAwesomeIcon icon={faTimes} />
+                        </SavedUserRemove>
+                      </SavedUserItem>
+                    ))}
+                  </SavedUsersList>
+                </SavedUsersSection>
 
-              <Form.Group className="mb-4">
-                <Form.Label>Password</Form.Label>
-                <Form.Control
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  size="lg"
-                />
-              </Form.Group>
+                <Divider>
+                  <span>or</span>
+                </Divider>
 
-              <Button
-                variant="primary"
-                type="submit"
-                size="lg"
-                className="w-100 mb-3"
-                disabled={loading}
-                style={{
-                  background:
-                    'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  border: 'none',
-                }}
-              >
-                {loading ? (
-                  <>
-                    <Spinner animation="border" size="sm" className="me-2" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
+                <Button
+                  variant="outline-secondary"
+                  size="lg"
+                  className="w-100 mb-3"
+                  onClick={() => setShowLoginForm(true)}
+                >
+                  <FontAwesomeIcon icon={faUser} className="me-2" />
+                  Use another account
+                </Button>
+              </>
+            )}
+
+            {(!hasSavedUsers || showLoginForm) && (
+              <Form onSubmit={handleSubmit}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Email address</Form.Label>
+                  <Form.Control
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    size="lg"
+                    autoFocus={showLoginForm}
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    size="lg"
+                  />
+                </Form.Group>
+
+                <RememberMeRow>
+                  <Form.Check
+                    type="checkbox"
+                    id="rememberMe"
+                    label="Remember me on this device"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                </RememberMeRow>
+
+                <Button
+                  variant="primary"
+                  type="submit"
+                  size="lg"
+                  className="w-100 mb-3"
+                  disabled={loading || isOffline}
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none',
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Signing in...
+                    </>
+                  ) : (
+                    'Sign In'
+                  )}
+                </Button>
+
+                {showLoginForm && hasSavedUsers && (
+                  <Button
+                    variant="link"
+                    className="w-100 mb-2"
+                    onClick={() => {
+                      setShowLoginForm(false);
+                      setEmail('');
+                      setPassword('');
+                    }}
+                  >
+                    ← Back to saved accounts
+                  </Button>
                 )}
-              </Button>
 
-              <p className="text-center text-muted mb-0">
-                Don't have an account?{' '}
-                <Link to="/signup" style={{ color: '#667eea' }}>
-                  Sign up
-                </Link>
-              </p>
-            </Form>
+                <p className="text-center text-muted mb-0">
+                  Don't have an account?{' '}
+                  <Link to="/signup" style={{ color: '#667eea' }}>
+                    Sign up
+                  </Link>
+                </p>
+              </Form>
+            )}
           </Card.Body>
         </LoginCard>
       </Container>

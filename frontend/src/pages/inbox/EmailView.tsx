@@ -194,14 +194,32 @@ export function EmailView({
     }
   };
 
+  // Offline support
+  const isOnline = useEmailStore((state) => state.isOnline);
+  const cachedEmails = useEmailStore((state) => state.emails);
+
   const { data, loading, refetch } = useQuery(GET_EMAIL_QUERY, {
     variables: { input: { id: emailId } },
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
     notifyOnNetworkStatusChange: true,
   });
 
   // Fetch thread emails if this email is part of a thread
-  const email = data?.getEmail;
+  // Fall back to cached email when offline and no server data
+  const serverEmail = data?.getEmail;
+  const cachedEmail = cachedEmails[emailId];
+  const email = serverEmail ?? (cachedEmail ? {
+    ...cachedEmail,
+    attachments: [],
+    headers: null,
+    references: null,
+    isUnsubscribed: false,
+    unsubscribeUrl: null,
+    unsubscribeEmail: null,
+    hasAttachments: false,
+    attachmentCount: 0,
+  } : null);
+
   const {
     data: threadData,
     loading: threadLoading,
@@ -209,7 +227,7 @@ export function EmailView({
   } = useQuery(GET_EMAILS_BY_THREAD_QUERY, {
     variables: { threadId: email?.threadId || '' },
     skip: !email?.threadId || (email?.threadCount ?? 1) <= 1,
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
     notifyOnNetworkStatusChange: true,
   });
 

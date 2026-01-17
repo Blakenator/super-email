@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 /**
  * Email cache store using Zustand
- * Provides centralized email caching with tab synchronization
+ * Provides centralized email caching with tab synchronization and offline support
  */
 
 export interface CachedEmail {
@@ -28,6 +28,34 @@ export interface CachedEmail {
   tags?: Array<{ id: string; name: string; color: string }> | null;
 }
 
+export interface CachedEmailAccount {
+  id: string;
+  name?: string | null;
+  email: string;
+  host: string;
+  providerId?: string | null;
+}
+
+export interface CachedUser {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  themePreference?: string;
+  navbarCollapsed?: boolean;
+  notificationDetailLevel?: string;
+  inboxDensity?: boolean;
+  inboxGroupByDate?: boolean;
+}
+
+export interface SavedUser {
+  id: string;
+  email: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  lastLoginAt: string;
+}
+
 export interface MailboxUpdate {
   type:
     | 'NEW_EMAILS'
@@ -47,6 +75,19 @@ interface EmailStoreState {
   // Email cache by ID
   emails: Record<string, CachedEmail>;
 
+  // Email accounts cache
+  emailAccounts: CachedEmailAccount[];
+
+  // Cached user data for offline access
+  cachedUser: CachedUser | null;
+
+  // Saved users for "Remember Me" feature
+  savedUsers: SavedUser[];
+
+  // Offline status
+  isOnline: boolean;
+  lastOnlineAt: string | null;
+
   // Subscription state
   isSubscriptionActive: boolean;
   subscriptionError: string | null;
@@ -57,11 +98,25 @@ interface EmailStoreState {
   tabLockId: string | null;
   currentTabId: string;
 
-  // Actions
+  // Email actions
   setEmails: (emails: CachedEmail[]) => void;
   updateEmail: (email: CachedEmail) => void;
   removeEmail: (emailId: string) => void;
-  clearCache: () => void;
+  clearEmailCache: () => void;
+
+  // Email accounts actions
+  setEmailAccounts: (accounts: CachedEmailAccount[]) => void;
+
+  // User cache actions
+  setCachedUser: (user: CachedUser | null) => void;
+
+  // Saved users actions (Remember Me)
+  addSavedUser: (user: SavedUser) => void;
+  removeSavedUser: (userId: string) => void;
+  clearSavedUsers: () => void;
+
+  // Offline actions
+  setOnline: (online: boolean) => void;
 
   // Subscription actions
   setSubscriptionActive: (active: boolean) => void;
@@ -75,6 +130,9 @@ interface EmailStoreState {
   acquireTabLock: () => boolean;
   releaseTabLock: () => void;
   isCurrentTabOwner: () => boolean;
+
+  // Computed helpers
+  hasCachedData: () => boolean;
 }
 
 // Generate a unique ID for this tab
@@ -89,6 +147,11 @@ export const useEmailStore = create<EmailStoreState>()(
   persist(
     (set, get) => ({
       emails: {},
+      emailAccounts: [],
+      cachedUser: null,
+      savedUsers: [],
+      isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+      lastOnlineAt: null,
       isSubscriptionActive: false,
       subscriptionError: null,
       lastUpdate: null,
@@ -122,8 +185,43 @@ export const useEmailStore = create<EmailStoreState>()(
         });
       },
 
-      clearCache: () => {
-        set({ emails: {}, lastUpdate: null });
+      clearEmailCache: () => {
+        set({ emails: {}, emailAccounts: [], lastUpdate: null });
+      },
+
+      setEmailAccounts: (accounts) => {
+        set({ emailAccounts: accounts });
+      },
+
+      setCachedUser: (user) => {
+        set({ cachedUser: user });
+      },
+
+      addSavedUser: (user) => {
+        set((state) => {
+          // Remove existing entry for this user (to update lastLoginAt)
+          const filtered = state.savedUsers.filter((u) => u.id !== user.id);
+          // Add at the beginning (most recent first)
+          return { savedUsers: [user, ...filtered].slice(0, 10) }; // Keep max 10 users
+        });
+      },
+
+      removeSavedUser: (userId) => {
+        set((state) => ({
+          savedUsers: state.savedUsers.filter((u) => u.id !== userId),
+        }));
+      },
+
+      clearSavedUsers: () => {
+        set({ savedUsers: [] });
+      },
+
+      setOnline: (online) => {
+        const state = get();
+        set({
+          isOnline: online,
+          lastOnlineAt: online ? new Date().toISOString() : state.lastOnlineAt,
+        });
       },
 
       setSubscriptionActive: (active) => {
@@ -161,7 +259,7 @@ export const useEmailStore = create<EmailStoreState>()(
             break;
 
           case 'CONNECTION_ESTABLISHED':
-            set({ connectionStatus: 'connected', subscriptionError: null });
+            set({ connectionStatus: 'connected', subscriptionError: null, isOnline: true });
             break;
 
           case 'CONNECTION_CLOSED':
@@ -247,21 +345,31 @@ export const useEmailStore = create<EmailStoreState>()(
         }
         return false;
       },
+
+      hasCachedData: () => {
+        const state = get();
+        return Object.keys(state.emails).length > 0;
+      },
     }),
     {
       name: 'email-cache-storage',
       storage: createJSONStorage(() => localStorage),
-      // Only persist emails, not subscription state
+      // Persist emails, accounts, user cache, saved users, and offline timestamp
       partialize: (state) => ({
         emails: state.emails,
+        emailAccounts: state.emailAccounts,
+        cachedUser: state.cachedUser,
+        savedUsers: state.savedUsers,
         lastUpdate: state.lastUpdate,
+        lastOnlineAt: state.lastOnlineAt,
       }),
     },
   ),
 );
 
-// Refresh lock periodically if we own it
+// Set up browser event listeners
 if (typeof window !== 'undefined') {
+  // Refresh lock periodically if we own it
   setInterval(() => {
     const state = useEmailStore.getState();
     if (state.isCurrentTabOwner()) {
@@ -292,4 +400,16 @@ if (typeof window !== 'undefined') {
       }
     }
   });
+
+  // Online/offline event listeners
+  window.addEventListener('online', () => {
+    useEmailStore.getState().setOnline(true);
+  });
+
+  window.addEventListener('offline', () => {
+    useEmailStore.getState().setOnline(false);
+  });
+
+  // Initialize with current online status
+  useEmailStore.getState().setOnline(navigator.onLine);
 }

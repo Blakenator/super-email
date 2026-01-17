@@ -1,12 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-  faMoon,
-  faSun,
-  faBolt,
-  faCircle,
-} from '@fortawesome/free-solid-svg-icons';
+import { faMoon, faSun, faCircle } from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   IframeContainer,
@@ -254,6 +249,8 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
       overflow-wrap: break-word;
       background-color: ${bgColor};
       color: ${textColor};
+      overflow-x: hidden;
+      overflow-y: auto;
     }
     a {
       color: ${linkColor};
@@ -350,28 +347,35 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
     };
   }, [blobUrl]);
 
-  // Resize iframe to fit content
+  // Set iframe height to match container max-height so it can scroll internally
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
 
     const handleLoad = () => {
-      try {
-        const doc = iframe.contentDocument || iframe.contentWindow?.document;
-        if (doc?.body) {
-          // Add a small buffer to avoid scrollbars
-          const height = doc.body.scrollHeight + 16;
-          setIframeHeight(Math.max(100, Math.min(height, 2000))); // Cap at 2000px
-        }
-      } catch {
-        // Cross-origin error - can't access iframe content
-        // This shouldn't happen with blob URLs but handle gracefully
-        setIframeHeight(400);
-      }
+      // Calculate max height based on viewport (matching HtmlBodyContainer max-height)
+      const maxHeight = window.innerHeight - 300;
+      // Set iframe to fixed height so it scrolls internally
+      setIframeHeight(Math.max(100, maxHeight));
+    };
+
+    // Also recalculate on window resize
+    const handleResize = () => {
+      const maxHeight = window.innerHeight - 300;
+      setIframeHeight(Math.max(100, maxHeight));
     };
 
     iframe.addEventListener('load', handleLoad);
-    return () => iframe.removeEventListener('load', handleLoad);
+    window.addEventListener('resize', handleResize);
+
+    // Set initial height
+    const maxHeight = window.innerHeight - 300;
+    setIframeHeight(Math.max(100, maxHeight));
+
+    return () => {
+      iframe.removeEventListener('load', handleLoad);
+      window.removeEventListener('resize', handleResize);
+    };
   }, [blobUrl]);
 
   return (
@@ -404,6 +408,7 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
         src={blobUrl}
         title="Email content"
         sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+        scrolling="yes"
         // @ts-expect-error - allowtransparency is a valid HTML attribute but not typed in React
         allowtransparency="true"
         style={{

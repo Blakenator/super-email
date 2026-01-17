@@ -12,6 +12,7 @@ import {
 import { EmailFolder } from '../../../__generated__/graphql';
 import type { EmailFilters } from '../components';
 import { useEmailStore } from '../../../stores/emailStore';
+import type { CachedEmail } from '../../../stores/emailStore';
 
 const DEFAULT_PAGE_SIZE = 25;
 const PAGE_SIZE_KEY = 'inboxPageSize';
@@ -73,11 +74,34 @@ export function useInboxEmails({
     setSelectedIds(new Set());
   }, [folder, activeAccountTab, searchQuery, advancedFilters]);
 
+  // Offline support - declare early since it's used in multiple queries
+  const isOnline = useEmailStore((state) => state.isOnline);
+  const cachedEmails = useEmailStore((state) => state.emails);
+  const setEmails = useEmailStore((state) => state.setEmails);
+
   // Load email accounts for tabs
+  const cachedAccounts = useEmailStore((state) => state.emailAccounts);
+  const setEmailAccounts = useEmailStore((state) => state.setEmailAccounts);
+
   const { data: accountsData } = useQuery(GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY, {
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
   });
-  const accounts = accountsData?.getEmailAccounts ?? [];
+  const serverAccounts = accountsData?.getEmailAccounts ?? [];
+  
+  // Cache accounts when fetched, fall back to cached accounts when offline
+  useEffect(() => {
+    if (serverAccounts.length > 0) {
+      setEmailAccounts(serverAccounts.map((a) => ({
+        id: a.id,
+        name: a.name,
+        email: a.email,
+        host: a.host,
+        providerId: a.providerId,
+      })));
+    }
+  }, [serverAccounts, setEmailAccounts]);
+
+  const accounts = serverAccounts.length > 0 ? serverAccounts : cachedAccounts;
 
   // Determine which account to filter by
   const emailAccountId =
@@ -135,14 +159,18 @@ export function useInboxEmails({
     [folder, emailAccountId, searchQuery, advancedFilters],
   );
 
-  const { data, loading, refetch } = useQuery(GET_EMAILS_QUERY, {
+  const { data, loading, refetch, error } = useQuery(GET_EMAILS_QUERY, {
     variables: { input: queryInput },
-    fetchPolicy: 'cache-and-network',
+    // Use cache-only when offline to avoid network requests
+    fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
     nextFetchPolicy: 'cache-first', // After first fetch, use cache with network updates
     notifyOnNetworkStatusChange: true, // Ensure loading state updates on refetch
-    // Poll every 10 minutes for inbox folder when not filtering
+    // Poll every 10 minutes for inbox folder when not filtering (only when online)
     pollInterval:
-      folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery
+      isOnline &&
+      folder === EmailFolder.Inbox &&
+      !hasActiveFilters &&
+      !searchQuery
         ? POLL_INTERVAL_MS
         : 0,
   });
@@ -150,15 +178,58 @@ export function useInboxEmails({
   // Get total count for pagination
   const { data: countData } = useQuery(GET_EMAIL_COUNT_QUERY, {
     variables: { input: countInput },
-    fetchPolicy: 'cache-and-network',
-    // Also poll the count
+    fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
+    // Also poll the count (only when online)
     pollInterval:
-      folder === EmailFolder.Inbox && !hasActiveFilters && !searchQuery
+      isOnline &&
+      folder === EmailFolder.Inbox &&
+      !hasActiveFilters &&
+      !searchQuery
         ? POLL_INTERVAL_MS
         : 0,
   });
 
-  const totalCount = countData?.getEmailCount ?? 0;
+  // Update zustand cache when we get new emails from the server
+  useEffect(() => {
+    if (data?.getEmails && data.getEmails.length > 0) {
+      const emailsToCache: CachedEmail[] = data.getEmails.map((email) => ({
+        id: email.id,
+        messageId: email.messageId,
+        folder: email.folder,
+        fromAddress: email.fromAddress,
+        fromName: email.fromName,
+        subject: email.subject,
+        textBody: email.textBody,
+        htmlBody: email.htmlBody,
+        receivedAt: email.receivedAt,
+        isRead: email.isRead,
+        isStarred: email.isStarred,
+        emailAccountId: email.emailAccountId,
+        toAddresses: email.toAddresses,
+        ccAddresses: email.ccAddresses,
+        bccAddresses: email.bccAddresses,
+        inReplyTo: email.inReplyTo,
+        threadId: email.threadId,
+        threadCount: email.threadCount,
+        tags: email.tags?.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+      }));
+      setEmails(emailsToCache);
+    }
+  }, [data?.getEmails, setEmails]);
+
+  // Calculate total count - use server data when available, otherwise estimate from cache
+  const serverTotalCount = countData?.getEmailCount ?? 0;
+  const offlineTotalCount = useMemo(() => {
+    if (serverTotalCount > 0 || isOnline) return null;
+    // Count cached emails matching the current folder/account
+    return Object.values(cachedEmails).filter((email) => {
+      if (email.folder !== folder) return false;
+      if (emailAccountId && email.emailAccountId !== emailAccountId) return false;
+      return true;
+    }).length;
+  }, [serverTotalCount, isOnline, cachedEmails, folder, emailAccountId]);
+  
+  const totalCount = serverTotalCount > 0 ? serverTotalCount : (offlineTotalCount ?? 0);
   const totalPages = Math.ceil(totalCount / pageSize);
 
   // Subscribe to real-time email updates from the store
@@ -275,12 +346,16 @@ export function useInboxEmails({
   );
 
   const handleRefresh = useCallback(async () => {
+    if (!isOnline) {
+      toast.error('Cannot refresh while offline');
+      return;
+    }
     if (folder === EmailFolder.Inbox) {
       await syncAllAccounts();
     } else {
       await refetch();
     }
-  }, [folder, syncAllAccounts, refetch]);
+  }, [folder, syncAllAccounts, refetch, isOnline]);
 
   // Bulk action handlers
   const handleBulkMarkRead = useCallback(
@@ -399,7 +474,36 @@ export function useInboxEmails({
     setInternalFilters(emptyFilters);
   }, []);
 
-  const emails = data?.getEmails ?? [];
+  // Use server data if available, otherwise fall back to zustand cache when offline
+  const serverEmails = data?.getEmails ?? [];
+  
+  // When offline and no server data, use cached emails filtered by folder/account
+  const offlineFallbackEmails = useMemo(() => {
+    if (serverEmails.length > 0 || isOnline) return null;
+    
+    // Convert cached emails object to array and filter
+    const allCached = Object.values(cachedEmails);
+    return allCached
+      .filter((email) => {
+        // Filter by folder
+        if (email.folder !== folder) return false;
+        // Filter by account if specified
+        if (emailAccountId && email.emailAccountId !== emailAccountId) return false;
+        // Basic search filter
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase();
+          const matchesSubject = email.subject?.toLowerCase().includes(query);
+          const matchesFrom = email.fromAddress?.toLowerCase().includes(query);
+          const matchesBody = email.textBody?.toLowerCase().includes(query);
+          if (!matchesSubject && !matchesFrom && !matchesBody) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())
+      .slice(offset, offset + pageSize);
+  }, [serverEmails.length, isOnline, cachedEmails, folder, emailAccountId, searchQuery, offset, pageSize]);
+  
+  const emails = serverEmails.length > 0 ? serverEmails : (offlineFallbackEmails ?? []);
   const showTabs = folder === EmailFolder.Inbox && accounts.length > 1;
   const allSelected = emails.length > 0 && selectedIds.size === emails.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < emails.length;

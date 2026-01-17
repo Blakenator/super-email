@@ -5,10 +5,12 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 
 import {
   ApolloClient,
+  ApolloLink,
   HttpLink,
   InMemoryCache,
   split,
 } from '@apollo/client/core';
+import { onError } from '@apollo/client/link/error';
 import { ApolloProvider } from '@apollo/client/react';
 import { setContext } from '@apollo/client/link/context';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
@@ -20,6 +22,7 @@ import { AuthProvider, supabase } from './contexts/AuthContext.tsx';
 import { ErrorBoundary } from './core/components/ErrorBoundary.tsx';
 import { lightTheme } from './core/theme.ts';
 import { ThemedApp } from './ThemedApp.tsx';
+import { useEmailStore } from './stores/emailStore.ts';
 
 const httpLink = new HttpLink({ uri: '/api/graphql' });
 
@@ -50,7 +53,10 @@ const wsLink = new GraphQLWsLink(
     },
     keepAlive: 10000, // Send ping every 10 seconds
     on: {
-      connected: () => console.log('[WS] Connected'),
+      connected: () => {
+        console.log('[WS] Connected');
+        useEmailStore.getState().setOnline(true);
+      },
       closed: (event) => console.log('[WS] Closed', event),
       error: (error) => console.error('[WS] Error', error),
     },
@@ -72,6 +78,16 @@ const authLink = setContext(async (_, { headers }) => {
   };
 });
 
+// Error handling link for offline support
+const errorLink = onError(({ networkError, operation, forward }) => {
+  if (networkError) {
+    // Update offline status when we detect network errors
+    useEmailStore.getState().setOnline(false);
+    console.log('[Apollo] Network error detected, switching to offline mode');
+  }
+  return forward(operation);
+});
+
 // Split link - use WebSocket for subscriptions, HTTP for queries/mutations
 const splitLink = split(
   ({ query }) => {
@@ -86,8 +102,24 @@ const splitLink = split(
 );
 
 const client = new ApolloClient({
-  link: splitLink,
+  link: ApolloLink.from([errorLink, splitLink]),
   cache: new InMemoryCache(),
+  defaultOptions: {
+    watchQuery: {
+      // Return cached data even if network request fails
+      fetchPolicy: 'cache-first',
+      errorPolicy: 'all',
+      // Don't throw on network errors - just return cached data
+      notifyOnNetworkStatusChange: true,
+    },
+    query: {
+      fetchPolicy: 'cache-first',
+      errorPolicy: 'all',
+    },
+    mutate: {
+      errorPolicy: 'all',
+    },
+  },
 });
 
 createRoot(document.getElementById('root')!).render(

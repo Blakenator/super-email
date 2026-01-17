@@ -12,6 +12,8 @@ export * from './EmptyState';
 export * from './ErrorBoundary';
 export * from './HtmlViewer';
 export * from './LoadingSpinner';
+export * from './OfflineBanner';
+export { OfflineBannerSpacer } from './OfflineBanner';
 export * from './PageWrapper';
 export * from './ResponsiveTabs';
 export * from './RichTextEditor';

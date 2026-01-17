@@ -83,7 +83,7 @@ export const Body = styled.div`
 
 export const HtmlBodyContainer = styled.div`
   max-height: calc(100vh - 300px);
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid ${({ theme }) => theme.colors.borderLight};
   border-radius: ${({ theme }) => theme.borderRadius.md};
   padding: ${({ theme }) => theme.spacing.md};
