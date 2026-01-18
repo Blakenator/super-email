@@ -125,8 +125,24 @@ deploy_backend() {
     
     cd "$PROJECT_ROOT"
     
+    # Temporarily disable Docker credential helpers to avoid pass/keychain issues
+    export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
+    mkdir -p "$DOCKER_CONFIG"
+    
+    # Backup existing config if it exists
+    if [ -f "$DOCKER_CONFIG/config.json" ]; then
+        cp "$DOCKER_CONFIG/config.json" "$DOCKER_CONFIG/config.json.backup"
+    fi
+    
+    # Create a minimal config without credential helpers
+    echo '{}' > "$DOCKER_CONFIG/config.json"
+    
     # Login to ECR
+    log_info "Logging into ECR..."
     aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+    
+    # Store ECR registry for cleanup
+    ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
     
     # Build the Docker image
     log_info "Building Docker image..."
@@ -139,6 +155,12 @@ deploy_backend() {
     log_info "Pushing Docker image to ECR..."
     docker push "$BACKEND_REPO_URL:latest"
     docker push "$BACKEND_REPO_URL:$(git rev-parse --short HEAD)"
+    
+    # Logout from ECR and restore Docker config
+    docker logout "$ECR_REGISTRY" > /dev/null 2>&1 || true
+    if [ -f "$DOCKER_CONFIG/config.json.backup" ]; then
+        mv "$DOCKER_CONFIG/config.json.backup" "$DOCKER_CONFIG/config.json"
+    fi
     
     # Force new deployment of ECS service
     log_info "Updating ECS service..."
