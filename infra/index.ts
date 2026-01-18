@@ -799,10 +799,6 @@ const backendService = new aws.ecs.Service(`${stackName}-backend-service`, {
     },
   ],
   healthCheckGracePeriodSeconds: 60, // Give time for DB connection
-  deploymentConfiguration: {
-    minimumHealthyPercent: 50,
-    maximumPercent: 200,
-  },
   tags: {
     Name: `${stackName}-backend-service`,
     Environment: environment,
