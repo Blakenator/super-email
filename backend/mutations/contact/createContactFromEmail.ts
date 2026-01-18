@@ -30,13 +30,13 @@ export const createContactFromEmail = makeMutation(
     if (existingContactEmail) {
       // Contact exists, update it if it was auto-created
       const existing = existingContactEmail.contact;
-      if (existing.isAutoCreated && !existing.name && email.fromName) {
+      if (existing && existing.isAutoCreated && !existing.name && email.fromName) {
         await existing.update({
           name: email.fromName,
           isAutoCreated: false,
         });
       }
-      return Contact.findByPk(existing.id, { include: [ContactEmail] });
+      return existing ? Contact.findByPk(existing.id, { include: [ContactEmail] }) : null;
     }
 
     // Also check the legacy email field

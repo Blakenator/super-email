@@ -9,11 +9,19 @@ import {
   Table,
   Index,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies:
+// - Regular import for decorators (lazy evaluation via arrow functions)
+// - Type-only import for type annotations (avoids __metadata circular ref)
 import { EmailAccount } from './email-account.model.js';
+import type { EmailAccount as EmailAccountType } from './email-account.model.js';
 import { SmtpProfile } from './smtp-profile.model.js';
+import type { SmtpProfile as SmtpProfileType } from './smtp-profile.model.js';
 import { Tag } from './tag.model.js';
+import type { Tag as TagType } from './tag.model.js';
 import { EmailTag } from './email-tag.model.js';
+import type { EmailTag as EmailTagType } from './email-tag.model.js';
 import { Attachment } from './attachment.model.js';
+import type { Attachment as AttachmentType } from './attachment.model.js';
 
 export enum EmailFolder {
   INBOX = 'INBOX',
@@ -53,14 +61,14 @@ export class Email extends Model {
   declare emailAccountId: string;
 
   @BelongsTo(() => EmailAccount, { onDelete: 'CASCADE' })
-  declare emailAccount: EmailAccount;
+  declare emailAccount?: EmailAccountType;
 
   @ForeignKey(() => SmtpProfile)
   @Column({ type: DataType.UUID, allowNull: true })
   declare smtpProfileId: string | null;
 
   @BelongsTo(() => SmtpProfile)
-  declare smtpProfile: SmtpProfile | null;
+  declare smtpProfile?: SmtpProfileType | null;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare messageId: string;
@@ -141,9 +149,9 @@ export class Email extends Model {
 
   // Tags relationship via junction table
   @BelongsToMany(() => Tag, () => EmailTag)
-  declare tags: Tag[];
+  declare tags?: TagType[];
 
   // Attachments relationship
   @HasMany(() => Attachment)
-  declare attachments: Attachment[];
+  declare attachments?: AttachmentType[];
 }

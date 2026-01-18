@@ -7,8 +7,11 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { User } from './user.model.js';
+import type { User as UserType } from './user.model.js';
 import { ContactEmail } from './contact-email.model.js';
+import type { ContactEmail as ContactEmailType } from './contact-email.model.js';
 
 @Table({
   timestamps: true,
@@ -34,7 +37,7 @@ export class Contact extends Model {
   declare userId: string;
 
   @BelongsTo(() => User, { onDelete: 'CASCADE' })
-  declare user: User;
+  declare user?: UserType;
 
   // Primary email for backward compatibility - will be synced with the primary ContactEmail
   @Column({ type: DataType.TEXT, allowNull: true })
@@ -63,5 +66,5 @@ export class Contact extends Model {
   declare isAutoCreated: boolean;
 
   @HasMany(() => ContactEmail, { onDelete: 'CASCADE', hooks: true })
-  declare emails: ContactEmail[];
+  declare emails?: ContactEmailType[];
 }

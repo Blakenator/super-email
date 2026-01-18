@@ -7,6 +7,7 @@ import cors from 'cors';
 import { readFileSync } from 'node:fs';
 import type { MyContext } from '@main/common';
 import { sequelize } from './db/database.js';
+import { config } from './config/env.js';
 import type { AllBackendResolvers, BackendContext } from './types.js';
 import { QueryResolvers } from './queries/index.js';
 import { MutationResolvers } from './mutations/index.js';
@@ -457,7 +458,12 @@ app.use(
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    version: process.env.GIT_COMMIT_SHA || 'unknown',
+    nodeEnv: config.nodeEnv,
+  });
 });
 
 // Attachment download endpoint (for development - serves local files)

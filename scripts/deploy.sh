@@ -107,6 +107,13 @@ deploy_infrastructure() {
     
     cd "$PROJECT_ROOT/infra"
     
+    # Ensure GIT_COMMIT_SHA is set
+    if [ -z "$GIT_COMMIT_SHA" ]; then
+        GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        export GIT_COMMIT_SHA="$GIT_SHA"
+    fi
+    log_info "Deploying with Git SHA: $GIT_COMMIT_SHA"
+    
     # Select or create the stack
     pulumi stack select "$ENVIRONMENT" 2>/dev/null || pulumi stack init "$ENVIRONMENT"
     
@@ -134,6 +141,11 @@ get_infrastructure_outputs() {
     log_info "Getting existing infrastructure outputs..."
     
     cd "$PROJECT_ROOT/infra"
+    
+    # Get git commit SHA for versioning
+    GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    export GIT_COMMIT_SHA="$GIT_SHA"
+    log_info "Git commit SHA: $GIT_SHA"
     
     # Check if stack exists
     if ! pulumi stack select "$ENVIRONMENT" 2>/dev/null; then
@@ -164,6 +176,11 @@ deploy_backend() {
     
     cd "$PROJECT_ROOT"
     
+    # Get git commit SHA for versioning
+    GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    export GIT_COMMIT_SHA="$GIT_SHA"
+    log_info "Git commit SHA: $GIT_SHA"
+    
     # Temporarily disable Docker credential helpers to avoid pass/keychain issues
     export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
     mkdir -p "$DOCKER_CONFIG"
@@ -190,11 +207,11 @@ deploy_backend() {
     
     # Tag and push
     docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:latest"
-    docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:$(git rev-parse --short HEAD)"
+    docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:$GIT_SHA"
     
     log_info "Pushing Docker image to ECR..."
     docker push "$BACKEND_REPO_URL:latest"
-    docker push "$BACKEND_REPO_URL:$(git rev-parse --short HEAD)"
+    docker push "$BACKEND_REPO_URL:$GIT_SHA"
     
     # Logout from ECR and restore Docker config
     docker logout "$ECR_REGISTRY" > /dev/null 2>&1 || true

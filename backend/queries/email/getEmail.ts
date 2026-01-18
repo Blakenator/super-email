@@ -8,21 +8,15 @@ export const getEmail = makeQuery(
     const userId = requireAuth(context);
 
     const email = await Email.findByPk(input.id, {
-      include: [EmailAccount, Attachment],
+      include: [
+        {
+          model: EmailAccount,
+          where: { userId }, // Verify ownership in the same query
+          required: true,
+        },
+        Attachment,
+      ],
     });
-
-    if (!email) {
-      return null;
-    }
-
-    // Verify ownership through email account
-    const emailAccount = await EmailAccount.findOne({
-      where: { id: email.emailAccountId, userId },
-    });
-
-    if (!emailAccount) {
-      return null;
-    }
 
     return email;
   },

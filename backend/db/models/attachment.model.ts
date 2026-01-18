@@ -7,7 +7,10 @@ import {
   Table,
   Index,
 } from 'sequelize-typescript';
+// Import Email class for decorator usage via arrow function (lazy evaluation)
+// Import Email type separately for type annotation
 import { Email } from './email.model.js';
+import type { Email as EmailType } from './email.model.js';
 
 export enum AttachmentType {
   INLINE = 'INLINE',
@@ -37,8 +40,10 @@ export class Attachment extends Model {
   @Column({ type: DataType.UUID, allowNull: false })
   declare emailId: string;
 
+  // Don't declare type here to avoid circular ref in __metadata
+  // Use type assertion when accessing: (attachment.email as Email)
   @BelongsTo(() => Email, { onDelete: 'CASCADE' })
-  declare email: Email;
+  email?: EmailType;
 
   // Original filename from email
   @Column({ type: DataType.TEXT, allowNull: false })

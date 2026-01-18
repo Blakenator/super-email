@@ -5,8 +5,11 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { Email } from './email.model.js';
+import type { Email as EmailType } from './email.model.js';
 import { Tag } from './tag.model.js';
+import type { Tag as TagType } from './tag.model.js';
 
 @Table({
   timestamps: true,

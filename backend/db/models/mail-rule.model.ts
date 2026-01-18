@@ -6,8 +6,11 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { User } from './user.model.js';
+import type { User as UserType } from './user.model.js';
 import { EmailAccount } from './email-account.model.js';
+import type { EmailAccount as EmailAccountType } from './email-account.model.js';
 
 export enum RuleAction {
   ARCHIVE = 'ARCHIVE',
@@ -58,7 +61,7 @@ export class MailRule extends Model {
   declare userId: string;
 
   @BelongsTo(() => User, { onDelete: 'CASCADE' })
-  declare user: User;
+  declare user?: UserType;
 
   // Optional: apply rule only to specific account
   @ForeignKey(() => EmailAccount)
@@ -66,7 +69,7 @@ export class MailRule extends Model {
   declare emailAccountId: string | null;
 
   @BelongsTo(() => EmailAccount, { onDelete: 'CASCADE' })
-  declare emailAccount: EmailAccount | null;
+  declare emailAccount?: EmailAccountType | null;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare name: string;

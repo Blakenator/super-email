@@ -1,4 +1,23 @@
-import { Column, DataType, Model, Table } from 'sequelize-typescript';
+import {
+  Column,
+  DataType,
+  Model,
+  Table,
+  HasMany,
+} from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
+import { EmailAccount } from './email-account.model.js';
+import type { EmailAccount as EmailAccountType } from './email-account.model.js';
+import { SmtpProfile } from './smtp-profile.model.js';
+import type { SmtpProfile as SmtpProfileType } from './smtp-profile.model.js';
+import { Contact } from './contact.model.js';
+import type { Contact as ContactType } from './contact.model.js';
+import { AuthenticationMethod } from './authentication-method.model.js';
+import type { AuthenticationMethod as AuthenticationMethodType } from './authentication-method.model.js';
+import { Tag } from './tag.model.js';
+import type { Tag as TagType } from './tag.model.js';
+import { MailRule } from './mail-rule.model.js';
+import type { MailRule as MailRuleType } from './mail-rule.model.js';
 
 export enum ThemePreference {
   LIGHT = 'LIGHT',
@@ -65,13 +84,22 @@ export class User extends Model {
   })
   declare inboxGroupByDate: boolean;
 
-  // Note: HasMany associations are not defined here to avoid circular dependencies.
-  // The ForeignKey/BelongsTo decorators on child models are sufficient for Sequelize
-  // to establish relationships. Query with `include: [EmailAccount, SmtpProfile]` will still work.
-  //
-  // The associations exist implicitly:
-  // - emailAccounts: EmailAccount[] (via EmailAccount.userId FK)
-  // - smtpProfiles: SmtpProfile[] (via SmtpProfile.userId FK)
-  // - contacts: Contact[] (via Contact.userId FK)
-  // - authenticationMethods: AuthenticationMethod[] (via AuthenticationMethod.userId FK)
+  // Associations
+  @HasMany(() => EmailAccount)
+  declare emailAccounts?: EmailAccountType[];
+
+  @HasMany(() => SmtpProfile)
+  declare smtpProfiles?: SmtpProfileType[];
+
+  @HasMany(() => Contact)
+  declare contacts?: ContactType[];
+
+  @HasMany(() => AuthenticationMethod)
+  declare authenticationMethods?: AuthenticationMethodType[];
+
+  @HasMany(() => Tag)
+  declare tags?: TagType[];
+
+  @HasMany(() => MailRule)
+  declare mailRules?: MailRuleType[];
 }

@@ -6,7 +6,9 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { User } from './user.model.js';
+import type { User as UserType } from './user.model.js';
 
 export enum AuthProvider {
   EMAIL_PASSWORD = 'EMAIL_PASSWORD',
@@ -40,7 +42,7 @@ export class AuthenticationMethod extends Model {
   declare userId: string;
 
   @BelongsTo(() => User, { onDelete: 'CASCADE' })
-  declare user: User;
+  declare user?: UserType;
 
   @Column({
     type: DataType.ENUM(...Object.values(AuthProvider)),

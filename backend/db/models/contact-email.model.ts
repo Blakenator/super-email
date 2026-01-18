@@ -6,7 +6,9 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { Contact } from './contact.model.js';
+import type { Contact as ContactType } from './contact.model.js';
 
 @Table({
   timestamps: true,
@@ -32,7 +34,7 @@ export class ContactEmail extends Model {
   declare contactId: string;
 
   @BelongsTo(() => Contact, { onDelete: 'CASCADE' })
-  declare contact: Contact;
+  declare contact?: ContactType;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare email: string;

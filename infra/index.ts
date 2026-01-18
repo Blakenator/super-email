@@ -12,6 +12,9 @@ const stackName = `email-client-${environment}`;
 // Get current AWS region (needed early for VPC endpoints)
 const currentRegion = aws.getRegionOutput({});
 
+// Get git commit SHA from environment (set by deploy script)
+const gitCommitSha = process.env.GIT_COMMIT_SHA || 'unknown';
+
 // Get a timestamp or version for the backend image
 // This forces ECS to redeploy when the image changes
 const imageTag = pulumi.getStack() === 'prod' ? 'latest' : 'dev';
@@ -689,6 +692,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
       environment: [
         { name: 'NODE_ENV', value: 'production' },
         { name: 'LOG_LEVEL', value: 'info' },
+        { name: 'GIT_COMMIT_SHA', value: gitCommitSha },
         { name: 'DB_HOST', value: dbHost },
         { name: 'DB_PORT', value: String(dbPort) },
         { name: 'DB_NAME', value: 'emailclient' },

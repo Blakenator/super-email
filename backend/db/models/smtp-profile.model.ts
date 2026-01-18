@@ -6,7 +6,9 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { User } from './user.model.js';
+import type { User as UserType } from './user.model.js';
 
 @Table({
   timestamps: true,
@@ -30,7 +32,7 @@ export class SmtpProfile extends Model {
   declare userId: string;
 
   @BelongsTo(() => User, { onDelete: 'CASCADE' })
-  declare user: User;
+  declare user?: UserType;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare name: string;

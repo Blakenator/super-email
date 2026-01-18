@@ -6,8 +6,11 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { User } from './user.model.js';
+import type { User as UserType } from './user.model.js';
 import { SmtpProfile } from './smtp-profile.model.js';
+import type { SmtpProfile as SmtpProfileType } from './smtp-profile.model.js';
 
 export enum EmailAccountType {
   IMAP = 'IMAP',
@@ -36,7 +39,7 @@ export class EmailAccount extends Model {
   declare userId: string;
 
   @BelongsTo(() => User, { onDelete: 'CASCADE' })
-  declare user: User;
+  declare user?: UserType;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare name: string;
@@ -90,7 +93,7 @@ export class EmailAccount extends Model {
   declare defaultSmtpProfileId: string | null;
 
   @BelongsTo(() => SmtpProfile)
-  declare defaultSmtpProfile: SmtpProfile | null;
+  declare defaultSmtpProfile?: SmtpProfileType | null;
 
   // Provider ID for icon display (gmail, outlook, yahoo, etc.)
   @Column({ type: DataType.TEXT, allowNull: true })

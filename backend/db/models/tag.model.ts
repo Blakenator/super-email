@@ -7,9 +7,13 @@ import {
   Model,
   Table,
 } from 'sequelize-typescript';
+// Dual import pattern for circular dependencies
 import { User } from './user.model.js';
+import type { User as UserType } from './user.model.js';
 import { Email } from './email.model.js';
+import type { Email as EmailType } from './email.model.js';
 import { EmailTag } from './email-tag.model.js';
+import type { EmailTag as EmailTagType } from './email-tag.model.js';
 
 @Table({
   timestamps: true,
@@ -33,7 +37,7 @@ export class Tag extends Model {
   declare userId: string;
 
   @BelongsTo(() => User, { onDelete: 'CASCADE' })
-  declare user: User;
+  declare user?: UserType;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare name: string;
@@ -45,5 +49,5 @@ export class Tag extends Model {
   declare description: string | null;
 
   @BelongsToMany(() => Email, () => EmailTag)
-  declare emails: Email[];
+  declare emails?: EmailType[];
 }

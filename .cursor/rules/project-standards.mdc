@@ -1,16 +1,18 @@
 ---
-description: "Project-wide coding standards and conventions for the email client project"
+description: 'Project-wide coding standards and conventions for the email client project'
 alwaysApply: true
 ---
 
 # Email Client Project Standards
 
 ## Package Management
+
 - Always use `pnpm` instead of `yarn`, `npm`, or `npx`
 - Use workspace protocol (`workspace:^`) for internal package dependencies
 - Run commands from the root when possible, using `pnpm run --filter` for workspace-specific commands
 
 ## Component Organization
+
 - Extract components to `frontend/src/core/components/` when:
   - Used in more than one place, OR
   - Used so frequently that consistency is important (e.g., Button bootstrap wrapper, filters, EmailChipInput)
@@ -18,6 +20,7 @@ alwaysApply: true
 - Prefer using existing core components over bespoke new components where possible
 
 ## AWS Dependencies & Local Development
+
 - This project must run both locally and in AWS
 - Any AWS service dependency MUST have a local alternative:
   - **S3**: Use local file system (`data/attachments/`) in development, S3 in production
@@ -26,18 +29,28 @@ alwaysApply: true
 - AWS SDK clients should be conditionally initialized (only in production) to avoid local dependency issues
 
 ## Code Style
+
 - Use TypeScript strict mode
 - Follow existing patterns for GraphQL queries/mutations (use codegen from `common/schema.graphql`)
 - Use Sequelize models in `backend/db/models/` for database operations
+- **Sequelize Circular Dependencies**: Use dual imports to avoid `emitDecoratorMetadata` issues:
+  ```typescript
+  import { Model } from './model.js';                    // For decorators
+  import type { Model as ModelType } from './model.js';  // For types
+  @BelongsTo(() => Model, { onDelete: 'CASCADE' })
+  declare relation?: ModelType;  // Use type alias
+  ```
 - Centralize configuration in `backend/config/env.ts`
 - Use the logger from `backend/helpers/logger.ts` instead of console.log
 
 ## File Structure
+
 - Backend: `backend/mutations/` and `backend/queries/` for GraphQL resolvers
 - Frontend: `frontend/src/pages/` for route components, `frontend/src/components/` for page-specific components
 - Shared types: Use GraphQL schema in `common/schema.graphql` and generate types
 
 ## Environment Configuration
+
 - All environment variables should be accessed through `backend/config/env.ts`
 - Never hardcode AWS credentials or secrets
 - Use `config.isProduction` and `config.isDevelopment` flags for environment checks
