@@ -108,7 +108,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          VITE_BACKEND_URL: ${{ env.BACKEND_API_URL }}/api
+          VITE_BACKEND_URL: ${{ env.BACKEND_API_URL }}
           VITE_APP_URL: ${{ env.FRONTEND_URL }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

@@ -46,22 +46,15 @@ fi
 cd "$PROJECT_ROOT/frontend"
 
 # Set environment variables for Vite build
-# IMPORTANT: Store just the base backend URL, paths are constructed in the frontend
+# BACKEND_API_URL from Pulumi is the full domain URL (e.g., https://super-mail.app)
 export VITE_SUPABASE_URL="$SUPABASE_URL"
 export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-export VITE_BACKEND_URL="${BACKEND_API_URL}/api"
+export VITE_BACKEND_URL="$BACKEND_API_URL"  # Full backend URL (CloudFront routes specific paths)
 export VITE_APP_URL="$FRONTEND_URL"
 
 log_info "Building frontend with production config..."
 log_info "  Frontend URL: $FRONTEND_URL"
-log_info "  Backend Base URL: ${BACKEND_API_URL}/api"
-
-# Verify that VITE_BACKEND_URL is an absolute URL
-if [[ ! "$VITE_BACKEND_URL" =~ ^https?:// ]]; then
-    log_error "VITE_BACKEND_URL must be an absolute URL (http:// or https://)"
-    log_error "Got: $VITE_BACKEND_URL"
-    exit 1
-fi
+log_info "  Backend API: $BACKEND_API_URL"
 
 pnpm run build
 

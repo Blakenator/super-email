@@ -488,7 +488,7 @@ export async function createServer(
 
   // Setup Express middleware
   app.use(
-    '/api/graphql',
+    '/graphql',
     cors<cors.CorsRequest>(),
     express.json({ limit: '10mb' }),
     expressMiddleware(apolloServer, {
@@ -518,7 +518,7 @@ export async function createServer(
   });
 
   // Attachment download endpoint
-  app.get('/api/attachments/download/:id', async (req, res) => {
+  app.get('/attachments/download/:id', async (req, res) => {
     try {
       const attachmentId = req.params.id;
       const token = req.headers.authorization?.replace('Bearer ', '') ?? '';

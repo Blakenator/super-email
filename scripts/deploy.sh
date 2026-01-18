@@ -197,7 +197,7 @@ wait_for_backend() {
         ATTEMPT=$((ATTEMPT + 1))
         
         # Try to hit the health endpoint via CloudFront
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/api/health" 2>/dev/null || echo "000")
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/health" 2>/dev/null || echo "000")
         
         if [ "$HTTP_CODE" = "200" ]; then
             log_info "Backend health check passed!"
@@ -250,7 +250,7 @@ main() {
     echo "=============================================="
     echo ""
     echo "  Frontend URL: $FRONTEND_URL"
-    echo "  Backend API:  $BACKEND_API_URL/api"
+    echo "  Backend API:  $BACKEND_API_URL"
     if [ -n "$BACKEND_PUBLIC_IP" ]; then
         echo "  EC2 IP:       $BACKEND_PUBLIC_IP"
     fi
