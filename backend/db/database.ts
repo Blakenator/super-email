@@ -44,4 +44,13 @@ export const sequelize = new Sequelize({
     Attachment,
   ],
   logging: !config.isDevelopment ? console.debug : false,
+  // Enable SSL for production (required by AWS RDS)
+  dialectOptions: config.isProduction
+    ? {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false, // AWS RDS uses self-signed certs
+        },
+      }
+    : undefined,
 });
