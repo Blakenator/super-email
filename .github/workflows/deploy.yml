@@ -1,36 +1,29 @@
 # StacksMail Deployment Workflow
 #
-# This workflow deploys the application to AWS.
-# It can be triggered manually or automatically on merge to main.
+# Cost-optimized deployment for bootstrapped projects.
+# Uses EC2 instead of ECS+ALB for significant cost savings.
 #
 # Required GitHub Secrets:
-#   - AWS_ACCESS_KEY_ID: AWS access key with deployment permissions
-#   - AWS_SECRET_ACCESS_KEY: AWS secret access key
-#   - AWS_REGION: AWS region (e.g., us-west-1)
-#   - PULUMI_ACCESS_TOKEN: Pulumi access token for state management
-#   - SUPABASE_URL: Supabase project URL
-#   - SUPABASE_ANON_KEY: Supabase anon/public key
-#   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
+#   - AWS_ACCESS_KEY_ID
+#   - AWS_SECRET_ACCESS_KEY
+#   - AWS_REGION
+#   - PULUMI_ACCESS_TOKEN
+#   - SUPABASE_URL
+#   - SUPABASE_ANON_KEY
+#   - SUPABASE_SERVICE_ROLE_KEY
 
 name: Deploy to AWS
 
 on:
-  # Manual trigger with environment selection
   workflow_dispatch:
     inputs:
       environment:
         description: 'Deployment environment'
         required: true
-        default: 'dev'
+        default: 'prod'
         type: choice
         options:
-          - dev
           - prod
-
-  # Uncomment to enable automatic deployment on merge to main
-  # push:
-  #   branches:
-  #     - main
 
 env:
   NODE_VERSION: '20'
@@ -38,9 +31,8 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to ${{ github.event.inputs.environment || 'dev' }}
+    name: Deploy to ${{ github.event.inputs.environment || 'prod' }}
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'dev' }}
     
     steps:
       - name: Checkout code
@@ -56,17 +48,12 @@ jobs:
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
       - name: Setup pnpm cache
         uses: actions/cache@v4
         with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -81,13 +68,12 @@ jobs:
       - name: Setup Pulumi
         uses: pulumi/actions@v5
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Get AWS Account ID
-        id: get-account-id
-        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
 
       - name: Deploy Infrastructure
         env:
@@ -97,39 +83,28 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          ENVIRONMENT="${{ github.event.inputs.environment || 'prod' }}"
           ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"
           
-          # Load outputs for subsequent steps
+          # Load outputs
           source .deploy-outputs
           echo "BACKEND_REPO_URL=$BACKEND_REPO_URL" >> $GITHUB_ENV
           echo "FRONTEND_BUCKET=$FRONTEND_BUCKET" >> $GITHUB_ENV
           echo "FRONTEND_DISTRIBUTION_ID=$FRONTEND_DISTRIBUTION_ID" >> $GITHUB_ENV
           echo "BACKEND_API_URL=$BACKEND_API_URL" >> $GITHUB_ENV
           echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV
-          echo "ECS_CLUSTER=email-client-$ENVIRONMENT-cluster" >> $GITHUB_ENV
-          echo "ECS_SERVICE=email-client-$ENVIRONMENT-backend" >> $GITHUB_ENV
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+          echo "BACKEND_INSTANCE_ID=$BACKEND_INSTANCE_ID" >> $GITHUB_ENV
+          echo "BACKEND_PUBLIC_IP=$BACKEND_PUBLIC_IP" >> $GITHUB_ENV
 
       - name: Build and push backend Docker image
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          AWS_ACCOUNT_ID: ${{ steps.get-account-id.outputs.account_id }}
           GIT_COMMIT_SHA: ${{ github.sha }}
         run: |
-          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          ENVIRONMENT="${{ github.event.inputs.environment || 'prod' }}"
           ./scripts/deploy-backend.sh "$ENVIRONMENT"
 
-      - name: Update ECS service
-        run: |
-          aws ecs update-service \
-            --cluster "${{ env.ECS_CLUSTER }}" \
-            --service "${{ env.ECS_SERVICE }}" \
-            --force-new-deployment
-
-      - name: Build frontend
+      - name: Build and deploy frontend
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -143,19 +118,26 @@ jobs:
           FRONTEND_BUCKET: ${{ env.FRONTEND_BUCKET }}
           FRONTEND_DISTRIBUTION_ID: ${{ env.FRONTEND_DISTRIBUTION_ID }}
         run: |
-          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          ENVIRONMENT="${{ github.event.inputs.environment || 'prod' }}"
           ./scripts/deploy-frontend.sh "$ENVIRONMENT"
 
       - name: Deployment summary
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
         run: |
           echo "## Deployment Complete! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** ${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment || 'prod' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Frontend URL:** ${{ env.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Backend API:** ${{ env.BACKEND_API_URL }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend API:** ${{ env.BACKEND_API_URL }}/api" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "_Note: ECS service update may take a few minutes to complete._" >> $GITHUB_STEP_SUMMARY
+          echo "**EC2 IP:** ${{ env.BACKEND_PUBLIC_IP }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Note: The EC2 instance may take a few minutes to start the container._" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Cost Breakdown" >> $GITHUB_STEP_SUMMARY
+          echo "- EC2 t4g.micro: ~\\$6/month" >> $GITHUB_STEP_SUMMARY
+          echo "- RDS t4g.micro: ~\\$13/month" >> $GITHUB_STEP_SUMMARY
+          echo "- CloudFront: ~\\$1-5/month" >> $GITHUB_STEP_SUMMARY
+          echo "- S3: ~\\$1-5/month" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total: ~\\$25-35/month**" >> $GITHUB_STEP_SUMMARY

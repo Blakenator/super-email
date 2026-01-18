@@ -4,9 +4,14 @@ set -e
 # ============================================================================
 # StacksMail Deploy Script
 # ============================================================================
-# This script orchestrates the full deployment to AWS by calling shared
-# deployment scripts that are also used by GitHub Actions.
+# This script orchestrates the full deployment to AWS.
 # 
+# Architecture: Cost-optimized for bootstrapped projects
+#   - EC2 t4g.micro (ARM): ~$6/month
+#   - RDS t4g.micro: ~$13/month
+#   - CloudFront CDN: ~$1-5/month
+#   - Total: ~$25-35/month
+#
 # Prerequisites:
 #   - AWS CLI configured with appropriate credentials
 #   - Docker installed and running
@@ -17,10 +22,10 @@ set -e
 # Usage:
 #   ./scripts/deploy.sh [environment]
 #
-# Environment defaults to 'dev' if not specified.
+# Environment defaults to 'prod' if not specified.
 # ============================================================================
 
-ENVIRONMENT="${1:-dev}"
+ENVIRONMENT="${1:-prod}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
@@ -54,18 +59,8 @@ check_prereqs() {
         exit 1
     fi
     
-    if ! command -v docker &> /dev/null; then
-        log_error "Docker not found. Please install it first."
-        exit 1
-    fi
-    
     if ! docker info &> /dev/null; then
         log_error "Docker daemon not running. Please start Docker."
-        log_error ""
-        log_error "To start Docker:"
-        log_error "  - On macOS: Open Docker Desktop application"
-        log_error "  - On Linux: Run 'sudo systemctl start docker' or 'sudo service docker start'"
-        log_error "  - You may need to add your user to the docker group: 'sudo usermod -aG docker \$USER'"
         exit 1
     fi
     
@@ -86,7 +81,8 @@ check_prereqs() {
 get_aws_info() {
     log_info "Getting AWS account information..."
     AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-    AWS_REGION=$(aws configure get region || echo "us-east-1")
+    AWS_REGION="${AWS_REGION:-$(aws configure get region || echo "us-west-1")}"
+    export AWS_REGION
     
     if [ -z "$AWS_ACCOUNT_ID" ]; then
         log_error "Failed to get AWS account ID. Check your AWS credentials."
@@ -113,11 +109,6 @@ get_infrastructure_outputs() {
     
     cd "$PROJECT_ROOT/infra"
     
-    # Get git commit SHA for versioning
-    GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    export GIT_COMMIT_SHA="$GIT_SHA"
-    log_info "Git commit SHA: $GIT_SHA"
-    
     # Check if stack exists
     if ! pulumi stack select "$ENVIRONMENT" 2>/dev/null; then
         log_warn "Stack $ENVIRONMENT does not exist. Will create during deployment."
@@ -127,6 +118,14 @@ get_infrastructure_outputs() {
     
     # Try to get outputs
     BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl 2>/dev/null || echo "")
+    BACKEND_INSTANCE_ID=$(pulumi stack output backendInstanceId 2>/dev/null || echo "")
+    BACKEND_PUBLIC_IP=$(pulumi stack output backendPublicIp 2>/dev/null || echo "")
+    FRONTEND_URL=$(pulumi stack output frontendUrl 2>/dev/null || echo "")
+    BACKEND_API_URL=$(pulumi stack output backendApiUrl 2>/dev/null || echo "")
+    FRONTEND_BUCKET=$(pulumi stack output frontendBucketName 2>/dev/null || echo "")
+    FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId 2>/dev/null || echo "")
+    
+    export BACKEND_REPO_URL BACKEND_INSTANCE_ID BACKEND_PUBLIC_IP FRONTEND_URL BACKEND_API_URL FRONTEND_BUCKET FRONTEND_DISTRIBUTION_ID
     
     if [ -z "$BACKEND_REPO_URL" ]; then
         log_warn "ECR repository not found. Will create during deployment."
@@ -134,8 +133,9 @@ get_infrastructure_outputs() {
         return 1
     fi
     
-    export BACKEND_REPO_URL
-    log_info "Found existing ECR repository: $BACKEND_REPO_URL"
+    log_info "Found existing infrastructure:"
+    log_info "  ECR: $BACKEND_REPO_URL"
+    log_info "  EC2: $BACKEND_PUBLIC_IP"
     
     cd "$PROJECT_ROOT"
     return 0
@@ -185,51 +185,35 @@ deploy_frontend() {
     "$SCRIPT_DIR/deploy-frontend.sh" "$ENVIRONMENT"
 }
 
-# Wait for ECS service to stabilize
+# Wait for backend to be healthy
 wait_for_backend() {
-    log_info "Waiting for backend service to stabilize..."
+    log_info "Waiting for backend to be healthy..."
     
-    CLUSTER_NAME="email-client-$ENVIRONMENT-cluster"
-    SERVICE_NAME="email-client-$ENVIRONMENT-backend"
-    
-    # Wait up to 5 minutes for the service to be stable
-    MAX_ATTEMPTS=30
+    # Wait up to 3 minutes for the backend to respond
+    MAX_ATTEMPTS=18
     ATTEMPT=0
     
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         ATTEMPT=$((ATTEMPT + 1))
         
-        # Check if service has running tasks
-        RUNNING_COUNT=$(aws ecs describe-services \
-            --cluster "$CLUSTER_NAME" \
-            --services "$SERVICE_NAME" \
-            --region "$AWS_REGION" \
-            --query 'services[0].runningCount' \
-            --output text 2>/dev/null || echo "0")
+        # Try to hit the health endpoint via CloudFront
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/api/health" 2>/dev/null || echo "000")
         
-        DESIRED_COUNT=$(aws ecs describe-services \
-            --cluster "$CLUSTER_NAME" \
-            --services "$SERVICE_NAME" \
-            --region "$AWS_REGION" \
-            --query 'services[0].desiredCount' \
-            --output text 2>/dev/null || echo "1")
-        
-        if [ "$RUNNING_COUNT" = "$DESIRED_COUNT" ] && [ "$RUNNING_COUNT" != "0" ]; then
-            log_info "Backend service is running ($RUNNING_COUNT/$DESIRED_COUNT tasks)"
-            
-            # Try to hit the health endpoint
-            if curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/health" | grep -q "200"; then
-                log_info "Backend health check passed!"
-                return 0
-            fi
+        if [ "$HTTP_CODE" = "200" ]; then
+            log_info "Backend health check passed!"
+            return 0
         fi
         
-        log_info "Waiting for backend... (attempt $ATTEMPT/$MAX_ATTEMPTS, running: $RUNNING_COUNT/$DESIRED_COUNT)"
+        log_info "Waiting for backend... (attempt $ATTEMPT/$MAX_ATTEMPTS, status: $HTTP_CODE)"
         sleep 10
     done
     
-    log_warn "Backend service did not stabilize within timeout. Check ECS logs for issues."
-    log_warn "You can view logs at: https://${AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region=${AWS_REGION}#logsV2:log-groups/log-group/\$252Fecs\$252Femail-client-${ENVIRONMENT}\$252Fbackend"
+    log_warn "Backend did not respond within timeout."
+    log_warn "This is normal on first deploy - EC2 needs time to start Docker container."
+    log_warn ""
+    log_warn "You can check the EC2 instance:"
+    log_warn "  ssh -i ~/.ssh/your-key.pem ec2-user@$BACKEND_PUBLIC_IP"
+    log_warn "  sudo docker logs backend"
 }
 
 # Main deployment flow
@@ -237,13 +221,13 @@ main() {
     check_prereqs
     get_aws_info
     
-    # Try to get existing infrastructure outputs (ECR repo URL)
+    # Try to get existing infrastructure outputs
     if get_infrastructure_outputs; then
         # Infrastructure exists, build and push image first
-        log_info "Building and pushing Docker image before infrastructure update..."
+        log_info "Updating existing deployment..."
         deploy_backend
         
-        # Now update infrastructure (will use the new image)
+        # Update infrastructure (in case of config changes)
         deploy_infrastructure
     else
         # First time deploy: create infrastructure first (including ECR repo)
@@ -252,15 +236,6 @@ main() {
         
         # Now build and push the image
         deploy_backend
-        
-        # Force ECS service to redeploy with the new image
-        log_info "Forcing ECS service to use the new image..."
-        aws ecs update-service \
-            --cluster "email-client-$ENVIRONMENT-cluster" \
-            --service "email-client-$ENVIRONMENT-backend" \
-            --force-new-deployment \
-            --region "$AWS_REGION" \
-            > /dev/null 2>&1 || log_warn "Could not force ECS service update (service may not exist yet)"
     fi
     
     # Deploy frontend
@@ -275,10 +250,17 @@ main() {
     echo "=============================================="
     echo ""
     echo "  Frontend URL: $FRONTEND_URL"
-    echo "  Backend API:  $BACKEND_API_URL"
+    echo "  Backend API:  $BACKEND_API_URL/api"
+    if [ -n "$BACKEND_PUBLIC_IP" ]; then
+        echo "  EC2 IP:       $BACKEND_PUBLIC_IP"
+    fi
     echo ""
     echo "  Note: CloudFront may take a few minutes to"
     echo "  propagate. If you see errors, wait and retry."
+    echo ""
+    echo "  To update the backend container:"
+    echo "    ssh ec2-user@$BACKEND_PUBLIC_IP"
+    echo "    ./update-backend.sh"
     echo "=============================================="
 }
 

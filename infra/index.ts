@@ -1,167 +1,141 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import * as awsx from '@pulumi/awsx';
+
+// =============================================================================
+// COST-OPTIMIZED ARCHITECTURE FOR BOOTSTRAPPED PROJECTS
+// =============================================================================
+// Total estimated cost: ~$25-35/month
+//
+// Components:
+// - EC2 t4g.nano (ARM): ~$3/month
+// - RDS t4g.micro: ~$13/month
+// - CloudFront: ~$1-5/month (low traffic)
+// - S3: ~$1-5/month
+// - Elastic IP: FREE (when attached)
+// - Secrets Manager: ~$1/month
+//
+// What we removed (savings ~$100/month):
+// - NAT Gateway: $45-90/month
+// - ALB: $16-20/month
+// - VPC Endpoints: $28/month
+// - ECS Fargate: $10-15/month
+// =============================================================================
 
 // Configuration
 const config = new pulumi.Config();
 const environment = config.require('environment');
-const dbInstanceClass = config.get('dbInstanceClass') || 'db.t3.micro';
+const dbInstanceClass = config.get('dbInstanceClass') || 'db.t4g.micro';
 
-// Supabase configuration from Pulumi config (set via .env in deploy script)
+// Supabase configuration
 const supabaseUrl = config.require('supabaseUrl');
 const supabaseAnonKey = config.require('supabaseAnonKey');
 const supabaseServiceRoleKey = config.requireSecret('supabaseServiceRoleKey');
 
 const stackName = `email-client-${environment}`;
-
-// Get current AWS region (needed early for VPC endpoints)
 const currentRegion = aws.getRegionOutput({});
 
-// Get git commit SHA from environment (set by deploy script)
-const gitCommitSha = process.env.GIT_COMMIT_SHA || 'unknown';
-
-// Get a timestamp or version for the backend image
-// This forces ECS to redeploy when the image changes
-const imageTag = pulumi.getStack() === 'prod' ? 'latest' : 'dev';
-
 // =============================================================================
-// VPC and Networking
+// VPC - Simple setup with public subnets only (no NAT needed)
 // =============================================================================
 
-const vpc = new awsx.ec2.Vpc(`${stackName}-vpc`, {
+const vpc = new aws.ec2.Vpc(`${stackName}-vpc`, {
   cidrBlock: '10.0.0.0/16',
-  numberOfAvailabilityZones: 2,
   enableDnsHostnames: true,
   enableDnsSupport: true,
-  natGateways: {
-    strategy: environment === 'prod' ? 'OnePerAz' : 'Single', // NAT Gateway for private subnet internet access
-  },
   tags: {
     Name: `${stackName}-vpc`,
     Environment: environment,
   },
 });
 
-// =============================================================================
-// VPC Endpoints for ECR and S3 (allows Fargate to pull images without NAT)
-// =============================================================================
+// Internet Gateway
+const igw = new aws.ec2.InternetGateway(`${stackName}-igw`, {
+  vpcId: vpc.id,
+  tags: {
+    Name: `${stackName}-igw`,
+    Environment: environment,
+  },
+});
 
-// Security group for VPC endpoints
-const vpcEndpointSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-vpce-sg`, {
-  vpcId: vpc.vpcId,
-  description: 'Security group for VPC endpoints',
-  ingress: [
+// Public subnets (2 AZs for RDS requirement)
+const availabilityZones = aws.getAvailabilityZones({ state: 'available' });
+
+const publicSubnet1 = new aws.ec2.Subnet(`${stackName}-public-1`, {
+  vpcId: vpc.id,
+  cidrBlock: '10.0.1.0/24',
+  availabilityZone: availabilityZones.then(azs => azs.names[0]),
+  mapPublicIpOnLaunch: true,
+  tags: {
+    Name: `${stackName}-public-1`,
+    Environment: environment,
+  },
+});
+
+const publicSubnet2 = new aws.ec2.Subnet(`${stackName}-public-2`, {
+  vpcId: vpc.id,
+  cidrBlock: '10.0.2.0/24',
+  availabilityZone: availabilityZones.then(azs => azs.names[1]),
+  mapPublicIpOnLaunch: true,
+  tags: {
+    Name: `${stackName}-public-2`,
+    Environment: environment,
+  },
+});
+
+// Route table for public subnets
+const publicRouteTable = new aws.ec2.RouteTable(`${stackName}-public-rt`, {
+  vpcId: vpc.id,
+  routes: [
     {
-      description: 'HTTPS from VPC',
-      fromPort: 443,
-      toPort: 443,
-      protocol: 'tcp',
-      cidrBlocks: ['10.0.0.0/16'],
+      cidrBlock: '0.0.0.0/0',
+      gatewayId: igw.id,
     },
   ],
-  egress: [
+  tags: {
+    Name: `${stackName}-public-rt`,
+    Environment: environment,
+  },
+});
+
+new aws.ec2.RouteTableAssociation(`${stackName}-public-rta-1`, {
+  subnetId: publicSubnet1.id,
+  routeTableId: publicRouteTable.id,
+});
+
+new aws.ec2.RouteTableAssociation(`${stackName}-public-rta-2`, {
+  subnetId: publicSubnet2.id,
+  routeTableId: publicRouteTable.id,
+});
+
+// =============================================================================
+// Security Groups
+// =============================================================================
+
+// Security group for EC2 backend
+const backendSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-backend-sg`, {
+  vpcId: vpc.id,
+  description: 'Security group for backend EC2 instance',
+  ingress: [
     {
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1',
+      description: 'HTTP from anywhere (CloudFront)',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
       cidrBlocks: ['0.0.0.0/0'],
     },
-  ],
-  tags: {
-    Name: `${stackName}-vpce-sg`,
-    Environment: environment,
-  },
-});
-
-// Get private subnet route tables for S3 gateway endpoint
-const privateRouteTables = vpc.privateSubnetIds.apply(async (subnetIds) => {
-  const routeTableIds: string[] = [];
-  for (const subnetId of subnetIds) {
-    const rt = await aws.ec2.getRouteTable({ subnetId });
-    routeTableIds.push(rt.routeTableId);
-  }
-  return routeTableIds;
-});
-
-// S3 Gateway endpoint (free, for pulling container layers)
-const s3Endpoint = new aws.ec2.VpcEndpoint(`${stackName}-s3-endpoint`, {
-  vpcId: vpc.vpcId,
-  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.s3`,
-  vpcEndpointType: 'Gateway',
-  routeTableIds: privateRouteTables,
-  tags: {
-    Name: `${stackName}-s3-endpoint`,
-    Environment: environment,
-  },
-});
-
-// ECR API endpoint (for docker login, manifest fetching)
-const ecrApiEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-ecr-api-endpoint`, {
-  vpcId: vpc.vpcId,
-  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.ecr.api`,
-  vpcEndpointType: 'Interface',
-  subnetIds: vpc.privateSubnetIds,
-  securityGroupIds: [vpcEndpointSecurityGroup.id],
-  privateDnsEnabled: true,
-  tags: {
-    Name: `${stackName}-ecr-api-endpoint`,
-    Environment: environment,
-  },
-});
-
-// ECR Docker endpoint (for pulling layers)
-const ecrDkrEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-ecr-dkr-endpoint`, {
-  vpcId: vpc.vpcId,
-  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.ecr.dkr`,
-  vpcEndpointType: 'Interface',
-  subnetIds: vpc.privateSubnetIds,
-  securityGroupIds: [vpcEndpointSecurityGroup.id],
-  privateDnsEnabled: true,
-  tags: {
-    Name: `${stackName}-ecr-dkr-endpoint`,
-    Environment: environment,
-  },
-});
-
-// CloudWatch Logs endpoint (for sending logs)
-const logsEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-logs-endpoint`, {
-  vpcId: vpc.vpcId,
-  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.logs`,
-  vpcEndpointType: 'Interface',
-  subnetIds: vpc.privateSubnetIds,
-  securityGroupIds: [vpcEndpointSecurityGroup.id],
-  privateDnsEnabled: true,
-  tags: {
-    Name: `${stackName}-logs-endpoint`,
-    Environment: environment,
-  },
-});
-
-// Secrets Manager endpoint (for fetching secrets)
-const secretsEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-secrets-endpoint`, {
-  vpcId: vpc.vpcId,
-  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.secretsmanager`,
-  vpcEndpointType: 'Interface',
-  subnetIds: vpc.privateSubnetIds,
-  securityGroupIds: [vpcEndpointSecurityGroup.id],
-  privateDnsEnabled: true,
-  tags: {
-    Name: `${stackName}-secrets-endpoint`,
-    Environment: environment,
-  },
-});
-
-// Security group for the backend ECS service
-const backendSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-backend-sg`, {
-  vpcId: vpc.vpcId,
-  description: 'Security group for backend ECS service',
-  ingress: [
     {
-      description: 'HTTP from ALB',
+      description: 'Backend API port',
       fromPort: 4000,
       toPort: 4000,
       protocol: 'tcp',
-      cidrBlocks: ['10.0.0.0/16'],
+      cidrBlocks: ['0.0.0.0/0'],
+    },
+    {
+      description: 'SSH for debugging',
+      fromPort: 22,
+      toPort: 22,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'], // TODO: Restrict to your IP in production
     },
   ],
   egress: [
@@ -180,7 +154,7 @@ const backendSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-backend-sg`
 
 // Security group for RDS
 const rdsSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-rds-sg`, {
-  vpcId: vpc.vpcId,
+  vpcId: vpc.id,
   description: 'Security group for RDS PostgreSQL',
   ingress: [
     {
@@ -205,65 +179,29 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-rds-sg`, {
   },
 });
 
-// Security group for ALB
-const albSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-alb-sg`, {
-  vpcId: vpc.vpcId,
-  description: 'Security group for Application Load Balancer',
-  ingress: [
-    {
-      description: 'HTTP',
-      fromPort: 80,
-      toPort: 80,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
-    },
-    {
-      description: 'HTTPS',
-      fromPort: 443,
-      toPort: 443,
-      protocol: 'tcp',
-      cidrBlocks: ['0.0.0.0/0'],
-    },
-  ],
-  egress: [
-    {
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1',
-      cidrBlocks: ['0.0.0.0/0'],
-    },
-  ],
-  tags: {
-    Name: `${stackName}-alb-sg`,
-    Environment: environment,
-  },
-});
-
 // =============================================================================
 // RDS PostgreSQL Database
 // =============================================================================
 
 const dbSubnetGroup = new aws.rds.SubnetGroup(`${stackName}-db-subnet-group`, {
-  subnetIds: vpc.privateSubnetIds,
+  subnetIds: [publicSubnet1.id, publicSubnet2.id],
   tags: {
     Name: `${stackName}-db-subnet-group`,
     Environment: environment,
   },
 });
 
-// Generate random password for database using AWS Secrets Manager
+// Database password in Secrets Manager
 const dbPasswordSecret = new aws.secretsmanager.Secret(`${stackName}-db-password`, {
   name: `${stackName}/database-password`,
   description: 'Database password for Email Client',
-  recoveryWindowInDays: 0, // Allow immediate deletion on stack destroy
+  recoveryWindowInDays: 0,
   tags: {
     Name: `${stackName}-db-password`,
     Environment: environment,
   },
 });
 
-// Generate a random password only on first creation
-// Use ignoreChanges to prevent regeneration on subsequent updates
 const dbPasswordVersion = new aws.secretsmanager.SecretVersion(`${stackName}-db-password-version`, {
   secretId: dbPasswordSecret.id,
   secretString: pulumi.output(aws.secretsmanager.getRandomPassword({
@@ -271,15 +209,11 @@ const dbPasswordVersion = new aws.secretsmanager.SecretVersion(`${stackName}-db-
     excludePunctuation: true,
   })).apply(p => p.randomPassword),
 }, {
-  ignoreChanges: ['secretString'], // Don't regenerate password on updates
+  ignoreChanges: ['secretString'],
 });
 
-// Ensure dbPassword is always a string (not undefined)
-// Since we're generating the password, it will always exist, but TypeScript needs this assertion
 const dbPassword = dbPasswordVersion.secretString.apply(pwd => {
-  if (!pwd) {
-    throw new Error('Database password was not generated');
-  }
+  if (!pwd) throw new Error('Database password was not generated');
   return pwd;
 });
 
@@ -296,12 +230,11 @@ const database = new aws.rds.Instance(`${stackName}-db`, {
   password: dbPassword,
   dbSubnetGroupName: dbSubnetGroup.name,
   vpcSecurityGroupIds: [rdsSecurityGroup.id],
-  multiAz: environment === 'prod',
+  multiAz: false, // Single AZ for cost savings
   publiclyAccessible: false,
-  skipFinalSnapshot: environment !== 'prod',
-  finalSnapshotIdentifier: environment === 'prod' ? `${stackName}-final-snapshot` : undefined,
-  backupRetentionPeriod: environment === 'prod' ? 7 : 1,
-  deletionProtection: environment === 'prod',
+  skipFinalSnapshot: true,
+  backupRetentionPeriod: 1, // Minimal backups
+  deletionProtection: false,
   tags: {
     Name: `${stackName}-postgres`,
     Environment: environment,
@@ -309,15 +242,13 @@ const database = new aws.rds.Instance(`${stackName}-db`, {
 });
 
 // =============================================================================
-// S3 Bucket for Email Attachments
+// S3 Buckets
 // =============================================================================
 
+// Attachments bucket
 const attachmentsBucket = new aws.s3.Bucket(`${stackName}-attachments`, {
   bucket: `${stackName}-attachments`,
   acl: 'private',
-  versioning: {
-    enabled: false,
-  },
   serverSideEncryptionConfiguration: {
     rule: {
       applyServerSideEncryptionByDefault: {
@@ -327,21 +258,11 @@ const attachmentsBucket = new aws.s3.Bucket(`${stackName}-attachments`, {
   },
   lifecycleRules: [
     {
-      id: 'transition-to-infrequent-access',
+      id: 'archive-old-attachments',
       enabled: true,
       transitions: [
-        {
-          days: 30,
-          storageClass: 'STANDARD_IA',
-        },
-        {
-          days: 90,
-          storageClass: 'GLACIER',
-        },
-        {
-          days: 180,
-          storageClass: 'DEEP_ARCHIVE',
-        },
+        { days: 30, storageClass: 'STANDARD_IA' },
+        { days: 90, storageClass: 'GLACIER' },
       ],
     },
   ],
@@ -351,8 +272,7 @@ const attachmentsBucket = new aws.s3.Bucket(`${stackName}-attachments`, {
   },
 });
 
-// Block all public access to attachments bucket
-new aws.s3.BucketPublicAccessBlock(`${stackName}-attachments-public-access-block`, {
+new aws.s3.BucketPublicAccessBlock(`${stackName}-attachments-public-block`, {
   bucket: attachmentsBucket.id,
   blockPublicAcls: true,
   blockPublicPolicy: true,
@@ -360,25 +280,7 @@ new aws.s3.BucketPublicAccessBlock(`${stackName}-attachments-public-access-block
   restrictPublicBuckets: true,
 });
 
-// CORS configuration for attachments bucket
-new aws.s3.BucketCorsConfigurationV2(`${stackName}-attachments-cors`, {
-  bucket: attachmentsBucket.id,
-  corsRules: [
-    {
-      allowedHeaders: ['*'],
-      allowedMethods: ['GET', 'PUT', 'POST'],
-      allowedOrigins: ['*'], // TODO: Restrict to your domain in production
-      exposeHeaders: ['ETag'],
-      maxAgeSeconds: 3000,
-    },
-  ],
-});
-
-// =============================================================================
-// S3 Bucket for Frontend Static Files
-// =============================================================================
-// Note: CloudFront distribution is created later (after ALB) so it can proxy API requests
-
+// Frontend bucket
 const frontendBucket = new aws.s3.BucketV2(`${stackName}-frontend`, {
   bucket: `${stackName}-frontend`,
   tags: {
@@ -387,8 +289,7 @@ const frontendBucket = new aws.s3.BucketV2(`${stackName}-frontend`, {
   },
 });
 
-// Allow public access to the bucket (no restrictions)
-const frontendPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${stackName}-frontend-public-access-block`, {
+const frontendPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${stackName}-frontend-public-block`, {
   bucket: frontendBucket.id,
   blockPublicAcls: false,
   blockPublicPolicy: false,
@@ -396,400 +297,291 @@ const frontendPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${stackNam
   restrictPublicBuckets: false,
 });
 
-// Get AWS account ID for bucket policy
-const currentAccount = aws.getCallerIdentityOutput({});
-
-// S3 bucket policy to allow public read access
-const frontendBucketPolicy = new aws.s3.BucketPolicy(`${stackName}-frontend-bucket-policy`, {
+new aws.s3.BucketPolicy(`${stackName}-frontend-policy`, {
   bucket: frontendBucket.id,
-  policy: frontendBucket.arn.apply((bucketArn) =>
-    JSON.stringify({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Sid: 'PublicReadGetObject',
-          Effect: 'Allow',
-          Principal: '*',
-          Action: 's3:GetObject',
-          Resource: `${bucketArn}/*`,
-        },
-      ],
-    })
-  ),
+  policy: frontendBucket.arn.apply(arn => JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [{
+      Sid: 'PublicRead',
+      Effect: 'Allow',
+      Principal: '*',
+      Action: 's3:GetObject',
+      Resource: `${arn}/*`,
+    }],
+  })),
 }, {
-  dependsOn: [frontendPublicAccessBlock], // Must apply after public access block is configured
+  dependsOn: [frontendPublicAccessBlock],
 });
 
 // =============================================================================
-// ECR Repository (Backend only)
+// ECR Repository
 // =============================================================================
 
 const backendRepo = new aws.ecr.Repository(`${stackName}-backend`, {
   name: `${stackName}-backend`,
   imageTagMutability: 'MUTABLE',
-  imageScanningConfiguration: {
-    scanOnPush: true,
-  },
+  imageScanningConfiguration: { scanOnPush: false }, // Disable to save a tiny bit
   tags: {
     Name: `${stackName}-backend`,
     Environment: environment,
   },
 });
 
-// ECR lifecycle policy to keep only last 10 images
 new aws.ecr.LifecyclePolicy(`${stackName}-backend-lifecycle`, {
   repository: backendRepo.name,
   policy: JSON.stringify({
-    rules: [
-      {
-        rulePriority: 1,
-        description: 'Keep last 10 images',
-        selection: {
-          tagStatus: 'any',
-          countType: 'imageCountMoreThan',
-          countNumber: 10,
-        },
-        action: {
-          type: 'expire',
-        },
+    rules: [{
+      rulePriority: 1,
+      description: 'Keep last 5 images',
+      selection: {
+        tagStatus: 'any',
+        countType: 'imageCountMoreThan',
+        countNumber: 5,
       },
-    ],
+      action: { type: 'expire' },
+    }],
   }),
 });
 
 // =============================================================================
-// ECS Cluster and Backend Service
+// IAM Role for EC2
 // =============================================================================
 
-const cluster = new aws.ecs.Cluster(`${stackName}-cluster`, {
-  name: `${stackName}-cluster`,
-  settings: [
-    {
-      name: 'containerInsights',
-      value: 'enabled',
-    },
-  ],
-  tags: {
-    Name: `${stackName}-cluster`,
-    Environment: environment,
-  },
-});
-
-// IAM role for ECS task execution
-const taskExecutionRole = new aws.iam.Role(`${stackName}-task-exec-role`, {
-  name: `${stackName}-task-exec-role`,
+const ec2Role = new aws.iam.Role(`${stackName}-ec2-role`, {
+  name: `${stackName}-ec2-role`,
   assumeRolePolicy: JSON.stringify({
     Version: '2012-10-17',
-    Statement: [
-      {
-        Action: 'sts:AssumeRole',
-        Effect: 'Allow',
-        Principal: {
-          Service: 'ecs-tasks.amazonaws.com',
-        },
-      },
-    ],
+    Statement: [{
+      Action: 'sts:AssumeRole',
+      Effect: 'Allow',
+      Principal: { Service: 'ec2.amazonaws.com' },
+    }],
   }),
   tags: {
-    Name: `${stackName}-task-exec-role`,
+    Name: `${stackName}-ec2-role`,
     Environment: environment,
   },
 });
 
-new aws.iam.RolePolicyAttachment(`${stackName}-task-exec-policy`, {
-  role: taskExecutionRole.name,
-  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+// ECR access
+new aws.iam.RolePolicyAttachment(`${stackName}-ec2-ecr-policy`, {
+  role: ec2Role.name,
+  policyArn: 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
 });
 
-// IAM role for ECS tasks
-const taskRole = new aws.iam.Role(`${stackName}-task-role`, {
-  name: `${stackName}-task-role`,
-  assumeRolePolicy: JSON.stringify({
+// S3 access for attachments
+const s3Policy = new aws.iam.Policy(`${stackName}-s3-policy`, {
+  name: `${stackName}-s3-policy`,
+  policy: attachmentsBucket.arn.apply(arn => JSON.stringify({
     Version: '2012-10-17',
-    Statement: [
-      {
-        Action: 'sts:AssumeRole',
-        Effect: 'Allow',
-        Principal: {
-          Service: 'ecs-tasks.amazonaws.com',
-        },
-      },
-    ],
-  }),
-  tags: {
-    Name: `${stackName}-task-role`,
-    Environment: environment,
-  },
-});
-
-// Policy for S3 attachments bucket access
-const s3AttachmentsPolicy = new aws.iam.Policy(`${stackName}-s3-attachments-policy`, {
-  name: `${stackName}-s3-attachments-policy`,
-  description: 'Policy for accessing email attachments S3 bucket',
-  policy: attachmentsBucket.arn.apply((bucketArn) => JSON.stringify({
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Action: [
-          's3:PutObject',
-          's3:GetObject',
-          's3:DeleteObject',
-          's3:ListBucket',
-        ],
-        Resource: [
-          bucketArn,
-          `${bucketArn}/*`,
-        ],
-      },
-    ],
+    Statement: [{
+      Effect: 'Allow',
+      Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
+      Resource: [arn, `${arn}/*`],
+    }],
   })),
-  tags: {
-    Name: `${stackName}-s3-attachments-policy`,
-    Environment: environment,
-  },
 });
 
-// Attach S3 policy to task role
-new aws.iam.RolePolicyAttachment(`${stackName}-task-s3-policy`, {
-  role: taskRole.name,
-  policyArn: s3AttachmentsPolicy.arn,
+new aws.iam.RolePolicyAttachment(`${stackName}-ec2-s3-policy`, {
+  role: ec2Role.name,
+  policyArn: s3Policy.arn,
 });
 
-// Policy for Secrets Manager access (IMAP/SMTP credentials)
-const secretsManagerPolicy = new aws.iam.Policy(`${stackName}-secrets-policy`, {
+// Secrets Manager access
+const secretsPolicy = new aws.iam.Policy(`${stackName}-secrets-policy`, {
   name: `${stackName}-secrets-policy`,
-  description: 'Policy for accessing email credentials in Secrets Manager',
   policy: JSON.stringify({
     Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Action: [
-          'secretsmanager:GetSecretValue',
-          'secretsmanager:CreateSecret',
-          'secretsmanager:UpdateSecret',
-          'secretsmanager:DeleteSecret',
-          'secretsmanager:TagResource',
-        ],
-        Resource: [
-          `arn:aws:secretsmanager:*:*:secret:email-client/*`,
-        ],
-      },
-    ],
+    Statement: [{
+      Effect: 'Allow',
+      Action: ['secretsmanager:GetSecretValue', 'secretsmanager:CreateSecret', 'secretsmanager:UpdateSecret', 'secretsmanager:DeleteSecret'],
+      Resource: ['arn:aws:secretsmanager:*:*:secret:email-client/*'],
+    }],
   }),
-  tags: {
-    Name: `${stackName}-secrets-policy`,
-    Environment: environment,
-  },
 });
 
-// Attach Secrets Manager policy to task role
-new aws.iam.RolePolicyAttachment(`${stackName}-task-secrets-policy`, {
-  role: taskRole.name,
-  policyArn: secretsManagerPolicy.arn,
+new aws.iam.RolePolicyAttachment(`${stackName}-ec2-secrets-policy`, {
+  role: ec2Role.name,
+  policyArn: secretsPolicy.arn,
 });
 
-// CloudWatch Log Groups
-const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`, {
-  name: `/ecs/${stackName}/backend`,
-  retentionInDays: 30,
-  tags: {
-    Name: `${stackName}-backend-logs`,
-    Environment: environment,
-  },
+// CloudWatch Logs access
+new aws.iam.RolePolicyAttachment(`${stackName}-ec2-logs-policy`, {
+  role: ec2Role.name,
+  policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
 });
 
-// Backend Task Definition
-const supabaseServiceSecret = new aws.secretsmanager.Secret(`${stackName}-supabase-service-key`, {
+const instanceProfile = new aws.iam.InstanceProfile(`${stackName}-instance-profile`, {
+  name: `${stackName}-instance-profile`,
+  role: ec2Role.name,
+});
+
+// =============================================================================
+// Supabase Service Role Key in Secrets Manager
+// =============================================================================
+
+const supabaseServiceSecret = new aws.secretsmanager.Secret(`${stackName}-supabase-key`, {
   name: `${stackName}/supabase-service-role-key`,
   description: 'Supabase Service Role Key',
   recoveryWindowInDays: 0,
   tags: {
-    Name: `${stackName}-supabase-service-key`,
+    Name: `${stackName}-supabase-key`,
     Environment: environment,
   },
 });
 
-const supabaseServiceSecretVersion = new aws.secretsmanager.SecretVersion(`${stackName}-supabase-service-key-version`, {
+new aws.secretsmanager.SecretVersion(`${stackName}-supabase-key-version`, {
   secretId: supabaseServiceSecret.id,
   secretString: supabaseServiceRoleKey,
-});
-
-const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-task`, {
-  family: `${stackName}-backend`,
-  networkMode: 'awsvpc',
-  requiresCompatibilities: ['FARGATE'],
-  cpu: '256',
-  memory: '512',
-  executionRoleArn: taskExecutionRole.arn,
-  taskRoleArn: taskRole.arn,
-  containerDefinitions: pulumi.all([
-    backendRepo.repositoryUrl,
-    database.address,
-    database.port,
-    dbPassword,
-    attachmentsBucket.bucket,
-    currentRegion.name,
-    supabaseServiceSecretVersion.arn,
-  ]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName, region, secretArn]) => JSON.stringify([
-    {
-      name: 'backend',
-      image: `${repoUrl}:${imageTag}`,
-      essential: true,
-      portMappings: [
-        {
-          containerPort: 4000,
-          protocol: 'tcp',
-        },
-      ],
-      environment: [
-        { name: 'NODE_ENV', value: 'production' },
-        { name: 'LOG_LEVEL', value: 'info' },
-        { name: 'GIT_COMMIT_SHA', value: gitCommitSha },
-        { name: 'DB_HOST', value: dbHost },
-        { name: 'DB_PORT', value: String(dbPort) },
-        { name: 'DB_NAME', value: 'emailclient' },
-        { name: 'DB_USER', value: 'emailclient' },
-        { name: 'DB_PASSWORD', value: dbPass },
-        { name: 'PORT', value: '4000' },
-        { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
-        { name: 'AWS_REGION', value: region },
-        { name: 'SECRETS_BASE_PATH', value: 'email-client' },
-        { name: 'SUPABASE_URL', value: supabaseUrl },
-        { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
-      ],
-      secrets: [
-        {
-          name: 'SUPABASE_SERVICE_ROLE_KEY',
-          valueFrom: secretArn,
-        },
-      ],
-      logConfiguration: {
-        logDriver: 'awslogs',
-        options: {
-          'awslogs-group': `/ecs/${stackName}/backend`,
-          'awslogs-region': region,
-          'awslogs-stream-prefix': 'ecs',
-        },
-      },
-      healthCheck: {
-        command: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:4000/health || exit 1'],
-        interval: 30,
-        timeout: 5,
-        retries: 3,
-        startPeriod: 60,
-      },
-    },
-  ])),
-  tags: {
-    Name: `${stackName}-backend-task`,
-    Environment: environment,
-  },
+}, {
+  ignoreChanges: ['secretString'],
 });
 
 // =============================================================================
-// Application Load Balancer (Backend API only)
+// EC2 Instance (Backend Server)
 // =============================================================================
 
-const alb = new aws.lb.LoadBalancer(`${stackName}-alb`, {
-  name: `${stackName}-alb`,
-  internal: false,
-  loadBalancerType: 'application',
-  securityGroups: [albSecurityGroup.id],
-  subnets: vpc.publicSubnetIds,
-  enableDeletionProtection: environment === 'prod',
-  tags: {
-    Name: `${stackName}-alb`,
-    Environment: environment,
-  },
-});
-
-// Target group for backend
-const backendTargetGroup = new aws.lb.TargetGroup(`${stackName}-backend-tg`, {
-  name: `${stackName}-backend-tg`,
-  port: 4000,
-  protocol: 'HTTP',
-  vpcId: vpc.vpcId,
-  targetType: 'ip',
-  healthCheck: {
-    enabled: true,
-    path: '/health',
-    port: 'traffic-port',
-    protocol: 'HTTP',
-    healthyThreshold: 2,
-    unhealthyThreshold: 3,
-    timeout: 5,
-    interval: 30,
-    matcher: '200',
-  },
-  tags: {
-    Name: `${stackName}-backend-tg`,
-    Environment: environment,
-  },
-});
-
-// ALB Listener
-const httpListener = new aws.lb.Listener(`${stackName}-http-listener`, {
-  loadBalancerArn: alb.arn,
-  port: 80,
-  protocol: 'HTTP',
-  defaultActions: [
-    {
-      type: 'forward',
-      targetGroupArn: backendTargetGroup.arn,
-    },
+// Get latest Amazon Linux 2023 ARM64 AMI
+const ami = aws.ec2.getAmi({
+  mostRecent: true,
+  owners: ['amazon'],
+  filters: [
+    { name: 'name', values: ['al2023-ami-*-arm64'] },
+    { name: 'virtualization-type', values: ['hvm'] },
   ],
 });
 
-// =============================================================================
-// ECS Backend Service
-// =============================================================================
+// User data script to set up Docker and run the backend
+const userData = pulumi.all([
+  backendRepo.repositoryUrl,
+  database.address,
+  database.port,
+  dbPassword,
+  attachmentsBucket.bucket,
+  currentRegion.name,
+  supabaseServiceSecret.arn,
+]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName, region, secretArn]) => `#!/bin/bash
+set -e
 
-const backendService = new aws.ecs.Service(`${stackName}-backend-service`, {
-  name: `${stackName}-backend`,
-  cluster: cluster.arn,
-  taskDefinition: backendTaskDefinition.arn,
-  desiredCount: environment === 'prod' ? 2 : 1,
-  launchType: 'FARGATE',
-  networkConfiguration: {
-    subnets: vpc.privateSubnetIds,
-    securityGroups: [backendSecurityGroup.id],
-    assignPublicIp: false,
+# Update and install Docker
+dnf update -y
+dnf install -y docker
+systemctl enable docker
+systemctl start docker
+
+# Install AWS CLI v2
+dnf install -y aws-cli
+
+# Login to ECR
+aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${repoUrl.split('/')[0]}
+
+# Get Supabase Service Role Key from Secrets Manager
+SUPABASE_SERVICE_KEY=$(aws secretsmanager get-secret-value --secret-id ${secretArn} --query SecretString --output text --region ${region})
+
+# Pull and run the backend container
+docker pull ${repoUrl}:latest
+
+docker run -d \\
+  --name backend \\
+  --restart always \\
+  -p 80:4000 \\
+  -e NODE_ENV=production \\
+  -e LOG_LEVEL=info \\
+  -e DB_HOST=${dbHost} \\
+  -e DB_PORT=${dbPort} \\
+  -e DB_NAME=emailclient \\
+  -e DB_USER=emailclient \\
+  -e DB_PASSWORD='${dbPass}' \\
+  -e PORT=4000 \\
+  -e ATTACHMENTS_S3_BUCKET=${bucketName} \\
+  -e AWS_REGION=${region} \\
+  -e SECRETS_BASE_PATH=email-client \\
+  -e SUPABASE_URL=${supabaseUrl} \\
+  -e SUPABASE_ANON_KEY=${supabaseAnonKey} \\
+  -e SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_KEY" \\
+  ${repoUrl}:latest
+
+# Create update script for easy redeployment
+cat > /home/ec2-user/update-backend.sh << 'EOF'
+#!/bin/bash
+aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${repoUrl.split('/')[0]}
+docker pull ${repoUrl}:latest
+docker stop backend || true
+docker rm backend || true
+docker run -d \\
+  --name backend \\
+  --restart always \\
+  -p 80:4000 \\
+  -e NODE_ENV=production \\
+  -e LOG_LEVEL=info \\
+  -e DB_HOST=${dbHost} \\
+  -e DB_PORT=${dbPort} \\
+  -e DB_NAME=emailclient \\
+  -e DB_USER=emailclient \\
+  -e DB_PASSWORD='${dbPass}' \\
+  -e PORT=4000 \\
+  -e ATTACHMENTS_S3_BUCKET=${bucketName} \\
+  -e AWS_REGION=${region} \\
+  -e SECRETS_BASE_PATH=email-client \\
+  -e SUPABASE_URL=${supabaseUrl} \\
+  -e SUPABASE_ANON_KEY=${supabaseAnonKey} \\
+  -e SUPABASE_SERVICE_ROLE_KEY="$(aws secretsmanager get-secret-value --secret-id ${secretArn} --query SecretString --output text --region ${region})" \\
+  ${repoUrl}:latest
+EOF
+chmod +x /home/ec2-user/update-backend.sh
+chown ec2-user:ec2-user /home/ec2-user/update-backend.sh
+
+echo "Backend setup complete!"
+`);
+
+// EC2 instance - t4g.nano is the smallest ARM instance (~$3/month)
+const backendInstance = new aws.ec2.Instance(`${stackName}-backend`, {
+  ami: ami.then(a => a.id),
+  instanceType: 't4g.micro', // $6/month, more headroom than nano
+  subnetId: publicSubnet1.id,
+  vpcSecurityGroupIds: [backendSecurityGroup.id],
+  iamInstanceProfile: instanceProfile.name,
+  associatePublicIpAddress: true,
+  userData: userData,
+  userDataReplaceOnChange: false, // Don't recreate on user data change
+  rootBlockDevice: {
+    volumeSize: 20,
+    volumeType: 'gp3',
+    deleteOnTermination: true,
   },
-  loadBalancers: [
-    {
-      targetGroupArn: backendTargetGroup.arn,
-      containerName: 'backend',
-      containerPort: 4000,
-    },
-  ],
-  healthCheckGracePeriodSeconds: 60, // Give time for DB connection
   tags: {
-    Name: `${stackName}-backend-service`,
+    Name: `${stackName}-backend`,
     Environment: environment,
   },
 }, {
-  dependsOn: [database, ecrApiEndpoint, ecrDkrEndpoint, s3Endpoint, logsEndpoint], // Wait for VPC endpoints and DB
+  dependsOn: [database],
+});
+
+// Elastic IP for stable address
+const backendEip = new aws.ec2.Eip(`${stackName}-backend-eip`, {
+  instance: backendInstance.id,
+  domain: 'vpc',
+  tags: {
+    Name: `${stackName}-backend-eip`,
+    Environment: environment,
+  },
 });
 
 // =============================================================================
-// CloudFront CDN for Frontend + Backend API Proxy
+// CloudFront CDN
 // =============================================================================
 
-// CloudFront distribution - serves frontend from S3 and proxies /api/* to ALB
-const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-frontend-cdn`, {
+const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-cdn`, {
   enabled: true,
   isIpv6Enabled: true,
   defaultRootObject: 'index.html',
   httpVersion: 'http2and3',
-  priceClass: 'PriceClass_100', // US, Canada, Europe
+  priceClass: 'PriceClass_100',
 
   origins: [
     {
       domainName: frontendBucket.bucketRegionalDomainName,
       originId: 'S3Origin',
-      // Use S3 website endpoint for public access (no OAC)
       customOriginConfig: {
         httpPort: 80,
         httpsPort: 443,
@@ -798,22 +590,19 @@ const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-front
       },
     },
     {
-      // Backend API origin - CloudFront proxies /api/* to backend ALB
-      domainName: alb.dnsName,
-      originId: 'BackendAPIOrigin',
+      // Backend API via EC2 Elastic IP
+      domainName: backendEip.publicDns,
+      originId: 'BackendOrigin',
       customOriginConfig: {
         httpPort: 80,
         httpsPort: 443,
-        originProtocolPolicy: 'http-only', // ALB is HTTP only
+        originProtocolPolicy: 'http-only',
         originSslProtocols: ['TLSv1.2'],
         originReadTimeout: 60,
         originKeepaliveTimeout: 5,
       },
       customHeaders: [
-        {
-          name: 'X-Forwarded-Proto',
-          value: 'https',
-        },
+        { name: 'X-Forwarded-Proto', value: 'https' },
       ],
     },
   ],
@@ -824,47 +613,29 @@ const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-front
     allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
     cachedMethods: ['GET', 'HEAD'],
     compress: true,
-    cachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6', // CachingOptimized
+    cachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6',
   },
 
-  // Cache behavior for API requests - no caching, forward everything
   orderedCacheBehaviors: [
     {
       pathPattern: '/api/*',
-      targetOriginId: 'BackendAPIOrigin',
-      viewerProtocolPolicy: 'https-only', // Force HTTPS for API
+      targetOriginId: 'BackendOrigin',
+      viewerProtocolPolicy: 'https-only',
       allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
       cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
-      compress: false, // Don't compress API responses
-      
-      // Use Managed-AllViewerExceptHostHeader cache policy for API (no caching)
+      compress: false,
       cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
-      
-      // Use Managed-AllViewerExceptHostHeader origin request policy
       originRequestPolicyId: 'b689b0a8-53d0-40ab-baf2-68738e2966ac',
     },
   ],
 
-  // SPA routing - return index.html for 404s (client-side routing)
   customErrorResponses: [
-    {
-      errorCode: 404,
-      responseCode: 200,
-      responsePagePath: '/index.html',
-      errorCachingMinTtl: 0,
-    },
-    {
-      errorCode: 403,
-      responseCode: 200,
-      responsePagePath: '/index.html',
-      errorCachingMinTtl: 0,
-    },
+    { errorCode: 404, responseCode: 200, responsePagePath: '/index.html', errorCachingMinTtl: 0 },
+    { errorCode: 403, responseCode: 200, responsePagePath: '/index.html', errorCachingMinTtl: 0 },
   ],
 
   restrictions: {
-    geoRestriction: {
-      restrictionType: 'none',
-    },
+    geoRestriction: { restrictionType: 'none' },
   },
 
   viewerCertificate: {
@@ -872,29 +643,26 @@ const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-front
   },
 
   tags: {
-    Name: `${stackName}-frontend-cdn`,
+    Name: `${stackName}-cdn`,
     Environment: environment,
   },
 }, {
-  dependsOn: [alb, frontendBucketPolicy], // Wait for ALB and S3 bucket setup
+  dependsOn: [backendEip, frontendPublicAccessBlock],
 });
 
 // =============================================================================
 // Outputs
 // =============================================================================
 
-// =============================================================================
-// Outputs
-// =============================================================================
-
-export const vpcId = vpc.vpcId;
-export const backendApiUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`; // Backend API is proxied through CloudFront
+export const vpcId = vpc.id;
+export const backendApiUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`;
 export const frontendUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`;
 export const frontendBucketName = frontendBucket.bucket;
 export const frontendDistributionId = frontendDistribution.id;
 export const backendRepoUrl = backendRepo.repositoryUrl;
+export const backendInstanceId = backendInstance.id;
+export const backendPublicIp = backendEip.publicIp;
+export const backendPublicDns = backendEip.publicDns;
 export const databaseEndpoint = database.endpoint;
 export const databaseAddress = database.address;
-export const clusterArn = cluster.arn;
 export const attachmentsBucketName = attachmentsBucket.bucket;
-export const attachmentsBucketArn = attachmentsBucket.arn;
