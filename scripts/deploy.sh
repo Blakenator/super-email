@@ -58,8 +58,18 @@ check_prereqs() {
         exit 1
     fi
     
+    if ! command -v docker &> /dev/null; then
+        log_error "Docker not found. Please install it first."
+        exit 1
+    fi
+    
     if ! docker info &> /dev/null; then
         log_error "Docker daemon not running. Please start Docker."
+        log_error ""
+        log_error "To start Docker:"
+        log_error "  - On macOS: Open Docker Desktop application"
+        log_error "  - On Linux: Run 'sudo systemctl start docker' or 'sudo service docker start'"
+        log_error "  - You may need to add your user to the docker group: 'sudo usermod -aG docker \$USER'"
         exit 1
     fi
     

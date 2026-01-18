@@ -243,19 +243,23 @@ const dbSubnetGroup = new aws.rds.SubnetGroup(`${stackName}-db-subnet-group`, {
 const dbPasswordSecret = new aws.secretsmanager.Secret(`${stackName}-db-password`, {
   name: `${stackName}/database-password`,
   description: 'Database password for Email Client',
+  recoveryWindowInDays: 0, // Allow immediate deletion on stack destroy
   tags: {
     Name: `${stackName}-db-password`,
     Environment: environment,
   },
 });
 
-// Generate a random password
+// Generate a random password only on first creation
+// Use ignoreChanges to prevent regeneration on subsequent updates
 const dbPasswordVersion = new aws.secretsmanager.SecretVersion(`${stackName}-db-password-version`, {
   secretId: dbPasswordSecret.id,
   secretString: pulumi.output(aws.secretsmanager.getRandomPassword({
     passwordLength: 32,
     excludePunctuation: true,
   })).apply(p => p.randomPassword),
+}, {
+  ignoreChanges: ['secretString'], // Don't regenerate password on updates
 });
 
 // Ensure dbPassword is always a string (not undefined)
