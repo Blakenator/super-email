@@ -118,15 +118,44 @@ deploy_infrastructure() {
     pulumi up --yes
     
     # Get outputs
-    BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl)
-    FRONTEND_BUCKET=$(pulumi stack output frontendBucketName)
-    FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId)
-    BACKEND_API_URL=$(pulumi stack output backendApiUrl)
-    FRONTEND_URL=$(pulumi stack output frontendUrl)
+    export BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl)
+    export FRONTEND_BUCKET=$(pulumi stack output frontendBucketName)
+    export FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId)
+    export BACKEND_API_URL=$(pulumi stack output backendApiUrl)
+    export FRONTEND_URL=$(pulumi stack output frontendUrl)
     
     log_info "Infrastructure deployed successfully."
     
     cd "$PROJECT_ROOT"
+}
+
+# Get infrastructure outputs without deploying
+get_infrastructure_outputs() {
+    log_info "Getting existing infrastructure outputs..."
+    
+    cd "$PROJECT_ROOT/infra"
+    
+    # Check if stack exists
+    if ! pulumi stack select "$ENVIRONMENT" 2>/dev/null; then
+        log_warn "Stack $ENVIRONMENT does not exist. Will create during deployment."
+        cd "$PROJECT_ROOT"
+        return 1
+    fi
+    
+    # Try to get outputs
+    BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl 2>/dev/null || echo "")
+    
+    if [ -z "$BACKEND_REPO_URL" ]; then
+        log_warn "ECR repository not found. Will create during deployment."
+        cd "$PROJECT_ROOT"
+        return 1
+    fi
+    
+    export BACKEND_REPO_URL
+    log_info "Found existing ECR repository: $BACKEND_REPO_URL"
+    
+    cd "$PROJECT_ROOT"
+    return 0
 }
 
 # Build and push backend Docker image
@@ -178,6 +207,7 @@ deploy_backend() {
     CLUSTER_NAME="email-client-$ENVIRONMENT-cluster"
     SERVICE_NAME="email-client-$ENVIRONMENT-backend"
     
+    # Update the service to use the new image
     aws ecs update-service \
         --cluster "$CLUSTER_NAME" \
         --service "$SERVICE_NAME" \
@@ -185,6 +215,7 @@ deploy_backend() {
         --region "$AWS_REGION" \
         > /dev/null
     
+    log_info "ECS service update initiated. Tasks will be replaced with new image."
     log_info "Backend deployed successfully."
 }
 
@@ -287,9 +318,37 @@ wait_for_backend() {
 main() {
     check_prereqs
     get_aws_info
-    deploy_infrastructure
-    deploy_backend
+    
+    # Try to get existing infrastructure outputs (ECR repo URL)
+    if get_infrastructure_outputs; then
+        # Infrastructure exists, build and push image first
+        log_info "Building and pushing Docker image before infrastructure update..."
+        deploy_backend
+        
+        # Now update infrastructure (will use the new image)
+        deploy_infrastructure
+    else
+        # First time deploy: create infrastructure first (including ECR repo)
+        log_info "First deployment: creating infrastructure first..."
+        deploy_infrastructure
+        
+        # Now build and push the image
+        deploy_backend
+        
+        # Force ECS service to redeploy with the new image
+        log_info "Forcing ECS service to use the new image..."
+        aws ecs update-service \
+            --cluster "email-client-$ENVIRONMENT-cluster" \
+            --service "email-client-$ENVIRONMENT-backend" \
+            --force-new-deployment \
+            --region "$AWS_REGION" \
+            > /dev/null 2>&1 || log_warn "Could not force ECS service update (service may not exist yet)"
+    fi
+    
+    # Deploy frontend
     deploy_frontend
+    
+    # Wait for backend to be healthy
     wait_for_backend
     
     echo ""

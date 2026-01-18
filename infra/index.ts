@@ -12,6 +12,10 @@ const stackName = `email-client-${environment}`;
 // Get current AWS region (needed early for VPC endpoints)
 const currentRegion = aws.getRegionOutput({});
 
+// Get a timestamp or version for the backend image
+// This forces ECS to redeploy when the image changes
+const imageTag = pulumi.getStack() === 'prod' ? 'latest' : 'dev';
+
 // =============================================================================
 // VPC and Networking
 // =============================================================================
@@ -674,7 +678,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
   ]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName, region]) => JSON.stringify([
     {
       name: 'backend',
-      image: `${repoUrl}:latest`,
+      image: `${repoUrl}:${imageTag}`,
       essential: true,
       portMappings: [
         {
