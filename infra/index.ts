@@ -143,7 +143,14 @@ const dbPasswordVersion = new aws.secretsmanager.SecretVersion(`${stackName}-db-
   })).apply(p => p.randomPassword),
 });
 
-const dbPassword = dbPasswordVersion.secretString;
+// Ensure dbPassword is always a string (not undefined)
+// Since we're generating the password, it will always exist, but TypeScript needs this assertion
+const dbPassword = dbPasswordVersion.secretString.apply(pwd => {
+  if (!pwd) {
+    throw new Error('Database password was not generated');
+  }
+  return pwd;
+});
 
 const database = new aws.rds.Instance(`${stackName}-db`, {
   identifier: `${stackName}-postgres`,
