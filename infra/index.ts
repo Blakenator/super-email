@@ -381,32 +381,13 @@ const frontendBucket = new aws.s3.BucketV2(`${stackName}-frontend`, {
   },
 });
 
-// Enforce bucket owner for all objects (required for OAC)
-const frontendBucketOwnership = new aws.s3.BucketOwnershipControls(`${stackName}-frontend-ownership`, {
-  bucket: frontendBucket.id,
-  rule: {
-    objectOwnership: 'BucketOwnerEnforced',
-  },
-});
-
-// Block public access - but allow CloudFront OAC via bucket policy
+// Allow public access to the bucket (no restrictions)
 const frontendPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${stackName}-frontend-public-access-block`, {
   bucket: frontendBucket.id,
-  blockPublicAcls: true,
-  blockPublicPolicy: false, // Allow bucket policy for CloudFront
-  ignorePublicAcls: true,
-  restrictPublicBuckets: false, // Allow service principal access
-}, {
-  dependsOn: [frontendBucketOwnership],
-});
-
-// CloudFront Origin Access Control for S3
-const frontendOAC = new aws.cloudfront.OriginAccessControl(`${stackName}-frontend-oac`, {
-  name: `${stackName}-frontend-oac`,
-  description: 'OAC for frontend S3 bucket',
-  originAccessControlOriginType: 's3',
-  signingBehavior: 'always',
-  signingProtocol: 'sigv4',
+  blockPublicAcls: false,
+  blockPublicPolicy: false,
+  ignorePublicAcls: false,
+  restrictPublicBuckets: false,
 });
 
 // CloudFront distribution for frontend
@@ -421,7 +402,13 @@ const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-front
     {
       domainName: frontendBucket.bucketRegionalDomainName,
       originId: 'S3Origin',
-      originAccessControlId: frontendOAC.id,
+      // Use S3 website endpoint for public access (no OAC)
+      customOriginConfig: {
+        httpPort: 80,
+        httpsPort: 443,
+        originProtocolPolicy: 'http-only',
+        originSslProtocols: ['TLSv1.2'],
+      },
     },
   ],
 
@@ -466,33 +453,22 @@ const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-front
   },
 });
 
-// Get AWS account ID for CloudFront ARN
+// Get AWS account ID for bucket policy
 const currentAccount = aws.getCallerIdentityOutput({});
 
-// S3 bucket policy to allow CloudFront access
+// S3 bucket policy to allow public read access
 const frontendBucketPolicy = new aws.s3.BucketPolicy(`${stackName}-frontend-bucket-policy`, {
   bucket: frontendBucket.id,
-  policy: pulumi.all([
-    frontendBucket.arn,
-    frontendDistribution.id,
-    currentAccount.accountId,
-  ]).apply(([bucketArn, distId, accountId]) =>
+  policy: frontendBucket.arn.apply((bucketArn) =>
     JSON.stringify({
       Version: '2012-10-17',
       Statement: [
         {
-          Sid: 'AllowCloudFrontServicePrincipal',
+          Sid: 'PublicReadGetObject',
           Effect: 'Allow',
-          Principal: {
-            Service: 'cloudfront.amazonaws.com',
-          },
+          Principal: '*',
           Action: 's3:GetObject',
           Resource: `${bucketArn}/*`,
-          Condition: {
-            StringEquals: {
-              'AWS:SourceArn': `arn:aws:cloudfront::${accountId}:distribution/${distId}`,
-            },
-          },
         },
       ],
     })
