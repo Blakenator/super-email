@@ -550,7 +550,7 @@ const backendInstance = new aws.ec2.Instance(`${stackName}-backend`, {
   userData: userData,
   userDataReplaceOnChange: false, // Don't recreate on user data change
   rootBlockDevice: {
-    volumeSize: 20,
+    volumeSize: 30, // AL2023 requires minimum 30GB
     volumeType: 'gp3',
     deleteOnTermination: true,
   },
