@@ -13,6 +13,7 @@ import { Op } from 'sequelize';
 import { uploadAttachment } from './attachment-storage.js';
 import { getImapCredentials } from './secrets.js';
 import { Readable } from 'stream';
+import { publishMailboxUpdate } from './pubsub.js';
 
 export interface SyncResult {
   synced: number;
@@ -148,6 +149,13 @@ export async function startAsyncSync(
     syncExpiresAt: getSyncExpirationTime(),
   });
 
+  // Notify subscribers that sync is starting
+  publishMailboxUpdate(emailAccount.userId, {
+    type: 'SYNC_STARTED',
+    emailAccountId: emailAccount.id,
+    message: 'Starting email sync...',
+  });
+
   // Run sync in background
   syncEmailsFromImapAccount(emailAccount, syncId)
     .then(async (result) => {
@@ -172,6 +180,15 @@ export async function startAsyncSync(
       console.log(
         `[IMAP] Sync complete for ${emailAccount.email}: ${result.synced} synced`,
       );
+
+      // Notify subscribers that sync is complete
+      publishMailboxUpdate(emailAccount.userId, {
+        type: 'SYNC_COMPLETED',
+        emailAccountId: emailAccount.id,
+        message: result.cancelled
+          ? 'Sync cancelled'
+          : `Synced ${result.synced} new email(s)`,
+      });
 
       // Clear status after 10 seconds
       setTimeout(async () => {
@@ -205,6 +222,13 @@ export async function startAsyncSync(
         syncExpiresAt: null,
       });
       console.error(`[IMAP] Sync failed for ${emailAccount.email}:`, err);
+
+      // Notify subscribers that sync failed
+      publishMailboxUpdate(emailAccount.userId, {
+        type: 'ERROR',
+        emailAccountId: emailAccount.id,
+        message: `Sync failed: ${errorMsg}`,
+      });
 
       // Clear error status after 30 seconds
       setTimeout(async () => {

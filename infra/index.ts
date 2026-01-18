@@ -7,6 +7,11 @@ const config = new pulumi.Config();
 const environment = config.require('environment');
 const dbInstanceClass = config.get('dbInstanceClass') || 'db.t3.micro';
 
+// Supabase configuration from Pulumi config (set via .env in deploy script)
+const supabaseUrl = config.require('supabaseUrl');
+const supabaseAnonKey = config.require('supabaseAnonKey');
+const supabaseServiceRoleKey = config.requireSecret('supabaseServiceRoleKey');
+
 const stackName = `email-client-${environment}`;
 
 // Get current AWS region (needed early for VPC endpoints)
@@ -658,6 +663,21 @@ const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`,
 });
 
 // Backend Task Definition
+const supabaseServiceSecret = new aws.secretsmanager.Secret(`${stackName}-supabase-service-key`, {
+  name: `${stackName}/supabase-service-role-key`,
+  description: 'Supabase Service Role Key',
+  recoveryWindowInDays: 0,
+  tags: {
+    Name: `${stackName}-supabase-service-key`,
+    Environment: environment,
+  },
+});
+
+const supabaseServiceSecretVersion = new aws.secretsmanager.SecretVersion(`${stackName}-supabase-service-key-version`, {
+  secretId: supabaseServiceSecret.id,
+  secretString: supabaseServiceRoleKey,
+});
+
 const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-task`, {
   family: `${stackName}-backend`,
   networkMode: 'awsvpc',
@@ -673,7 +693,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
     dbPassword,
     attachmentsBucket.bucket,
     currentRegion.name,
-  ]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName, region]) => JSON.stringify([
+    supabaseServiceSecretVersion.arn,
+  ]).apply(([repoUrl, dbHost, dbPort, dbPass, bucketName, region, secretArn]) => JSON.stringify([
     {
       name: 'backend',
       image: `${repoUrl}:${imageTag}`,
@@ -697,10 +718,14 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
         { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
         { name: 'AWS_REGION', value: region },
         { name: 'SECRETS_BASE_PATH', value: 'email-client' },
-        // Supabase config - TODO: Move to Secrets Manager in production
-        { name: 'SUPABASE_URL', value: 'https://ivqyyttllhpwbducgpih.supabase.co' },
-        { name: 'SUPABASE_ANON_KEY', value: 'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F' },
-        { name: 'SUPABASE_SERVICE_ROLE_KEY', value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2cXl5dHRsbGhwd2JkdWNncGloIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzQyMDg5MCwiZXhwIjoyMDUyOTk2ODkwfQ.vBBqCSy-AqAJyPWE0QlZzP1JJHGvJ-_a_P-9l-cZuFo' },
+        { name: 'SUPABASE_URL', value: supabaseUrl },
+        { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
+      ],
+      secrets: [
+        {
+          name: 'SUPABASE_SERVICE_ROLE_KEY',
+          valueFrom: secretArn,
+        },
       ],
       logConfiguration: {
         logDriver: 'awslogs',

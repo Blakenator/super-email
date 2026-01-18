@@ -23,11 +23,12 @@ import { ErrorBoundary } from './core/components/ErrorBoundary.tsx';
 import { lightTheme } from './core/theme.ts';
 import { ThemedApp } from './ThemedApp.tsx';
 import { useEmailStore } from './stores/emailStore.ts';
+import { config } from './config.ts';
 
-const httpLink = new HttpLink({ uri: '/api/graphql' });
+const httpLink = new HttpLink({ uri: config.api.graphqlUrl });
 
 // WebSocket link for subscriptions
-const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/graphql`;
+const wsUrl = config.api.wsUrl;
 
 const wsLink = new GraphQLWsLink(
   createClient({

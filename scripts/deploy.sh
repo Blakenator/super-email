@@ -11,6 +11,7 @@ set -e
 #   - Docker installed and running
 #   - Pulumi CLI installed and logged in
 #   - pnpm installed
+#   - .env file with required credentials (see .env.example)
 #
 # Usage:
 #   ./scripts/deploy.sh [environment]
@@ -21,6 +22,15 @@ set -e
 ENVIRONMENT="${1:-dev}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Load environment variables from .env file if it exists
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    echo "Loading environment variables from .env file..."
+    export $(grep -v '^#' "$PROJECT_ROOT/.env" | xargs)
+else
+    echo "Warning: .env file not found. Using environment variables or defaults."
+    echo "Create a .env file from .env.example for production deployments."
+fi
 
 echo "=============================================="
 echo "  StacksMail Deploy - Environment: $ENVIRONMENT"
@@ -120,6 +130,12 @@ deploy_infrastructure() {
     # Set the environment config
     pulumi config set environment "$ENVIRONMENT"
     pulumi config set aws:region "$AWS_REGION"
+    pulumi config set gitCommitSha "$GIT_COMMIT_SHA"
+    
+    # Set Supabase configuration from environment variables
+    pulumi config set supabaseUrl "$SUPABASE_URL"
+    pulumi config set supabaseAnonKey "$SUPABASE_ANON_KEY"
+    pulumi config set --secret supabaseServiceRoleKey "$SUPABASE_SERVICE_ROLE_KEY"
     
     # Deploy
     pulumi up --yes
@@ -290,9 +306,25 @@ deploy_frontend() {
         pnpm install
     fi
     
-    # Build frontend
-    log_info "Building frontend..."
+    # Get infrastructure outputs for environment variables
+    cd "$PROJECT_ROOT/infra"
+    FRONTEND_URL=$(pulumi stack output frontendUrl 2>/dev/null || echo "")
+    BACKEND_API_URL=$(pulumi stack output backendApiUrl 2>/dev/null || echo "")
+    cd "$PROJECT_ROOT"
+    
+    # Build frontend with environment variables
+    log_info "Building frontend with production config..."
     cd frontend
+    
+    # Set environment variables for Vite build
+    export VITE_SUPABASE_URL="$SUPABASE_URL"
+    export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+    export VITE_BACKEND_API_URL="${BACKEND_API_URL}/api/graphql"
+    export VITE_APP_URL="$FRONTEND_URL"
+    
+    log_info "Frontend URL: $FRONTEND_URL"
+    log_info "Backend API URL: $BACKEND_API_URL"
+    
     pnpm run build
     
     # Sync to S3

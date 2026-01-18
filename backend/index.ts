@@ -18,7 +18,7 @@ import type { ApolloServerPlugin } from '@apollo/server';
 import { WebSocketServer } from 'ws';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import { makeExecutableSchema } from '@graphql-tools/schema';
-import { PubSub } from 'graphql-subscriptions';
+import { pubSub, MAILBOX_UPDATES } from './helpers/pubsub.js';
 import {
   startIdleForUser,
   stopIdleForUser,
@@ -231,10 +231,22 @@ const resolvers: AllBackendResolvers = {
         let isComplete = false;
         let cleanedUp = false;
 
+        // Listen to PubSub events (for manual sync completions)
+        const pubSubSubscriptionId = await pubSub.subscribe(
+          `${MAILBOX_UPDATES}:${userId}`,
+          (update: MailboxUpdateEvent) => {
+            logger.info(
+              'Subscription',
+              `[User ${userId}] Received PubSub event: type=${update.type}, account=${update.emailAccountId}`,
+            );
+            onUpdate(update);
+          },
+        );
+
         const onUpdate = (update: MailboxUpdateEvent) => {
           logger.info(
             'Subscription',
-            `[User ${userId}] Received IDLE event: type=${update.type}, account=${update.emailAccountId}, message=${update.message || 'none'}`,
+            `[User ${userId}] Received event: type=${update.type}, account=${update.emailAccountId}, message=${update.message || 'none'}`,
           );
 
           const wrappedUpdate = { mailboxUpdates: update };
@@ -260,6 +272,8 @@ const resolvers: AllBackendResolvers = {
             'Subscription',
             `Cleaning up mailboxUpdates subscription for user ${userId}`,
           );
+          // Unsubscribe from PubSub
+          await pubSub.unsubscribe(pubSubSubscriptionId);
           await stopIdleForUser(userId);
         };
 

@@ -133,6 +133,35 @@ In development, IMAP/SMTP credentials are stored in `data/secrets.json` (gitigno
 2. **Docker** - Installed and running
 3. **Pulumi CLI** - Installed and logged in (`pulumi login`)
 4. **pnpm** - Installed globally
+5. **`.env` file** - Required for production deployments (see below)
+
+### Environment Configuration
+
+**IMPORTANT**: Sensitive credentials are no longer hardcoded in the codebase.
+
+1. **Copy the template file:**
+   ```bash
+   cp .env.template .env
+   ```
+
+2. **Fill in your actual values:**
+   ```bash
+   # .env file
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_ANON_KEY=your_supabase_anon_key_here
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+   AWS_REGION=us-west-1
+   ```
+
+3. **Get your Supabase credentials:**
+   - Go to https://supabase.com/dashboard
+   - Select your project
+   - Go to Settings → API
+   - Copy `Project URL`, `anon/public key`, and `service_role key`
+
+4. **NEVER commit `.env` to git:**
+   - The `.env` file is automatically ignored by `.gitignore`
+   - Keep it secure and never share it publicly
 
 ### Required AWS Permissions
 
@@ -197,8 +226,11 @@ Go to your GitHub repository → Settings → Secrets and variables → Actions,
 |--------|-------------|
 | `AWS_ACCESS_KEY_ID` | AWS access key with deployment permissions |
 | `AWS_SECRET_ACCESS_KEY` | AWS secret access key |
-| `AWS_REGION` | AWS region (e.g., `us-east-1`) |
+| `AWS_REGION` | AWS region (e.g., `us-west-1`) |
 | `PULUMI_ACCESS_TOKEN` | Pulumi access token ([get one here](https://app.pulumi.com/account/tokens)) |
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_ANON_KEY` | Your Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service role key |
 
 #### Triggering Deployment
 

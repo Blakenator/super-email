@@ -13,6 +13,7 @@ import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope } from '@fortawesome/free-solid-svg-icons';
+import { PasswordInput } from '../../core/components/PasswordInput';
 import { PageWrapper, SignUpCard, Logo, Tagline } from './auth.wrappers';
 
 export function SignUp() {
@@ -112,27 +113,23 @@ export function SignUp() {
                 />
               </Form.Group>
 
-              <Form.Group className="mb-3">
-                <Form.Label>Password</Form.Label>
-                <Form.Control
-                  type="password"
-                  placeholder="Create a password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </Form.Group>
+              <PasswordInput
+                value={password}
+                onChange={setPassword}
+                placeholder="Create a password"
+                label="Password"
+                required
+                className="mb-3"
+              />
 
-              <Form.Group className="mb-4">
-                <Form.Label>Confirm Password</Form.Label>
-                <Form.Control
-                  type="password"
-                  placeholder="Confirm your password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  required
-                />
-              </Form.Group>
+              <PasswordInput
+                value={confirmPassword}
+                onChange={setConfirmPassword}
+                placeholder="Confirm your password"
+                label="Confirm Password"
+                required
+                className="mb-4"
+              />
 
               <Button
                 variant="primary"

@@ -43,7 +43,7 @@ export const sequelize = new Sequelize({
     MailRule,
     Attachment,
   ],
-  logging: !config.isDevelopment ? console.debug : false,
+  logging: false,
   // Enable SSL for production (required by AWS RDS)
   dialectOptions: config.isProduction
     ? {

@@ -4,6 +4,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEnvelope, faWifi, faTimes, faUser } from '@fortawesome/free-solid-svg-icons';
+import { PasswordInput } from '../../core/components/PasswordInput';
 import {
   PageWrapper,
   AuthCard as LoginCard,
@@ -179,17 +180,15 @@ export function Login() {
                   />
                 </Form.Group>
 
-                <Form.Group className="mb-3">
-                  <Form.Label>Password</Form.Label>
-                  <Form.Control
-                    type="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    size="lg"
-                  />
-                </Form.Group>
+                <PasswordInput
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="Enter your password"
+                  label="Password"
+                  required
+                  size="lg"
+                  className="mb-3"
+                />
 
                 <RememberMeRow>
                   <Form.Check

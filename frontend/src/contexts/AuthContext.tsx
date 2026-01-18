@@ -13,12 +13,14 @@ import {
   UPDATE_USER_PREFERENCES_MUTATION,
 } from '../pages/auth/queries';
 import { useEmailStore, type SavedUser, type CachedUser } from '../stores/emailStore';
+import { config } from '../config';
 
 // Supabase client configuration
-const supabaseUrl = 'https://ivqyyttllhpwbducgpih.supabase.co';
-const supabaseAnonKey = 'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F';
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(config.supabase.url, config.supabase.anonKey, {
+  auth: {
+    redirectTo: config.supabase.redirectUrl,
+  },
+});
 
 import type { ThemePreference } from '../core/theme';
 

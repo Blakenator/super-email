@@ -6,8 +6,11 @@
 # Required GitHub Secrets:
 #   - AWS_ACCESS_KEY_ID: AWS access key with deployment permissions
 #   - AWS_SECRET_ACCESS_KEY: AWS secret access key
-#   - AWS_REGION: AWS region (e.g., us-east-1)
+#   - AWS_REGION: AWS region (e.g., us-west-1)
 #   - PULUMI_ACCESS_TOKEN: Pulumi access token for state management
+#   - SUPABASE_URL: Supabase project URL
+#   - SUPABASE_ANON_KEY: Supabase anon/public key
+#   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
 
 name: Deploy to AWS
 
@@ -88,6 +91,7 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          GIT_SHA=$(git rev-parse --short HEAD)
           
           # Select or create stack
           pulumi stack select "$ENVIRONMENT" 2>/dev/null || pulumi stack init "$ENVIRONMENT"
@@ -95,6 +99,12 @@ jobs:
           # Set configuration
           pulumi config set environment "$ENVIRONMENT"
           pulumi config set aws:region "${{ secrets.AWS_REGION }}"
+          pulumi config set gitCommitSha "$GIT_SHA"
+          
+          # Set Supabase configuration
+          pulumi config set supabaseUrl "${{ secrets.SUPABASE_URL }}"
+          pulumi config set supabaseAnonKey "${{ secrets.SUPABASE_ANON_KEY }}"
+          pulumi config set --secret supabaseServiceRoleKey "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
           
           # Deploy infrastructure
           pulumi up --yes
@@ -103,6 +113,8 @@ jobs:
           echo "BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl)" >> $GITHUB_ENV
           echo "FRONTEND_BUCKET=$(pulumi stack output frontendBucketName)" >> $GITHUB_ENV
           echo "FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId)" >> $GITHUB_ENV
+          echo "BACKEND_API_URL=$(pulumi stack output backendApiUrl)" >> $GITHUB_ENV
+          echo "FRONTEND_URL=$(pulumi stack output frontendUrl)" >> $GITHUB_ENV
           echo "ECS_CLUSTER=email-client-$ENVIRONMENT-cluster" >> $GITHUB_ENV
           echo "ECS_SERVICE=email-client-$ENVIRONMENT-backend" >> $GITHUB_ENV
 
@@ -130,6 +142,11 @@ jobs:
 
       - name: Build frontend
         working-directory: ./frontend
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VITE_BACKEND_API_URL: ${{ env.BACKEND_API_URL }}/api/graphql
+          VITE_APP_URL: ${{ env.FRONTEND_URL }}
         run: pnpm run build
 
       - name: Deploy frontend to S3
@@ -144,6 +161,13 @@ jobs:
           # Upload index.html with no-cache
           aws s3 cp frontend/dist/index.html "s3://${{ env.FRONTEND_BUCKET }}/index.html" \
             --cache-control "no-cache, no-store, must-revalidate"
+          
+          # Upload any JSON files with no-cache
+          find frontend/dist -name "*.json" -type f | while read json_file; do
+            relative_path="${json_file#frontend/dist/}"
+            aws s3 cp "$json_file" "s3://${{ env.FRONTEND_BUCKET }}/$relative_path" \
+              --cache-control "no-cache"
+          done
 
       - name: Invalidate CloudFront cache
         run: |
