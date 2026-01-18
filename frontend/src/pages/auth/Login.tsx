@@ -3,7 +3,12 @@ import { Container, Form, Button, Alert, Spinner, Card } from 'react-bootstrap';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEnvelope, faWifi, faTimes, faUser } from '@fortawesome/free-solid-svg-icons';
+import {
+  faEnvelope,
+  faWifi,
+  faTimes,
+  faUser,
+} from '@fortawesome/free-solid-svg-icons';
 import { PasswordInput } from '../../core/components/PasswordInput';
 import {
   PageWrapper,
@@ -30,6 +35,7 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showLoginForm, setShowLoginForm] = useState(false);
+  const [isEmailReadOnly, setIsEmailReadOnly] = useState(false);
   const { login, savedUsers, removeSavedUser, isOffline } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -57,6 +63,7 @@ export function Login() {
     setEmail(savedUserEmail);
     setShowLoginForm(true);
     setRememberMe(true);
+    setIsEmailReadOnly(true);
   };
 
   const handleRemoveSavedUser = (e: React.MouseEvent, userId: string) => {
@@ -64,7 +71,11 @@ export function Login() {
     removeSavedUser(userId);
   };
 
-  const getInitials = (firstName?: string | null, lastName?: string | null, email?: string) => {
+  const getInitials = (
+    firstName?: string | null,
+    lastName?: string | null,
+    email?: string,
+  ) => {
     if (firstName && lastName) {
       return `${firstName[0]}${lastName[0]}`.toUpperCase();
     }
@@ -77,7 +88,11 @@ export function Login() {
     return '?';
   };
 
-  const getDisplayName = (firstName?: string | null, lastName?: string | null, email?: string) => {
+  const getDisplayName = (
+    firstName?: string | null,
+    lastName?: string | null,
+    email?: string,
+  ) => {
     if (firstName && lastName) {
       return `${firstName} ${lastName}`;
     }
@@ -100,7 +115,9 @@ export function Login() {
               StacksMail
             </Logo>
             <Tagline>
-              {shouldShowSavedUsers ? 'Choose an account' : 'Sign in to your account'}
+              {shouldShowSavedUsers
+                ? 'Choose an account'
+                : 'Sign in to your account'}
             </Tagline>
 
             {isOffline && (
@@ -130,16 +147,26 @@ export function Login() {
                         onClick={() => handleSavedUserClick(savedUser.email)}
                       >
                         <SavedUserAvatar>
-                          {getInitials(savedUser.firstName, savedUser.lastName, savedUser.email)}
+                          {getInitials(
+                            savedUser.firstName,
+                            savedUser.lastName,
+                            savedUser.email,
+                          )}
                         </SavedUserAvatar>
                         <SavedUserInfo>
                           <SavedUserName>
-                            {getDisplayName(savedUser.firstName, savedUser.lastName, savedUser.email)}
+                            {getDisplayName(
+                              savedUser.firstName,
+                              savedUser.lastName,
+                              savedUser.email,
+                            )}
                           </SavedUserName>
                           <SavedUserEmail>{savedUser.email}</SavedUserEmail>
                         </SavedUserInfo>
                         <SavedUserRemove
-                          onClick={(e) => handleRemoveSavedUser(e, savedUser.id)}
+                          onClick={(e) =>
+                            handleRemoveSavedUser(e, savedUser.id)
+                          }
                           title="Remove from saved accounts"
                         >
                           <FontAwesomeIcon icon={faTimes} />
@@ -154,10 +181,11 @@ export function Login() {
                 </Divider>
 
                 <Button
-                  variant="outline-secondary"
+                  variant="link"
                   size="lg"
                   className="w-100 mb-3"
                   onClick={() => setShowLoginForm(true)}
+                  style={{ textDecoration: 'none' }}
                 >
                   <FontAwesomeIcon icon={faUser} className="me-2" />
                   Use another account
@@ -176,7 +204,9 @@ export function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     required
                     size="lg"
-                    autoFocus={showLoginForm}
+                    autoFocus={showLoginForm && !isEmailReadOnly}
+                    readOnly={isEmailReadOnly}
+                    disabled={isEmailReadOnly}
                   />
                 </Form.Group>
 
@@ -230,6 +260,7 @@ export function Login() {
                       setShowLoginForm(false);
                       setEmail('');
                       setPassword('');
+                      setIsEmailReadOnly(false);
                     }}
                   >
                     ← Back to saved accounts
