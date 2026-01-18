@@ -456,10 +456,18 @@ const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-front
   },
 });
 
+// Get AWS account ID for CloudFront ARN
+const currentAccount = aws.getCallerIdentityOutput({});
+
 // S3 bucket policy to allow CloudFront access
 const frontendBucketPolicy = new aws.s3.BucketPolicy(`${stackName}-frontend-bucket-policy`, {
   bucket: frontendBucket.id,
-  policy: pulumi.all([frontendBucket.arn, frontendDistribution.arn]).apply(([bucketArn, distArn]) =>
+  policy: pulumi.all([
+    frontendBucket.arn,
+    frontendDistribution.id,
+    currentAccount.accountId,
+    currentRegion.name,
+  ]).apply(([bucketArn, distId, accountId, region]) =>
     JSON.stringify({
       Version: '2012-10-17',
       Statement: [
@@ -473,7 +481,7 @@ const frontendBucketPolicy = new aws.s3.BucketPolicy(`${stackName}-frontend-buck
           Resource: `${bucketArn}/*`,
           Condition: {
             StringEquals: {
-              'AWS:SourceArn': distArn,
+              'AWS:SourceArn': `arn:aws:cloudfront::${accountId}:distribution/${distId}`,
             },
           },
         },
