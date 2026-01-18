@@ -374,13 +374,13 @@ const frontendBucket = new aws.s3.BucketV2(`${stackName}-frontend`, {
   },
 });
 
-// Block public access - CloudFront will access via OAC
+// Block public access - but allow CloudFront OAC via bucket policy
 new aws.s3.BucketPublicAccessBlock(`${stackName}-frontend-public-access-block`, {
   bucket: frontendBucket.id,
   blockPublicAcls: true,
-  blockPublicPolicy: true,
+  blockPublicPolicy: false, // Allow bucket policy for CloudFront
   ignorePublicAcls: true,
-  restrictPublicBuckets: true,
+  restrictPublicBuckets: false, // Allow service principal access
 });
 
 // CloudFront Origin Access Control for S3
@@ -684,6 +684,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
       ],
       environment: [
         { name: 'NODE_ENV', value: 'production' },
+        { name: 'LOG_LEVEL', value: 'info' },
         { name: 'DB_HOST', value: dbHost },
         { name: 'DB_PORT', value: String(dbPort) },
         { name: 'DB_NAME', value: 'emailclient' },
@@ -693,6 +694,10 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-t
         { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
         { name: 'AWS_REGION', value: region },
         { name: 'SECRETS_BASE_PATH', value: 'email-client' },
+        // Supabase config - TODO: Move to Secrets Manager in production
+        { name: 'SUPABASE_URL', value: 'https://ivqyyttllhpwbducgpih.supabase.co' },
+        { name: 'SUPABASE_ANON_KEY', value: 'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F' },
+        { name: 'SUPABASE_SERVICE_ROLE_KEY', value: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml2cXl5dHRsbGhwd2JkdWNncGloIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczNzQyMDg5MCwiZXhwIjoyMDUyOTk2ODkwfQ.vBBqCSy-AqAJyPWE0QlZzP1JJHGvJ-_a_P-9l-cZuFo' },
       ],
       logConfiguration: {
         logDriver: 'awslogs',
@@ -793,10 +798,17 @@ const backendService = new aws.ecs.Service(`${stackName}-backend-service`, {
       containerPort: 4000,
     },
   ],
+  healthCheckGracePeriodSeconds: 60, // Give time for DB connection
+  deploymentConfiguration: {
+    minimumHealthyPercent: 50,
+    maximumPercent: 200,
+  },
   tags: {
     Name: `${stackName}-backend-service`,
     Environment: environment,
   },
+}, {
+  dependsOn: [database, ecrApiEndpoint, ecrDkrEndpoint, s3Endpoint, logsEndpoint], // Wait for VPC endpoints and DB
 });
 
 // =============================================================================
