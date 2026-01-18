@@ -183,17 +183,18 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-rds-sg`, {
 // RDS PostgreSQL Database
 // =============================================================================
 
-const dbSubnetGroup = new aws.rds.SubnetGroup(`${stackName}-db-subnet-group`, {
+const dbSubnetGroup = new aws.rds.SubnetGroup(`${stackName}-db-subnet-group-v2`, {
   subnetIds: [publicSubnet1.id, publicSubnet2.id],
   tags: {
-    Name: `${stackName}-db-subnet-group`,
+    Name: `${stackName}-db-subnet-group-v2`,
     Environment: environment,
   },
 });
 
 // Database password in Secrets Manager
 const dbPasswordSecret = new aws.secretsmanager.Secret(`${stackName}-db-password`, {
-  name: `${stackName}/database-password`,
+  // Use namePrefix to avoid conflicts with orphaned secrets
+  namePrefix: `${stackName}-db-password-`,
   description: 'Database password for Email Client',
   recoveryWindowInDays: 0,
   tags: {
@@ -217,8 +218,8 @@ const dbPassword = dbPasswordVersion.secretString.apply(pwd => {
   return pwd;
 });
 
-const database = new aws.rds.Instance(`${stackName}-db`, {
-  identifier: `${stackName}-postgres`,
+const database = new aws.rds.Instance(`${stackName}-db-v2`, {
+  identifier: `${stackName}-postgres-v2`,
   engine: 'postgres',
   engineVersion: '15',
   instanceClass: dbInstanceClass,
@@ -236,7 +237,7 @@ const database = new aws.rds.Instance(`${stackName}-db`, {
   backupRetentionPeriod: 1, // Minimal backups
   deletionProtection: false,
   tags: {
-    Name: `${stackName}-postgres`,
+    Name: `${stackName}-postgres-v2`,
     Environment: environment,
   },
 });
@@ -420,8 +421,12 @@ const instanceProfile = new aws.iam.InstanceProfile(`${stackName}-instance-profi
 // Supabase Service Role Key in Secrets Manager
 // =============================================================================
 
+// Use a unique name with a random suffix to avoid conflicts with orphaned secrets
+const supabaseSecretName = `email-client/${environment}/supabase-key`;
+
 const supabaseServiceSecret = new aws.secretsmanager.Secret(`${stackName}-supabase-key`, {
-  name: `${stackName}/supabase-service-role-key`,
+  // Use namePrefix instead of name to allow Pulumi to manage lifecycle
+  namePrefix: `${stackName}-supabase-`,
   description: 'Supabase Service Role Key',
   recoveryWindowInDays: 0,
   tags: {
