@@ -1,0 +1,18 @@
+{
+  "include": [
+    "queries/**/*.ts",
+    "mutations/**/*.ts",
+    "helpers/**/*.ts",
+    "server.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "test/**/*",
+    "dist/**/*",
+    "node_modules/**/*"
+  ],
+  "reporter": ["text", "html", "lcov"],
+  "report-dir": "./coverage/integration",
+  "all": true,
+  "check-coverage": false
+}

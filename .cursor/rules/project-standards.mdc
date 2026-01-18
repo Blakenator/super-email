@@ -28,6 +28,51 @@ alwaysApply: true
 - Check `config.isProduction` to determine which implementation to use
 - AWS SDK clients should be conditionally initialized (only in production) to avoid local dependency issues
 
+## GraphQL Schema Documentation
+
+- **All GraphQL schema elements MUST have documentation comments** using triple-quoted strings (`"""..."""`)
+- Required documentation for:
+  - Types and input types: describe the entity's purpose
+  - Queries and mutations: describe what the operation does
+  - Fields: describe the field's meaning and any constraints
+  - Scalars: describe the format and validation rules
+  - Enums: describe each enum value's meaning
+- Example:
+  ```graphql
+  """
+  A tag that can be applied to emails for organization.
+  Tags are user-specific and can have custom colors.
+  """
+  type Tag {
+    """
+    Unique identifier for this tag
+    """
+    id: String!
+    """
+    Display name shown in the UI
+    """
+    name: String!
+    """
+    Hex color code (e.g., "#ff0000")
+    """
+    color: String!
+  }
+  ```
+
+## Testing Requirements
+
+- **All new GraphQL queries/mutations MUST have corresponding tests**
+- **All new helper functions in `backend/helpers/` MUST have unit tests**
+- Test file naming conventions:
+  - Unit tests: `*.unit.test.ts` - for pure functions, helpers, utilities
+  - Integration tests: `*.integration.test.ts` - for GraphQL operations, DB interactions
+- Test scripts:
+  - `pnpm test` - run all tests
+  - `pnpm test:unit` - run only unit tests
+  - `pnpm test:integration` - run only integration tests
+- Use the shared test server in `test/integration/server-setup.ts` for integration tests
+- Integration tests share a single server instance across all test files
+
 ## Code Style
 
 - Use TypeScript strict mode
@@ -48,6 +93,7 @@ alwaysApply: true
 - Backend: `backend/mutations/` and `backend/queries/` for GraphQL resolvers
 - Frontend: `frontend/src/pages/` for route components, `frontend/src/components/` for page-specific components
 - Shared types: Use GraphQL schema in `common/schema.graphql` and generate types
+- Tests: `backend/test/helpers/` for unit tests, `backend/test/integration/` for integration tests
 
 ## Environment Configuration
 

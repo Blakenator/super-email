@@ -1,0 +1,8 @@
+{
+  "extension": ["ts"],
+  "spec": "test/**/*.test.ts",
+  "recursive": true,
+  "timeout": 10000,
+  "exit": true,
+  "node-option": ["import=tsx"]
+}

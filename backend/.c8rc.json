@@ -1,0 +1,20 @@
+{
+  "include": [
+    "queries/**/*.ts",
+    "mutations/**/*.ts",
+    "helpers/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "test/**/*",
+    "dist/**/*",
+    "node_modules/**/*"
+  ],
+  "reporter": ["text", "html", "lcov"],
+  "report-dir": "./coverage",
+  "all": true,
+  "check-coverage": false,
+  "lines": 50,
+  "functions": 50,
+  "branches": 50
+}
