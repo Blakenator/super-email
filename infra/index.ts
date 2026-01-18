@@ -381,13 +381,23 @@ const frontendBucket = new aws.s3.BucketV2(`${stackName}-frontend`, {
   },
 });
 
+// Enforce bucket owner for all objects (required for OAC)
+const frontendBucketOwnership = new aws.s3.BucketOwnershipControls(`${stackName}-frontend-ownership`, {
+  bucket: frontendBucket.id,
+  rule: {
+    objectOwnership: 'BucketOwnerEnforced',
+  },
+});
+
 // Block public access - but allow CloudFront OAC via bucket policy
-new aws.s3.BucketPublicAccessBlock(`${stackName}-frontend-public-access-block`, {
+const frontendPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${stackName}-frontend-public-access-block`, {
   bucket: frontendBucket.id,
   blockPublicAcls: true,
   blockPublicPolicy: false, // Allow bucket policy for CloudFront
   ignorePublicAcls: true,
   restrictPublicBuckets: false, // Allow service principal access
+}, {
+  dependsOn: [frontendBucketOwnership],
 });
 
 // CloudFront Origin Access Control for S3
@@ -466,8 +476,7 @@ const frontendBucketPolicy = new aws.s3.BucketPolicy(`${stackName}-frontend-buck
     frontendBucket.arn,
     frontendDistribution.id,
     currentAccount.accountId,
-    currentRegion.name,
-  ]).apply(([bucketArn, distId, accountId, region]) =>
+  ]).apply(([bucketArn, distId, accountId]) =>
     JSON.stringify({
       Version: '2012-10-17',
       Statement: [
@@ -488,6 +497,8 @@ const frontendBucketPolicy = new aws.s3.BucketPolicy(`${stackName}-frontend-buck
       ],
     })
   ),
+}, {
+  dependsOn: [frontendPublicAccessBlock], // Must apply after public access block is configured
 });
 
 // =============================================================================
