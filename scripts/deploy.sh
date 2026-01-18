@@ -176,10 +176,64 @@ deploy_backend() {
     
     cd "$PROJECT_ROOT"
     
-    # Get git commit SHA for versioning
+    # Get git commit SHA for versioning (metadata only, not for change detection)
     GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
     export GIT_COMMIT_SHA="$GIT_SHA"
     log_info "Git commit SHA: $GIT_SHA"
+    
+    # Calculate content hash for backend code (excluding commit SHA)
+    log_info "Calculating backend content hash..."
+    CONTENT_HASH=$(find backend common -type f \( -name "*.ts" -o -name "*.js" -o -name "*.json" -o -name "Dockerfile" \) \
+        -not -path "*/node_modules/*" \
+        -not -path "*/dist/*" \
+        -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1 | cut -c1-12)
+    
+    log_info "Backend content hash: $CONTENT_HASH"
+    
+    # Check if this content hash already exists in ECR
+    log_info "Checking if image with hash $CONTENT_HASH already exists in ECR..."
+    IMAGE_EXISTS=$(aws ecr describe-images \
+        --repository-name "email-client-$ENVIRONMENT-backend" \
+        --image-ids imageTag="content-$CONTENT_HASH" \
+        --region "$AWS_REGION" \
+        2>/dev/null | jq -r '.imageDetails | length' || echo "0")
+    
+    if [ "$IMAGE_EXISTS" != "0" ]; then
+        log_info "✓ Image with hash $CONTENT_HASH already exists in ECR. Skipping build."
+        log_info "Updating ECS service to use existing image..."
+        
+        # Still update the task definition to use this image and update GIT_COMMIT_SHA env var
+        cd "$PROJECT_ROOT/infra"
+        pulumi config set gitCommitSha "$GIT_SHA"
+        export GIT_COMMIT_SHA="$GIT_SHA"
+        pulumi up --yes --target "urn:pulumi:$ENVIRONMENT::email-client-infra::aws:ecs/taskDefinition:TaskDefinition::email-client-$ENVIRONMENT-backend-task" || true
+        
+        # Tag the existing image with latest and git SHA
+        MANIFEST=$(aws ecr batch-get-image \
+            --repository-name "email-client-$ENVIRONMENT-backend" \
+            --image-ids imageTag="content-$CONTENT_HASH" \
+            --region "$AWS_REGION" \
+            --query 'images[0].imageManifest' \
+            --output text)
+        
+        aws ecr put-image \
+            --repository-name "email-client-$ENVIRONMENT-backend" \
+            --image-tag "latest" \
+            --image-manifest "$MANIFEST" \
+            --region "$AWS_REGION" > /dev/null 2>&1 || true
+            
+        aws ecr put-image \
+            --repository-name "email-client-$ENVIRONMENT-backend" \
+            --image-tag "$GIT_SHA" \
+            --image-manifest "$MANIFEST" \
+            --region "$AWS_REGION" > /dev/null 2>&1 || true
+        
+        cd "$PROJECT_ROOT"
+        log_info "Backend deployment complete (reused existing image)."
+        return 0
+    fi
+    
+    log_info "✗ Image not found in ECR. Building new image..."
     
     # Temporarily disable Docker credential helpers to avoid pass/keychain issues
     export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
@@ -202,14 +256,16 @@ deploy_backend() {
     
     # Build the Docker image
     log_info "Building Docker image..."
-    # Clean build cache to avoid conflicts with local node_modules
-    docker build --no-cache -t stacksmail-backend -f backend/Dockerfile .
+    # Use cache for faster builds when possible
+    docker build -t stacksmail-backend -f backend/Dockerfile .
     
-    # Tag and push
+    # Tag with content hash, latest, and git SHA
+    docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:content-$CONTENT_HASH"
     docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:latest"
     docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:$GIT_SHA"
     
     log_info "Pushing Docker image to ECR..."
+    docker push "$BACKEND_REPO_URL:content-$CONTENT_HASH"
     docker push "$BACKEND_REPO_URL:latest"
     docker push "$BACKEND_REPO_URL:$GIT_SHA"
     
@@ -219,21 +275,7 @@ deploy_backend() {
         mv "$DOCKER_CONFIG/config.json.backup" "$DOCKER_CONFIG/config.json"
     fi
     
-    # Force new deployment of ECS service
-    log_info "Updating ECS service..."
-    CLUSTER_NAME="email-client-$ENVIRONMENT-cluster"
-    SERVICE_NAME="email-client-$ENVIRONMENT-backend"
-    
-    # Update the service to use the new image
-    aws ecs update-service \
-        --cluster "$CLUSTER_NAME" \
-        --service "$SERVICE_NAME" \
-        --force-new-deployment \
-        --region "$AWS_REGION" \
-        > /dev/null
-    
-    log_info "ECS service update initiated. Tasks will be replaced with new image."
-    log_info "Backend deployed successfully."
+    log_info "Backend deployed successfully (new image built)."
 }
 
 # Build and deploy frontend to S3 + CloudFront
