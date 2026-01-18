@@ -1,0 +1,15 @@
+{
+  "include": [
+    "helpers/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "test/**/*",
+    "dist/**/*",
+    "node_modules/**/*"
+  ],
+  "reporter": ["text", "html", "lcov"],
+  "report-dir": "./coverage/unit",
+  "all": true,
+  "check-coverage": false
+}
