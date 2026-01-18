@@ -184,9 +184,12 @@ deploy_frontend() {
     aws s3 cp dist/index.html "s3://$FRONTEND_BUCKET/index.html" \
         --cache-control "no-cache, no-store, must-revalidate"
     
-    # Upload any JSON files (manifests, etc.)
-    find dist -name "*.json" -exec aws s3 cp {} "s3://$FRONTEND_BUCKET/{}" \
-        --cache-control "no-cache" \; 2>/dev/null || true
+    # Upload any JSON files (manifests, etc.) with correct relative paths
+    for json_file in $(find dist -name "*.json" -type f 2>/dev/null); do
+        relative_path="${json_file#dist/}"
+        aws s3 cp "$json_file" "s3://$FRONTEND_BUCKET/$relative_path" \
+            --cache-control "no-cache"
+    done
     
     # Invalidate CloudFront cache
     log_info "Invalidating CloudFront cache..."
@@ -200,6 +203,53 @@ deploy_frontend() {
     log_info "Frontend deployed successfully."
 }
 
+# Wait for ECS service to stabilize
+wait_for_backend() {
+    log_info "Waiting for backend service to stabilize..."
+    
+    CLUSTER_NAME="email-client-$ENVIRONMENT-cluster"
+    SERVICE_NAME="email-client-$ENVIRONMENT-backend"
+    
+    # Wait up to 5 minutes for the service to be stable
+    MAX_ATTEMPTS=30
+    ATTEMPT=0
+    
+    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+        ATTEMPT=$((ATTEMPT + 1))
+        
+        # Check if service has running tasks
+        RUNNING_COUNT=$(aws ecs describe-services \
+            --cluster "$CLUSTER_NAME" \
+            --services "$SERVICE_NAME" \
+            --region "$AWS_REGION" \
+            --query 'services[0].runningCount' \
+            --output text 2>/dev/null || echo "0")
+        
+        DESIRED_COUNT=$(aws ecs describe-services \
+            --cluster "$CLUSTER_NAME" \
+            --services "$SERVICE_NAME" \
+            --region "$AWS_REGION" \
+            --query 'services[0].desiredCount' \
+            --output text 2>/dev/null || echo "1")
+        
+        if [ "$RUNNING_COUNT" = "$DESIRED_COUNT" ] && [ "$RUNNING_COUNT" != "0" ]; then
+            log_info "Backend service is running ($RUNNING_COUNT/$DESIRED_COUNT tasks)"
+            
+            # Try to hit the health endpoint
+            if curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/health" | grep -q "200"; then
+                log_info "Backend health check passed!"
+                return 0
+            fi
+        fi
+        
+        log_info "Waiting for backend... (attempt $ATTEMPT/$MAX_ATTEMPTS, running: $RUNNING_COUNT/$DESIRED_COUNT)"
+        sleep 10
+    done
+    
+    log_warn "Backend service did not stabilize within timeout. Check ECS logs for issues."
+    log_warn "You can view logs at: https://${AWS_REGION}.console.aws.amazon.com/cloudwatch/home?region=${AWS_REGION}#logsV2:log-groups/log-group/\$252Fecs\$252Femail-client-${ENVIRONMENT}\$252Fbackend"
+}
+
 # Main deployment flow
 main() {
     check_prereqs
@@ -207,6 +257,7 @@ main() {
     deploy_infrastructure
     deploy_backend
     deploy_frontend
+    wait_for_backend
     
     echo ""
     echo "=============================================="
@@ -216,8 +267,8 @@ main() {
     echo "  Frontend URL: $FRONTEND_URL"
     echo "  Backend API:  $BACKEND_API_URL"
     echo ""
-    echo "  Note: It may take a few minutes for the ECS"
-    echo "  service to fully deploy the new containers."
+    echo "  Note: CloudFront may take a few minutes to"
+    echo "  propagate. If you see errors, wait and retry."
     echo "=============================================="
 }
 

@@ -9,6 +9,9 @@ const dbInstanceClass = config.get('dbInstanceClass') || 'db.t3.micro';
 
 const stackName = `email-client-${environment}`;
 
+// Get current AWS region (needed early for VPC endpoints)
+const currentRegion = aws.getRegionOutput({});
+
 // =============================================================================
 // VPC and Networking
 // =============================================================================
@@ -18,8 +21,120 @@ const vpc = new awsx.ec2.Vpc(`${stackName}-vpc`, {
   numberOfAvailabilityZones: 2,
   enableDnsHostnames: true,
   enableDnsSupport: true,
+  natGateways: {
+    strategy: environment === 'prod' ? 'OnePerAz' : 'Single', // NAT Gateway for private subnet internet access
+  },
   tags: {
     Name: `${stackName}-vpc`,
+    Environment: environment,
+  },
+});
+
+// =============================================================================
+// VPC Endpoints for ECR and S3 (allows Fargate to pull images without NAT)
+// =============================================================================
+
+// Security group for VPC endpoints
+const vpcEndpointSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-vpce-sg`, {
+  vpcId: vpc.vpcId,
+  description: 'Security group for VPC endpoints',
+  ingress: [
+    {
+      description: 'HTTPS from VPC',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      cidrBlocks: ['10.0.0.0/16'],
+    },
+  ],
+  egress: [
+    {
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+    },
+  ],
+  tags: {
+    Name: `${stackName}-vpce-sg`,
+    Environment: environment,
+  },
+});
+
+// Get private subnet route tables for S3 gateway endpoint
+const privateRouteTables = vpc.privateSubnetIds.apply(async (subnetIds) => {
+  const routeTableIds: string[] = [];
+  for (const subnetId of subnetIds) {
+    const rt = await aws.ec2.getRouteTable({ subnetId });
+    routeTableIds.push(rt.routeTableId);
+  }
+  return routeTableIds;
+});
+
+// S3 Gateway endpoint (free, for pulling container layers)
+const s3Endpoint = new aws.ec2.VpcEndpoint(`${stackName}-s3-endpoint`, {
+  vpcId: vpc.vpcId,
+  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.s3`,
+  vpcEndpointType: 'Gateway',
+  routeTableIds: privateRouteTables,
+  tags: {
+    Name: `${stackName}-s3-endpoint`,
+    Environment: environment,
+  },
+});
+
+// ECR API endpoint (for docker login, manifest fetching)
+const ecrApiEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-ecr-api-endpoint`, {
+  vpcId: vpc.vpcId,
+  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.ecr.api`,
+  vpcEndpointType: 'Interface',
+  subnetIds: vpc.privateSubnetIds,
+  securityGroupIds: [vpcEndpointSecurityGroup.id],
+  privateDnsEnabled: true,
+  tags: {
+    Name: `${stackName}-ecr-api-endpoint`,
+    Environment: environment,
+  },
+});
+
+// ECR Docker endpoint (for pulling layers)
+const ecrDkrEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-ecr-dkr-endpoint`, {
+  vpcId: vpc.vpcId,
+  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.ecr.dkr`,
+  vpcEndpointType: 'Interface',
+  subnetIds: vpc.privateSubnetIds,
+  securityGroupIds: [vpcEndpointSecurityGroup.id],
+  privateDnsEnabled: true,
+  tags: {
+    Name: `${stackName}-ecr-dkr-endpoint`,
+    Environment: environment,
+  },
+});
+
+// CloudWatch Logs endpoint (for sending logs)
+const logsEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-logs-endpoint`, {
+  vpcId: vpc.vpcId,
+  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.logs`,
+  vpcEndpointType: 'Interface',
+  subnetIds: vpc.privateSubnetIds,
+  securityGroupIds: [vpcEndpointSecurityGroup.id],
+  privateDnsEnabled: true,
+  tags: {
+    Name: `${stackName}-logs-endpoint`,
+    Environment: environment,
+  },
+});
+
+// Secrets Manager endpoint (for fetching secrets)
+const secretsEndpoint = new aws.ec2.VpcEndpoint(`${stackName}-secrets-endpoint`, {
+  vpcId: vpc.vpcId,
+  serviceName: pulumi.interpolate`com.amazonaws.${currentRegion.name}.secretsmanager`,
+  vpcEndpointType: 'Interface',
+  subnetIds: vpc.privateSubnetIds,
+  securityGroupIds: [vpcEndpointSecurityGroup.id],
+  privateDnsEnabled: true,
+  tags: {
+    Name: `${stackName}-secrets-endpoint`,
     Environment: environment,
   },
 });
@@ -535,9 +650,6 @@ const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`,
     Environment: environment,
   },
 });
-
-// Get current AWS region
-const currentRegion = aws.getRegionOutput({});
 
 // Backend Task Definition
 const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-task`, {
