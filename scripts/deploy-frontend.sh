@@ -22,17 +22,46 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 log_info "Deploying frontend for environment: $ENVIRONMENT"
 
+# Validate required environment variables
+if [ -z "$BACKEND_API_URL" ]; then
+    log_error "BACKEND_API_URL is not set. Cannot deploy frontend without backend URL."
+    exit 1
+fi
+
+if [ -z "$FRONTEND_URL" ]; then
+    log_error "FRONTEND_URL is not set. Cannot deploy frontend."
+    exit 1
+fi
+
+if [ -z "$SUPABASE_URL" ]; then
+    log_error "SUPABASE_URL is not set. Cannot deploy frontend."
+    exit 1
+fi
+
+if [ -z "$FRONTEND_BUCKET" ]; then
+    log_error "FRONTEND_BUCKET is not set. Cannot deploy frontend."
+    exit 1
+fi
+
 cd "$PROJECT_ROOT/frontend"
 
 # Set environment variables for Vite build
+# IMPORTANT: Store just the base backend URL, paths are constructed in the frontend
 export VITE_SUPABASE_URL="$SUPABASE_URL"
 export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-export VITE_BACKEND_API_URL="${BACKEND_API_URL}/api/graphql"
+export VITE_BACKEND_URL="${BACKEND_API_URL}/api"
 export VITE_APP_URL="$FRONTEND_URL"
 
 log_info "Building frontend with production config..."
 log_info "  Frontend URL: $FRONTEND_URL"
-log_info "  Backend API URL: $BACKEND_API_URL"
+log_info "  Backend Base URL: ${BACKEND_API_URL}/api"
+
+# Verify that VITE_BACKEND_URL is an absolute URL
+if [[ ! "$VITE_BACKEND_URL" =~ ^https?:// ]]; then
+    log_error "VITE_BACKEND_URL must be an absolute URL (http:// or https://)"
+    log_error "Got: $VITE_BACKEND_URL"
+    exit 1
+fi
 
 pnpm run build
 

@@ -6,7 +6,7 @@
 // Use import.meta.env for Vite environment variables
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://ivqyyttllhpwbducgpih.supabase.co';
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F';
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || '/api/graphql';
+const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_URL || '/api';
 const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
 
 export const config = {
@@ -16,8 +16,10 @@ export const config = {
     redirectUrl: `${APP_URL}/auth/callback`,
   },
   api: {
-    graphqlUrl: BACKEND_API_URL,
-    wsUrl: BACKEND_API_URL.replace('http://', 'ws://').replace('https://', 'wss://'),
+    baseUrl: BACKEND_BASE_URL,
+    graphqlUrl: `${BACKEND_BASE_URL}/graphql`,
+    wsUrl: `${BACKEND_BASE_URL}/graphql`.replace('http://', 'ws://').replace('https://', 'wss://'),
+    attachmentsUrl: `${BACKEND_BASE_URL}/attachments`,
   },
   app: {
     url: APP_URL,

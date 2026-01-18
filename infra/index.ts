@@ -375,8 +375,9 @@ new aws.s3.BucketCorsConfigurationV2(`${stackName}-attachments-cors`, {
 });
 
 // =============================================================================
-// S3 Bucket for Frontend Static Files + CloudFront CDN
+// S3 Bucket for Frontend Static Files
 // =============================================================================
+// Note: CloudFront distribution is created later (after ALB) so it can proxy API requests
 
 const frontendBucket = new aws.s3.BucketV2(`${stackName}-frontend`, {
   bucket: `${stackName}-frontend`,
@@ -393,69 +394,6 @@ const frontendPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${stackNam
   blockPublicPolicy: false,
   ignorePublicAcls: false,
   restrictPublicBuckets: false,
-});
-
-// CloudFront distribution for frontend
-const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-frontend-cdn`, {
-  enabled: true,
-  isIpv6Enabled: true,
-  defaultRootObject: 'index.html',
-  httpVersion: 'http2and3',
-  priceClass: 'PriceClass_100', // US, Canada, Europe
-
-  origins: [
-    {
-      domainName: frontendBucket.bucketRegionalDomainName,
-      originId: 'S3Origin',
-      // Use S3 website endpoint for public access (no OAC)
-      customOriginConfig: {
-        httpPort: 80,
-        httpsPort: 443,
-        originProtocolPolicy: 'http-only',
-        originSslProtocols: ['TLSv1.2'],
-      },
-    },
-  ],
-
-  defaultCacheBehavior: {
-    targetOriginId: 'S3Origin',
-    viewerProtocolPolicy: 'redirect-to-https',
-    allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
-    cachedMethods: ['GET', 'HEAD'],
-    compress: true,
-    cachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6', // CachingOptimized
-  },
-
-  // SPA routing - return index.html for 404s (client-side routing)
-  customErrorResponses: [
-    {
-      errorCode: 404,
-      responseCode: 200,
-      responsePagePath: '/index.html',
-      errorCachingMinTtl: 0,
-    },
-    {
-      errorCode: 403,
-      responseCode: 200,
-      responsePagePath: '/index.html',
-      errorCachingMinTtl: 0,
-    },
-  ],
-
-  restrictions: {
-    geoRestriction: {
-      restrictionType: 'none',
-    },
-  },
-
-  viewerCertificate: {
-    cloudfrontDefaultCertificate: true,
-  },
-
-  tags: {
-    Name: `${stackName}-frontend-cdn`,
-    Environment: environment,
-  },
 });
 
 // Get AWS account ID for bucket policy
@@ -836,11 +774,121 @@ const backendService = new aws.ecs.Service(`${stackName}-backend-service`, {
 });
 
 // =============================================================================
+// CloudFront CDN for Frontend + Backend API Proxy
+// =============================================================================
+
+// CloudFront distribution - serves frontend from S3 and proxies /api/* to ALB
+const frontendDistribution = new aws.cloudfront.Distribution(`${stackName}-frontend-cdn`, {
+  enabled: true,
+  isIpv6Enabled: true,
+  defaultRootObject: 'index.html',
+  httpVersion: 'http2and3',
+  priceClass: 'PriceClass_100', // US, Canada, Europe
+
+  origins: [
+    {
+      domainName: frontendBucket.bucketRegionalDomainName,
+      originId: 'S3Origin',
+      // Use S3 website endpoint for public access (no OAC)
+      customOriginConfig: {
+        httpPort: 80,
+        httpsPort: 443,
+        originProtocolPolicy: 'http-only',
+        originSslProtocols: ['TLSv1.2'],
+      },
+    },
+    {
+      // Backend API origin - CloudFront proxies /api/* to backend ALB
+      domainName: alb.dnsName,
+      originId: 'BackendAPIOrigin',
+      customOriginConfig: {
+        httpPort: 80,
+        httpsPort: 443,
+        originProtocolPolicy: 'http-only', // ALB is HTTP only
+        originSslProtocols: ['TLSv1.2'],
+        originReadTimeout: 60,
+        originKeepaliveTimeout: 5,
+      },
+      customHeaders: [
+        {
+          name: 'X-Forwarded-Proto',
+          value: 'https',
+        },
+      ],
+    },
+  ],
+
+  defaultCacheBehavior: {
+    targetOriginId: 'S3Origin',
+    viewerProtocolPolicy: 'redirect-to-https',
+    allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
+    cachedMethods: ['GET', 'HEAD'],
+    compress: true,
+    cachePolicyId: '658327ea-f89d-4fab-a63d-7e88639e58f6', // CachingOptimized
+  },
+
+  // Cache behavior for API requests - no caching, forward everything
+  orderedCacheBehaviors: [
+    {
+      pathPattern: '/api/*',
+      targetOriginId: 'BackendAPIOrigin',
+      viewerProtocolPolicy: 'https-only', // Force HTTPS for API
+      allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+      cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
+      compress: false, // Don't compress API responses
+      
+      // Use Managed-AllViewerExceptHostHeader cache policy for API (no caching)
+      cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
+      
+      // Use Managed-AllViewerExceptHostHeader origin request policy
+      originRequestPolicyId: 'b689b0a8-53d0-40ab-baf2-68738e2966ac',
+    },
+  ],
+
+  // SPA routing - return index.html for 404s (client-side routing)
+  customErrorResponses: [
+    {
+      errorCode: 404,
+      responseCode: 200,
+      responsePagePath: '/index.html',
+      errorCachingMinTtl: 0,
+    },
+    {
+      errorCode: 403,
+      responseCode: 200,
+      responsePagePath: '/index.html',
+      errorCachingMinTtl: 0,
+    },
+  ],
+
+  restrictions: {
+    geoRestriction: {
+      restrictionType: 'none',
+    },
+  },
+
+  viewerCertificate: {
+    cloudfrontDefaultCertificate: true,
+  },
+
+  tags: {
+    Name: `${stackName}-frontend-cdn`,
+    Environment: environment,
+  },
+}, {
+  dependsOn: [alb, frontendBucketPolicy], // Wait for ALB and S3 bucket setup
+});
+
+// =============================================================================
+// Outputs
+// =============================================================================
+
+// =============================================================================
 // Outputs
 // =============================================================================
 
 export const vpcId = vpc.vpcId;
-export const backendApiUrl = pulumi.interpolate`http://${alb.dnsName}`;
+export const backendApiUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`; // Backend API is proxied through CloudFront
 export const frontendUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`;
 export const frontendBucketName = frontendBucket.bucket;
 export const frontendDistributionId = frontendDistribution.id;

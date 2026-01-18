@@ -13,6 +13,7 @@ import {
 } from './queries';
 import { useNavigate } from 'react-router';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { config } from '../../config';
 import {
   faReply,
   faTrash,
@@ -136,7 +137,7 @@ export function EmailView({
       }
 
       // Fetch download URL from GraphQL
-      const response = await fetch('/api/graphql', {
+      const response = await fetch(config.api.graphqlUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
