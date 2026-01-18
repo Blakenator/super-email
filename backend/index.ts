@@ -464,30 +464,29 @@ app.get('/health', (_req, res) => {
 app.get('/api/attachments/download/:id', async (req, res) => {
   try {
     const attachmentId = req.params.id;
-    logger.info('[Attachment] Download request', {
+    logger.info('Attachment', 'Download request', {
       attachmentId,
       hasAuth: !!req.headers.authorization,
     });
 
     const token = req.headers.authorization?.replace('Bearer ', '') ?? '';
     if (!token) {
-      logger.warn('[Attachment] No auth token provided');
+      logger.warn('Attachment', 'No auth token provided');
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
     const payload = await verifyToken(token);
     if (!payload?.userId) {
-      logger.warn('[Attachment] Invalid token');
+      logger.warn('Attachment', 'Invalid token');
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    logger.info('[Attachment] Token verified', {
+    logger.info('Attachment', 'Token verified', {
       userId: payload.userId,
       attachmentId,
     });
 
     // Verify user has access to this attachment by looking it up by ID
-    // @ts-expect-error - Sequelize-TypeScript typing issue with findByPk
     const attachment = await Attachment.findByPk(attachmentId, {
       include: [
         {

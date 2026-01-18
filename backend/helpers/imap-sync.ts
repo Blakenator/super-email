@@ -672,8 +672,6 @@ async function processEmailAttachments(
 
   // Bulk create successfully uploaded attachments
   if (attachmentsToCreate.length > 0) {
-    // TypeScript doesn't recognize Sequelize model static methods from base Model class
-    // @ts-expect-error - bulkCreate exists on all Sequelize models
     await Attachment.bulkCreate(attachmentsToCreate);
     console.log(
       `[IMAP] Saved ${attachmentsToCreate.length} attachments for email ${emailId}`,

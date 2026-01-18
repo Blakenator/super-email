@@ -8,8 +8,6 @@ export const getAttachment = makeQuery(
   async (_parent, { id }, context) => {
     const userId = requireAuth(context);
 
-    // TypeScript doesn't recognize Sequelize model static methods from base Model class
-    // @ts-expect-error - findOne exists on all Sequelize models
     const attachment = await Attachment.findOne({
       where: { id },
       include: [

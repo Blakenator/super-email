@@ -21,7 +21,7 @@ async function ensureLocalDirectory() {
   try {
     await fs.mkdir(LOCAL_ATTACHMENTS_DIR, { recursive: true });
   } catch (error) {
-    logger.error('Failed to create attachments directory', { error });
+    logger.error('AttachmentStorage', 'Failed to create attachments directory', { error });
     throw error;
   }
 }
@@ -89,7 +89,7 @@ async function uploadToS3(
   });
 
   await s3Client.send(command);
-  logger.info('Uploaded attachment to S3', { key, size });
+  logger.info('AttachmentStorage', 'Uploaded attachment to S3', { key, size });
 
   return { storageKey: key, size };
 }
@@ -109,7 +109,7 @@ async function uploadToLocalDisk(
   await pipeline(stream, writeStream);
 
   const stats = await fs.stat(filePath);
-  logger.info('Uploaded attachment to local disk', { key, size: stats.size });
+  logger.info('AttachmentStorage', 'Uploaded attachment to local disk', { key, size: stats.size });
 
   return { storageKey: key, size: stats.size };
 }
@@ -184,10 +184,10 @@ export async function deleteAttachment(attachmentId: string): Promise<void> {
       Key: attachmentId,
     });
     await s3Client.send(command);
-    logger.info('Deleted attachment from S3', { key: attachmentId });
+    logger.info('AttachmentStorage', 'Deleted attachment from S3', { key: attachmentId });
   } else {
     const filePath = getLocalAttachmentPath(attachmentId);
     await fs.unlink(filePath);
-    logger.info('Deleted attachment from local disk', { key: attachmentId });
+    logger.info('AttachmentStorage', 'Deleted attachment from local disk', { key: attachmentId });
   }
 }
