@@ -95,14 +95,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Throttle profile fetches - don't fetch more than once per minute unless forced
       const now = Date.now();
       if (!force && now - lastProfileFetchRef.current < PROFILE_FETCH_INTERVAL_MS) {
-        console.log('Profile fetch throttled - too soon since last fetch');
         return null;
       }
 
       // Skip network fetch if offline (unless forced)
       const currentIsOnline = useEmailStore.getState().isOnline;
       if (!force && !currentIsOnline) {
-        console.log('Skipping profile fetch - offline');
         const currentCachedUser = useEmailStore.getState().cachedUser;
         if (currentCachedUser) {
           return currentCachedUser;
@@ -154,9 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
           setCachedUser(cachedUserData);
 
-          // Save user for "Remember Me" feature if requested
+          // Update saved user with full profile data if rememberMe was requested
           if (rememberMe) {
-            addSavedUser({
+            useEmailStore.getState().addSavedUser({
               id: userData.id,
               email: userData.email,
               firstName: userData.firstName,
@@ -171,7 +169,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.error('Error fetching profile:', error);
         // If offline and we have cached user data, use that
         if (!isOnline && cachedUser) {
-          console.log('Using cached user data for offline mode');
           setUser({
             id: cachedUser.id,
             email: cachedUser.email,
@@ -305,8 +302,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setToken(session.access_token);
-        // Fetch profile from backend to ensure user exists in our DB (force on auth change)
-        await fetchProfileFromBackend(session.access_token, false, true);
+        
+        // Don't fetch profile for SIGNED_IN events - the login function handles that
+        // This prevents race conditions where rememberMe flag gets lost
+        if (event !== 'SIGNED_IN') {
+          // Fetch profile from backend to ensure user exists in our DB (force on auth change)
+          await fetchProfileFromBackend(session.access_token, false, true);
+        }
 
         // Check for redirect path in URL after OAuth login
         if (event === 'SIGNED_IN') {
@@ -373,8 +375,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.session) {
         setToken(data.session.access_token);
+        
+        // If rememberMe is true, save the user info immediately
+        // Do this BEFORE fetching profile to avoid race conditions with navigation
+        if (rememberMe && data.session.user.email) {
+          useEmailStore.getState().addSavedUser({
+            id: data.session.user.id,
+            email: data.session.user.email,
+            firstName: data.session.user.user_metadata?.firstName || null,
+            lastName: data.session.user.user_metadata?.lastName || null,
+            lastLoginAt: new Date().toISOString(),
+          });
+        }
+        
         // Fetch profile from backend to ensure user/auth method exists
-        await fetchProfileFromBackend(data.session.access_token, rememberMe);
+        await fetchProfileFromBackend(data.session.access_token, rememberMe, true);
       }
     },
     [fetchProfileFromBackend],
