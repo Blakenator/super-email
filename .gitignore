@@ -249,3 +249,5 @@ options
 
 # Local data directory (attachments, secrets, etc.)
 data/
+.deploy-outputs
+.backend-image-tag

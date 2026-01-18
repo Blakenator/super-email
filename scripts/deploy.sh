@@ -4,14 +4,15 @@ set -e
 # ============================================================================
 # StacksMail Deploy Script
 # ============================================================================
-# This script builds and deploys the application to AWS.
+# This script orchestrates the full deployment to AWS by calling shared
+# deployment scripts that are also used by GitHub Actions.
 # 
 # Prerequisites:
 #   - AWS CLI configured with appropriate credentials
 #   - Docker installed and running
 #   - Pulumi CLI installed and logged in
 #   - pnpm installed
-#   - .env file with required credentials (see .env.example)
+#   - .env file with required credentials (see .env.template)
 #
 # Usage:
 #   ./scripts/deploy.sh [environment]
@@ -23,36 +24,21 @@ ENVIRONMENT="${1:-dev}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
+# Load common functions
+source "$SCRIPT_DIR/common.sh"
+
 # Load environment variables from .env file if it exists
 if [ -f "$PROJECT_ROOT/.env" ]; then
-    echo "Loading environment variables from .env file..."
+    log_info "Loading environment variables from .env file..."
     export $(grep -v '^#' "$PROJECT_ROOT/.env" | xargs)
 else
-    echo "Warning: .env file not found. Using environment variables or defaults."
-    echo "Create a .env file from .env.example for production deployments."
+    log_warn ".env file not found. Using environment variables or defaults."
+    log_warn "Create a .env file from .env.template for production deployments."
 fi
 
 echo "=============================================="
 echo "  StacksMail Deploy - Environment: $ENVIRONMENT"
 echo "=============================================="
-
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
 
 # Check prerequisites
 check_prereqs() {
@@ -113,43 +99,12 @@ get_aws_info() {
 
 # Deploy infrastructure with Pulumi
 deploy_infrastructure() {
-    log_info "Deploying infrastructure with Pulumi..."
+    "$SCRIPT_DIR/deploy-infrastructure.sh" "$ENVIRONMENT"
     
-    cd "$PROJECT_ROOT/infra"
-    
-    # Ensure GIT_COMMIT_SHA is set
-    if [ -z "$GIT_COMMIT_SHA" ]; then
-        GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-        export GIT_COMMIT_SHA="$GIT_SHA"
+    # Load outputs
+    if [ -f "$PROJECT_ROOT/.deploy-outputs" ]; then
+        source "$PROJECT_ROOT/.deploy-outputs"
     fi
-    log_info "Deploying with Git SHA: $GIT_COMMIT_SHA"
-    
-    # Select or create the stack
-    pulumi stack select "$ENVIRONMENT" 2>/dev/null || pulumi stack init "$ENVIRONMENT"
-    
-    # Set the environment config
-    pulumi config set environment "$ENVIRONMENT"
-    pulumi config set aws:region "$AWS_REGION"
-    pulumi config set gitCommitSha "$GIT_COMMIT_SHA"
-    
-    # Set Supabase configuration from environment variables
-    pulumi config set supabaseUrl "$SUPABASE_URL"
-    pulumi config set supabaseAnonKey "$SUPABASE_ANON_KEY"
-    pulumi config set --secret supabaseServiceRoleKey "$SUPABASE_SERVICE_ROLE_KEY"
-    
-    # Deploy
-    pulumi up --yes
-    
-    # Get outputs
-    export BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl)
-    export FRONTEND_BUCKET=$(pulumi stack output frontendBucketName)
-    export FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId)
-    export BACKEND_API_URL=$(pulumi stack output backendApiUrl)
-    export FRONTEND_URL=$(pulumi stack output frontendUrl)
-    
-    log_info "Infrastructure deployed successfully."
-    
-    cd "$PROJECT_ROOT"
 }
 
 # Get infrastructure outputs without deploying
@@ -188,69 +143,6 @@ get_infrastructure_outputs() {
 
 # Build and push backend Docker image
 deploy_backend() {
-    log_info "Building and deploying backend..."
-    
-    cd "$PROJECT_ROOT"
-    
-    # Get git commit SHA for versioning (metadata only, not for change detection)
-    GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-    export GIT_COMMIT_SHA="$GIT_SHA"
-    log_info "Git commit SHA: $GIT_SHA"
-    
-    # Calculate content hash for backend code (excluding commit SHA)
-    log_info "Calculating backend content hash..."
-    CONTENT_HASH=$(find backend common -type f \( -name "*.ts" -o -name "*.js" -o -name "*.json" -o -name "Dockerfile" \) \
-        -not -path "*/node_modules/*" \
-        -not -path "*/dist/*" \
-        -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1 | cut -c1-12)
-    
-    log_info "Backend content hash: $CONTENT_HASH"
-    
-    # Check if this content hash already exists in ECR
-    log_info "Checking if image with hash $CONTENT_HASH already exists in ECR..."
-    IMAGE_EXISTS=$(aws ecr describe-images \
-        --repository-name "email-client-$ENVIRONMENT-backend" \
-        --image-ids imageTag="content-$CONTENT_HASH" \
-        --region "$AWS_REGION" \
-        2>/dev/null | jq -r '.imageDetails | length' || echo "0")
-    
-    if [ "$IMAGE_EXISTS" != "0" ]; then
-        log_info "✓ Image with hash $CONTENT_HASH already exists in ECR. Skipping build."
-        log_info "Updating ECS service to use existing image..."
-        
-        # Still update the task definition to use this image and update GIT_COMMIT_SHA env var
-        cd "$PROJECT_ROOT/infra"
-        pulumi config set gitCommitSha "$GIT_SHA"
-        export GIT_COMMIT_SHA="$GIT_SHA"
-        pulumi up --yes --target "urn:pulumi:$ENVIRONMENT::email-client-infra::aws:ecs/taskDefinition:TaskDefinition::email-client-$ENVIRONMENT-backend-task" || true
-        
-        # Tag the existing image with latest and git SHA
-        MANIFEST=$(aws ecr batch-get-image \
-            --repository-name "email-client-$ENVIRONMENT-backend" \
-            --image-ids imageTag="content-$CONTENT_HASH" \
-            --region "$AWS_REGION" \
-            --query 'images[0].imageManifest' \
-            --output text)
-        
-        aws ecr put-image \
-            --repository-name "email-client-$ENVIRONMENT-backend" \
-            --image-tag "latest" \
-            --image-manifest "$MANIFEST" \
-            --region "$AWS_REGION" > /dev/null 2>&1 || true
-            
-        aws ecr put-image \
-            --repository-name "email-client-$ENVIRONMENT-backend" \
-            --image-tag "$GIT_SHA" \
-            --image-manifest "$MANIFEST" \
-            --region "$AWS_REGION" > /dev/null 2>&1 || true
-        
-        cd "$PROJECT_ROOT"
-        log_info "Backend deployment complete (reused existing image)."
-        return 0
-    fi
-    
-    log_info "✗ Image not found in ECR. Building new image..."
-    
     # Temporarily disable Docker credential helpers to avoid pass/keychain issues
     export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}"
     mkdir -p "$DOCKER_CONFIG"
@@ -270,92 +162,27 @@ deploy_backend() {
     # Store ECR registry for cleanup
     ECR_REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
     
-    # Build the Docker image
-    log_info "Building Docker image..."
-    # Use cache for faster builds when possible
-    docker build -t stacksmail-backend -f backend/Dockerfile .
-    
-    # Tag with content hash, latest, and git SHA
-    docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:content-$CONTENT_HASH"
-    docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:latest"
-    docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:$GIT_SHA"
-    
-    log_info "Pushing Docker image to ECR..."
-    docker push "$BACKEND_REPO_URL:content-$CONTENT_HASH"
-    docker push "$BACKEND_REPO_URL:latest"
-    docker push "$BACKEND_REPO_URL:$GIT_SHA"
+    # Call shared deployment script
+    "$SCRIPT_DIR/deploy-backend.sh" "$ENVIRONMENT"
     
     # Logout from ECR and restore Docker config
     docker logout "$ECR_REGISTRY" > /dev/null 2>&1 || true
     if [ -f "$DOCKER_CONFIG/config.json.backup" ]; then
         mv "$DOCKER_CONFIG/config.json.backup" "$DOCKER_CONFIG/config.json"
     fi
-    
-    log_info "Backend deployed successfully (new image built)."
 }
 
 # Build and deploy frontend to S3 + CloudFront
 deploy_frontend() {
-    log_info "Building and deploying frontend..."
-    
-    cd "$PROJECT_ROOT"
-    
     # Install dependencies if needed
-    if [ ! -d "node_modules" ]; then
+    if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
         log_info "Installing dependencies..."
+        cd "$PROJECT_ROOT"
         pnpm install
     fi
     
-    # Get infrastructure outputs for environment variables
-    cd "$PROJECT_ROOT/infra"
-    FRONTEND_URL=$(pulumi stack output frontendUrl 2>/dev/null || echo "")
-    BACKEND_API_URL=$(pulumi stack output backendApiUrl 2>/dev/null || echo "")
-    cd "$PROJECT_ROOT"
-    
-    # Build frontend with environment variables
-    log_info "Building frontend with production config..."
-    cd frontend
-    
-    # Set environment variables for Vite build
-    export VITE_SUPABASE_URL="$SUPABASE_URL"
-    export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-    export VITE_BACKEND_API_URL="${BACKEND_API_URL}/api/graphql"
-    export VITE_APP_URL="$FRONTEND_URL"
-    
-    log_info "Frontend URL: $FRONTEND_URL"
-    log_info "Backend API URL: $BACKEND_API_URL"
-    
-    pnpm run build
-    
-    # Sync to S3
-    log_info "Uploading to S3..."
-    aws s3 sync dist/ "s3://$FRONTEND_BUCKET/" \
-        --delete \
-        --cache-control "public, max-age=31536000, immutable" \
-        --exclude "index.html" \
-        --exclude "*.json"
-    
-    # Upload HTML and JSON files with no-cache
-    aws s3 cp dist/index.html "s3://$FRONTEND_BUCKET/index.html" \
-        --cache-control "no-cache, no-store, must-revalidate"
-    
-    # Upload any JSON files (manifests, etc.) with correct relative paths
-    for json_file in $(find dist -name "*.json" -type f 2>/dev/null); do
-        relative_path="${json_file#dist/}"
-        aws s3 cp "$json_file" "s3://$FRONTEND_BUCKET/$relative_path" \
-            --cache-control "no-cache"
-    done
-    
-    # Invalidate CloudFront cache
-    log_info "Invalidating CloudFront cache..."
-    aws cloudfront create-invalidation \
-        --distribution-id "$FRONTEND_DISTRIBUTION_ID" \
-        --paths "/*" \
-        > /dev/null
-    
-    cd "$PROJECT_ROOT"
-    
-    log_info "Frontend deployed successfully."
+    # Call shared deployment script
+    "$SCRIPT_DIR/deploy-frontend.sh" "$ENVIRONMENT"
 }
 
 # Wait for ECS service to stabilize

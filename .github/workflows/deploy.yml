@@ -85,36 +85,28 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Get AWS Account ID
+        id: get-account-id
+        run: echo "account_id=$(aws sts get-caller-identity --query Account --output text)" >> $GITHUB_OUTPUT
+
       - name: Deploy Infrastructure
-        working-directory: ./infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
-          GIT_SHA=$(git rev-parse --short HEAD)
+          ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"
           
-          # Select or create stack
-          pulumi stack select "$ENVIRONMENT" 2>/dev/null || pulumi stack init "$ENVIRONMENT"
-          
-          # Set configuration
-          pulumi config set environment "$ENVIRONMENT"
-          pulumi config set aws:region "${{ secrets.AWS_REGION }}"
-          pulumi config set gitCommitSha "$GIT_SHA"
-          
-          # Set Supabase configuration
-          pulumi config set supabaseUrl "${{ secrets.SUPABASE_URL }}"
-          pulumi config set supabaseAnonKey "${{ secrets.SUPABASE_ANON_KEY }}"
-          pulumi config set --secret supabaseServiceRoleKey "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-          
-          # Deploy infrastructure
-          pulumi up --yes
-          
-          # Export outputs for later steps
-          echo "BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl)" >> $GITHUB_ENV
-          echo "FRONTEND_BUCKET=$(pulumi stack output frontendBucketName)" >> $GITHUB_ENV
-          echo "FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId)" >> $GITHUB_ENV
-          echo "BACKEND_API_URL=$(pulumi stack output backendApiUrl)" >> $GITHUB_ENV
-          echo "FRONTEND_URL=$(pulumi stack output frontendUrl)" >> $GITHUB_ENV
+          # Load outputs for subsequent steps
+          source .deploy-outputs
+          echo "BACKEND_REPO_URL=$BACKEND_REPO_URL" >> $GITHUB_ENV
+          echo "FRONTEND_BUCKET=$FRONTEND_BUCKET" >> $GITHUB_ENV
+          echo "FRONTEND_DISTRIBUTION_ID=$FRONTEND_DISTRIBUTION_ID" >> $GITHUB_ENV
+          echo "BACKEND_API_URL=$BACKEND_API_URL" >> $GITHUB_ENV
+          echo "FRONTEND_URL=$FRONTEND_URL" >> $GITHUB_ENV
           echo "ECS_CLUSTER=email-client-$ENVIRONMENT-cluster" >> $GITHUB_ENV
           echo "ECS_SERVICE=email-client-$ENVIRONMENT-backend" >> $GITHUB_ENV
 
@@ -122,16 +114,13 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push backend Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./backend/Dockerfile
-          push: true
-          tags: |
-            ${{ env.BACKEND_REPO_URL }}:latest
-            ${{ env.BACKEND_REPO_URL }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ steps.get-account-id.outputs.account_id }}
+          GIT_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          ./scripts/deploy-backend.sh "$ENVIRONMENT"
 
       - name: Update ECS service
         run: |
@@ -141,54 +130,32 @@ jobs:
             --force-new-deployment
 
       - name: Build frontend
-        working-directory: ./frontend
         env:
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           VITE_BACKEND_API_URL: ${{ env.BACKEND_API_URL }}/api/graphql
           VITE_APP_URL: ${{ env.FRONTEND_URL }}
-        run: pnpm run build
-
-      - name: Deploy frontend to S3
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          BACKEND_API_URL: ${{ env.BACKEND_API_URL }}
+          FRONTEND_URL: ${{ env.FRONTEND_URL }}
+          FRONTEND_BUCKET: ${{ env.FRONTEND_BUCKET }}
+          FRONTEND_DISTRIBUTION_ID: ${{ env.FRONTEND_DISTRIBUTION_ID }}
         run: |
-          # Sync static assets with long cache
-          aws s3 sync frontend/dist/ "s3://${{ env.FRONTEND_BUCKET }}/" \
-            --delete \
-            --cache-control "public, max-age=31536000, immutable" \
-            --exclude "index.html" \
-            --exclude "*.json"
-          
-          # Upload index.html with no-cache
-          aws s3 cp frontend/dist/index.html "s3://${{ env.FRONTEND_BUCKET }}/index.html" \
-            --cache-control "no-cache, no-store, must-revalidate"
-          
-          # Upload any JSON files with no-cache
-          find frontend/dist -name "*.json" -type f | while read json_file; do
-            relative_path="${json_file#frontend/dist/}"
-            aws s3 cp "$json_file" "s3://${{ env.FRONTEND_BUCKET }}/$relative_path" \
-              --cache-control "no-cache"
-          done
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id "${{ env.FRONTEND_DISTRIBUTION_ID }}" \
-            --paths "/*"
+          ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
+          ./scripts/deploy-frontend.sh "$ENVIRONMENT"
 
       - name: Deployment summary
-        working-directory: ./infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
         run: |
-          FRONTEND_URL=$(pulumi stack output frontendUrl)
-          BACKEND_URL=$(pulumi stack output backendApiUrl)
-          
           echo "## Deployment Complete! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Environment:** ${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Frontend URL:** $FRONTEND_URL" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend URL:** ${{ env.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Backend API:** $BACKEND_URL" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend API:** ${{ env.BACKEND_API_URL }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "_Note: ECS service update may take a few minutes to complete._" >> $GITHUB_STEP_SUMMARY

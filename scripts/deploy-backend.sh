@@ -1,0 +1,94 @@
+#!/bin/bash
+# ============================================================================
+# Deploy Backend Docker Image
+# ============================================================================
+# Usage: ./deploy-backend.sh ENVIRONMENT
+# Environment variables required:
+#   - AWS_REGION
+#   - AWS_ACCOUNT_ID
+#   - BACKEND_REPO_URL
+#   - GIT_COMMIT_SHA (optional, will be generated)
+# ============================================================================
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/common.sh"
+
+ENVIRONMENT="${1:-dev}"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+log_info "Deploying backend for environment: $ENVIRONMENT"
+
+cd "$PROJECT_ROOT"
+
+# Get git commit SHA for versioning (metadata only)
+if [ -z "$GIT_COMMIT_SHA" ]; then
+    GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    export GIT_COMMIT_SHA="$GIT_SHA"
+fi
+log_info "Git commit SHA: $GIT_COMMIT_SHA"
+
+# Calculate content hash for backend code
+log_info "Calculating backend content hash..."
+CONTENT_HASH=$(find backend common -type f \( -name "*.ts" -o -name "*.js" -o -name "*.json" -o -name "Dockerfile" \) \
+    -not -path "*/node_modules/*" \
+    -not -path "*/dist/*" \
+    -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1 | cut -c1-12)
+
+log_info "Backend content hash: $CONTENT_HASH"
+
+# Check if this content hash already exists in ECR
+log_info "Checking if image with hash $CONTENT_HASH already exists in ECR..."
+IMAGE_EXISTS=$(aws ecr describe-images \
+    --repository-name "email-client-$ENVIRONMENT-backend" \
+    --image-ids imageTag="content-$CONTENT_HASH" \
+    --region "$AWS_REGION" \
+    2>/dev/null | jq -r '.imageDetails | length' || echo "0")
+
+if [ "$IMAGE_EXISTS" != "0" ]; then
+    log_info "✓ Image with hash $CONTENT_HASH already exists in ECR. Skipping build."
+    
+    # Tag the existing image with latest and git SHA
+    MANIFEST=$(aws ecr batch-get-image \
+        --repository-name "email-client-$ENVIRONMENT-backend" \
+        --image-ids imageTag="content-$CONTENT_HASH" \
+        --region "$AWS_REGION" \
+        --query 'images[0].imageManifest' \
+        --output text)
+    
+    aws ecr put-image \
+        --repository-name "email-client-$ENVIRONMENT-backend" \
+        --image-tag "latest" \
+        --image-manifest "$MANIFEST" \
+        --region "$AWS_REGION" > /dev/null 2>&1 || true
+        
+    aws ecr put-image \
+        --repository-name "email-client-$ENVIRONMENT-backend" \
+        --image-tag "$GIT_COMMIT_SHA" \
+        --image-manifest "$MANIFEST" \
+        --region "$AWS_REGION" > /dev/null 2>&1 || true
+    
+    log_info "Backend deployment complete (reused existing image)."
+    echo "BACKEND_IMAGE_TAG=content-$CONTENT_HASH" > "$PROJECT_ROOT/.backend-image-tag"
+    exit 0
+fi
+
+log_info "✗ Image not found in ECR. Building new image..."
+
+# Build and push Docker image
+log_info "Building Docker image..."
+docker build -t stacksmail-backend -f backend/Dockerfile .
+
+# Tag with content hash, latest, and git SHA
+docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:content-$CONTENT_HASH"
+docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:latest"
+docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:$GIT_COMMIT_SHA"
+
+log_info "Pushing Docker image to ECR..."
+docker push "$BACKEND_REPO_URL:content-$CONTENT_HASH"
+docker push "$BACKEND_REPO_URL:latest"
+docker push "$BACKEND_REPO_URL:$GIT_COMMIT_SHA"
+
+log_info "Backend deployed successfully (new image built)."
+echo "BACKEND_IMAGE_TAG=content-$CONTENT_HASH" > "$PROJECT_ROOT/.backend-image-tag"
