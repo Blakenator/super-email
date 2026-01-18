@@ -156,7 +156,8 @@ deploy_backend() {
     
     # Build the Docker image
     log_info "Building Docker image..."
-    docker build -t stacksmail-backend -f backend/Dockerfile .
+    # Clean build cache to avoid conflicts with local node_modules
+    docker build --no-cache -t stacksmail-backend -f backend/Dockerfile .
     
     # Tag and push
     docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:latest"
