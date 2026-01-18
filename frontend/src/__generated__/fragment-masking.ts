@@ -1,6 +1,14 @@
 /* eslint-disable */
-import { ResultOf, DocumentTypeDecoration } from '@graphql-typed-document-node/core';
-import { Incremental, TypedDocumentString } from './graphql';
+import type { ResultOf, DocumentTypeDecoration } from '@graphql-typed-document-node/core';
+import type { Incremental } from './graphql';
+
+// Define TypedDocumentString for compatibility
+export type TypedDocumentString<TResult, TVariables> = DocumentTypeDecoration<TResult, TVariables> & {
+  __meta__?: {
+    fragmentName?: string;
+    deferredFields?: Record<string, string[]>;
+  };
+};
 
 
 export type FragmentType<TDocumentType extends DocumentTypeDecoration<any, any>> = TDocumentType extends DocumentTypeDecoration<

@@ -54,9 +54,11 @@ export const lightTheme = {
     textPrimary: '#202124',
     textSecondary: '#5f6368',
     textMuted: '#9aa0a6',
+    text: '#202124', // alias for textPrimary
 
     // Background colors
     background: '#f6f8fc',
+    backgroundGray: '#f1f3f4', // alias for backgroundHover
     backgroundWhite: '#ffffff',
     backgroundHover: '#f1f3f4',
     unreadBackground: '#e8f0fe',
@@ -101,9 +103,11 @@ export const darkTheme = {
     textPrimary: '#f3f4f6',
     textSecondary: '#9ca3af',
     textMuted: '#6b7280',
+    text: '#f3f4f6', // alias for textPrimary
 
     // Background colors
     background: '#111827',
+    backgroundGray: '#374151', // alias for backgroundHover
     backgroundWhite: '#1f2937',
     backgroundHover: '#374151',
     unreadBackground: '#1e3a5f',
@@ -134,11 +138,13 @@ export const darkTheme = {
 // Default theme for backwards compatibility
 export const theme = lightTheme;
 
-export type Theme = typeof lightTheme;
+export type Theme = typeof lightTheme | typeof darkTheme;
 
 // Helper to access theme in styled-components
 declare module 'styled-components' {
-  export interface DefaultTheme extends Theme {}
+  export interface DefaultTheme extends Omit<typeof lightTheme, 'mode'> {
+    mode: 'light' | 'dark';
+  }
 }
 
 // Helper to get theme based on preference and system setting
