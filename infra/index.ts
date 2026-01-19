@@ -72,31 +72,34 @@ const vpc = new awsx.ec2.Vpc(`${stackName}-vpc`, {
 // =============================================================================
 
 // Security group for the backend ECS service
-const backendSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-backend-sg`, {
-  vpcId: vpc.vpcId,
-  description: 'Security group for backend ECS service',
-  ingress: [
-    {
-      description: 'HTTP from ALB',
-      fromPort: 4000,
-      toPort: 4000,
-      protocol: 'tcp',
-      cidrBlocks: ['10.0.0.0/16'],
+const backendSecurityGroup = new aws.ec2.SecurityGroup(
+  `${stackName}-backend-sg`,
+  {
+    vpcId: vpc.vpcId,
+    description: 'Security group for backend ECS service',
+    ingress: [
+      {
+        description: 'HTTP from ALB',
+        fromPort: 4000,
+        toPort: 4000,
+        protocol: 'tcp',
+        cidrBlocks: ['10.0.0.0/16'],
+      },
+    ],
+    egress: [
+      {
+        fromPort: 0,
+        toPort: 0,
+        protocol: '-1',
+        cidrBlocks: ['0.0.0.0/0'],
+      },
+    ],
+    tags: {
+      Name: `${stackName}-backend-sg`,
+      Environment: environment,
     },
-  ],
-  egress: [
-    {
-      fromPort: 0,
-      toPort: 0,
-      protocol: '-1',
-      cidrBlocks: ['0.0.0.0/0'],
-    },
-  ],
-  tags: {
-    Name: `${stackName}-backend-sg`,
-    Environment: environment,
   },
-});
+);
 
 // Security group for RDS
 const rdsSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-rds-sg`, {
@@ -172,15 +175,18 @@ const dbSubnetGroup = new aws.rds.SubnetGroup(`${stackName}-db-subnet-group`, {
 });
 
 // Database password in Secrets Manager
-const dbPasswordSecret = new aws.secretsmanager.Secret(`${stackName}-db-password`, {
-  namePrefix: `${stackName}-db-password-`,
-  description: 'Database password for Email Client',
-  recoveryWindowInDays: 0,
-  tags: {
-    Name: `${stackName}-db-password`,
-    Environment: environment,
+const dbPasswordSecret = new aws.secretsmanager.Secret(
+  `${stackName}-db-password`,
+  {
+    namePrefix: `${stackName}-db-password-`,
+    description: 'Database password for Email Client',
+    recoveryWindowInDays: 0,
+    tags: {
+      Name: `${stackName}-db-password`,
+      Environment: environment,
+    },
   },
-});
+);
 
 const dbPasswordVersion = new aws.secretsmanager.SecretVersion(
   `${stackName}-db-password-version`,
@@ -404,7 +410,8 @@ const taskExecutionRole = new aws.iam.Role(`${stackName}-task-exec-role`, {
 
 new aws.iam.RolePolicyAttachment(`${stackName}-task-exec-policy`, {
   role: taskExecutionRole.name,
-  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
+  policyArn:
+    'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
 });
 
 const taskRole = new aws.iam.Role(`${stackName}-task-role`, {
@@ -431,7 +438,12 @@ const s3Policy = new aws.iam.Policy(`${stackName}-s3-policy`, {
       Statement: [
         {
           Effect: 'Allow',
-          Action: ['s3:PutObject', 's3:GetObject', 's3:DeleteObject', 's3:ListBucket'],
+          Action: [
+            's3:PutObject',
+            's3:GetObject',
+            's3:DeleteObject',
+            's3:ListBucket',
+          ],
           Resource: [arn, `${arn}/*`],
         },
       ],
@@ -473,14 +485,17 @@ new aws.iam.RolePolicyAttachment(`${stackName}-task-secrets-policy`, {
 // CloudWatch Log Group - Cost Optimized
 // =============================================================================
 
-const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`, {
-  name: `/ecs/${stackName}/backend`,
-  retentionInDays: isProd ? 14 : 7, // Cost optimization: Shorter retention
-  tags: {
-    Name: `${stackName}-backend-logs`,
-    Environment: environment,
+const backendLogGroup = new aws.cloudwatch.LogGroup(
+  `${stackName}-backend-logs`,
+  {
+    name: `/ecs/${stackName}/backend`,
+    retentionInDays: isProd ? 14 : 7, // Cost optimization: Shorter retention
+    tags: {
+      Name: `${stackName}-backend-logs`,
+      Environment: environment,
+    },
   },
-});
+);
 
 // =============================================================================
 // Supabase Secret in Secrets Manager
@@ -509,77 +524,83 @@ const supabaseServiceSecretVersion = new aws.secretsmanager.SecretVersion(
 // ECS Task Definition
 // =============================================================================
 
-const backendTaskDefinition = new aws.ecs.TaskDefinition(`${stackName}-backend-task`, {
-  family: `${stackName}-backend`,
-  networkMode: 'awsvpc',
-  requiresCompatibilities: ['FARGATE'],
-  cpu: '256',
-  memory: '512',
-  executionRoleArn: taskExecutionRole.arn,
-  taskRoleArn: taskRole.arn,
-  containerDefinitions: pulumi
-    .all([
-      backendRepo.repositoryUrl,
-      database.address,
-      database.port,
-      dbPassword,
-      attachmentsBucket.bucket,
-      currentRegion.name,
-      supabaseServiceSecretVersion.arn,
-    ])
-    .apply(([repoUrl, dbHost, dbPort, dbPass, bucketName, region, secretArn]) =>
-      JSON.stringify([
-        {
-          name: 'backend',
-          image: `${repoUrl}:${imageTag}`,
-          essential: true,
-          portMappings: [{ containerPort: 4000, protocol: 'tcp' }],
-          environment: [
-            { name: 'NODE_ENV', value: 'production' },
-            { name: 'LOG_LEVEL', value: 'info' },
-            { name: 'GIT_COMMIT_SHA', value: gitCommitSha },
-            { name: 'CONTENT_HASH', value: contentHash },
-            { name: 'DB_HOST', value: dbHost },
-            { name: 'DB_PORT', value: String(dbPort) },
-            { name: 'DB_NAME', value: 'emailclient' },
-            { name: 'DB_USER', value: 'emailclient' },
-            { name: 'DB_PASSWORD', value: dbPass },
-            { name: 'PORT', value: '4000' },
-            { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
-            { name: 'AWS_REGION', value: region },
-            { name: 'SECRETS_BASE_PATH', value: 'email-client' },
-            { name: 'SUPABASE_URL', value: supabaseUrl },
-            { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
-          ],
-          secrets: [{ name: 'SUPABASE_SERVICE_ROLE_KEY', valueFrom: secretArn }],
-          logConfiguration: {
-            logDriver: 'awslogs',
-            options: {
-              'awslogs-group': `/ecs/${stackName}/backend`,
-              'awslogs-region': region,
-              'awslogs-stream-prefix': 'ecs',
+const backendTaskDefinition = new aws.ecs.TaskDefinition(
+  `${stackName}-backend-task`,
+  {
+    family: `${stackName}-backend`,
+    networkMode: 'awsvpc',
+    requiresCompatibilities: ['FARGATE'],
+    cpu: '256',
+    memory: '512',
+    executionRoleArn: taskExecutionRole.arn,
+    taskRoleArn: taskRole.arn,
+    containerDefinitions: pulumi
+      .all([
+        backendRepo.repositoryUrl,
+        database.address,
+        database.port,
+        dbPassword,
+        attachmentsBucket.bucket,
+        currentRegion.name,
+        supabaseServiceSecretVersion.arn,
+      ])
+      .apply(
+        ([repoUrl, dbHost, dbPort, dbPass, bucketName, region, secretArn]) =>
+          JSON.stringify([
+            {
+              name: 'backend',
+              image: `${repoUrl}:${imageTag}`,
+              essential: true,
+              portMappings: [{ containerPort: 4000, protocol: 'tcp' }],
+              environment: [
+                { name: 'NODE_ENV', value: 'production' },
+                { name: 'LOG_LEVEL', value: 'info' },
+                { name: 'GIT_COMMIT_SHA', value: gitCommitSha },
+                { name: 'CONTENT_HASH', value: contentHash },
+                { name: 'DB_HOST', value: dbHost },
+                { name: 'DB_PORT', value: String(dbPort) },
+                { name: 'DB_NAME', value: 'emailclient' },
+                { name: 'DB_USER', value: 'emailclient' },
+                { name: 'DB_PASSWORD', value: dbPass },
+                { name: 'PORT', value: '4000' },
+                { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
+                { name: 'AWS_REGION', value: region },
+                { name: 'SECRETS_BASE_PATH', value: 'email-client' },
+                { name: 'SUPABASE_URL', value: supabaseUrl },
+                { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
+              ],
+              secrets: [
+                { name: 'SUPABASE_SERVICE_ROLE_KEY', valueFrom: secretArn },
+              ],
+              logConfiguration: {
+                logDriver: 'awslogs',
+                options: {
+                  'awslogs-group': `/ecs/${stackName}/backend`,
+                  'awslogs-region': region,
+                  'awslogs-stream-prefix': 'ecs',
+                },
+              },
+              healthCheck: {
+                command: [
+                  'CMD-SHELL',
+                  'wget --no-verbose --tries=1 --spider http://localhost:4000/api/health || exit 1',
+                ],
+                interval: 30,
+                timeout: 5,
+                retries: 3,
+                startPeriod: 60,
+              },
             },
-          },
-          healthCheck: {
-            command: [
-              'CMD-SHELL',
-              'wget --no-verbose --tries=1 --spider http://localhost:4000/api/health || exit 1',
-            ],
-            interval: 30,
-            timeout: 5,
-            retries: 3,
-            startPeriod: 60,
-          },
-        },
-      ]),
-    ),
-  tags: {
-    Name: `${stackName}-backend-task`,
-    Environment: environment,
-    GitCommitSha: gitCommitSha,
-    ContentHash: contentHash,
+          ]),
+      ),
+    tags: {
+      Name: `${stackName}-backend-task`,
+      Environment: environment,
+      GitCommitSha: gitCommitSha,
+      ContentHash: contentHash,
+    },
   },
-});
+);
 
 // =============================================================================
 // Application Load Balancer
@@ -728,7 +749,15 @@ const frontendDistribution = new aws.cloudfront.Distribution(
         pathPattern: '/api/*',
         targetOriginId: 'BackendOrigin',
         viewerProtocolPolicy: 'https-only',
-        allowedMethods: ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+        allowedMethods: [
+          'GET',
+          'HEAD',
+          'OPTIONS',
+          'PUT',
+          'POST',
+          'PATCH',
+          'DELETE',
+        ],
         cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
         compress: false,
         cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad', // CachingDisabled

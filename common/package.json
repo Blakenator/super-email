@@ -4,7 +4,20 @@
   "description": "Shared GraphQL schema and types for email client",
   "main": "src/index.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
+    },
+    "./routes": {
+      "types": "./dist/routes.d.ts",
+      "import": "./dist/routes.js",
+      "default": "./src/routes.ts"
+    }
+  },
   "scripts": {
+    "build": "tsc",
     "generate": "graphql-codegen --config codegen.ts",
     "start": "graphql-codegen --config codegen.ts --watch",
     "typecheck": "tsc --noEmit"

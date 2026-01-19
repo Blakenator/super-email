@@ -19,7 +19,8 @@ import { makeExecutableSchema } from '@graphql-tools/schema';
 import { WebSocketServer } from 'ws';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import type { ApolloServerPlugin } from '@apollo/server';
-import type { Sequelize, ModelStatic, Model } from 'sequelize';
+import type { Sequelize } from 'sequelize-typescript';
+import type { ModelStatic, Model } from 'sequelize';
 
 import type { BackendContext, AllBackendResolvers } from './types.js';
 import { QueryResolvers } from './queries/index.js';
@@ -32,6 +33,7 @@ import {
   stopIdleForUser,
   type MailboxUpdateEvent,
 } from './helpers/imap-idle.js';
+import { API_ROUTES } from '@main/common';
 
 // Default models - imported from db
 import {
@@ -401,10 +403,10 @@ export async function createServer(
   if (!deps.skipWebSocket) {
     const wsServer = new WebSocketServer({
       server: httpServer,
-      path: '/api/graphql',
+      path: API_ROUTES.GRAPHQL,
     }) as any;
 
-    serverCleanup = useServer(
+    const wsCleanup = useServer(
       {
         schema,
         context: async (ctx) => {
@@ -434,6 +436,16 @@ export async function createServer(
       },
       wsServer,
     );
+
+    // Wrap dispose to ensure it always returns Promise<void>
+    serverCleanup = {
+      dispose: async () => {
+        const result = wsCleanup.dispose();
+        if (result instanceof Promise) {
+          await result;
+        }
+      },
+    };
   }
 
   // Create plugins array
@@ -488,7 +500,7 @@ export async function createServer(
 
   // Setup Express middleware
   app.use(
-    '/api/graphql',
+    API_ROUTES.GRAPHQL,
     cors<cors.CorsRequest>(),
     express.json({ limit: '10mb' }),
     expressMiddleware(apolloServer, {
@@ -509,7 +521,7 @@ export async function createServer(
   );
 
   // Health check endpoint
-  app.get('/health', (_req, res) => {
+  app.get(API_ROUTES.HEALTH, (_req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -518,7 +530,7 @@ export async function createServer(
   });
 
   // Attachment download endpoint
-  app.get('/api/attachments/download/:id', async (req, res) => {
+  app.get(`${API_ROUTES.ATTACHMENTS.BASE}/download/:id`, async (req, res) => {
     try {
       const attachmentId = req.params.id;
       const token = req.headers.authorization?.replace('Bearer ', '') ?? '';
@@ -588,7 +600,7 @@ export async function createServer(
     start: async () => {
       await new Promise<void>((resolve) => httpServer.listen({ port }, resolve));
       if (deps.enableLogging) {
-        logger.info('Server', `📧 Email Client API ready at http://localhost:${port}/api/graphql`);
+        logger.info('Server', `📧 Email Client API ready at http://localhost:${port}${API_ROUTES.GRAPHQL}`);
       }
     },
     

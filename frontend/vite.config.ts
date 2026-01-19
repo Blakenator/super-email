@@ -84,6 +84,8 @@ export default defineConfig({
         __dirname,
         'src/graphql-typed-document-shim.ts',
       ),
+      // Resolve @main/common from source for Vite
+      '@main/common': path.resolve(__dirname, '../common/src/index.ts'),
     },
   },
   server: {
