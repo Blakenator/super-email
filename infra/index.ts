@@ -166,13 +166,21 @@ const albSecurityGroup = new aws.ec2.SecurityGroup(`${stackName}-alb-sg`, {
 // RDS PostgreSQL Database - Cost Optimized
 // =============================================================================
 
-const dbSubnetGroup = new aws.rds.SubnetGroup(`${stackName}-db-subnet-group`, {
-  subnetIds: vpc.privateSubnetIds,
-  tags: {
-    Name: `${stackName}-db-subnet-group`,
-    Environment: environment,
+const dbSubnetGroup = new aws.rds.SubnetGroup(
+  `${stackName}-db-subnet-group`,
+  {
+    namePrefix: `${stackName}-db-subnet-`,
+    subnetIds: vpc.privateSubnetIds,
+    tags: {
+      Name: `${stackName}-db-subnet-group`,
+      Environment: environment,
+    },
   },
-});
+  {
+    // Allow replacement when VPC changes
+    deleteBeforeReplace: true,
+  },
+);
 
 // Database password in Secrets Manager
 const dbPasswordSecret = new aws.secretsmanager.Secret(
