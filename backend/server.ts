@@ -33,6 +33,10 @@ import {
   stopIdleForUser,
   type MailboxUpdateEvent,
 } from './helpers/imap-idle.js';
+import {
+  startBackgroundSync,
+  stopBackgroundSync,
+} from './helpers/background-sync.js';
 import { API_ROUTES } from '@main/common';
 
 // Default models - imported from db
@@ -71,6 +75,8 @@ export interface ServerDependencies {
   skipDbSync?: boolean;
   /** Skip WebSocket server (for testing) */
   skipWebSocket?: boolean;
+  /** Skip background sync scheduler (for testing) */
+  skipBackgroundSync?: boolean;
   /** Custom port (defaults to 4000) */
   port?: number;
   /** Enable verbose logging */
@@ -96,6 +102,7 @@ export function getDefaultDependencies(): ServerDependencies {
     schemaPath: path.join(process.cwd(), '..', 'common', 'schema.graphql'),
     skipDbSync: false,
     skipWebSocket: false,
+    skipBackgroundSync: false,
     port: 4000,
     enableLogging: true,
   };
@@ -602,9 +609,15 @@ export async function createServer(
       if (deps.enableLogging) {
         logger.info('Server', `📧 Email Client API ready at http://localhost:${port}${API_ROUTES.GRAPHQL}`);
       }
+      // Start background sync for stale email accounts (unless disabled)
+      if (!deps.skipBackgroundSync) {
+        startBackgroundSync();
+      }
     },
     
     stop: async () => {
+      // Stop background sync scheduler
+      stopBackgroundSync();
       await apolloServer.stop();
       httpServer.close();
     },

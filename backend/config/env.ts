@@ -63,6 +63,22 @@ export const config = {
     secret: process.env.JWT_SECRET || 'development-secret-change-in-production',
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
+  
+  // Background Sync Configuration
+  backgroundSync: {
+    // How long before an email account is considered stale and needs re-syncing (in minutes)
+    staleThresholdMinutes: parseInt(
+      process.env.BACKGROUND_SYNC_STALE_THRESHOLD_MINUTES || (isProduction ? '15' : '5'),
+      10,
+    ),
+    // How often to run the background sync check (in minutes)
+    intervalMinutes: parseInt(
+      process.env.BACKGROUND_SYNC_INTERVAL_MINUTES || (isProduction ? '60' : '2'),
+      10,
+    ),
+    // Whether background sync is enabled
+    enabled: process.env.BACKGROUND_SYNC_ENABLED !== 'false',
+  },
 } as const;
 
 /**
@@ -91,6 +107,9 @@ export const envVarDefinitions = {
     LOCAL_SECRETS_FILE: 'Path to local secrets file for development',
     JWT_SECRET: 'Secret for JWT signing (not needed if using Supabase auth)',
     JWT_EXPIRES_IN: 'JWT token expiration time (default: 7d)',
+    BACKGROUND_SYNC_STALE_THRESHOLD_MINUTES: 'Minutes before email account is considered stale (default: 15 in prod, 5 in dev)',
+    BACKGROUND_SYNC_INTERVAL_MINUTES: 'How often to run background sync (default: 60 in prod, 2 in dev)',
+    BACKGROUND_SYNC_ENABLED: 'Enable/disable background sync (default: true)',
   },
 } as const;
 

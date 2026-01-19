@@ -49,10 +49,11 @@ export function getTestDependencies(
   return {
     schemaPath: path.join(process.cwd(), '..', 'common', 'schema.graphql'),
     verifyToken: mockVerifyToken,
-    skipWebSocket: true,  // Skip WebSocket for faster tests
-    skipDbSync: false,    // We do want DB sync for integration tests
-    enableLogging: false, // Quiet tests
-    port: 4001,           // Different port to avoid conflicts
+    skipWebSocket: true,       // Skip WebSocket for faster tests
+    skipDbSync: false,         // We do want DB sync for integration tests
+    skipBackgroundSync: true,  // Skip background sync during tests
+    enableLogging: false,      // Quiet tests
+    port: 4001,                // Different port to avoid conflicts
     ...overrides,
   };
 }
