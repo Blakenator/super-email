@@ -103,14 +103,14 @@ if (domainName && hostedZone) {
   certificateValidation.push(validationRecord);
 
   // Wait for certificate validation
-  new aws.acm.CertificateValidation(
-    `${stackName}-cert-validation-waiter`,
-    {
-      certificateArn: certificate.arn,
-      validationRecordFqdns: [validationRecord.fqdn],
-    },
-    { provider: usEast1Provider },
-  );
+  // new aws.acm.CertificateValidation(
+  //   `${stackName}-cert-validation-waiter`,
+  //   {
+  //     certificateArn: certificate.arn,
+  //     validationRecordFqdns: [validationRecord.fqdn],
+  //   },
+  //   { provider: usEast1Provider },
+  // );
 }
 
 // =============================================================================
@@ -310,8 +310,8 @@ const dbPassword = dbPasswordVersion.secretString.apply((pwd) => {
   return pwd;
 });
 
-const database = new aws.rds.Instance(`${stackName}-db`, {
-  identifier: `${stackName}-postgres`,
+const database = new aws.rds.Instance(`${stackName}-db-v3`, {
+  identifier: `${stackName}-postgres-v3`,
   engine: 'postgres',
   engineVersion: '15',
   instanceClass: dbInstanceClass,
@@ -329,7 +329,7 @@ const database = new aws.rds.Instance(`${stackName}-db`, {
   backupRetentionPeriod: 1, // Minimal backups
   deletionProtection: false,
   tags: {
-    Name: `${stackName}-postgres`,
+    Name: `${stackName}-postgres-v3`,
     Environment: environment,
   },
 });

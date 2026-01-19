@@ -1,0 +1,7 @@
+config:
+  email-client-infra:environment: prod
+  aws:region: us-west-1
+  email-client-infra:supabaseUrl: https://ivqyyttllhpwbducgpih.supabase.co
+  email-client-infra:supabaseAnonKey: sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F
+  email-client-infra:supabaseServiceRoleKey:
+    secure: AAABAFfszbKNNU/A9BPtNPpXOgd2usvwdddz5fm7KsIvP0OyAYYEIRLjiwvY7HzP1OrKWNpCFS15hsMJyxLqfHdv63+2lj67xON9UvWa+T/nKn40bYnBPsJbGE7I5WRTJ2wDiPEfjCN5fq3VuwhGPKH2mvHc/daCVIupYKhD8xHEChMURYliBguCt+MQwMUBzp4eJWCbWZfEWyr1xnSrqj+hW/SI4vbfjYIZJfS9yXAwLVtbd3Sl66eu5PzjJNnmjBpV/b5ffKUFKnd+Vi7x2rA9BY8AwmImSAZr1fh1cb0T9FgA1QawZecAUymbUM3VfhnqEl/qtSoez14=
