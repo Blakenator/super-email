@@ -185,35 +185,77 @@ deploy_frontend() {
     "$SCRIPT_DIR/deploy-frontend.sh" "$ENVIRONMENT"
 }
 
-# Wait for backend to be healthy
-wait_for_backend() {
-    log_info "Waiting for backend to be healthy..."
+# Wait for frontend to be available
+wait_for_frontend() {
+    log_info "Checking frontend availability..."
     
-    # Wait up to 3 minutes for the backend to respond
-    MAX_ATTEMPTS=18
+    MAX_ATTEMPTS=6
     ATTEMPT=0
     
     while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
         ATTEMPT=$((ATTEMPT + 1))
         
-        # Try to hit the health endpoint via CloudFront
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/api/health" 2>/dev/null || echo "000")
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL" 2>/dev/null || echo "000")
         
         if [ "$HTTP_CODE" = "200" ]; then
-            log_info "Backend health check passed!"
+            log_info "✓ Frontend is available!"
             return 0
         fi
         
-        log_info "Waiting for backend... (attempt $ATTEMPT/$MAX_ATTEMPTS, status: $HTTP_CODE)"
+        log_info "Waiting for frontend... (attempt $ATTEMPT/$MAX_ATTEMPTS, status: $HTTP_CODE)"
+        sleep 5
+    done
+    
+    log_warn "Frontend not responding. CloudFront may still be propagating."
+}
+
+# Wait for backend to be healthy
+wait_for_backend() {
+    log_info "Checking backend availability..."
+    
+    # First check if EC2 is responding directly
+    if [ -n "$BACKEND_PUBLIC_IP" ]; then
+        log_info "Testing EC2 direct connection..."
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://$BACKEND_PUBLIC_IP/api/health" 2>/dev/null || echo "000")
+        
+        if [ "$HTTP_CODE" != "200" ]; then
+            log_warn "EC2 backend not responding on http://$BACKEND_PUBLIC_IP/api/health"
+            log_warn "Container may not be running. Starting container..."
+            log_warn ""
+            log_warn "Run this command to start the container:"
+            log_warn "  ./scripts/start-ec2-container.sh $BACKEND_PUBLIC_IP"
+            log_warn ""
+            log_warn "Or SSH to the instance and check:"
+            log_warn "  ssh ec2-user@$BACKEND_PUBLIC_IP"
+            log_warn "  docker ps -a"
+            log_warn "  docker logs backend"
+            return 1
+        else
+            log_info "✓ EC2 backend is responding directly"
+        fi
+    fi
+    
+    # Now check via CloudFront
+    log_info "Testing CloudFront proxy..."
+    MAX_ATTEMPTS=6
+    ATTEMPT=0
+    
+    while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+        ATTEMPT=$((ATTEMPT + 1))
+        
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/api/health" 2>/dev/null || echo "000")
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+            log_info "✓ Backend health check passed via CloudFront!"
+            return 0
+        fi
+        
+        log_info "Waiting for CloudFront... (attempt $ATTEMPT/$MAX_ATTEMPTS, status: $HTTP_CODE)"
         sleep 10
     done
     
-    log_warn "Backend did not respond within timeout."
-    log_warn "This is normal on first deploy - EC2 needs time to start Docker container."
-    log_warn ""
-    log_warn "You can check the EC2 instance:"
-    log_warn "  ssh -i ~/.ssh/your-key.pem ec2-user@$BACKEND_PUBLIC_IP"
-    log_warn "  sudo docker logs backend"
+    log_warn "Backend not accessible via CloudFront."
+    log_warn "CloudFront may still be propagating, or there may be a routing issue."
 }
 
 # Main deployment flow
@@ -241,7 +283,15 @@ main() {
     # Deploy frontend
     deploy_frontend
     
-    # Wait for backend to be healthy
+    echo ""
+    echo "=============================================="
+    echo "  Running Health Checks"
+    echo "=============================================="
+    
+    # Check frontend availability
+    wait_for_frontend
+    
+    # Check backend availability
     wait_for_backend
     
     echo ""
@@ -253,14 +303,13 @@ main() {
     echo "  Backend API:  $BACKEND_API_URL"
     if [ -n "$BACKEND_PUBLIC_IP" ]; then
         echo "  EC2 IP:       $BACKEND_PUBLIC_IP"
+        echo ""
+        echo "  Manual Container Start:"
+        echo "    ./scripts/start-ec2-container.sh $BACKEND_PUBLIC_IP"
     fi
     echo ""
     echo "  Note: CloudFront may take a few minutes to"
     echo "  propagate. If you see errors, wait and retry."
-    echo ""
-    echo "  To update the backend container:"
-    echo "    ssh ec2-user@$BACKEND_PUBLIC_IP"
-    echo "    ./update-backend.sh"
     echo "=============================================="
 }
 
