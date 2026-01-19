@@ -43,25 +43,34 @@ if [ -z "$FRONTEND_BUCKET" ]; then
     exit 1
 fi
 
+cd "$PROJECT_ROOT"
+
+# Build common package first (needed by frontend)
+log_info "Building common package..."
+cd common
+pnpm run build
+cd ..
+
 cd "$PROJECT_ROOT/frontend"
 
 # Set environment variables for Vite build
-# IMPORTANT: Store just the base backend URL, paths are constructed in the frontend
 export VITE_SUPABASE_URL="$SUPABASE_URL"
 export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-export VITE_BACKEND_URL="${BACKEND_API_URL}/api"
 export VITE_APP_URL="$FRONTEND_URL"
+
+# Backend URL:
+# - If DOMAIN_NAME is set: use api subdomain (e.g., https://api.super-mail.app)
+# - Otherwise: defaults to window.location.origin (frontend will call /api/* on same domain)
+if [ -n "$DOMAIN_NAME" ]; then
+    export VITE_BACKEND_URL="https://${BACKEND_SUBDOMAIN:-api}.${DOMAIN_NAME}"
+    log_info "Using API subdomain: $VITE_BACKEND_URL"
+else
+    # Don't set VITE_BACKEND_URL - let it default to window.location.origin
+    log_info "Backend URL will default to same origin (calls /api/* paths)"
+fi
 
 log_info "Building frontend with production config..."
 log_info "  Frontend URL: $FRONTEND_URL"
-log_info "  Backend Base URL: ${BACKEND_API_URL}/api"
-
-# Verify that VITE_BACKEND_URL is an absolute URL
-if [[ ! "$VITE_BACKEND_URL" =~ ^https?:// ]]; then
-    log_error "VITE_BACKEND_URL must be an absolute URL (http:// or https://)"
-    log_error "Got: $VITE_BACKEND_URL"
-    exit 1
-fi
 
 pnpm run build
 
