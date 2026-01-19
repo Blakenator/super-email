@@ -29,11 +29,42 @@ fi
 log_info "Git commit SHA: $GIT_COMMIT_SHA"
 
 # Calculate content hash for backend code
+# Includes all files that affect the Docker build:
+# - Source code (*.ts, *.js) from backend/ and common/
+# - Config files (*.json, tsconfig.json, package.json)
+# - GraphQL schema (*.graphql)
+# - Dockerfile and .dockerignore
+# - Dependency lock files (pnpm-lock.yaml, pnpm-workspace.yaml)
+# Excludes:
+# - node_modules (not in Docker context due to .dockerignore)
+# - dist (build output, not in Docker context)
+# - coverage (test artifacts)
+# - data/attachments (runtime data)
+# - .DS_Store (macOS metadata)
 log_info "Calculating backend content hash..."
-CONTENT_HASH=$(find backend common -type f \( -name "*.ts" -o -name "*.js" -o -name "*.json" -o -name "Dockerfile" \) \
-    -not -path "*/node_modules/*" \
-    -not -path "*/dist/*" \
-    -exec sha256sum {} \; | sort | sha256sum | cut -d' ' -f1 | cut -c1-12)
+CONTENT_HASH=$(
+    {
+        # Root-level files that affect Docker build
+        find . -maxdepth 1 -type f \
+            \( -name "pnpm-lock.yaml" -o -name "pnpm-workspace.yaml" -o -name "package.json" -o -name ".dockerignore" \) \
+            2>/dev/null
+        # Backend and common directories (all relevant files)
+        find backend common -type f \
+            \( \
+                -name "*.ts" -o \
+                -name "*.js" -o \
+                -name "*.json" -o \
+                -name "*.graphql" -o \
+                -name "Dockerfile" \
+            \) \
+            -not -path "*/node_modules/*" \
+            -not -path "*/dist/*" \
+            -not -path "*/coverage/*" \
+            -not -path "*/data/attachments/*" \
+            -not -name ".DS_Store" \
+            2>/dev/null
+    } | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1 | cut -c1-12
+)
 
 log_info "Backend content hash: $CONTENT_HASH"
 
