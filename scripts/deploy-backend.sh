@@ -28,65 +28,84 @@ if [ -z "$GIT_COMMIT_SHA" ]; then
 fi
 log_info "Git commit SHA: $GIT_COMMIT_SHA"
 
-# Calculate content hash for backend code
-# Includes all files that affect the Docker build:
-# - Source code (*.ts, *.js) from backend/ and common/
-# - Config files (*.json, tsconfig.json, package.json)
-# - GraphQL schema (*.graphql)
-# - Dockerfile and .dockerignore
-# - Dependency lock files (pnpm-lock.yaml, pnpm-workspace.yaml)
-# Excludes:
-# - node_modules (not in Docker context due to .dockerignore)
-# - dist (build output, not in Docker context)
-# - coverage (test artifacts)
-# - data/attachments (runtime data)
-# - .DS_Store (macOS metadata)
-log_info "Calculating backend content hash..."
-CONTENT_HASH=$(
-    {
-        # Root-level files that affect Docker build
-        find . -maxdepth 1 -type f \
-            \( -name "pnpm-lock.yaml" -o -name "pnpm-workspace.yaml" -o -name "package.json" -o -name ".dockerignore" \) \
-            2>/dev/null
-        # Backend and common directories (all relevant files)
-        find backend common -type f \
-            \( \
-                -name "*.ts" -o \
-                -name "*.js" -o \
-                -name "*.json" -o \
-                -name "*.graphql" -o \
-                -name "Dockerfile" \
-            \) \
-            -not -path "*/node_modules/*" \
-            -not -path "*/dist/*" \
-            -not -path "*/coverage/*" \
-            -not -path "*/data/attachments/*" \
-            -not -name ".DS_Store" \
-            2>/dev/null
-    } | sort | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1 | cut -c1-12
-)
+# Build backend and common packages first
+# This ensures we hash the actual build outputs (what gets deployed)
+log_info "Building backend and common packages..."
+cd "$PROJECT_ROOT/common"
+if ! pnpm run build; then
+    log_error "Failed to build common package"
+    exit 1
+fi
+
+cd "$PROJECT_ROOT/backend"
+if ! pnpm run build; then
+    log_error "Failed to build backend package"
+    exit 1
+fi
+
+cd "$PROJECT_ROOT"
+
+# Calculate content hash from built outputs
+# This includes all compiled code and dependencies that actually get deployed
+log_info "Calculating backend content hash from build outputs..."
+HASH_FILES=$(mktemp)
+trap "rm -f $HASH_FILES" EXIT
+
+# Collect all files that affect the deployed image
+{
+    # Built JavaScript outputs (what actually runs)
+    find backend/dist common/dist -type f \( -name "*.js" -o -name "*.d.ts" -o -name "*.js.map" -o -name "*.d.ts.map" \) 2>/dev/null
+    # GraphQL schema (copied to Docker image)
+    find common -name "schema.graphql" 2>/dev/null
+    # Dockerfile and .dockerignore (affect Docker build)
+    find backend -maxdepth 1 -type f -name "Dockerfile" 2>/dev/null
+    find . -maxdepth 1 -type f -name ".dockerignore" 2>/dev/null
+} | sort > "$HASH_FILES"
+
+# Check if we found any files
+if [ ! -s "$HASH_FILES" ]; then
+    log_error "No files found to hash. Build may have failed."
+    exit 1
+fi
+
+# Calculate hash
+CONTENT_HASH=$(cat "$HASH_FILES" | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1 | cut -c1-12)
+
+# Ensure we got a valid hash
+if [ -z "$CONTENT_HASH" ] || [ ${#CONTENT_HASH} -ne 12 ]; then
+    log_error "Failed to calculate content hash (got: '$CONTENT_HASH')"
+    exit 1
+fi
 
 log_info "Backend content hash: $CONTENT_HASH"
 
 # Check if this content hash already exists in ECR
 log_info "Checking if image with hash $CONTENT_HASH already exists in ECR..."
-ECR_OUTPUT=$(aws ecr describe-images \
-    --repository-name "email-client-$ENVIRONMENT-backend" \
-    --image-ids imageTag="content-$CONTENT_HASH" \
-    --region "$AWS_REGION" \
-    2>&1)
 
-if [ $? -eq 0 ] && [ -n "$ECR_OUTPUT" ]; then
-    # Command succeeded, parse the JSON
-    IMAGE_EXISTS=$(echo "$ECR_OUTPUT" | jq -r '.imageDetails | length' 2>/dev/null || echo "0")
+# Check if jq is available
+if ! command -v jq &> /dev/null; then
+    log_warn "jq not found. Cannot check ECR for existing images. Will build new image."
+    IMAGE_EXISTS="0"
 else
-    # Command failed (image not found or other error)
-    IMAGE_EXISTS="0"
-fi
+    ECR_OUTPUT=$(aws ecr describe-images \
+        --repository-name "email-client-$ENVIRONMENT-backend" \
+        --image-ids imageTag="content-$CONTENT_HASH" \
+        --region "$AWS_REGION" \
+        2>&1)
+    ECR_EXIT_CODE=$?
 
-# Ensure IMAGE_EXISTS is a number (default to 0 if empty or invalid)
-if [ -z "$IMAGE_EXISTS" ] || ! [[ "$IMAGE_EXISTS" =~ ^[0-9]+$ ]]; then
-    IMAGE_EXISTS="0"
+    if [ $ECR_EXIT_CODE -eq 0 ] && [ -n "$ECR_OUTPUT" ]; then
+        # Command succeeded, parse the JSON
+        IMAGE_EXISTS=$(echo "$ECR_OUTPUT" | jq -r '.imageDetails | length' 2>/dev/null || echo "0")
+    else
+        # Command failed (image not found or other error)
+        IMAGE_EXISTS="0"
+    fi
+
+    # Ensure IMAGE_EXISTS is a number (default to 0 if empty or invalid)
+    if [ -z "$IMAGE_EXISTS" ] || ! [[ "$IMAGE_EXISTS" =~ ^[0-9]+$ ]]; then
+        IMAGE_EXISTS="0"
+    fi
 fi
 
 BUILD_NEW_IMAGE=false
