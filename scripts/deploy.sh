@@ -218,7 +218,7 @@ wait_for_backend() {
             log_info "Backend service is running ($RUNNING_COUNT/$DESIRED_COUNT tasks)"
             
             # Try to hit the health endpoint
-            if curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/health" | grep -q "200"; then
+            if curl -s -o /dev/null -w "%{http_code}" "${BACKEND_API_URL}/api/health" | grep -q "200"; then
                 log_info "Backend health check passed!"
                 return 0
             fi
@@ -276,6 +276,12 @@ main() {
     echo ""
     echo "  Frontend URL: $FRONTEND_URL"
     echo "  Backend API:  $BACKEND_API_URL"
+    echo ""
+    echo "  Version Info:"
+    echo "    Git SHA: $GIT_COMMIT_SHA"
+    echo ""
+    echo "  Useful Commands:"
+    echo "    View logs: ./scripts/view-logs.sh --tail"
     echo ""
     echo "  Note: CloudFront may take a few minutes to"
     echo "  propagate. If you see errors, wait and retry."

@@ -29,13 +29,18 @@ if [ -z "$GIT_COMMIT_SHA" ]; then
 fi
 log_info "Git commit SHA: $GIT_COMMIT_SHA"
 
+# Set CONTENT_HASH if not already set
+if [ -z "$CONTENT_HASH" ]; then
+    export CONTENT_HASH="unknown"
+fi
+log_info "Content hash: $CONTENT_HASH"
+
 # Select or create the stack
 pulumi stack select "$ENVIRONMENT" 2>/dev/null || pulumi stack init "$ENVIRONMENT"
 
 # Set configuration
 pulumi config set environment "$ENVIRONMENT"
 pulumi config set aws:region "$AWS_REGION"
-pulumi config set gitCommitSha "$GIT_COMMIT_SHA"
 
 # Set Supabase configuration
 pulumi config set supabaseUrl "$SUPABASE_URL"
