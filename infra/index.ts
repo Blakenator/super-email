@@ -423,21 +423,22 @@ new aws.iam.RolePolicyAttachment(`${stackName}-task-exec-policy`, {
 });
 
 // Secrets Manager policy for task execution role (to pull secrets at container start)
-const execSecretsPolicy = new aws.iam.Policy(`${stackName}-exec-secrets-policy`, {
-  name: `${stackName}-exec-secrets-policy`,
-  policy: JSON.stringify({
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Action: ['secretsmanager:GetSecretValue'],
-        Resource: [
-          `arn:aws:secretsmanager:*:*:secret:${stackName}-*`,
-        ],
-      },
-    ],
-  }),
-});
+const execSecretsPolicy = new aws.iam.Policy(
+  `${stackName}-exec-secrets-policy`,
+  {
+    name: `${stackName}-exec-secrets-policy`,
+    policy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['secretsmanager:GetSecretValue'],
+          Resource: [`arn:aws:secretsmanager:*:*:secret:${stackName}-*`],
+        },
+      ],
+    }),
+  },
+);
 
 new aws.iam.RolePolicyAttachment(`${stackName}-task-exec-secrets-policy`, {
   role: taskExecutionRole.name,
