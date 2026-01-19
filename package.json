@@ -7,7 +7,7 @@
     "start": "pnpm run --parallel -r start",
     "stop": "pnpm run --parallel -r stop",
     "typecheck": "pnpm run --parallel --filter=!@main/infra -r typecheck",
-    "build": "pnpm run --filter @main/backend build && pnpm run --filter @main/frontend build",
+    "build": "pnpm run --filter @main/common build && pnpm run -r build",
     "db:up": "docker-compose up -d",
     "db:down": "docker-compose down",
     "deploy": "./scripts/deploy.sh",

@@ -43,6 +43,14 @@ if [ -z "$FRONTEND_BUCKET" ]; then
     exit 1
 fi
 
+cd "$PROJECT_ROOT"
+
+# Build common package first (needed by frontend)
+log_info "Building common package..."
+cd common
+pnpm run build
+cd ..
+
 cd "$PROJECT_ROOT/frontend"
 
 # Set environment variables for Vite build
