@@ -422,6 +422,28 @@ new aws.iam.RolePolicyAttachment(`${stackName}-task-exec-policy`, {
     'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
 });
 
+// Secrets Manager policy for task execution role (to pull secrets at container start)
+const execSecretsPolicy = new aws.iam.Policy(`${stackName}-exec-secrets-policy`, {
+  name: `${stackName}-exec-secrets-policy`,
+  policy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: ['secretsmanager:GetSecretValue'],
+        Resource: [
+          `arn:aws:secretsmanager:*:*:secret:${stackName}-*`,
+        ],
+      },
+    ],
+  }),
+});
+
+new aws.iam.RolePolicyAttachment(`${stackName}-task-exec-secrets-policy`, {
+  role: taskExecutionRole.name,
+  policyArn: execSecretsPolicy.arn,
+});
+
 const taskRole = new aws.iam.Role(`${stackName}-task-role`, {
   name: `${stackName}-task-role`,
   assumeRolePolicy: JSON.stringify({
@@ -464,7 +486,7 @@ new aws.iam.RolePolicyAttachment(`${stackName}-task-s3-policy`, {
   policyArn: s3Policy.arn,
 });
 
-// Secrets Manager policy
+// Secrets Manager policy for task role (runtime access)
 const secretsPolicy = new aws.iam.Policy(`${stackName}-secrets-policy`, {
   name: `${stackName}-secrets-policy`,
   policy: JSON.stringify({
@@ -478,7 +500,10 @@ const secretsPolicy = new aws.iam.Policy(`${stackName}-secrets-policy`, {
           'secretsmanager:UpdateSecret',
           'secretsmanager:DeleteSecret',
         ],
-        Resource: ['arn:aws:secretsmanager:*:*:secret:email-client/*'],
+        Resource: [
+          `arn:aws:secretsmanager:*:*:secret:${stackName}-*`,
+          'arn:aws:secretsmanager:*:*:secret:email-client/*',
+        ],
       },
     ],
   }),
