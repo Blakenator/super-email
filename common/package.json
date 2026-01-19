@@ -2,9 +2,10 @@
   "name": "@main/common",
   "version": "1.0.0",
   "description": "Shared GraphQL schema and types for email client",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
+    "build": "tsc",
     "generate": "graphql-codegen --config codegen.ts",
     "start": "graphql-codegen --config codegen.ts --watch",
     "typecheck": "tsc --noEmit"

@@ -19,7 +19,8 @@ import { makeExecutableSchema } from '@graphql-tools/schema';
 import { WebSocketServer } from 'ws';
 import { useServer } from 'graphql-ws/lib/use/ws';
 import type { ApolloServerPlugin } from '@apollo/server';
-import type { Sequelize, ModelStatic, Model } from 'sequelize';
+import type { Sequelize } from 'sequelize-typescript';
+import type { ModelStatic, Model } from 'sequelize';
 
 import type { BackendContext, AllBackendResolvers } from './types.js';
 import { QueryResolvers } from './queries/index.js';
@@ -405,7 +406,7 @@ export async function createServer(
       path: '/api/graphql',
     }) as any;
 
-    serverCleanup = useServer(
+    const disposable = useServer(
       {
         schema,
         context: async (ctx) => {
@@ -423,7 +424,7 @@ export async function createServer(
             supabaseUserId = payload?.supabaseUserId;
           }
 
-          return { token, userId, supabaseUserId, sequelize: deps.sequelize } satisfies BackendContext;
+          return { token, userId, supabaseUserId, sequelize: deps.sequelize };
         },
         onConnect: async () => {
           if (deps.enableLogging) logger.info('WebSocket', 'Client connected');
@@ -435,6 +436,16 @@ export async function createServer(
       },
       wsServer,
     );
+
+    // Wrap dispose to ensure it always returns Promise<void>
+    serverCleanup = {
+      dispose: async () => {
+        const result = disposable.dispose();
+        if (result instanceof Promise) {
+          await result;
+        }
+      },
+    };
   }
 
   // Create plugins array

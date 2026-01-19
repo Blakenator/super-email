@@ -20,7 +20,7 @@ COPY backend/ ./backend/
 
 # Build common first, then backend
 WORKDIR /app/common
-RUN pnpm run build 2>/dev/null || true
+RUN pnpm run build
 
 WORKDIR /app/backend
 RUN pnpm run build
@@ -43,8 +43,8 @@ RUN pnpm install --frozen-lockfile --prod
 
 # Copy built files
 COPY --from=builder /app/backend/dist ./backend/dist
-COPY --from=builder /app/common/src ./common/src
-COPY common/schema.graphql ./common/
+COPY --from=builder /app/common/dist ./common/dist
+COPY --from=builder /app/common/schema.graphql ./common/
 
 # Set working directory to backend
 WORKDIR /app/backend
