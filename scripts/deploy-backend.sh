@@ -70,11 +70,24 @@ log_info "Backend content hash: $CONTENT_HASH"
 
 # Check if this content hash already exists in ECR
 log_info "Checking if image with hash $CONTENT_HASH already exists in ECR..."
-IMAGE_EXISTS=$(aws ecr describe-images \
+ECR_OUTPUT=$(aws ecr describe-images \
     --repository-name "email-client-$ENVIRONMENT-backend" \
     --image-ids imageTag="content-$CONTENT_HASH" \
     --region "$AWS_REGION" \
-    2>/dev/null | jq -r '.imageDetails | length' || echo "0")
+    2>&1)
+
+if [ $? -eq 0 ] && [ -n "$ECR_OUTPUT" ]; then
+    # Command succeeded, parse the JSON
+    IMAGE_EXISTS=$(echo "$ECR_OUTPUT" | jq -r '.imageDetails | length' 2>/dev/null || echo "0")
+else
+    # Command failed (image not found or other error)
+    IMAGE_EXISTS="0"
+fi
+
+# Ensure IMAGE_EXISTS is a number (default to 0 if empty or invalid)
+if [ -z "$IMAGE_EXISTS" ] || ! [[ "$IMAGE_EXISTS" =~ ^[0-9]+$ ]]; then
+    IMAGE_EXISTS="0"
+fi
 
 BUILD_NEW_IMAGE=false
 
