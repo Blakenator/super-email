@@ -106,10 +106,6 @@ jobs:
 
       - name: Build and deploy frontend
         env:
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          VITE_BACKEND_URL: ${{ env.BACKEND_API_URL }}
-          VITE_APP_URL: ${{ env.FRONTEND_URL }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -117,6 +113,8 @@ jobs:
           FRONTEND_URL: ${{ env.FRONTEND_URL }}
           FRONTEND_BUCKET: ${{ env.FRONTEND_BUCKET }}
           FRONTEND_DISTRIBUTION_ID: ${{ env.FRONTEND_DISTRIBUTION_ID }}
+          DOMAIN_NAME: ${{ secrets.DOMAIN_NAME || '' }}
+          BACKEND_SUBDOMAIN: api
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'prod' }}"
           ./scripts/deploy-frontend.sh "$ENVIRONMENT"

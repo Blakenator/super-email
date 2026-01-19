@@ -27,6 +27,7 @@ import { MutationResolvers } from './mutations/index.js';
 import { logger } from './helpers/logger.js';
 import { verifyToken } from './helpers/auth.js';
 import { pubSub, MAILBOX_UPDATES } from './helpers/pubsub.js';
+import { API_ROUTES } from '@main/common';
 import {
   startIdleForUser,
   stopIdleForUser,
@@ -488,7 +489,7 @@ export async function createServer(
 
   // Setup Express middleware
   app.use(
-    '/graphql',
+    API_ROUTES.GRAPHQL,
     cors<cors.CorsRequest>(),
     express.json({ limit: '10mb' }),
     expressMiddleware(apolloServer, {
@@ -509,7 +510,7 @@ export async function createServer(
   );
 
   // Health check endpoint
-  app.get('/health', (_req, res) => {
+  app.get(API_ROUTES.HEALTH, (_req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -518,7 +519,7 @@ export async function createServer(
   });
 
   // Attachment download endpoint
-  app.get('/attachments/download/:id', async (req, res) => {
+  app.get(`${API_ROUTES.ATTACHMENTS.BASE}/download/:id`, async (req, res) => {
     try {
       const attachmentId = req.params.id;
       const token = req.headers.authorization?.replace('Bearer ', '') ?? '';

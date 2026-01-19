@@ -3,3 +3,5 @@ export interface MyContext {
   userId?: string;
   supabaseUserId?: string;
 }
+
+export * from './routes.js';

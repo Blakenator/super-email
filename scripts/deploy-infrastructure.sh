@@ -3,11 +3,7 @@
 # Deploy Infrastructure with Pulumi
 # ============================================================================
 # Usage: ./deploy-infrastructure.sh ENVIRONMENT
-# Environment variables required:
-#   - AWS_REGION
-#   - SUPABASE_URL
-#   - SUPABASE_ANON_KEY
-#   - SUPABASE_SERVICE_ROLE_KEY
+# Environment variables loaded from .env file
 # ============================================================================
 
 set -e
@@ -29,17 +25,20 @@ if [ -z "$GIT_COMMIT_SHA" ]; then
 fi
 log_info "Git commit SHA: $GIT_COMMIT_SHA"
 
+# Export environment variables for Pulumi (reads from process.env)
+export ENVIRONMENT="$ENVIRONMENT"
+export AWS_REGION="${AWS_REGION:-us-west-1}"
+export DB_INSTANCE_CLASS="${DB_INSTANCE_CLASS:-db.t4g.micro}"
+export DOMAIN_NAME="${DOMAIN_NAME:-}"
+export BACKEND_SUBDOMAIN="${BACKEND_SUBDOMAIN:-api}"
+
+log_info "Configuration:"
+log_info "  Environment: $ENVIRONMENT"
+log_info "  AWS Region: $AWS_REGION"
+log_info "  Domain: ${DOMAIN_NAME:-<not set, using CloudFront>}"
+
 # Select or create the stack
 pulumi stack select "$ENVIRONMENT" 2>/dev/null || pulumi stack init "$ENVIRONMENT"
-
-# Set configuration
-pulumi config set environment "$ENVIRONMENT"
-pulumi config set aws:region "$AWS_REGION"
-
-# Set Supabase configuration
-pulumi config set supabaseUrl "$SUPABASE_URL"
-pulumi config set supabaseAnonKey "$SUPABASE_ANON_KEY"
-pulumi config set --secret supabaseServiceRoleKey "$SUPABASE_SERVICE_ROLE_KEY"
 
 # Deploy infrastructure
 pulumi up --yes

@@ -46,15 +46,23 @@ fi
 cd "$PROJECT_ROOT/frontend"
 
 # Set environment variables for Vite build
-# BACKEND_API_URL from Pulumi is the full domain URL (e.g., https://super-mail.app)
 export VITE_SUPABASE_URL="$SUPABASE_URL"
 export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
-export VITE_BACKEND_URL="$BACKEND_API_URL"  # Full backend URL (CloudFront routes specific paths)
 export VITE_APP_URL="$FRONTEND_URL"
+
+# Backend URL:
+# - If DOMAIN_NAME is set: use api subdomain (e.g., https://api.super-mail.app)
+# - Otherwise: defaults to window.location.origin (frontend will call /api/* on same domain)
+if [ -n "$DOMAIN_NAME" ]; then
+    export VITE_BACKEND_URL="https://${BACKEND_SUBDOMAIN:-api}.${DOMAIN_NAME}"
+    log_info "Using API subdomain: $VITE_BACKEND_URL"
+else
+    # Don't set VITE_BACKEND_URL - let it default to window.location.origin
+    log_info "Backend URL will default to same origin (calls /api/* paths)"
+fi
 
 log_info "Building frontend with production config..."
 log_info "  Frontend URL: $FRONTEND_URL"
-log_info "  Backend API: $BACKEND_API_URL"
 
 pnpm run build
 

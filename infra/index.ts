@@ -22,96 +22,41 @@ import * as aws from '@pulumi/aws';
 // - ECS Fargate: $10-15/month
 // =============================================================================
 
-// Configuration
-const config = new pulumi.Config();
-const environment = config.require('environment');
-const dbInstanceClass = config.get('dbInstanceClass') || 'db.t4g.micro';
+// Configuration loaded from environment variables (set by deploy script from .env)
+const environment = process.env.ENVIRONMENT || 'prod';
+const dbInstanceClass = process.env.DB_INSTANCE_CLASS || 'db.t4g.micro';
 
-// Custom domain configuration (optional)
-const domainName = config.get('domainName'); // e.g., "super-mail.app"
-const backendSubdomain = config.get('backendSubdomain') || 'api'; // e.g., "api"
-const createDns = config.getBoolean('createDns') ?? true; // Whether to create Route53 hosted zone
+// Custom domain configuration (optional - managed via Cloudflare DNS)
+// When set, CloudFront will use this domain + api subdomain
+const domainName = process.env.DOMAIN_NAME; // e.g., "super-mail.app"
+const backendSubdomain = process.env.BACKEND_SUBDOMAIN || 'api'; // e.g., "api"
 
 // Supabase configuration
-const supabaseUrl = config.require('supabaseUrl');
-const supabaseAnonKey = config.require('supabaseAnonKey');
-const supabaseServiceRoleKey = config.requireSecret('supabaseServiceRoleKey');
+const supabaseUrl = process.env.SUPABASE_URL!;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+  throw new Error(
+    'Missing required environment variables: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY',
+  );
+}
 
 const stackName = `email-client-${environment}`;
 const currentRegion = aws.getRegionOutput({});
 
 // =============================================================================
-// Route53 Hosted Zone (if using custom domain)
+// DNS & SSL Configuration (Cloudflare-managed)
 // =============================================================================
-
-let hostedZone: aws.route53.Zone | undefined;
-
-if (domainName && createDns) {
-  hostedZone = new aws.route53.Zone(`${stackName}-zone`, {
-    name: domainName,
-    comment: `Hosted zone for ${domainName}`,
-    tags: {
-      Name: `${stackName}-zone`,
-      Environment: environment,
-    },
-  });
-}
-
+// When using a custom domain (set DOMAIN_NAME in .env):
+// - DNS is managed via Cloudflare (not Route53)
+// - SSL/TLS is handled by Cloudflare (not ACM)
+// - Add these CNAME records in Cloudflare:
+//   1. super-mail.app -> CloudFront domain (from outputs)
+//   2. api.super-mail.app -> CloudFront domain (from outputs)
+// - Cloudflare will proxy requests and handle SSL termination
+// - CloudFront will accept both domain names without needing a certificate
 // =============================================================================
-// ACM Certificate (must be in us-east-1 for CloudFront)
-// =============================================================================
-
-let certificate: aws.acm.Certificate | undefined;
-let certificateValidation: aws.route53.Record[] | undefined;
-
-if (domainName && hostedZone) {
-  // ACM certificate must be in us-east-1 for CloudFront
-  const usEast1Provider = new aws.Provider(`${stackName}-us-east-1`, {
-    region: 'us-east-1',
-  });
-
-  certificate = new aws.acm.Certificate(
-    `${stackName}-cert`,
-    {
-      domainName: domainName,
-      subjectAlternativeNames: [`*.${domainName}`], // Wildcard for api.super-mail.app
-      validationMethod: 'DNS',
-      tags: {
-        Name: `${stackName}-cert`,
-        Environment: environment,
-      },
-    },
-    { provider: usEast1Provider },
-  );
-
-  // Create DNS validation records
-  certificateValidation = [];
-  const validationOptions = certificate.domainValidationOptions;
-
-  // Create validation record for main domain
-  const validationRecord = new aws.route53.Record(
-    `${stackName}-cert-validation`,
-    {
-      name: validationOptions[0].resourceRecordName,
-      type: validationOptions[0].resourceRecordType,
-      records: [validationOptions[0].resourceRecordValue],
-      zoneId: hostedZone.zoneId,
-      ttl: 60,
-    },
-  );
-
-  certificateValidation.push(validationRecord);
-
-  // Wait for certificate validation
-  // new aws.acm.CertificateValidation(
-  //   `${stackName}-cert-validation-waiter`,
-  //   {
-  //     certificateArn: certificate.arn,
-  //     validationRecordFqdns: [validationRecord.fqdn],
-  //   },
-  //   { provider: usEast1Provider },
-  // );
-}
 
 // =============================================================================
 // VPC - Simple setup with public subnets only (no NAT needed)
@@ -728,21 +673,11 @@ const frontendDistribution = new aws.cloudfront.Distribution(
     httpVersion: 'http2and3',
     priceClass: 'PriceClass_100',
 
-    // Custom domain configuration
-    ...(domainName && certificate
-      ? {
-          aliases: [domainName],
-          viewerCertificate: {
-            acmCertificateArn: certificate.arn,
-            sslSupportMethod: 'sni-only',
-            minimumProtocolVersion: 'TLSv1.2_2021',
-          },
-        }
-      : {
-          viewerCertificate: {
-            cloudfrontDefaultCertificate: true,
-          },
-        }),
+    // Use CloudFront's default certificate
+    // Custom domain SSL is handled by Cloudflare
+    viewerCertificate: {
+      cloudfrontDefaultCertificate: true,
+    },
 
     origins: [
       {
@@ -782,7 +717,7 @@ const frontendDistribution = new aws.cloudfront.Distribution(
 
     orderedCacheBehaviors: [
       {
-        pathPattern: '/graphql',
+        pathPattern: '/api/*',
         targetOriginId: 'BackendOrigin',
         viewerProtocolPolicy: 'https-only',
         allowedMethods: [
@@ -794,26 +729,6 @@ const frontendDistribution = new aws.cloudfront.Distribution(
           'PATCH',
           'DELETE',
         ],
-        cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
-        compress: false,
-        cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
-        originRequestPolicyId: 'b689b0a8-53d0-40ab-baf2-68738e2966ac',
-      },
-      {
-        pathPattern: '/attachments/*',
-        targetOriginId: 'BackendOrigin',
-        viewerProtocolPolicy: 'https-only',
-        allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
-        cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
-        compress: false,
-        cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
-        originRequestPolicyId: 'b689b0a8-53d0-40ab-baf2-68738e2966ac',
-      },
-      {
-        pathPattern: '/health',
-        targetOriginId: 'BackendOrigin',
-        viewerProtocolPolicy: 'https-only',
-        allowedMethods: ['GET', 'HEAD', 'OPTIONS'],
         cachedMethods: ['GET', 'HEAD', 'OPTIONS'],
         compress: false,
         cachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
@@ -846,47 +761,19 @@ const frontendDistribution = new aws.cloudfront.Distribution(
     },
   },
   {
-    dependsOn: [
-      backendEip,
-      frontendBucketPolicy,
-      ...(certificate ? [certificate] : []),
-    ],
+    dependsOn: [backendEip, frontendBucketPolicy],
   },
 );
 
 // =============================================================================
-// Route53 DNS Records (if using custom domain)
+// DNS Configuration (Cloudflare-managed)
 // =============================================================================
-
-if (domainName && hostedZone) {
-  // Main domain points to CloudFront
-  new aws.route53.Record(`${stackName}-dns-root`, {
-    zoneId: hostedZone.zoneId,
-    name: domainName,
-    type: 'A',
-    aliases: [
-      {
-        name: frontendDistribution.domainName,
-        zoneId: frontendDistribution.hostedZoneId,
-        evaluateTargetHealth: false,
-      },
-    ],
-  });
-
-  // API subdomain also points to CloudFront (for backwards compatibility)
-  new aws.route53.Record(`${stackName}-dns-api`, {
-    zoneId: hostedZone.zoneId,
-    name: `${backendSubdomain}.${domainName}`,
-    type: 'A',
-    aliases: [
-      {
-        name: frontendDistribution.domainName,
-        zoneId: frontendDistribution.hostedZoneId,
-        evaluateTargetHealth: false,
-      },
-    ],
-  });
-}
+// When using a custom domain, add these CNAME records in Cloudflare:
+// 1. super-mail.app -> d76vxdg33nana.cloudfront.net (from frontendUrl output)
+// 2. api.super-mail.app -> d76vxdg33nana.cloudfront.net (from frontendUrl output)
+//
+// Set SSL/TLS mode in Cloudflare to "Full" (not "Full (strict)")
+// =============================================================================
 
 // =============================================================================
 // Outputs
@@ -899,6 +786,7 @@ export const backendApiUrl = domainName
 export const frontendUrl = domainName
   ? pulumi.interpolate`https://${domainName}`
   : pulumi.interpolate`https://${frontendDistribution.domainName}`;
+export const cloudfrontDomain = frontendDistribution.domainName;
 export const frontendBucketName = frontendBucket.bucket;
 export const frontendDistributionId = frontendDistribution.id;
 export const backendRepoUrl = backendRepo.repositoryUrl;
@@ -908,6 +796,3 @@ export const backendPublicDns = backendEip.publicDns;
 export const databaseEndpoint = database.endpoint;
 export const databaseAddress = database.address;
 export const attachmentsBucketName = attachmentsBucket.bucket;
-export const hostedZoneId = hostedZone?.zoneId;
-export const hostedZoneNameServers = hostedZone?.nameServers;
-export const certificateArn = certificate?.arn;

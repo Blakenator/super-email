@@ -88,18 +88,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/graphql': {
+      '/api': {
         target: 'http://localhost:4000',
         changeOrigin: true,
         ws: true, // Enable WebSocket proxying for subscriptions
-      },
-      '/attachments': {
-        target: 'http://localhost:4000',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://localhost:4000',
-        changeOrigin: true,
       },
     },
   },
