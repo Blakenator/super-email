@@ -82,31 +82,44 @@ log_info "Backend content hash: $CONTENT_HASH"
 # Check if this content hash already exists in ECR
 log_info "Checking if image with hash $CONTENT_HASH already exists in ECR..."
 
+IMAGE_EXISTS="0"
+
+# Temporarily disable exit on error for ECR check (it's okay if this fails)
+set +e
+
 # Check if jq is available
-if ! command -v jq &> /dev/null; then
-    log_warn "jq not found. Cannot check ECR for existing images. Will build new image."
-    IMAGE_EXISTS="0"
-else
+if command -v jq >/dev/null 2>&1; then
+    # Try to check ECR for existing image
     ECR_OUTPUT=$(aws ecr describe-images \
         --repository-name "email-client-$ENVIRONMENT-backend" \
         --image-ids imageTag="content-$CONTENT_HASH" \
         --region "$AWS_REGION" \
         2>&1)
-    ECR_EXIT_CODE=$?
-
-    if [ $ECR_EXIT_CODE -eq 0 ] && [ -n "$ECR_OUTPUT" ]; then
-        # Command succeeded, parse the JSON
-        IMAGE_EXISTS=$(echo "$ECR_OUTPUT" | jq -r '.imageDetails | length' 2>/dev/null || echo "0")
-    else
-        # Command failed (image not found or other error)
-        IMAGE_EXISTS="0"
+    ECR_EXIT=$?
+    
+    if [ $ECR_EXIT -eq 0 ] && [ -n "$ECR_OUTPUT" ]; then
+        # Try to parse JSON (may fail if output is error message)
+        IMAGE_COUNT=$(echo "$ECR_OUTPUT" | jq -r '.imageDetails | length' 2>/dev/null)
+        JQ_EXIT=$?
+        
+        if [ $JQ_EXIT -eq 0 ] && [ -n "$IMAGE_COUNT" ] && [ "$IMAGE_COUNT" != "null" ]; then
+            # Validate it's a number using basic pattern matching
+            case "$IMAGE_COUNT" in
+                ''|*[!0-9]*) 
+                    IMAGE_EXISTS="0" 
+                    ;;
+                *) 
+                    IMAGE_EXISTS="$IMAGE_COUNT" 
+                    ;;
+            esac
+        fi
     fi
-
-    # Ensure IMAGE_EXISTS is a number (default to 0 if empty or invalid)
-    if [ -z "$IMAGE_EXISTS" ] || ! [[ "$IMAGE_EXISTS" =~ ^[0-9]+$ ]]; then
-        IMAGE_EXISTS="0"
-    fi
+else
+    log_warn "jq not found. Cannot check ECR for existing images. Will build new image."
 fi
+
+# Re-enable exit on error
+set -e
 
 BUILD_NEW_IMAGE=false
 
