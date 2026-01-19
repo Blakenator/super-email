@@ -476,10 +476,46 @@ new aws.iam.RolePolicyAttachment(`${stackName}-ec2-secrets-policy`, {
   policyArn: secretsPolicy.arn,
 });
 
-// CloudWatch Logs access
+// CloudWatch Log Group for backend container logs
+const backendLogGroup = new aws.cloudwatch.LogGroup(`${stackName}-backend-logs`, {
+  name: `/ec2/${stackName}/backend`,
+  retentionInDays: 14, // Keep logs for 14 days to manage costs
+  tags: {
+    Name: `${stackName}-backend-logs`,
+    Environment: environment,
+  },
+});
+
+// CloudWatch Logs access - need explicit permissions for awslogs driver
+const logsPolicy = new aws.iam.Policy(`${stackName}-logs-policy`, {
+  name: `${stackName}-logs-policy`,
+  policy: backendLogGroup.arn.apply((arn) =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: [
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+            'logs:DescribeLogStreams',
+          ],
+          Resource: [`${arn}:*`],
+        },
+      ],
+    }),
+  ),
+});
+
 new aws.iam.RolePolicyAttachment(`${stackName}-ec2-logs-policy`, {
   role: ec2Role.name,
-  policyArn: 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
+  policyArn: logsPolicy.arn,
+});
+
+// SSM access for remote commands (required for deploy script updates)
+new aws.iam.RolePolicyAttachment(`${stackName}-ec2-ssm-policy`, {
+  role: ec2Role.name,
+  policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
 });
 
 const instanceProfile = new aws.iam.InstanceProfile(
@@ -542,6 +578,7 @@ const userData = pulumi
     attachmentsBucket.bucket,
     currentRegion.name,
     supabaseServiceSecret.arn,
+    backendLogGroup.name,
   ])
   .apply(
     ([
@@ -552,8 +589,12 @@ const userData = pulumi
       bucketName,
       region,
       secretArn,
+      logGroupName,
     ]) => `#!/bin/bash
-set -e
+set -ex  # Echo commands and exit on error
+
+exec > >(tee /var/log/user-data.log) 2>&1
+echo "=== User data script started at $(date) ==="
 
 # Update and install Docker
 dnf update -y
@@ -564,19 +605,30 @@ systemctl start docker
 # Install AWS CLI v2
 dnf install -y aws-cli
 
+# Ensure SSM Agent is running (included in AL2023 by default)
+systemctl enable amazon-ssm-agent
+systemctl start amazon-ssm-agent
+
+echo "=== Docker and SSM Agent started ==="
+
 # Login to ECR
 aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${repoUrl.split('/')[0]}
 
 # Get Supabase Service Role Key from Secrets Manager
 SUPABASE_SERVICE_KEY=$(aws secretsmanager get-secret-value --secret-id ${secretArn} --query SecretString --output text --region ${region})
 
-# Pull and run the backend container
+# Pull and run the backend container with CloudWatch logging
 docker pull ${repoUrl}:latest
 
 docker run -d \\
   --name backend \\
   --restart always \\
   -p 80:4000 \\
+  --log-driver=awslogs \\
+  --log-opt awslogs-region=${region} \\
+  --log-opt awslogs-group=${logGroupName} \\
+  --log-opt awslogs-stream=backend-$(curl -s http://169.254.169.254/latest/meta-data/instance-id) \\
+  --log-opt awslogs-create-stream=true \\
   -e NODE_ENV=production \\
   -e LOG_LEVEL=info \\
   -e DB_HOST=${dbHost} \\
@@ -614,11 +666,17 @@ echo "[$(date)] Stopping old container..."
 docker stop backend || true
 docker rm backend || true
 
-echo "[$(date)] Starting new container..."
+echo "[$(date)] Starting new container with CloudWatch logging..."
+INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 docker run -d \\
   --name backend \\
   --restart always \\
   -p 80:4000 \\
+  --log-driver=awslogs \\
+  --log-opt awslogs-region=${region} \\
+  --log-opt awslogs-group=${logGroupName} \\
+  --log-opt awslogs-stream=backend-$INSTANCE_ID \\
+  --log-opt awslogs-create-stream=true \\
   -e NODE_ENV=production \\
   -e LOG_LEVEL=info \\
   -e DB_HOST=${dbHost} \\
@@ -637,6 +695,7 @@ docker run -d \\
 
 echo "[$(date)] Backend container started successfully!"
 docker ps | grep backend
+echo "[$(date)] Logs are available in CloudWatch: ${logGroupName}"
 SCRIPT_EOF
 chmod +x /home/ec2-user/update-backend.sh
 chown ec2-user:ec2-user /home/ec2-user/update-backend.sh
@@ -822,3 +881,4 @@ export const backendPublicDns = backendEip.publicDns;
 export const databaseEndpoint = database.endpoint;
 export const databaseAddress = database.address;
 export const attachmentsBucketName = attachmentsBucket.bucket;
+export const backendLogGroupName = backendLogGroup.name;
