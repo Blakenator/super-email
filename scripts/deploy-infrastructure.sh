@@ -25,12 +25,20 @@ if [ -z "$GIT_COMMIT_SHA" ]; then
 fi
 log_info "Git commit SHA: $GIT_COMMIT_SHA"
 
+# Ensure CONTENT_HASH is set
+if [ -z "$CONTENT_HASH" ]; then
+    export CONTENT_HASH="unknown"
+fi
+log_info "Content hash: $CONTENT_HASH"
+
 # Export environment variables for Pulumi (reads from process.env)
 export ENVIRONMENT="$ENVIRONMENT"
 export AWS_REGION="${AWS_REGION:-us-west-1}"
 export DB_INSTANCE_CLASS="${DB_INSTANCE_CLASS:-db.t4g.micro}"
 export DOMAIN_NAME="${DOMAIN_NAME:-}"
 export BACKEND_SUBDOMAIN="${BACKEND_SUBDOMAIN:-api}"
+export GIT_COMMIT_SHA="$GIT_COMMIT_SHA"
+export CONTENT_HASH="$CONTENT_HASH"
 
 log_info "Configuration:"
 log_info "  Environment: $ENVIRONMENT"

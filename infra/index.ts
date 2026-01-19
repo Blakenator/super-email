@@ -31,6 +31,10 @@ const dbInstanceClass = process.env.DB_INSTANCE_CLASS || 'db.t4g.micro';
 const domainName = process.env.DOMAIN_NAME; // e.g., "super-mail.app"
 const backendSubdomain = process.env.BACKEND_SUBDOMAIN || 'api'; // e.g., "api"
 
+// Version tracking for deployments
+const gitCommitSha = process.env.GIT_COMMIT_SHA || 'unknown';
+const contentHash = process.env.CONTENT_HASH || 'unknown';
+
 // Supabase configuration
 const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
@@ -590,12 +594,27 @@ docker run -d \\
   ${repoUrl}:latest
 
 # Create update script for easy redeployment
-cat > /home/ec2-user/update-backend.sh << 'EOF'
+cat > /home/ec2-user/update-backend.sh << 'SCRIPT_EOF'
 #!/bin/bash
-aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin ${repoUrl.split('/')[0]}
+set -e
+
+echo "[$(date)] Starting backend update..."
+
+# Get ECR registry from repo URL
+REPO_URL="${repoUrl}"
+ECR_REGISTRY=$(echo "$REPO_URL" | cut -d'/' -f1)
+
+echo "[$(date)] Logging into ECR..."
+aws ecr get-login-password --region ${region} | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+
+echo "[$(date)] Pulling latest image..."
 docker pull ${repoUrl}:latest
+
+echo "[$(date)] Stopping old container..."
 docker stop backend || true
 docker rm backend || true
+
+echo "[$(date)] Starting new container..."
 docker run -d \\
   --name backend \\
   --restart always \\
@@ -615,7 +634,10 @@ docker run -d \\
   -e SUPABASE_ANON_KEY=${supabaseAnonKey} \\
   -e SUPABASE_SERVICE_ROLE_KEY="$(aws secretsmanager get-secret-value --secret-id ${secretArn} --query SecretString --output text --region ${region})" \\
   ${repoUrl}:latest
-EOF
+
+echo "[$(date)] Backend container started successfully!"
+docker ps | grep backend
+SCRIPT_EOF
 chmod +x /home/ec2-user/update-backend.sh
 chown ec2-user:ec2-user /home/ec2-user/update-backend.sh
 
@@ -643,10 +665,14 @@ const backendInstance = new aws.ec2.Instance(
     tags: {
       Name: `${stackName}-backend`,
       Environment: environment,
+      GitCommitSha: gitCommitSha,
+      ContentHash: contentHash,
+      DeployedAt: new Date().toISOString(),
     },
   },
   {
     dependsOn: [database],
+    ignoreChanges: ['tags.DeployedAt'], // Don't recreate instance if only timestamp changed
   },
 );
 

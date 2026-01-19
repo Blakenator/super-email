@@ -167,17 +167,42 @@ if [ -n "$BACKEND_INSTANCE_ID" ]; then
     log_info "Updating EC2 instance $BACKEND_INSTANCE_ID..."
     
     # Use SSM to run the update script on EC2
-    aws ssm send-command \
+    COMMAND_ID=$(aws ssm send-command \
         --instance-ids "$BACKEND_INSTANCE_ID" \
         --document-name "AWS-RunShellScript" \
         --parameters 'commands=["/home/ec2-user/update-backend.sh"]' \
         --region "$AWS_REGION" \
-        --output text > /dev/null 2>&1 || {
-            log_warn "SSM command failed. You may need to manually SSH and run: /home/ec2-user/update-backend.sh"
-            log_warn "Or wait for the next EC2 reboot to pick up the new image."
-        }
+        --query 'Command.CommandId' \
+        --output text 2>/dev/null || echo "")
     
-    log_info "EC2 update command sent. Container will restart with new image."
+    if [ -n "$COMMAND_ID" ]; then
+        log_info "SSM command sent: $COMMAND_ID"
+        log_info "Waiting for EC2 to update container (30 seconds)..."
+        sleep 30
+        
+        # Check command status
+        COMMAND_STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$BACKEND_INSTANCE_ID" \
+            --region "$AWS_REGION" \
+            --query 'Status' \
+            --output text 2>/dev/null || echo "Unknown")
+        
+        log_info "SSM command status: $COMMAND_STATUS"
+        
+        if [ "$COMMAND_STATUS" = "Success" ]; then
+            log_info "✓ EC2 instance updated successfully!"
+        else
+            log_warn "SSM command may not have completed. Status: $COMMAND_STATUS"
+            log_warn "Check logs with:"
+            log_warn "  aws ssm get-command-invocation --command-id $COMMAND_ID --instance-id $BACKEND_INSTANCE_ID --region $AWS_REGION"
+        fi
+    else
+        log_warn "SSM command failed to send. You may need to manually SSH and run: /home/ec2-user/update-backend.sh"
+        log_warn "Or wait for the next EC2 reboot to pick up the new image."
+    fi
+    
+    log_info "EC2 update process initiated."
 else
     log_warn "BACKEND_INSTANCE_ID not set. Skipping EC2 update."
     log_warn "The new image is in ECR. Restart the EC2 instance or run update-backend.sh manually."
@@ -185,3 +210,4 @@ fi
 
 log_info "Backend deployment complete."
 echo "BACKEND_IMAGE_TAG=content-$CONTENT_HASH" > "$PROJECT_ROOT/.backend-image-tag"
+echo "GIT_COMMIT_SHA=$GIT_COMMIT_SHA" >> "$PROJECT_ROOT/.backend-image-tag"

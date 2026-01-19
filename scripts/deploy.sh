@@ -263,21 +263,64 @@ main() {
     check_prereqs
     get_aws_info
     
+    # Calculate git commit SHA early for tagging
+    if [ -z "$GIT_COMMIT_SHA" ]; then
+        GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+        export GIT_COMMIT_SHA="$GIT_SHA"
+    fi
+    log_info "Git commit SHA: $GIT_COMMIT_SHA"
+    
     # Try to get existing infrastructure outputs
     if get_infrastructure_outputs; then
         # Infrastructure exists, build and push image first
         log_info "Updating existing deployment..."
+        
+        # Build packages and calculate content hash
+        log_info "Building packages to calculate content hash..."
+        cd "$PROJECT_ROOT/common"
+        pnpm run build
+        cd "$PROJECT_ROOT/backend"
+        pnpm run build
+        cd "$PROJECT_ROOT"
+        
+        # Calculate content hash (same logic as deploy-backend.sh)
+        HASH_FILES=$(mktemp)
+        trap "rm -f $HASH_FILES" EXIT
+        {
+            find backend/dist common/dist -type f \( -name "*.js" -o -name "*.d.ts" -o -name "*.js.map" -o -name "*.d.ts.map" \) 2>/dev/null
+            find common -name "schema.graphql" 2>/dev/null
+            find backend -maxdepth 1 -type f -name "Dockerfile" 2>/dev/null
+            find . -maxdepth 1 -type f -name ".dockerignore" 2>/dev/null
+        } | sort > "$HASH_FILES"
+        
+        CONTENT_HASH=$(cat "$HASH_FILES" | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1 | cut -c1-12)
+        export CONTENT_HASH
+        log_info "Content hash: $CONTENT_HASH"
+        
+        # Deploy backend with the calculated hash
         deploy_backend
         
-        # Update infrastructure (in case of config changes)
+        # Update infrastructure (will tag EC2 with new hash)
         deploy_infrastructure
     else
         # First time deploy: create infrastructure first (including ECR repo)
         log_info "First deployment: creating infrastructure first..."
+        
+        # Set a placeholder content hash for initial deploy
+        export CONTENT_HASH="initial"
+        
         deploy_infrastructure
         
         # Now build and push the image
         deploy_backend
+        
+        # Re-run infrastructure to update tags with actual content hash
+        if [ -f "$PROJECT_ROOT/.backend-image-tag" ]; then
+            source "$PROJECT_ROOT/.backend-image-tag"
+            export CONTENT_HASH="${BACKEND_IMAGE_TAG#content-}"
+            log_info "Updating EC2 tags with content hash: $CONTENT_HASH"
+            deploy_infrastructure
+        fi
     fi
     
     # Deploy frontend
@@ -307,6 +350,10 @@ main() {
         echo "  Manual Container Start:"
         echo "    ./scripts/start-ec2-container.sh $BACKEND_PUBLIC_IP"
     fi
+    echo ""
+    echo "  Version Info:"
+    echo "    Git SHA:      $GIT_COMMIT_SHA"
+    echo "    Content Hash: $CONTENT_HASH"
     echo ""
     echo "  Note: CloudFront may take a few minutes to"
     echo "  propagate. If you see errors, wait and retry."
