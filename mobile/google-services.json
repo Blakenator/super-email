@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "907765874068",
+    "project_id": "super-email-64e84",
+    "storage_bucket": "super-email-64e84.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:907765874068:android:51b0434ba4f0fe5deea381",
+        "android_client_info": {
+          "package_name": "app.super_mail.android"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAydU61GGGu2D8BOLKRtn1BZWhOhdOj86U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

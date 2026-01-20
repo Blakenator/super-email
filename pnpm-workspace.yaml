@@ -1,5 +1,8 @@
 packages:
-  - 'backend'
-  - 'common'
-  - 'frontend'
-  - 'infra'
+  - backend
+  - common
+  - frontend
+  - infra
+  - mobile
+
+nodeLinker: hoisted

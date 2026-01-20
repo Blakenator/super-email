@@ -15,7 +15,18 @@
     "deploy:prod": "./scripts/deploy.sh prod",
     "infra:preview": "cd infra && pulumi preview",
     "infra:up": "cd infra && pulumi up",
-    "infra:destroy": "cd infra && pulumi destroy"
+    "infra:destroy": "cd infra && pulumi destroy",
+    "mobile:start": "pnpm run --filter @main/mobile start",
+    "mobile:start:clear": "pnpm run --filter @main/mobile start:clear",
+    "mobile:ios": "pnpm run --filter @main/mobile ios",
+    "mobile:ios:clear": "pnpm run --filter @main/mobile ios:clear",
+    "mobile:android": "pnpm run --filter @main/mobile android",
+    "mobile:android:clear": "pnpm run --filter @main/mobile android:clear",
+    "mobile:logs": "pnpm run --filter @main/mobile logs",
+    "mobile:reset": "pnpm run --filter @main/mobile reset",
+    "mobile:build": "./scripts/build-mobile.sh",
+    "mobile:build:ios": "./scripts/build-mobile.sh ios",
+    "mobile:build:android": "./scripts/build-mobile.sh android"
   },
   "keywords": [
     "email",
@@ -33,5 +44,12 @@
   },
   "dependencies": {
     "luxon": "^3.7.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "react": "19.1.0",
+      "react-dom": "19.1.0",
+      "@types/react": "~19.1.0"
+    }
   }
 }
