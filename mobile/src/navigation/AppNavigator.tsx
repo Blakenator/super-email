@@ -5,20 +5,30 @@
 
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 
 import { useTheme } from '../theme';
 import { useAuthStore } from '../stores/authStore';
+import { Icon, TabIcon } from '../components/ui';
 
 // Screens
 import { LoginScreen, SignupScreen } from '../screens/auth';
 import { InboxScreen } from '../screens/inbox';
 import { ContactsScreen } from '../screens/contacts';
-import { SettingsScreen } from '../screens/settings';
+import {
+  SettingsScreen,
+  AccountsSettingsScreen,
+  SmtpSettingsScreen,
+  TagsSettingsScreen,
+  RulesSettingsScreen,
+  NotificationsSettingsScreen,
+} from '../screens/settings';
 import { NukeScreen } from '../screens/nuke';
+import { ComposeScreen } from '../screens/compose';
 
 // Type definitions
 export type RootStackParamList = {
@@ -26,7 +36,13 @@ export type RootStackParamList = {
   Main: undefined;
   EmailDetail: { emailId: string };
   ContactDetail: { contactId: string };
+  Compose: { replyTo?: { emailId: string; toAddress: string; subject: string } } | undefined;
   Nuke: undefined;
+  AccountSettings: undefined;
+  SmtpSettings: undefined;
+  TagSettings: undefined;
+  RuleSettings: undefined;
+  NotificationSettings: undefined;
 };
 
 export type AuthStackParamList = {
@@ -45,45 +61,56 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainTab = createBottomTabNavigator<MainTabParamList>();
 
-// Simple Login Screen wrapper
-function LoginScreenWrapper() {
-  return <LoginScreen onNavigateToSignup={() => {}} />;
-}
-
-// Simple Signup Screen wrapper
-function SignupScreenWrapper() {
-  return <SignupScreen onNavigateToLogin={() => {}} />;
-}
-
 // Auth Navigator
 function AuthNavigator() {
+  const authNavigation = useNavigation<NativeStackNavigationProp<AuthStackParamList>>();
+  
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-      <AuthStack.Screen name="Login" component={LoginScreenWrapper} />
-      <AuthStack.Screen name="Signup" component={SignupScreenWrapper} />
+      <AuthStack.Screen name="Login">
+        {() => <LoginScreen onNavigateToSignup={() => authNavigation.navigate('Signup')} />}
+      </AuthStack.Screen>
+      <AuthStack.Screen name="Signup">
+        {() => <SignupScreen onNavigateToLogin={() => authNavigation.navigate('Login')} />}
+      </AuthStack.Screen>
     </AuthStack.Navigator>
   );
 }
 
-// Inbox Screen wrapper
+// Inbox Screen wrapper with navigation
 function InboxScreenWrapper() {
-  return <InboxScreen onEmailPress={() => {}} />;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
+  return (
+    <InboxScreen
+      onEmailPress={(emailId) => navigation.navigate('EmailDetail', { emailId })}
+      onComposePress={() => navigation.navigate('Compose')}
+    />
+  );
 }
 
 // Contacts Screen wrapper
 function ContactsScreenWrapper() {
-  return <ContactsScreen onContactPress={() => {}} />;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
+  return (
+    <ContactsScreen
+      onContactPress={(contactId) => navigation.navigate('ContactDetail', { contactId })}
+    />
+  );
 }
 
 // Settings Screen wrapper
 function SettingsScreenWrapper() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
   return (
     <SettingsScreen
-      onNavigateToAccounts={() => {}}
-      onNavigateToSmtp={() => {}}
-      onNavigateToTags={() => {}}
-      onNavigateToRules={() => {}}
-      onNavigateToNotifications={() => {}}
+      onNavigateToAccounts={() => navigation.navigate('AccountSettings')}
+      onNavigateToSmtp={() => navigation.navigate('SmtpSettings')}
+      onNavigateToTags={() => navigation.navigate('TagSettings')}
+      onNavigateToRules={() => navigation.navigate('RuleSettings')}
+      onNavigateToNotifications={() => navigation.navigate('NotificationSettings')}
     />
   );
 }
@@ -116,8 +143,8 @@ function MainTabNavigator() {
         options={{
           title: 'Inbox',
           headerTitle: 'StacksMail',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>📥</Text>
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="inbox" focused={focused} color={color} />
           ),
         }}
       />
@@ -126,8 +153,8 @@ function MainTabNavigator() {
         component={ContactsScreenWrapper}
         options={{
           title: 'Contacts',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>👥</Text>
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="users" focused={focused} color={color} />
           ),
         }}
       />
@@ -136,8 +163,8 @@ function MainTabNavigator() {
         component={SettingsScreenWrapper}
         options={{
           title: 'Settings',
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.6 }}>⚙️</Text>
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="settings" focused={focused} color={color} />
           ),
         }}
       />
@@ -145,28 +172,44 @@ function MainTabNavigator() {
   );
 }
 
-// Placeholder screen
-function PlaceholderScreen({ title }: { title: string }) {
+// Placeholder screen for email detail
+function EmailDetailScreen() {
   const theme = useTheme();
   return (
     <View style={[styles.placeholder, { backgroundColor: theme.colors.background }]}>
-      <Text style={{ color: theme.colors.text }}>{title}</Text>
+      <Icon name="mail" size="xl" color={theme.colors.textMuted} />
     </View>
   );
 }
 
+// Placeholder screen for contact detail
+function ContactDetailScreen() {
+  const theme = useTheme();
+  return (
+    <View style={[styles.placeholder, { backgroundColor: theme.colors.background }]}>
+      <Icon name="user" size="xl" color={theme.colors.textMuted} />
+    </View>
+  );
+}
+
+// Compose Screen wrapper
+function ComposeScreenWrapper() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
+  return <ComposeScreen onClose={() => navigation.goBack()} />;
+}
+
 // Nuke Screen wrapper
 function NukeScreenWrapper() {
-  return <NukeScreen onComplete={() => {}} />;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
+  return <NukeScreen onComplete={() => navigation.goBack()} />;
 }
 
 // Root Navigator
 export function AppNavigator() {
-  console.log('[AppNavigator] Rendering...');
   const theme = useTheme();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-
-  console.log('[AppNavigator] isAuthenticated:', isAuthenticated);
 
   return (
     <NavigationContainer>
@@ -193,20 +236,48 @@ export function AppNavigator() {
             />
             <RootStack.Screen
               name="EmailDetail"
+              component={EmailDetailScreen}
               options={{ title: 'Email' }}
-            >
-              {() => <PlaceholderScreen title="Email Detail" />}
-            </RootStack.Screen>
+            />
             <RootStack.Screen
               name="ContactDetail"
+              component={ContactDetailScreen}
               options={{ title: 'Contact' }}
-            >
-              {() => <PlaceholderScreen title="Contact Detail" />}
-            </RootStack.Screen>
+            />
+            <RootStack.Screen
+              name="Compose"
+              component={ComposeScreenWrapper}
+              options={{ headerShown: false, presentation: 'modal' }}
+            />
             <RootStack.Screen
               name="Nuke"
               component={NukeScreenWrapper}
               options={{ title: 'Inbox Nuke', presentation: 'modal' }}
+            />
+            <RootStack.Screen
+              name="AccountSettings"
+              component={AccountsSettingsScreen}
+              options={{ title: 'Email Accounts' }}
+            />
+            <RootStack.Screen
+              name="SmtpSettings"
+              component={SmtpSettingsScreen}
+              options={{ title: 'SMTP Profiles' }}
+            />
+            <RootStack.Screen
+              name="TagSettings"
+              component={TagsSettingsScreen}
+              options={{ title: 'Tags' }}
+            />
+            <RootStack.Screen
+              name="RuleSettings"
+              component={RulesSettingsScreen}
+              options={{ title: 'Mail Rules' }}
+            />
+            <RootStack.Screen
+              name="NotificationSettings"
+              component={NotificationsSettingsScreen}
+              options={{ title: 'Notifications' }}
             />
           </>
         )}

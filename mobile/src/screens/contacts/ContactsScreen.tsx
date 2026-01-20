@@ -14,9 +14,10 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { useTheme } from '../../theme';
+import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
+import { Icon } from '../../components/ui';
 
 const GET_CONTACTS_QUERY = gql`
   query GetContacts {
@@ -166,7 +167,7 @@ export function ContactsScreen({ onContactPress }: ContactsScreenProps) {
         onLongPress={() => handleDeleteContact(item)}
         style={[
           styles.contactCard,
-          { backgroundColor: theme.colors.surface },
+          { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border },
         ]}
       >
         <View
@@ -214,27 +215,30 @@ export function ContactsScreen({ onContactPress }: ContactsScreenProps) {
           )}
           
           {item.company && (
-            <Text
-              style={[styles.contactCompany, { color: theme.colors.textMuted }]}
-              numberOfLines={1}
-            >
-              🏢 {item.company}
-            </Text>
+            <View style={styles.companyRow}>
+              <Icon name="globe" size="xs" color={theme.colors.textMuted} />
+              <Text
+                style={[styles.contactCompany, { color: theme.colors.textMuted }]}
+                numberOfLines={1}
+              >
+                {item.company}
+              </Text>
+            </View>
           )}
         </View>
         
-        <Text style={{ color: theme.colors.textMuted }}>›</Text>
+        <Icon name="chevron-right" size="md" color={theme.colors.textMuted} />
       </TouchableOpacity>
     );
   };
   
   const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>👥</Text>
-      <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
+    <View style={sharedStyles.emptyContainer}>
+      <Icon name="users" size="xl" color={theme.colors.textMuted} />
+      <Text style={[sharedStyles.emptyTitle, { color: theme.colors.text }]}>
         {searchQuery ? 'No contacts found' : 'No contacts'}
       </Text>
-      <Text style={[styles.emptySubtitle, { color: theme.colors.textMuted }]}>
+      <Text style={[sharedStyles.emptySubtitle, { color: theme.colors.textMuted }]}>
         {searchQuery
           ? 'Try a different search term'
           : 'Your contacts will appear here'}
@@ -243,20 +247,16 @@ export function ContactsScreen({ onContactPress }: ContactsScreenProps) {
   );
   
   return (
-    <View
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Search Bar */}
-      <View
-        style={[styles.searchContainer, { backgroundColor: theme.colors.surface }]}
-      >
+      <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <View
           style={[
             styles.searchInput,
             { backgroundColor: theme.colors.backgroundSecondary },
           ]}
         >
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Icon name="search" size="sm" color={theme.colors.textMuted} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -266,7 +266,7 @@ export function ContactsScreen({ onContactPress }: ContactsScreenProps) {
           />
           {searchQuery && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Text style={{ color: theme.colors.textMuted }}>✕</Text>
+              <Icon name="x" size="sm" color={theme.colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -307,31 +307,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchContainer: {
-    padding: 12,
+    padding: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e0e0e0',
   },
   searchInput: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  searchIcon: {
-    fontSize: 16,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    gap: SPACING.sm,
   },
   searchTextInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
   },
   countContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
   },
   countText: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.sm,
   },
   listContent: {
     flexGrow: 1,
@@ -342,11 +338,10 @@ const styles = StyleSheet.create({
   contactCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e0e0e0',
-    gap: 12,
+    gap: SPACING.sm,
   },
   avatar: {
     width: 48,
@@ -356,7 +351,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     fontWeight: '600',
   },
   contactInfo: {
@@ -365,46 +360,32 @@ const styles = StyleSheet.create({
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: SPACING.sm,
   },
   contactName: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     fontWeight: '500',
   },
   autoBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: RADIUS.sm,
   },
   autoBadgeText: {
-    fontSize: 10,
+    fontSize: FONT_SIZE.xs,
     fontWeight: '500',
   },
   contactEmail: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
     marginTop: 2,
+  },
+  companyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+    gap: SPACING.xs,
   },
   contactCompany: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  emptyIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  emptySubtitle: {
-    fontSize: 14,
-    textAlign: 'center',
+    fontSize: FONT_SIZE.sm,
   },
 });

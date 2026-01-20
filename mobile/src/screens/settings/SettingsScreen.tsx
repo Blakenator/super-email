@@ -13,9 +13,10 @@ import {
   Switch,
   Alert,
 } from 'react-native';
-import { useTheme } from '../../theme';
+import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { useAuthStore, ThemePreference } from '../../stores/authStore';
 import { getBiometricTypeName } from '../../services/biometricAuth';
+import { Icon, IconName } from '../../components/ui';
 
 interface SettingsScreenProps {
   onNavigateToAccounts: () => void;
@@ -68,42 +69,46 @@ export function SettingsScreen({
   const biometricName = getBiometricTypeName(biometricType);
   
   const renderSectionHeader = (title: string) => (
-    <View style={styles.sectionHeader}>
-      <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>
+    <View style={sharedStyles.sectionHeader}>
+      <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>
         {title}
       </Text>
     </View>
   );
   
   const renderSettingRow = (
-    icon: string,
+    icon: IconName,
     title: string,
     subtitle?: string,
     onPress?: () => void,
-    rightElement?: React.ReactNode
+    rightElement?: React.ReactNode,
+    destructive?: boolean
   ) => (
     <TouchableOpacity
       onPress={onPress}
       disabled={!onPress && !rightElement}
       style={[
-        styles.settingRow,
-        { backgroundColor: theme.colors.surface },
+        sharedStyles.listItem,
+        sharedStyles.listItemBorder,
+        { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border },
       ]}
     >
-      <Text style={styles.settingIcon}>{icon}</Text>
-      <View style={styles.settingContent}>
-        <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
+      <View style={styles.iconContainer}>
+        <Icon name={icon} size="md" color={destructive ? theme.colors.error : theme.colors.textMuted} />
+      </View>
+      <View style={sharedStyles.listItemContent}>
+        <Text style={[sharedStyles.listItemTitle, { color: destructive ? theme.colors.error : theme.colors.text }]}>
           {title}
         </Text>
         {subtitle && (
-          <Text style={[styles.settingSubtitle, { color: theme.colors.textMuted }]}>
+          <Text style={[sharedStyles.listItemSubtitle, { color: theme.colors.textMuted }]}>
             {subtitle}
           </Text>
         )}
       </View>
       {rightElement || (
         onPress && (
-          <Text style={{ color: theme.colors.textMuted }}>›</Text>
+          <Icon name="chevron-right" size="md" color={theme.colors.textMuted} />
         )
       )}
     </TouchableOpacity>
@@ -112,22 +117,12 @@ export function SettingsScreen({
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={sharedStyles.screenScrollContent}
     >
       {/* User Info */}
       {user && (
-        <View
-          style={[
-            styles.userCard,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <View
-            style={[
-              styles.userAvatar,
-              { backgroundColor: theme.colors.primary },
-            ]}
-          >
+        <View style={[styles.userCard, { backgroundColor: theme.colors.surface }]}>
+          <View style={[styles.userAvatar, { backgroundColor: theme.colors.primary }]}>
             <Text style={styles.userAvatarText}>
               {user.firstName?.[0] || ''}{user.lastName?.[0] || ''}
             </Text>
@@ -146,27 +141,27 @@ export function SettingsScreen({
       {/* Email Configuration */}
       {renderSectionHeader('EMAIL CONFIGURATION')}
       
-      <View style={styles.section}>
+      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
         {renderSettingRow(
-          '📥',
+          'inbox',
           'Email Accounts',
           'IMAP/POP email accounts',
           onNavigateToAccounts
         )}
         {renderSettingRow(
-          '📤',
+          'send',
           'SMTP Profiles',
           'Outgoing email settings',
           onNavigateToSmtp
         )}
         {renderSettingRow(
-          '🏷️',
+          'tag',
           'Tags',
           'Manage email labels',
           onNavigateToTags
         )}
         {renderSettingRow(
-          '⚙️',
+          'zap',
           'Mail Rules',
           'Automatic email filtering',
           onNavigateToRules
@@ -176,51 +171,40 @@ export function SettingsScreen({
       {/* Appearance */}
       {renderSectionHeader('APPEARANCE')}
       
-      <View style={styles.section}>
-        <View
-          style={[
-            styles.themeSelector,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <Text style={styles.settingIcon}>🎨</Text>
-          <View style={styles.settingContent}>
-            <Text style={[styles.settingTitle, { color: theme.colors.text }]}>
+      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+        <View style={[styles.themeSelector, { backgroundColor: theme.colors.surface }]}>
+          <View style={styles.iconContainer}>
+            <Icon name="sun" size="md" color={theme.colors.textMuted} />
+          </View>
+          <View style={sharedStyles.listItemContent}>
+            <Text style={[sharedStyles.listItemTitle, { color: theme.colors.text }]}>
               Theme
             </Text>
           </View>
           <View style={styles.themeOptions}>
-            {(['LIGHT', 'DARK', 'AUTO'] as ThemePreference[]).map((themeOption) => (
+            {([
+              { value: 'LIGHT' as ThemePreference, icon: 'sun' as IconName },
+              { value: 'DARK' as ThemePreference, icon: 'moon' as IconName },
+              { value: 'AUTO' as ThemePreference, icon: 'smartphone' as IconName },
+            ]).map(({ value, icon }) => (
               <TouchableOpacity
-                key={themeOption}
-                onPress={() => setSelectedTheme(themeOption)}
+                key={value}
+                onPress={() => setSelectedTheme(value)}
                 style={[
                   styles.themeOption,
                   {
                     backgroundColor:
-                      selectedTheme === themeOption
+                      selectedTheme === value
                         ? theme.colors.primary
                         : theme.colors.backgroundSecondary,
                   },
                 ]}
               >
-                <Text
-                  style={[
-                    styles.themeOptionText,
-                    {
-                      color:
-                        selectedTheme === themeOption
-                          ? theme.colors.textInverse
-                          : theme.colors.text,
-                    },
-                  ]}
-                >
-                  {themeOption === 'AUTO'
-                    ? '🔄'
-                    : themeOption === 'LIGHT'
-                      ? '☀️'
-                      : '🌙'}
-                </Text>
+                <Icon
+                  name={icon}
+                  size="sm"
+                  color={selectedTheme === value ? '#fff' : theme.colors.text}
+                />
               </TouchableOpacity>
             ))}
           </View>
@@ -230,10 +214,10 @@ export function SettingsScreen({
       {/* Security */}
       {renderSectionHeader('SECURITY')}
       
-      <View style={styles.section}>
+      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
         {biometricAvailable && (
           renderSettingRow(
-            biometricType === 'facial' ? '👤' : '👆',
+            biometricType === 'facial' ? 'face-id' : 'fingerprint',
             `${biometricName} Login`,
             `Use ${biometricName} to unlock the app`,
             undefined,
@@ -249,9 +233,9 @@ export function SettingsScreen({
       {/* Notifications */}
       {renderSectionHeader('NOTIFICATIONS')}
       
-      <View style={styles.section}>
+      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
         {renderSettingRow(
-          '🔔',
+          'bell',
           'Notification Settings',
           'Configure push notifications',
           onNavigateToNotifications
@@ -261,21 +245,15 @@ export function SettingsScreen({
       {/* Account Actions */}
       {renderSectionHeader('ACCOUNT')}
       
-      <View style={styles.section}>
-        <TouchableOpacity
-          onPress={handleLogout}
-          style={[
-            styles.settingRow,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <Text style={styles.settingIcon}>🚪</Text>
-          <View style={styles.settingContent}>
-            <Text style={[styles.settingTitle, { color: theme.colors.error }]}>
-              Sign Out
-            </Text>
-          </View>
-        </TouchableOpacity>
+      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+        {renderSettingRow(
+          'log-out',
+          'Sign Out',
+          undefined,
+          handleLogout,
+          undefined,
+          true
+        )}
       </View>
       
       {/* App Info */}
@@ -292,16 +270,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    paddingBottom: 32,
-  },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    margin: 16,
-    borderRadius: 12,
-    gap: 12,
+    padding: SPACING.md,
+    margin: SPACING.md,
+    borderRadius: RADIUS.lg,
+    gap: SPACING.sm,
   },
   userAvatar: {
     width: 56,
@@ -312,67 +287,34 @@ const styles = StyleSheet.create({
   },
   userAvatarText: {
     color: '#ffffff',
-    fontSize: 20,
+    fontSize: FONT_SIZE.xl,
     fontWeight: '600',
   },
   userInfo: {
     flex: 1,
   },
   userName: {
-    fontSize: 18,
+    fontSize: FONT_SIZE.xl,
     fontWeight: '600',
   },
   userEmail: {
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
     marginTop: 2,
   },
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 8,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  section: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e0e0e0',
-  },
-  settingRow: {
-    flexDirection: 'row',
+  iconContainer: {
+    width: 28,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e0e0e0',
-    gap: 12,
-  },
-  settingIcon: {
-    fontSize: 20,
-  },
-  settingContent: {
-    flex: 1,
-  },
-  settingTitle: {
-    fontSize: 16,
-  },
-  settingSubtitle: {
-    fontSize: 13,
-    marginTop: 2,
   },
   themeSelector: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: SPACING.md,
     paddingVertical: 14,
-    gap: 12,
+    gap: SPACING.sm,
   },
   themeOptions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: SPACING.sm,
   },
   themeOption: {
     width: 36,
@@ -381,14 +323,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  themeOptionText: {
-    fontSize: 16,
-  },
   appInfo: {
     alignItems: 'center',
-    paddingVertical: 24,
+    paddingVertical: SPACING.lg,
   },
   appInfoText: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
   },
 });

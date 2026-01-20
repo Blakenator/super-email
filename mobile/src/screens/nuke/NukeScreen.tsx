@@ -11,14 +11,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../../theme';
+import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
 import { DateTime } from 'luxon';
-import { Button } from '../../components/ui';
+import { Button, Icon, IconName } from '../../components/ui';
 
 const NUKE_OLD_EMAILS_MUTATION = gql`
   mutation NukeOldEmails($input: NukeOldEmailsInput!) {
@@ -30,7 +29,7 @@ interface NukeOption {
   id: string;
   label: string;
   description: string;
-  icon: string;
+  icon: IconName;
   getDate: () => Date | undefined;
 }
 
@@ -39,35 +38,35 @@ const NUKE_OPTIONS: NukeOption[] = [
     id: 'all',
     label: 'All Emails',
     description: 'Archive everything in your inbox',
-    icon: '💥',
+    icon: 'zap',
     getDate: () => undefined,
   },
   {
     id: '1week',
     label: '1 Week Ago',
     description: 'Archive emails older than 1 week',
-    icon: '📅',
+    icon: 'clock',
     getDate: () => DateTime.now().minus({ weeks: 1 }).toJSDate(),
   },
   {
     id: '1month',
     label: '1 Month Ago',
     description: 'Archive emails older than 1 month',
-    icon: '📆',
+    icon: 'clock',
     getDate: () => DateTime.now().minus({ months: 1 }).toJSDate(),
   },
   {
     id: '6months',
     label: '6 Months Ago',
     description: 'Archive emails older than 6 months',
-    icon: '🗓️',
+    icon: 'clock',
     getDate: () => DateTime.now().minus({ months: 6 }).toJSDate(),
   },
   {
     id: '1year',
     label: '1 Year Ago',
     description: 'Archive emails older than 1 year',
-    icon: '📚',
+    icon: 'archive',
     getDate: () => DateTime.now().minus({ years: 1 }).toJSDate(),
   },
 ];
@@ -124,11 +123,11 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
   
   if (result !== null) {
     return (
-      <View
-        style={[styles.container, { backgroundColor: theme.colors.background }]}
-      >
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <View style={styles.resultContainer}>
-          <Text style={styles.resultIcon}>🎉</Text>
+          <View style={[styles.successIcon, { backgroundColor: theme.colors.success + '20' }]}>
+            <Icon name="check-circle" size="xl" color={theme.colors.success} />
+          </View>
           <Text style={[styles.resultTitle, { color: theme.colors.text }]}>
             Success!
           </Text>
@@ -138,7 +137,7 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
           <Button
             title="Back to Inbox"
             onPress={onComplete}
-            style={{ marginTop: 32 }}
+            style={{ marginTop: SPACING.xl }}
           />
         </View>
       </View>
@@ -148,14 +147,16 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={sharedStyles.screenScrollContent}
     >
       {/* Header */}
       <LinearGradient
         colors={['#ff6b6b', '#ee5a24']}
         style={styles.header}
       >
-        <Text style={styles.headerIcon}>💣</Text>
+        <View style={styles.headerIconContainer}>
+          <Icon name="zap" size="xl" color="#fff" />
+        </View>
         <Text style={styles.headerTitle}>Inbox Nuke</Text>
         <Text style={styles.headerSubtitle}>
           Archive old emails to reach inbox zero
@@ -205,15 +206,15 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
               )}
             </View>
             
-            <Text style={styles.optionIcon}>{option.icon}</Text>
+            <View style={[styles.optionIconContainer, { backgroundColor: theme.colors.primary + '15' }]}>
+              <Icon name={option.icon} size="md" color={theme.colors.primary} />
+            </View>
             
             <View style={styles.optionContent}>
               <Text style={[styles.optionLabel, { color: theme.colors.text }]}>
                 {option.label}
               </Text>
-              <Text
-                style={[styles.optionDescription, { color: theme.colors.textMuted }]}
-              >
+              <Text style={[styles.optionDescription, { color: theme.colors.textMuted }]}>
                 {option.description}
               </Text>
             </View>
@@ -222,10 +223,8 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
       </View>
       
       {/* Info */}
-      <View
-        style={[styles.infoCard, { backgroundColor: theme.colors.info + '20' }]}
-      >
-        <Text style={styles.infoIcon}>ℹ️</Text>
+      <View style={[styles.infoCard, { backgroundColor: theme.colors.info + '15' }]}>
+        <Icon name="info" size="md" color={theme.colors.info} />
         <Text style={[styles.infoText, { color: theme.colors.info }]}>
           Emails will be moved to your Archive folder, not permanently deleted.
           You can find them later if needed.
@@ -251,44 +250,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    paddingBottom: 32,
-  },
   header: {
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 24,
+    paddingVertical: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
-  headerIcon: {
-    fontSize: 48,
-    marginBottom: 12,
+  headerIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.sm,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: FONT_SIZE.xxxl,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginBottom: 8,
+    marginBottom: SPACING.xs,
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
   },
   optionsContainer: {
-    padding: 16,
+    padding: SPACING.md,
   },
   optionsTitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: SPACING.md,
   },
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    gap: 12,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.sm,
+    gap: SPACING.sm,
   },
   optionRadio: {
     width: 22,
@@ -303,56 +304,61 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
   },
-  optionIcon: {
-    fontSize: 24,
+  optionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   optionContent: {
     flex: 1,
   },
   optionLabel: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
     fontWeight: '500',
   },
   optionDescription: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.sm,
     marginTop: 2,
   },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginHorizontal: 16,
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  infoIcon: {
-    fontSize: 16,
+    marginHorizontal: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
+    gap: SPACING.sm,
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: FONT_SIZE.sm,
     lineHeight: 20,
   },
   actionContainer: {
-    padding: 16,
-    paddingTop: 24,
+    padding: SPACING.md,
+    paddingTop: SPACING.lg,
   },
   resultContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 32,
+    padding: SPACING.xl,
   },
-  resultIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+  successIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.md,
   },
   resultTitle: {
-    fontSize: 24,
+    fontSize: FONT_SIZE.xxl,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: SPACING.sm,
   },
   resultSubtitle: {
-    fontSize: 16,
+    fontSize: FONT_SIZE.lg,
   },
 });
