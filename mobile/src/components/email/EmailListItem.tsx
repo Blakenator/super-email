@@ -11,7 +11,8 @@ import {
   TouchableOpacity,
   Pressable,
 } from 'react-native';
-import { useTheme } from '../../theme';
+import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
+import { Icon } from '../ui';
 import type { Email } from '../../stores/emailStore';
 import { DateTime } from 'luxon';
 
@@ -80,6 +81,7 @@ export function EmailListItem({
             : email.isRead
               ? theme.colors.background
               : theme.colors.surface,
+          borderBottomColor: theme.colors.border,
         },
       ]}
     >
@@ -98,7 +100,7 @@ export function EmailListItem({
             ]}
           >
             {isSelected && (
-              <Text style={{ color: theme.colors.textInverse, fontSize: 12 }}>✓</Text>
+              <Icon name="check" size="xs" color="#fff" />
             )}
           </View>
         </TouchableOpacity>
@@ -121,7 +123,7 @@ export function EmailListItem({
           
           <View style={styles.headerRight}>
             {email.hasAttachments && (
-              <Text style={styles.attachmentIcon}>📎</Text>
+              <Icon name="paperclip" size="xs" color={theme.colors.textMuted} />
             )}
             <Text style={[styles.date, { color: theme.colors.textMuted }]}>
               {formatDate(email.receivedAt)}
@@ -173,9 +175,11 @@ export function EmailListItem({
         style={styles.starButton}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <Text style={[styles.star, { opacity: email.isStarred ? 1 : 0.3 }]}>
-          {email.isStarred ? '⭐' : '☆'}
-        </Text>
+        <Icon
+          name="star"
+          size="md"
+          color={email.isStarred ? theme.colors.starred : theme.colors.border}
+        />
       </TouchableOpacity>
     </Pressable>
   );
@@ -185,19 +189,18 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e0e0e0',
   },
   checkbox: {
-    marginRight: 12,
-    paddingTop: 4,
+    marginRight: SPACING.sm,
+    paddingTop: SPACING.xs,
   },
   checkboxInner: {
     width: 22,
     height: 22,
-    borderRadius: 4,
+    borderRadius: RADIUS.sm,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
@@ -209,44 +212,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: SPACING.xs,
   },
   sender: {
-    fontSize: 15,
+    fontSize: FONT_SIZE.md,
     flex: 1,
-    marginRight: 8,
+    marginRight: SPACING.sm,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  attachmentIcon: {
-    fontSize: 12,
+    gap: SPACING.xs,
   },
   date: {
-    fontSize: 12,
+    fontSize: FONT_SIZE.xs,
   },
   subject: {
-    fontSize: 14,
-    marginBottom: 4,
+    fontSize: FONT_SIZE.md,
+    marginBottom: SPACING.xs,
   },
   preview: {
-    fontSize: 13,
+    fontSize: FONT_SIZE.sm,
   },
   tags: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 8,
-    gap: 6,
+    marginTop: SPACING.sm,
+    gap: SPACING.xs,
   },
   tag: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.full,
+    gap: SPACING.xs,
   },
   tagDot: {
     width: 6,
@@ -254,14 +254,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   tagText: {
-    fontSize: 11,
+    fontSize: FONT_SIZE.xs,
     fontWeight: '500',
   },
   starButton: {
-    padding: 4,
-    marginLeft: 8,
-  },
-  star: {
-    fontSize: 20,
+    padding: SPACING.xs,
+    marginLeft: SPACING.sm,
   },
 });

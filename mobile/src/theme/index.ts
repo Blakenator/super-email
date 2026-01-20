@@ -276,3 +276,6 @@ export function useColors(): ThemeColors {
   const theme = useTheme();
   return theme.colors;
 }
+
+// Re-export shared styles
+export { sharedStyles, SPACING, RADIUS, FONT_SIZE, ICON_SIZE } from './styles';
