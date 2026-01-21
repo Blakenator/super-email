@@ -22,9 +22,9 @@ const GET_MAIL_RULES_QUERY = gql`
     getMailRules {
       id
       name
-      isActive
-      conditions
-      actions
+      description
+      isEnabled
+      priority
     }
   }
 `;
@@ -32,9 +32,9 @@ const GET_MAIL_RULES_QUERY = gql`
 interface MailRule {
   id: string;
   name: string;
-  isActive: boolean;
-  conditions: string;
-  actions: string;
+  description?: string;
+  isEnabled: boolean;
+  priority: number;
 }
 
 interface RulesSettingsScreenProps {
@@ -76,12 +76,14 @@ export function RulesSettingsScreen({ onEditRule, onAddRule }: RulesSettingsScre
     >
       <View style={styles.ruleInfo}>
         <Text style={[styles.ruleName, { color: theme.colors.text }]}>{rule.name}</Text>
-        <Text style={[styles.ruleConditions, { color: theme.colors.textMuted }]}>
-          {rule.conditions}
-        </Text>
+        {rule.description && (
+          <Text style={[styles.ruleConditions, { color: theme.colors.textMuted }]}>
+            {rule.description}
+          </Text>
+        )}
       </View>
       <Switch
-        value={rule.isActive}
+        value={rule.isEnabled}
         trackColor={{ true: theme.colors.primary }}
         onValueChange={() => {}}
       />

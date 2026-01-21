@@ -16,7 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
-import { Icon, Button } from '../../components/ui';
+import { Icon, Button, RichTextEditor } from '../../components/ui';
 import { useEmailStore, EmailAccount } from '../../stores/emailStore';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
@@ -35,7 +35,7 @@ const GET_SMTP_PROFILES_QUERY = gql`
     getSmtpProfiles {
       id
       name
-      username
+      email
       isDefault
     }
   }
@@ -44,7 +44,7 @@ const GET_SMTP_PROFILES_QUERY = gql`
 interface SmtpProfile {
   id: string;
   name: string;
-  username: string;
+  email: string;
   isDefault: boolean;
 }
 
@@ -69,9 +69,15 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
   const [cc, setCc] = useState('');
   const [bcc, setBcc] = useState('');
   const [subject, setSubject] = useState(replyTo?.subject ? `Re: ${replyTo.subject}` : '');
-  const [body, setBody] = useState('');
+  const [bodyHtml, setBodyHtml] = useState('');
+  const [bodyText, setBodyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showCcBcc, setShowCcBcc] = useState(false);
+
+  const handleEditorChange = (html: string, text: string) => {
+    setBodyHtml(html);
+    setBodyText(text);
+  };
 
   useEffect(() => {
     loadSmtpProfiles();
@@ -125,8 +131,8 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
             cc: cc ? cc.split(',').map(e => e.trim()) : [],
             bcc: bcc ? bcc.split(',').map(e => e.trim()) : [],
             subject: subject.trim(),
-            textBody: body,
-            htmlBody: `<p>${body.replace(/\n/g, '<br/>')}</p>`,
+            textBody: bodyText,
+            htmlBody: bodyHtml || `<p>${bodyText.replace(/\n/g, '<br/>')}</p>`,
           },
         },
       });
@@ -175,7 +181,7 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
         >
           <Text style={[styles.fieldLabel, { color: theme.colors.textMuted }]}>From:</Text>
           <Text style={[styles.fieldValue, { color: theme.colors.text }]} numberOfLines={1}>
-            {selectedProfile?.username || 'Select profile...'}
+            {selectedProfile?.email || 'Select profile...'}
           </Text>
           <Icon name="chevron-down" size="sm" color={theme.colors.textMuted} />
         </TouchableOpacity>
@@ -242,16 +248,15 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
           />
         </View>
 
-        {/* Body */}
-        <TextInput
-          style={[styles.bodyInput, { color: theme.colors.text }]}
-          value={body}
-          onChangeText={setBody}
-          placeholder="Compose your email..."
-          placeholderTextColor={theme.colors.textMuted}
-          multiline
-          textAlignVertical="top"
-        />
+        {/* Body - Rich Text Editor */}
+        <View style={styles.editorContainer}>
+          <RichTextEditor
+            onChange={handleEditorChange}
+            placeholder="Compose your email..."
+            minHeight={250}
+            autoFocus={!replyTo}
+          />
+        </View>
       </ScrollView>
 
       {/* From Picker Modal */}
@@ -281,7 +286,7 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
                   {profile.name}
                 </Text>
                 <Text style={[styles.pickerOptionSubtext, { color: theme.colors.textMuted }]}>
-                  {profile.username}
+                  {profile.email}
                 </Text>
                 {profile.id === selectedProfileId && (
                   <Icon name="check" size="md" color={theme.colors.primary} />
@@ -356,11 +361,9 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     fontWeight: '500',
   },
-  bodyInput: {
+  editorContainer: {
     flex: 1,
-    fontSize: FONT_SIZE.md,
-    padding: SPACING.md,
-    minHeight: 200,
+    minHeight: 250,
   },
   pickerOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -4,3 +4,7 @@ export { SmtpSettingsScreen } from './SmtpSettingsScreen';
 export { TagsSettingsScreen } from './TagsSettingsScreen';
 export { RulesSettingsScreen } from './RulesSettingsScreen';
 export { NotificationsSettingsScreen } from './NotificationsSettingsScreen';
+export { EditTagScreen } from './EditTagScreen';
+export { EditAccountScreen } from './EditAccountScreen';
+export { EditSmtpProfileScreen } from './EditSmtpProfileScreen';
+export { EditRuleScreen } from './EditRuleScreen';

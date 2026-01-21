@@ -70,11 +70,12 @@ export default defineConfig({
             },
           },
         ],
+        // Skip injecting Firefox-specific features to avoid Babel plugin issues
+        skipWaiting: true,
+        clientsClaim: true,
       },
       devOptions: {
-        enabled: true, // Enable in development for testing
-        type: 'module',
-        navigateFallback: 'index.html',
+        enabled: false, // Disable in dev to avoid Babel issues, enable in production only
       },
     }),
   ],
@@ -86,6 +87,15 @@ export default defineConfig({
       ),
       // Resolve @main/common from source for Vite
       '@main/common': path.resolve(__dirname, '../common/src/index.ts'),
+      // Force Vite to use a single React instance from pnpm store to avoid conflicts
+      react: path.resolve(
+        __dirname,
+        '../node_modules/.pnpm/react@19.2.3/node_modules/react',
+      ),
+      'react-dom': path.resolve(
+        __dirname,
+        '../node_modules/.pnpm/react-dom@19.2.3_react@19.2.3/node_modules/react-dom',
+      ),
     },
   },
   server: {

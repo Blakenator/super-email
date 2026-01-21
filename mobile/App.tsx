@@ -10,12 +10,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApolloProvider } from '@apollo/client/react';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SystemUI from 'expo-system-ui';
 
 // Import all modules at top level to avoid "Invalid hook call" errors
 import { apolloClient } from './src/services/apollo';
 import { useAuthStore } from './src/stores/authStore';
 import { AppNavigator } from './src/navigation';
-import { useTheme } from './src/theme';
+import { useTheme, darkTheme } from './src/theme';
 import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
@@ -33,7 +34,7 @@ export default function App() {
     async function prepare() {
       try {
         setLoadingStatus('Initializing...');
-        
+
         // Initialize auth store
         try {
           await useAuthStore.getState().initialize();
@@ -43,10 +44,17 @@ export default function App() {
           console.warn('Auth init error:', e);
           setLoadingStatus('Continuing in offline mode...');
         }
-        
+
+        // Check if we should prompt for biometric login
+        const { shouldPromptBiometric, promptBiometricLogin } = useAuthStore.getState();
+        if (shouldPromptBiometric) {
+          setLoadingStatus('Authenticating...');
+          await promptBiometricLogin();
+        }
+
         // Small delay to ensure everything is ready
-        await new Promise(resolve => setTimeout(resolve, 300));
-        
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
         setLoadingStatus('Ready!');
         setIsReady(true);
       } catch (e: any) {
@@ -99,6 +107,12 @@ export default function App() {
 // Main app component
 function MainApp() {
   const theme = useTheme();
+  const isDark = theme.colors.background === darkTheme.colors.background;
+
+  // Update system UI to match theme
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(theme.colors.background).catch(() => {});
+  }, [theme.colors.background]);
 
   useEffect(() => {
     // Set up notification listeners
@@ -120,7 +134,7 @@ function MainApp() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <ApolloProvider client={apolloClient}>
-          <StatusBar style={theme.colors.background === '#121212' ? 'light' : 'dark'} />
+          <StatusBar style={isDark ? 'light' : 'dark'} />
           <AppNavigator />
         </ApolloProvider>
       </SafeAreaProvider>

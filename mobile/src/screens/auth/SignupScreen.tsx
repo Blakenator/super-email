@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
 import { useAuthStore } from '../../stores/authStore';
-import { Button, Input } from '../../components/ui';
+import { Button, Input, useSafeInsets } from '../../components/ui';
 
 interface SignupScreenProps {
   onNavigateToLogin: () => void;
@@ -23,6 +23,7 @@ interface SignupScreenProps {
 
 export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
   const theme = useTheme();
+  const { padding: safeAreaPadding } = useSafeInsets(['top', 'bottom']);
   const { signup, isLoading } = useAuthStore();
   
   const [firstName, setFirstName] = useState('');
@@ -72,7 +73,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
         style={styles.container}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, safeAreaPadding]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
