@@ -17,7 +17,7 @@ import {
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
-import { Icon } from '../../components/ui';
+import { Icon, useSafeInsets } from '../../components/ui';
 
 const GET_CONTACTS_QUERY = gql`
   query GetContacts {
@@ -65,10 +65,12 @@ interface Contact {
 
 interface ContactsScreenProps {
   onContactPress: (contactId: string) => void;
+  onAddContact: () => void;
 }
 
-export function ContactsScreen({ onContactPress }: ContactsScreenProps) {
+export function ContactsScreen({ onContactPress, onAddContact }: ContactsScreenProps) {
   const theme = useTheme();
+  const { top: topInset } = useSafeInsets(['top']);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -249,7 +251,7 @@ export function ContactsScreen({ onContactPress }: ContactsScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Search Bar */}
-      <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border, paddingTop: topInset + SPACING.sm }]}>
         <View
           style={[
             styles.searchInput,
@@ -298,6 +300,14 @@ export function ContactsScreen({ onContactPress }: ContactsScreenProps) {
           filteredContacts.length === 0 && styles.listContentEmpty,
         ]}
       />
+
+      {/* Add Contact FAB */}
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+        onPress={onAddContact}
+      >
+        <Icon name="user-plus" size="lg" color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -387,5 +397,20 @@ const styles = StyleSheet.create({
   },
   contactCompany: {
     fontSize: FONT_SIZE.sm,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: SPACING.lg,
+    right: SPACING.lg,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
 });

@@ -3,7 +3,7 @@
  * User preferences and app settings
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,7 @@ import {
 } from 'react-native';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { useAuthStore, ThemePreference } from '../../stores/authStore';
-import { getBiometricTypeName } from '../../services/biometricAuth';
-import { Icon, IconName } from '../../components/ui';
+import { Icon, IconName, useSafeInsets } from '../../components/ui';
 
 interface SettingsScreenProps {
   onNavigateToAccounts: () => void;
@@ -24,6 +23,7 @@ interface SettingsScreenProps {
   onNavigateToTags: () => void;
   onNavigateToRules: () => void;
   onNavigateToNotifications: () => void;
+  onNavigateToNuke: () => void;
 }
 
 export function SettingsScreen({
@@ -32,20 +32,20 @@ export function SettingsScreen({
   onNavigateToTags,
   onNavigateToRules,
   onNavigateToNotifications,
+  onNavigateToNuke,
 }: SettingsScreenProps) {
   const theme = useTheme();
+  const { top: topInset } = useSafeInsets(['top']);
   const {
     user,
     logout,
     biometricAvailable,
     biometricEnabled,
-    biometricType,
     setBiometric,
+    setThemePreference,
   } = useAuthStore();
   
-  const [selectedTheme, setSelectedTheme] = useState<ThemePreference>(
-    user?.themePreference || 'AUTO'
-  );
+  const currentTheme = user?.themePreference || 'AUTO';
   
   const handleLogout = () => {
     Alert.alert(
@@ -65,8 +65,10 @@ export function SettingsScreen({
   const handleBiometricToggle = async (enabled: boolean) => {
     await setBiometric(enabled);
   };
-  
-  const biometricName = getBiometricTypeName(biometricType);
+
+  const handleThemeChange = async (newTheme: ThemePreference) => {
+    await setThemePreference(newTheme);
+  };
   
   const renderSectionHeader = (title: string) => (
     <View style={sharedStyles.sectionHeader}>
@@ -117,7 +119,7 @@ export function SettingsScreen({
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={sharedStyles.screenScrollContent}
+      contentContainerStyle={[sharedStyles.screenScrollContent, { paddingTop: topInset }]}
     >
       {/* User Info */}
       {user && (
@@ -167,6 +169,18 @@ export function SettingsScreen({
           onNavigateToRules
         )}
       </View>
+
+      {/* Inbox Tools */}
+      {renderSectionHeader('INBOX TOOLS')}
+      
+      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+        {renderSettingRow(
+          'zap',
+          'Inbox Nuke',
+          'Bulk archive old emails',
+          onNavigateToNuke
+        )}
+      </View>
       
       {/* Appearance */}
       {renderSectionHeader('APPEARANCE')}
@@ -189,12 +203,12 @@ export function SettingsScreen({
             ]).map(({ value, icon }) => (
               <TouchableOpacity
                 key={value}
-                onPress={() => setSelectedTheme(value)}
+                onPress={() => handleThemeChange(value)}
                 style={[
                   styles.themeOption,
                   {
                     backgroundColor:
-                      selectedTheme === value
+                      currentTheme === value
                         ? theme.colors.primary
                         : theme.colors.backgroundSecondary,
                   },
@@ -203,7 +217,7 @@ export function SettingsScreen({
                 <Icon
                   name={icon}
                   size="sm"
-                  color={selectedTheme === value ? '#fff' : theme.colors.text}
+                  color={currentTheme === value ? '#fff' : theme.colors.text}
                 />
               </TouchableOpacity>
             ))}
@@ -217,9 +231,9 @@ export function SettingsScreen({
       <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
         {biometricAvailable && (
           renderSettingRow(
-            biometricType === 'facial' ? 'face-id' : 'fingerprint',
-            `${biometricName} Login`,
-            `Use ${biometricName} to unlock the app`,
+            'fingerprint',
+            'Biometric Login',
+            'Use biometrics to unlock the app',
             undefined,
             <Switch
               value={biometricEnabled}

@@ -18,7 +18,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../theme';
 import { useAuthStore } from '../../stores/authStore';
-import { Button, Input } from '../../components/ui';
+import { Button, Input, useSafeInsets } from '../../components/ui';
 import { getBiometricTypeName } from '../../services/biometricAuth';
 
 interface LoginScreenProps {
@@ -27,6 +27,7 @@ interface LoginScreenProps {
 
 export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   const theme = useTheme();
+  const { padding: safeAreaPadding } = useSafeInsets(['top', 'bottom']);
   const {
     login,
     loginWithBiometric,
@@ -85,7 +86,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
         style={styles.container}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, safeAreaPadding]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>

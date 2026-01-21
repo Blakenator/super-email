@@ -21,9 +21,9 @@ const GET_SMTP_PROFILES_QUERY = gql`
     getSmtpProfiles {
       id
       name
+      email
       host
       port
-      username
       isDefault
     }
   }
@@ -32,9 +32,9 @@ const GET_SMTP_PROFILES_QUERY = gql`
 interface SmtpProfile {
   id: string;
   name: string;
+  email: string;
   host: string;
   port: number;
-  username: string;
   isDefault: boolean;
 }
 
@@ -87,7 +87,7 @@ export function SmtpSettingsScreen({ onEditProfile, onAddProfile }: SmtpSettings
         </Text>
         <View style={styles.profileMeta}>
           <Text style={[styles.profileUsername, { color: theme.colors.textMuted }]}>
-            {profile.username}
+            {profile.email}
           </Text>
           {profile.isDefault && (
             <View style={[styles.defaultBadge, { backgroundColor: theme.colors.primary + '20' }]}>

@@ -25,7 +25,10 @@ export type IconName =
   | 'sun' | 'moon' | 'monitor' | 'smartphone'
   // Other
   | 'log-out' | 'external-link' | 'link' | 'copy' | 'download' | 'upload'
-  | 'folder' | 'server' | 'zap' | 'shield' | 'globe' | 'clock';
+  | 'folder' | 'server' | 'zap' | 'shield' | 'globe' | 'clock' | 'briefcase'
+  // Formatting (for rich text editor)
+  | 'format-bold' | 'format-italic' | 'format-underline'
+  | 'format-list-bulleted' | 'format-list-numbered';
 
 type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
 
@@ -114,6 +117,13 @@ const ICON_MAP: Record<IconName, { set: 'feather' | 'material' | 'ionicons'; nam
   shield: { set: 'feather', name: 'shield' },
   globe: { set: 'feather', name: 'globe' },
   clock: { set: 'feather', name: 'clock' },
+  briefcase: { set: 'feather', name: 'briefcase' },
+  // Formatting
+  'format-bold': { set: 'material', name: 'format-bold' },
+  'format-italic': { set: 'material', name: 'format-italic' },
+  'format-underline': { set: 'material', name: 'format-underline' },
+  'format-list-bulleted': { set: 'material', name: 'format-list-bulleted' },
+  'format-list-numbered': { set: 'material', name: 'format-list-numbered' },
 };
 
 export function Icon({ name, size = 'md', color, focused }: IconProps) {

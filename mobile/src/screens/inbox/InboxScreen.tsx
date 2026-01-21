@@ -38,9 +38,10 @@ const FOLDERS: FolderConfig[] = [
 interface InboxScreenProps {
   onEmailPress: (emailId: string) => void;
   onComposePress: () => void;
+  onNukePress: () => void;
 }
 
-export function InboxScreen({ onEmailPress, onComposePress }: InboxScreenProps) {
+export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: InboxScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   
@@ -252,19 +253,24 @@ export function InboxScreen({ onEmailPress, onComposePress }: InboxScreenProps) 
   
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Account Switcher */}
-      <TouchableOpacity
-        style={[styles.accountSwitcher, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}
-        onPress={() => setShowAccountPicker(true)}
-      >
-        <View style={[styles.accountSwitcherAvatar, { backgroundColor: theme.colors.primary }]}>
-          <Icon name={currentAccountId ? 'mail' : 'inbox'} size="sm" color="#fff" />
-        </View>
-        <Text style={[styles.accountSwitcherText, { color: theme.colors.text }]} numberOfLines={1}>
-          {currentAccount?.name || 'All Accounts'}
-        </Text>
-        <Icon name="chevron-down" size="sm" color={theme.colors.textMuted} />
-      </TouchableOpacity>
+      {/* Header with Account Switcher */}
+      <View style={[styles.headerBar, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border, paddingTop: insets.top }]}>
+        <TouchableOpacity
+          style={styles.accountSwitcher}
+          onPress={() => setShowAccountPicker(true)}
+        >
+          <View style={[styles.accountSwitcherAvatar, { backgroundColor: theme.colors.primary }]}>
+            <Icon name={currentAccountId ? 'mail' : 'inbox'} size="sm" color="#fff" />
+          </View>
+          <Text style={[styles.accountSwitcherText, { color: theme.colors.text }]} numberOfLines={1}>
+            {currentAccount?.name || 'All Accounts'}
+          </Text>
+          <Icon name="chevron-down" size="sm" color={theme.colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerButton} onPress={onNukePress}>
+          <Icon name="zap" size="md" color={theme.colors.textMuted} />
+        </TouchableOpacity>
+      </View>
 
       {/* Folder Tabs */}
       <View style={[styles.folderTabs, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
@@ -357,13 +363,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  accountSwitcher: {
+  headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  accountSwitcher: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: SPACING.sm,
+  },
+  headerButton: {
+    padding: SPACING.sm,
   },
   accountSwitcherAvatar: {
     width: 28,
