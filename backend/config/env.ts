@@ -79,6 +79,28 @@ export const config = {
     // Whether background sync is enabled
     enabled: process.env.BACKGROUND_SYNC_ENABLED !== 'false',
   },
+
+  // Stripe Configuration (for billing)
+  stripe: {
+    // Stripe secret key (starts with sk_test_ or sk_live_)
+    secretKey: process.env.STRIPE_SECRET_KEY || '',
+    // Stripe webhook signing secret (starts with whsec_)
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+    // Stripe publishable key (for frontend, starts with pk_test_ or pk_live_)
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
+    // Price IDs for storage tiers (set in Stripe Dashboard)
+    storagePriceIds: {
+      basic: process.env.STRIPE_PRICE_STORAGE_BASIC || '',
+      pro: process.env.STRIPE_PRICE_STORAGE_PRO || '',
+      enterprise: process.env.STRIPE_PRICE_STORAGE_ENTERPRISE || '',
+    },
+    // Price IDs for account tiers (set in Stripe Dashboard)
+    accountPriceIds: {
+      basic: process.env.STRIPE_PRICE_ACCOUNTS_BASIC || '',
+      pro: process.env.STRIPE_PRICE_ACCOUNTS_PRO || '',
+      enterprise: process.env.STRIPE_PRICE_ACCOUNTS_ENTERPRISE || '',
+    },
+  },
 } as const;
 
 /**
@@ -110,6 +132,15 @@ export const envVarDefinitions = {
     BACKGROUND_SYNC_STALE_THRESHOLD_MINUTES: 'Minutes before email account is considered stale (default: 15 in prod, 5 in dev)',
     BACKGROUND_SYNC_INTERVAL_MINUTES: 'How often to run background sync (default: 60 in prod, 2 in dev)',
     BACKGROUND_SYNC_ENABLED: 'Enable/disable background sync (default: true)',
+    STRIPE_SECRET_KEY: 'Stripe secret API key (sk_test_... or sk_live_...)',
+    STRIPE_WEBHOOK_SECRET: 'Stripe webhook signing secret (whsec_...)',
+    STRIPE_PUBLISHABLE_KEY: 'Stripe publishable key for frontend (pk_test_... or pk_live_...)',
+    STRIPE_PRICE_STORAGE_BASIC: 'Stripe Price ID for Basic storage tier (10GB)',
+    STRIPE_PRICE_STORAGE_PRO: 'Stripe Price ID for Pro storage tier (20GB)',
+    STRIPE_PRICE_STORAGE_ENTERPRISE: 'Stripe Price ID for Enterprise storage tier (100GB)',
+    STRIPE_PRICE_ACCOUNTS_BASIC: 'Stripe Price ID for Basic accounts tier (2 accounts)',
+    STRIPE_PRICE_ACCOUNTS_PRO: 'Stripe Price ID for Pro accounts tier (5 accounts)',
+    STRIPE_PRICE_ACCOUNTS_ENTERPRISE: 'Stripe Price ID for Enterprise accounts tier (unlimited)',
   },
 } as const;
 

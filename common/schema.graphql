@@ -12,11 +12,17 @@ scalar JSON
 Common fields shared by all database entities.
 """
 interface BaseEntityProps {
-  """Unique identifier for the entity (UUID format)"""
+  """
+  Unique identifier for the entity (UUID format)
+  """
   id: String!
-  """Timestamp when the entity was created"""
+  """
+  Timestamp when the entity was created
+  """
   createdAt: Date
-  """Timestamp when the entity was last updated"""
+  """
+  Timestamp when the entity was last updated
+  """
   updatedAt: Date
 }
 
@@ -26,11 +32,17 @@ interface BaseEntityProps {
 User's preferred color scheme for the application interface.
 """
 enum ThemePreference {
-  """Light color scheme"""
+  """
+  Light color scheme
+  """
   LIGHT
-  """Dark color scheme"""
+  """
+  Dark color scheme
+  """
   DARK
-  """Follow system/browser preference"""
+  """
+  Follow system/browser preference
+  """
   AUTO
 }
 
@@ -38,9 +50,13 @@ enum ThemePreference {
 Level of detail shown in email notification previews.
 """
 enum NotificationDetailLevel {
-  """Show only sender and subject"""
+  """
+  Show only sender and subject
+  """
   MINIMAL
-  """Show sender, subject, and message preview"""
+  """
+  Show sender, subject, and message preview
+  """
   FULL
 }
 
@@ -49,33 +65,61 @@ A registered user of the email client application.
 Contains user profile information, preferences, and related entities.
 """
 type User implements BaseEntityProps {
-  """Unique identifier for the user (UUID format)"""
+  """
+  Unique identifier for the user (UUID format)
+  """
   id: String!
-  """Timestamp when the user account was created"""
+  """
+  Timestamp when the user account was created
+  """
   createdAt: Date
-  """Timestamp when the user account was last updated"""
+  """
+  Timestamp when the user account was last updated
+  """
   updatedAt: Date
-  """User's primary email address (used for login)"""
+  """
+  User's primary email address (used for login)
+  """
   email: String!
-  """User's first name"""
+  """
+  User's first name
+  """
   firstName: String!
-  """User's last name"""
+  """
+  User's last name
+  """
   lastName: String!
-  """User's preferred color scheme (LIGHT, DARK, or AUTO)"""
+  """
+  User's preferred color scheme (LIGHT, DARK, or AUTO)
+  """
   themePreference: ThemePreference!
-  """Whether the navigation sidebar is collapsed"""
+  """
+  Whether the navigation sidebar is collapsed
+  """
   navbarCollapsed: Boolean!
-  """Level of detail in notification previews"""
+  """
+  Level of detail in notification previews
+  """
   notificationDetailLevel: NotificationDetailLevel!
-  """Whether to use compact/dense inbox display mode"""
+  """
+  Whether to use compact/dense inbox display mode
+  """
   inboxDensity: Boolean!
-  """Whether to group emails by date in the inbox view"""
+  """
+  Whether to group emails by date in the inbox view
+  """
   inboxGroupByDate: Boolean!
-  """List of email accounts configured for this user (IMAP/POP3)"""
+  """
+  List of email accounts configured for this user (IMAP/POP3)
+  """
   emailAccounts: [EmailAccount!]!
-  """List of SMTP profiles configured for sending emails"""
+  """
+  List of SMTP profiles configured for sending emails
+  """
   smtpProfiles: [SmtpProfile!]!
-  """List of authentication methods linked to this account (OAuth, email/password)"""
+  """
+  List of authentication methods linked to this account (OAuth, email/password)
+  """
   authenticationMethods: [AuthenticationMethod!]!
 }
 
@@ -83,15 +127,25 @@ type User implements BaseEntityProps {
 Input for updating user preferences. All fields are optional - only provided fields will be updated.
 """
 input UpdateUserPreferencesInput {
-  """New theme preference"""
+  """
+  New theme preference
+  """
   themePreference: ThemePreference
-  """Whether to collapse the navigation sidebar"""
+  """
+  Whether to collapse the navigation sidebar
+  """
   navbarCollapsed: Boolean
-  """New notification detail level"""
+  """
+  New notification detail level
+  """
   notificationDetailLevel: NotificationDetailLevel
-  """Whether to use compact inbox display"""
+  """
+  Whether to use compact inbox display
+  """
   inboxDensity: Boolean
-  """Whether to group emails by date"""
+  """
+  Whether to group emails by date
+  """
   inboxGroupByDate: Boolean
 }
 
@@ -99,15 +153,25 @@ input UpdateUserPreferencesInput {
 Supported authentication providers for user login.
 """
 enum AuthProvider {
-  """Traditional email and password login"""
+  """
+  Traditional email and password login
+  """
   EMAIL_PASSWORD
-  """Google OAuth login"""
+  """
+  Google OAuth login
+  """
   GOOGLE
-  """GitHub OAuth login"""
+  """
+  GitHub OAuth login
+  """
   GITHUB
-  """Apple Sign-In"""
+  """
+  Apple Sign-In
+  """
   APPLE
-  """Microsoft/Azure AD login"""
+  """
+  Microsoft/Azure AD login
+  """
   MICROSOFT
 }
 
@@ -116,26 +180,43 @@ Represents a linked authentication method for a user account.
 Users can have multiple authentication methods (e.g., Google OAuth + email/password).
 """
 type AuthenticationMethod implements BaseEntityProps {
-  """Unique identifier for this authentication method"""
+  """
+  Unique identifier for this authentication method
+  """
   id: String!
-  """Timestamp when this auth method was linked"""
+  """
+  Timestamp when this auth method was linked
+  """
   createdAt: Date
-  """Timestamp when this auth method was last updated"""
+  """
+  Timestamp when this auth method was last updated
+  """
   updatedAt: Date
-  """ID of the user this auth method belongs to"""
+  """
+  ID of the user this auth method belongs to
+  """
   userId: String!
-  """The authentication provider (GOOGLE, EMAIL_PASSWORD, etc.)"""
+  """
+  The authentication provider (GOOGLE, EMAIL_PASSWORD, etc.)
+  """
   provider: AuthProvider!
-  """Unique identifier from the provider (e.g., Google user ID)"""
+  """
+  Unique identifier from the provider (e.g., Google user ID)
+  """
   providerUserId: String!
-  """Email address associated with this auth provider"""
+  """
+  Email address associated with this auth provider
+  """
   email: String!
-  """Display name from the provider (e.g., "john@gmail.com (Google)")"""
+  """
+  Display name from the provider (e.g., "john@gmail.com (Google)")
+  """
   displayName: String
-  """Timestamp when this auth method was last used for login"""
+  """
+  Timestamp when this auth method was last used for login
+  """
   lastUsedAt: Date
 }
-
 
 # ============ Email Accounts (IMAP/POP) ============
 
@@ -143,9 +224,13 @@ type AuthenticationMethod implements BaseEntityProps {
 Type of email receiving protocol.
 """
 enum EmailAccountType {
-  """IMAP protocol - supports folder sync and IDLE for real-time updates"""
+  """
+  IMAP protocol - supports folder sync and IDLE for real-time updates
+  """
   IMAP
-  """POP3 protocol - download-and-delete model"""
+  """
+  POP3 protocol - download-and-delete model
+  """
   POP3
 }
 
@@ -154,43 +239,81 @@ An email account configured for receiving emails via IMAP or POP3.
 Each user can have multiple email accounts from different providers.
 """
 type EmailAccount implements BaseEntityProps {
-  """Unique identifier for this email account"""
+  """
+  Unique identifier for this email account
+  """
   id: String!
-  """Timestamp when the account was added"""
+  """
+  Timestamp when the account was added
+  """
   createdAt: Date
-  """Timestamp when the account was last modified"""
+  """
+  Timestamp when the account was last modified
+  """
   updatedAt: Date
-  """ID of the user who owns this account"""
+  """
+  ID of the user who owns this account
+  """
   userId: String!
-  """Display name for this account (e.g., "Work Gmail")"""
+  """
+  Display name for this account (e.g., "Work Gmail")
+  """
   name: String!
-  """Email address for this account"""
+  """
+  Email address for this account
+  """
   email: String!
-  """IMAP/POP3 server hostname (e.g., "imap.gmail.com")"""
+  """
+  IMAP/POP3 server hostname (e.g., "imap.gmail.com")
+  """
   host: String!
-  """Server port number (e.g., 993 for IMAP with SSL)"""
+  """
+  Server port number (e.g., 993 for IMAP with SSL)
+  """
   port: Int!
-  """Protocol type (IMAP or POP3)"""
+  """
+  Protocol type (IMAP or POP3)
+  """
   accountType: EmailAccountType!
-  """Whether to use SSL/TLS encryption"""
+  """
+  Whether to use SSL/TLS encryption
+  """
   useSsl: Boolean!
-  """Timestamp of the last successful sync"""
+  """
+  Timestamp of the last successful sync
+  """
   lastSyncedAt: Date
-  """Whether a sync operation is currently in progress"""
+  """
+  Whether a sync operation is currently in progress
+  """
   isSyncing: Boolean!
-  """Progress percentage (0-100) during sync"""
+  """
+  Progress percentage (0-100) during sync
+  """
   syncProgress: Int
-  """Human-readable status message during sync"""
+  """
+  Human-readable status message during sync
+  """
   syncStatus: String
-  """When the current sync operation will timeout"""
+  """
+  When the current sync operation will timeout
+  """
   syncExpiresAt: Date
-  """ID of the default SMTP profile for sending from this account"""
+  """
+  ID of the default SMTP profile for sending from this account
+  """
   defaultSmtpProfileId: String
-  """The default SMTP profile object for sending emails"""
+  """
+  The default SMTP profile object for sending emails
+  """
   defaultSmtpProfile: SmtpProfile
-  """External provider ID (for OAuth-linked accounts like Google Workspace)"""
+  """
+  External provider ID (for OAuth-linked accounts like Google Workspace)
+  """
   providerId: String
-  """Whether this is the user's default/primary email account"""
+  """
+  Whether this is the user's default/primary email account
+  """
   isDefault: Boolean!
 }
 
@@ -198,27 +321,49 @@ type EmailAccount implements BaseEntityProps {
 Input for creating a new email account. Requires all connection details.
 """
 input CreateEmailAccountInput {
-  """Display name for the account"""
+  """
+  Display name for the account
+  """
   name: String!
-  """Email address"""
+  """
+  Email address
+  """
   email: String!
-  """IMAP/POP3 server hostname"""
+  """
+  IMAP/POP3 server hostname
+  """
   host: String!
-  """Server port number"""
+  """
+  Server port number
+  """
   port: Int!
-  """Username for authentication (often the email address)"""
+  """
+  Username for authentication (often the email address)
+  """
   username: String!
-  """Password or app-specific password for authentication"""
+  """
+  Password or app-specific password for authentication
+  """
   password: String!
-  """Protocol type (IMAP or POP3)"""
+  """
+  Protocol type (IMAP or POP3)
+  """
   accountType: EmailAccountType!
-  """Whether to use SSL/TLS"""
+  """
+  Whether to use SSL/TLS
+  """
   useSsl: Boolean!
-  """ID of the default SMTP profile for sending"""
+  """
+  ID of the default SMTP profile for sending
+  """
   defaultSmtpProfileId: String
-  """External provider ID for OAuth-linked accounts"""
+  """
+  External provider ID for OAuth-linked accounts
+  """
   providerId: String
-  """Whether to set this as the default account"""
+  """
+  Whether to set this as the default account
+  """
   isDefault: Boolean
 }
 
@@ -226,25 +371,45 @@ input CreateEmailAccountInput {
 Input for updating an existing email account. Only provided fields will be updated.
 """
 input UpdateEmailAccountInput {
-  """ID of the email account to update"""
+  """
+  ID of the email account to update
+  """
   id: String!
-  """New display name"""
+  """
+  New display name
+  """
   name: String
-  """New server hostname"""
+  """
+  New server hostname
+  """
   host: String
-  """New server port"""
+  """
+  New server port
+  """
   port: Int
-  """New username"""
+  """
+  New username
+  """
   username: String
-  """New password"""
+  """
+  New password
+  """
   password: String
-  """Whether to use SSL/TLS"""
+  """
+  Whether to use SSL/TLS
+  """
   useSsl: Boolean
-  """New default SMTP profile ID"""
+  """
+  New default SMTP profile ID
+  """
   defaultSmtpProfileId: String
-  """New provider ID"""
+  """
+  New provider ID
+  """
   providerId: String
-  """Whether this should be the default account"""
+  """
+  Whether this should be the default account
+  """
   isDefault: Boolean
 }
 
@@ -255,29 +420,53 @@ An SMTP profile for sending emails. Each email account can have a default SMTP p
 or users can select a different profile when composing.
 """
 type SmtpProfile implements BaseEntityProps {
-  """Unique identifier for this SMTP profile"""
+  """
+  Unique identifier for this SMTP profile
+  """
   id: String!
-  """Timestamp when the profile was created"""
+  """
+  Timestamp when the profile was created
+  """
   createdAt: Date
-  """Timestamp when the profile was last updated"""
+  """
+  Timestamp when the profile was last updated
+  """
   updatedAt: Date
-  """ID of the user who owns this profile"""
+  """
+  ID of the user who owns this profile
+  """
   userId: String!
-  """Display name for this profile (e.g., "Personal Gmail SMTP")"""
+  """
+  Display name for this profile (e.g., "Personal Gmail SMTP")
+  """
   name: String!
-  """The "from" email address for sent emails"""
+  """
+  The "from" email address for sent emails
+  """
   email: String!
-  """Optional display name alias (e.g., "John Doe" instead of just the email)"""
+  """
+  Optional display name alias (e.g., "John Doe" instead of just the email)
+  """
   alias: String
-  """SMTP server hostname (e.g., "smtp.gmail.com")"""
+  """
+  SMTP server hostname (e.g., "smtp.gmail.com")
+  """
   host: String!
-  """SMTP server port (e.g., 587 for TLS, 465 for SSL)"""
+  """
+  SMTP server port (e.g., 587 for TLS, 465 for SSL)
+  """
   port: Int!
-  """Whether to use SSL/TLS encryption"""
+  """
+  Whether to use SSL/TLS encryption
+  """
   useSsl: Boolean!
-  """Whether this is the user's default SMTP profile"""
+  """
+  Whether this is the user's default SMTP profile
+  """
   isDefault: Boolean!
-  """External provider ID for OAuth-linked profiles"""
+  """
+  External provider ID for OAuth-linked profiles
+  """
   providerId: String
 }
 
@@ -285,25 +474,45 @@ type SmtpProfile implements BaseEntityProps {
 Input for creating a new SMTP profile.
 """
 input CreateSmtpProfileInput {
-  """Display name for the profile"""
+  """
+  Display name for the profile
+  """
   name: String!
-  """The "from" email address"""
+  """
+  The "from" email address
+  """
   email: String!
-  """Optional display name alias"""
+  """
+  Optional display name alias
+  """
   alias: String
-  """SMTP server hostname"""
+  """
+  SMTP server hostname
+  """
   host: String!
-  """SMTP server port"""
+  """
+  SMTP server port
+  """
   port: Int!
-  """Username for SMTP authentication"""
+  """
+  Username for SMTP authentication
+  """
   username: String!
-  """Password for SMTP authentication"""
+  """
+  Password for SMTP authentication
+  """
   password: String!
-  """Whether to use SSL/TLS"""
+  """
+  Whether to use SSL/TLS
+  """
   useSsl: Boolean!
-  """Whether to set as default profile"""
+  """
+  Whether to set as default profile
+  """
   isDefault: Boolean
-  """External provider ID"""
+  """
+  External provider ID
+  """
   providerId: String
 }
 
@@ -311,25 +520,45 @@ input CreateSmtpProfileInput {
 Input for updating an existing SMTP profile. Only provided fields will be updated.
 """
 input UpdateSmtpProfileInput {
-  """ID of the SMTP profile to update"""
+  """
+  ID of the SMTP profile to update
+  """
   id: String!
-  """New display name"""
+  """
+  New display name
+  """
   name: String
-  """New display name alias"""
+  """
+  New display name alias
+  """
   alias: String
-  """New server hostname"""
+  """
+  New server hostname
+  """
   host: String
-  """New server port"""
+  """
+  New server port
+  """
   port: Int
-  """New username"""
+  """
+  New username
+  """
   username: String
-  """New password"""
+  """
+  New password
+  """
   password: String
-  """Whether to use SSL/TLS"""
+  """
+  Whether to use SSL/TLS
+  """
   useSsl: Boolean
-  """Whether this should be the default profile"""
+  """
+  Whether this should be the default profile
+  """
   isDefault: Boolean
-  """New provider ID"""
+  """
+  New provider ID
+  """
   providerId: String
 }
 
@@ -339,19 +568,33 @@ input UpdateSmtpProfileInput {
 An email address associated with a contact. A contact can have multiple email addresses.
 """
 type ContactEmail implements BaseEntityProps {
-  """Unique identifier for this email entry"""
+  """
+  Unique identifier for this email entry
+  """
   id: String!
-  """Timestamp when this email was added"""
+  """
+  Timestamp when this email was added
+  """
   createdAt: Date
-  """Timestamp when this email was last updated"""
+  """
+  Timestamp when this email was last updated
+  """
   updatedAt: Date
-  """ID of the contact this email belongs to"""
+  """
+  ID of the contact this email belongs to
+  """
   contactId: String!
-  """The email address"""
+  """
+  The email address
+  """
   email: String!
-  """Whether this is the primary email for the contact"""
+  """
+  Whether this is the primary email for the contact
+  """
   isPrimary: Boolean!
-  """Optional label (e.g., "Work", "Personal", "Other")"""
+  """
+  Optional label (e.g., "Work", "Personal", "Other")
+  """
   label: String
 }
 
@@ -360,31 +603,57 @@ A contact in the user's address book. Contacts can be auto-created from
 email senders or manually created.
 """
 type Contact implements BaseEntityProps {
-  """Unique identifier for this contact"""
+  """
+  Unique identifier for this contact
+  """
   id: String!
-  """Timestamp when the contact was created"""
+  """
+  Timestamp when the contact was created
+  """
   createdAt: Date
-  """Timestamp when the contact was last updated"""
+  """
+  Timestamp when the contact was last updated
+  """
   updatedAt: Date
-  """ID of the user who owns this contact"""
+  """
+  ID of the user who owns this contact
+  """
   userId: String!
-  """Primary email address (deprecated - use emails array)"""
+  """
+  Primary email address (deprecated - use emails array)
+  """
   email: String
-  """List of all email addresses for this contact"""
+  """
+  List of all email addresses for this contact
+  """
   emails: [ContactEmail!]!
-  """Full display name"""
+  """
+  Full display name
+  """
   name: String
-  """First name"""
+  """
+  First name
+  """
   firstName: String
-  """Last name"""
+  """
+  Last name
+  """
   lastName: String
-  """Company or organization"""
+  """
+  Company or organization
+  """
   company: String
-  """Phone number"""
+  """
+  Phone number
+  """
   phone: String
-  """Additional notes about the contact"""
+  """
+  Additional notes about the contact
+  """
   notes: String
-  """Whether this contact was auto-created from an email sender"""
+  """
+  Whether this contact was auto-created from an email sender
+  """
   isAutoCreated: Boolean!
 }
 
@@ -392,11 +661,17 @@ type Contact implements BaseEntityProps {
 Input for a contact email when creating/updating contacts.
 """
 input ContactEmailInput {
-  """The email address"""
+  """
+  The email address
+  """
   email: String!
-  """Whether this should be the primary email"""
+  """
+  Whether this should be the primary email
+  """
   isPrimary: Boolean
-  """Optional label for this email"""
+  """
+  Optional label for this email
+  """
   label: String
 }
 
@@ -404,19 +679,33 @@ input ContactEmailInput {
 Input for creating a new contact.
 """
 input CreateContactInput {
-  """List of email addresses for the contact"""
+  """
+  List of email addresses for the contact
+  """
   emails: [ContactEmailInput!]!
-  """Full display name"""
+  """
+  Full display name
+  """
   name: String
-  """First name"""
+  """
+  First name
+  """
   firstName: String
-  """Last name"""
+  """
+  Last name
+  """
   lastName: String
-  """Company or organization"""
+  """
+  Company or organization
+  """
   company: String
-  """Phone number"""
+  """
+  Phone number
+  """
   phone: String
-  """Additional notes"""
+  """
+  Additional notes
+  """
   notes: String
 }
 
@@ -424,21 +713,37 @@ input CreateContactInput {
 Input for updating an existing contact. Only provided fields will be updated.
 """
 input UpdateContactInput {
-  """ID of the contact to update"""
+  """
+  ID of the contact to update
+  """
   id: String!
-  """Updated list of email addresses"""
+  """
+  Updated list of email addresses
+  """
   emails: [ContactEmailInput!]
-  """Updated full name"""
+  """
+  Updated full name
+  """
   name: String
-  """Updated first name"""
+  """
+  Updated first name
+  """
   firstName: String
-  """Updated last name"""
+  """
+  Updated last name
+  """
   lastName: String
-  """Updated company"""
+  """
+  Updated company
+  """
   company: String
-  """Updated phone"""
+  """
+  Updated phone
+  """
   phone: String
-  """Updated notes"""
+  """
+  Updated notes
+  """
   notes: String
 }
 
@@ -446,13 +751,21 @@ input UpdateContactInput {
 Input for adding an email address to an existing contact.
 """
 input AddEmailToContactInput {
-  """ID of the contact to add the email to"""
+  """
+  ID of the contact to add the email to
+  """
   contactId: String!
-  """The email address to add"""
+  """
+  The email address to add
+  """
   email: String!
-  """Whether this should become the primary email"""
+  """
+  Whether this should become the primary email
+  """
   isPrimary: Boolean
-  """Optional label for this email"""
+  """
+  Optional label for this email
+  """
   label: String
 }
 
@@ -462,17 +775,29 @@ input AddEmailToContactInput {
 Email folder categories. Maps to standard IMAP folder semantics.
 """
 enum EmailFolder {
-  """Primary inbox for incoming emails"""
+  """
+  Primary inbox for incoming emails
+  """
   INBOX
-  """Emails sent by the user"""
+  """
+  Emails sent by the user
+  """
   SENT
-  """Unsent email drafts"""
+  """
+  Unsent email drafts
+  """
   DRAFTS
-  """Deleted emails (soft delete)"""
+  """
+  Deleted emails (soft delete)
+  """
   TRASH
-  """Emails marked as spam/junk"""
+  """
+  Emails marked as spam/junk
+  """
   SPAM
-  """Archived emails (removed from inbox but kept)"""
+  """
+  Archived emails (removed from inbox but kept)
+  """
   ARCHIVE
 }
 
@@ -480,9 +805,13 @@ enum EmailFolder {
 Type of email attachment.
 """
 enum AttachmentType {
-  """Inline attachment (e.g., embedded images in HTML)"""
+  """
+  Inline attachment (e.g., embedded images in HTML)
+  """
   INLINE
-  """Regular file attachment"""
+  """
+  Regular file attachment
+  """
   ATTACHMENT
 }
 
@@ -490,31 +819,57 @@ enum AttachmentType {
 A file attachment on an email.
 """
 type Attachment implements BaseEntityProps {
-  """Unique identifier for this attachment"""
+  """
+  Unique identifier for this attachment
+  """
   id: String!
-  """Timestamp when the attachment was saved"""
+  """
+  Timestamp when the attachment was saved
+  """
   createdAt: Date
-  """Timestamp when the attachment was last updated"""
+  """
+  Timestamp when the attachment was last updated
+  """
   updatedAt: Date
-  """ID of the email this attachment belongs to"""
+  """
+  ID of the email this attachment belongs to
+  """
   emailId: String!
-  """Original filename of the attachment"""
+  """
+  Original filename of the attachment
+  """
   filename: String!
-  """MIME type (e.g., "application/pdf", "image/png")"""
+  """
+  MIME type (e.g., "application/pdf", "image/png")
+  """
   mimeType: String!
-  """File extension (e.g., "pdf", "png")"""
+  """
+  File extension (e.g., "pdf", "png")
+  """
   extension: String
-  """File size in bytes"""
+  """
+  File size in bytes
+  """
   size: Int!
-  """Storage key for retrieving the file (S3 key or local path)"""
+  """
+  Storage key for retrieving the file (S3 key or local path)
+  """
   storageKey: String!
-  """Whether this is an inline or regular attachment"""
+  """
+  Whether this is an inline or regular attachment
+  """
   attachmentType: AttachmentType!
-  """Content-ID for inline attachments (used in HTML src references)"""
+  """
+  Content-ID for inline attachments (used in HTML src references)
+  """
   contentId: String
-  """Content-Disposition header value"""
+  """
+  Content-Disposition header value
+  """
   contentDisposition: String
-  """Whether the attachment has been scanned and deemed safe"""
+  """
+  Whether the attachment has been scanned and deemed safe
+  """
   isSafe: Boolean!
 }
 
@@ -522,71 +877,137 @@ type Attachment implements BaseEntityProps {
 An email message. Can be received, sent, or a draft.
 """
 type Email implements BaseEntityProps {
-  """Unique identifier for this email"""
+  """
+  Unique identifier for this email
+  """
   id: String!
-  """Timestamp when the email was stored locally"""
+  """
+  Timestamp when the email was stored locally
+  """
   createdAt: Date
-  """Timestamp when the email was last modified locally"""
+  """
+  Timestamp when the email was last modified locally
+  """
   updatedAt: Date
-  """ID of the email account this email belongs to"""
+  """
+  ID of the email account this email belongs to
+  """
   emailAccountId: String!
-  """The email account object"""
+  """
+  The email account object
+  """
   emailAccount: EmailAccount
-  """ID of the SMTP profile used to send (for sent emails)"""
+  """
+  ID of the SMTP profile used to send (for sent emails)
+  """
   smtpProfileId: String
-  """The SMTP profile used to send this email"""
+  """
+  The SMTP profile used to send this email
+  """
   smtpProfile: SmtpProfile
-  """Unique message ID from the email headers (RFC 5322 Message-ID)"""
+  """
+  Unique message ID from the email headers (RFC 5322 Message-ID)
+  """
   messageId: String!
-  """Which folder this email is in (INBOX, SENT, DRAFTS, etc.)"""
+  """
+  Which folder this email is in (INBOX, SENT, DRAFTS, etc.)
+  """
   folder: EmailFolder!
-  """Sender's email address"""
+  """
+  Sender's email address
+  """
   fromAddress: String!
-  """Sender's display name"""
+  """
+  Sender's display name
+  """
   fromName: String
-  """List of "To" recipient email addresses"""
+  """
+  List of "To" recipient email addresses
+  """
   toAddresses: [String!]!
-  """List of "CC" recipient email addresses"""
+  """
+  List of "CC" recipient email addresses
+  """
   ccAddresses: [String!]
-  """List of "BCC" recipient email addresses (only for sent emails)"""
+  """
+  List of "BCC" recipient email addresses (only for sent emails)
+  """
   bccAddresses: [String!]
-  """Email subject line"""
+  """
+  Email subject line
+  """
   subject: String!
-  """Plain text body content"""
+  """
+  Plain text body content
+  """
   textBody: String
-  """HTML body content"""
+  """
+  HTML body content
+  """
   htmlBody: String
-  """When the email was received (from email headers)"""
+  """
+  When the email was received (from email headers)
+  """
   receivedAt: Date!
-  """Whether the email has been read"""
+  """
+  Whether the email has been read
+  """
   isRead: Boolean!
-  """Whether the email is starred/flagged"""
+  """
+  Whether the email is starred/flagged
+  """
   isStarred: Boolean!
-  """Whether this is an unsent draft"""
+  """
+  Whether this is an unsent draft
+  """
   isDraft: Boolean!
-  """Message-ID of the email this is replying to"""
+  """
+  Message-ID of the email this is replying to
+  """
   inReplyTo: String
-  """List of Message-IDs in the email thread"""
+  """
+  List of Message-IDs in the email thread
+  """
   references: [String!]
-  """Thread identifier for grouping related emails"""
+  """
+  Thread identifier for grouping related emails
+  """
   threadId: String
-  """Number of emails in this thread"""
+  """
+  Number of emails in this thread
+  """
   threadCount: Int
-  """Raw email headers as JSON (for debugging)"""
+  """
+  Raw email headers as JSON (for debugging)
+  """
   headers: JSON
-  """Whether the user has unsubscribed from this sender"""
+  """
+  Whether the user has unsubscribed from this sender
+  """
   isUnsubscribed: Boolean!
-  """List-Unsubscribe URL if available"""
+  """
+  List-Unsubscribe URL if available
+  """
   unsubscribeUrl: String
-  """List-Unsubscribe email address if available"""
+  """
+  List-Unsubscribe email address if available
+  """
   unsubscribeEmail: String
-  """Tags/labels applied to this email"""
+  """
+  Tags/labels applied to this email
+  """
   tags: [Tag!]!
-  """List of file attachments"""
+  """
+  List of file attachments
+  """
   attachments: [Attachment!]!
-  """Quick check if email has any attachments"""
+  """
+  Quick check if email has any attachments
+  """
   hasAttachments: Boolean!
-  """Number of attachments"""
+  """
+  Number of attachments
+  """
   attachmentCount: Int!
 }
 
@@ -597,21 +1018,37 @@ A tag/label that can be applied to emails for organization.
 Similar to Gmail labels or folder categories.
 """
 type Tag implements BaseEntityProps {
-  """Unique identifier for this tag"""
+  """
+  Unique identifier for this tag
+  """
   id: String!
-  """Timestamp when the tag was created"""
+  """
+  Timestamp when the tag was created
+  """
   createdAt: Date
-  """Timestamp when the tag was last updated"""
+  """
+  Timestamp when the tag was last updated
+  """
   updatedAt: Date
-  """ID of the user who owns this tag"""
+  """
+  ID of the user who owns this tag
+  """
   userId: String!
-  """Display name for the tag"""
+  """
+  Display name for the tag
+  """
   name: String!
-  """Color hex code for the tag (e.g., "#FF5733")"""
+  """
+  Color hex code for the tag (e.g., "#FF5733")
+  """
   color: String!
-  """Optional description of what this tag is for"""
+  """
+  Optional description of what this tag is for
+  """
   description: String
-  """Number of emails with this tag applied"""
+  """
+  Number of emails with this tag applied
+  """
   emailCount: Int!
 }
 
@@ -619,11 +1056,17 @@ type Tag implements BaseEntityProps {
 Input for creating a new tag.
 """
 input CreateTagInput {
-  """Display name for the tag"""
+  """
+  Display name for the tag
+  """
   name: String!
-  """Color hex code (defaults to a random color if not provided)"""
+  """
+  Color hex code (defaults to a random color if not provided)
+  """
   color: String
-  """Optional description"""
+  """
+  Optional description
+  """
   description: String
 }
 
@@ -631,13 +1074,21 @@ input CreateTagInput {
 Input for updating an existing tag. Only provided fields will be updated.
 """
 input UpdateTagInput {
-  """ID of the tag to update"""
+  """
+  ID of the tag to update
+  """
   id: String!
-  """New display name"""
+  """
+  New display name
+  """
   name: String
-  """New color hex code"""
+  """
+  New color hex code
+  """
   color: String
-  """New description"""
+  """
+  New description
+  """
   description: String
 }
 
@@ -645,9 +1096,13 @@ input UpdateTagInput {
 Input for adding multiple tags to multiple emails (bulk operation).
 """
 input AddTagsToEmailsInput {
-  """List of email IDs to add tags to"""
+  """
+  List of email IDs to add tags to
+  """
   emailIds: [String!]!
-  """List of tag IDs to add"""
+  """
+  List of tag IDs to add
+  """
   tagIds: [String!]!
 }
 
@@ -655,9 +1110,13 @@ input AddTagsToEmailsInput {
 Input for removing multiple tags from multiple emails (bulk operation).
 """
 input RemoveTagsFromEmailsInput {
-  """List of email IDs to remove tags from"""
+  """
+  List of email IDs to remove tags from
+  """
   emailIds: [String!]!
-  """List of tag IDs to remove"""
+  """
+  List of tag IDs to remove
+  """
   tagIds: [String!]!
 }
 
@@ -669,17 +1128,29 @@ All conditions are optional - only non-null conditions are evaluated.
 Multiple conditions are combined with AND logic.
 """
 type RuleConditions {
-  """Match if sender address contains this substring (case-insensitive)"""
+  """
+  Match if sender address contains this substring (case-insensitive)
+  """
   fromContains: String
-  """Match if any To address contains this substring"""
+  """
+  Match if any To address contains this substring
+  """
   toContains: String
-  """Match if any CC address contains this substring"""
+  """
+  Match if any CC address contains this substring
+  """
   ccContains: String
-  """Match if any BCC address contains this substring"""
+  """
+  Match if any BCC address contains this substring
+  """
   bccContains: String
-  """Match if subject contains this substring (case-insensitive)"""
+  """
+  Match if subject contains this substring (case-insensitive)
+  """
   subjectContains: String
-  """Match if body (text or HTML) contains this substring"""
+  """
+  Match if body (text or HTML) contains this substring
+  """
   bodyContains: String
 }
 
@@ -688,17 +1159,29 @@ Actions to perform when a mail rule matches an email.
 Multiple actions can be combined.
 """
 type RuleActions {
-  """Move the email to Archive folder"""
+  """
+  Move the email to Archive folder
+  """
   archive: Boolean
-  """Star/flag the email"""
+  """
+  Star/flag the email
+  """
   star: Boolean
-  """Move the email to Trash"""
+  """
+  Move the email to Trash
+  """
   delete: Boolean
-  """Mark the email as read"""
+  """
+  Mark the email as read
+  """
   markRead: Boolean
-  """IDs of tags to add to the email"""
+  """
+  IDs of tags to add to the email
+  """
   addTagIds: [String!]
-  """Email address to forward the message to"""
+  """
+  Email address to forward the message to
+  """
   forwardTo: String
 }
 
@@ -707,31 +1190,57 @@ An automated mail rule that applies actions to matching emails.
 Rules are processed in priority order when new emails arrive.
 """
 type MailRule implements BaseEntityProps {
-  """Unique identifier for this rule"""
+  """
+  Unique identifier for this rule
+  """
   id: String!
-  """Timestamp when the rule was created"""
+  """
+  Timestamp when the rule was created
+  """
   createdAt: Date
-  """Timestamp when the rule was last updated"""
+  """
+  Timestamp when the rule was last updated
+  """
   updatedAt: Date
-  """ID of the user who owns this rule"""
+  """
+  ID of the user who owns this rule
+  """
   userId: String!
-  """Optional: Apply only to emails from this account (null = all accounts)"""
+  """
+  Optional: Apply only to emails from this account (null = all accounts)
+  """
   emailAccountId: String
-  """The email account this rule applies to"""
+  """
+  The email account this rule applies to
+  """
   emailAccount: EmailAccount
-  """Display name for the rule"""
+  """
+  Display name for the rule
+  """
   name: String!
-  """Optional description of what this rule does"""
+  """
+  Optional description of what this rule does
+  """
   description: String
-  """Conditions that emails must match"""
+  """
+  Conditions that emails must match
+  """
   conditions: RuleConditions!
-  """Actions to perform on matching emails"""
+  """
+  Actions to perform on matching emails
+  """
   actions: RuleActions!
-  """Whether this rule is currently active"""
+  """
+  Whether this rule is currently active
+  """
   isEnabled: Boolean!
-  """Processing priority (lower numbers run first)"""
+  """
+  Processing priority (lower numbers run first)
+  """
   priority: Int!
-  """If true, stop processing further rules after this one matches"""
+  """
+  If true, stop processing further rules after this one matches
+  """
   stopProcessing: Boolean!
 }
 
@@ -739,17 +1248,29 @@ type MailRule implements BaseEntityProps {
 Input for rule conditions when creating/updating a rule.
 """
 input RuleConditionsInput {
-  """Match if sender address contains this substring"""
+  """
+  Match if sender address contains this substring
+  """
   fromContains: String
-  """Match if any To address contains this substring"""
+  """
+  Match if any To address contains this substring
+  """
   toContains: String
-  """Match if any CC address contains this substring"""
+  """
+  Match if any CC address contains this substring
+  """
   ccContains: String
-  """Match if any BCC address contains this substring"""
+  """
+  Match if any BCC address contains this substring
+  """
   bccContains: String
-  """Match if subject contains this substring"""
+  """
+  Match if subject contains this substring
+  """
   subjectContains: String
-  """Match if body contains this substring"""
+  """
+  Match if body contains this substring
+  """
   bodyContains: String
 }
 
@@ -757,17 +1278,29 @@ input RuleConditionsInput {
 Input for rule actions when creating/updating a rule.
 """
 input RuleActionsInput {
-  """Move to Archive"""
+  """
+  Move to Archive
+  """
   archive: Boolean
-  """Star the email"""
+  """
+  Star the email
+  """
   star: Boolean
-  """Move to Trash"""
+  """
+  Move to Trash
+  """
   delete: Boolean
-  """Mark as read"""
+  """
+  Mark as read
+  """
   markRead: Boolean
-  """Tag IDs to add"""
+  """
+  Tag IDs to add
+  """
   addTagIds: [String!]
-  """Email to forward to"""
+  """
+  Email to forward to
+  """
   forwardTo: String
 }
 
@@ -775,21 +1308,37 @@ input RuleActionsInput {
 Input for creating a new mail rule.
 """
 input CreateMailRuleInput {
-  """Optional: Restrict to a specific email account"""
+  """
+  Optional: Restrict to a specific email account
+  """
   emailAccountId: String
-  """Display name for the rule"""
+  """
+  Display name for the rule
+  """
   name: String!
-  """Optional description"""
+  """
+  Optional description
+  """
   description: String
-  """Conditions for matching emails"""
+  """
+  Conditions for matching emails
+  """
   conditions: RuleConditionsInput!
-  """Actions to perform on matches"""
+  """
+  Actions to perform on matches
+  """
   actions: RuleActionsInput!
-  """Whether the rule is enabled (default: true)"""
+  """
+  Whether the rule is enabled (default: true)
+  """
   isEnabled: Boolean
-  """Processing priority (default: 0)"""
+  """
+  Processing priority (default: 0)
+  """
   priority: Int
-  """Stop processing after match (default: false)"""
+  """
+  Stop processing after match (default: false)
+  """
   stopProcessing: Boolean
 }
 
@@ -797,23 +1346,41 @@ input CreateMailRuleInput {
 Input for updating an existing mail rule. Only provided fields will be updated.
 """
 input UpdateMailRuleInput {
-  """ID of the rule to update"""
+  """
+  ID of the rule to update
+  """
   id: String!
-  """New email account restriction"""
+  """
+  New email account restriction
+  """
   emailAccountId: String
-  """New display name"""
+  """
+  New display name
+  """
   name: String
-  """New description"""
+  """
+  New description
+  """
   description: String
-  """Updated conditions"""
+  """
+  Updated conditions
+  """
   conditions: RuleConditionsInput
-  """Updated actions"""
+  """
+  Updated actions
+  """
   actions: RuleActionsInput
-  """Whether the rule is enabled"""
+  """
+  Whether the rule is enabled
+  """
   isEnabled: Boolean
-  """New priority"""
+  """
+  New priority
+  """
   priority: Int
-  """Whether to stop processing after match"""
+  """
+  Whether to stop processing after match
+  """
   stopProcessing: Boolean
 }
 
@@ -821,9 +1388,13 @@ input UpdateMailRuleInput {
 Result of running a mail rule against existing emails.
 """
 type RunRuleResult {
-  """Number of emails that matched the rule conditions"""
+  """
+  Number of emails that matched the rule conditions
+  """
   matchedCount: Int!
-  """Number of emails that were successfully processed"""
+  """
+  Number of emails that were successfully processed
+  """
   processedCount: Int!
 }
 
@@ -831,35 +1402,65 @@ type RunRuleResult {
 Input for querying emails with filters.
 """
 input GetEmailsInput {
-  """Filter by email account ID (null = all accounts)"""
+  """
+  Filter by email account ID (null = all accounts)
+  """
   emailAccountId: String
-  """Filter by folder (null = depends on includeAllFolders)"""
+  """
+  Filter by folder (null = depends on includeAllFolders)
+  """
   folder: EmailFolder
-  """Maximum number of emails to return (default: 50)"""
+  """
+  Maximum number of emails to return (default: 50)
+  """
   limit: Int
-  """Number of emails to skip for pagination"""
+  """
+  Number of emails to skip for pagination
+  """
   offset: Int
-  """Filter by read status (null = all)"""
+  """
+  Filter by read status (null = all)
+  """
   isRead: Boolean
-  """Filter by starred status (null = all)"""
+  """
+  Filter by starred status (null = all)
+  """
   isStarred: Boolean
-  """Full-text search query across subject and body"""
+  """
+  Full-text search query across subject and body
+  """
   searchQuery: String
-  """If true, search across all folders; if false, defaults to INBOX"""
+  """
+  If true, search across all folders; if false, defaults to INBOX
+  """
   includeAllFolders: Boolean
-  """Advanced filter: sender contains"""
+  """
+  Advanced filter: sender contains
+  """
   fromContains: String
-  """Advanced filter: To address contains"""
+  """
+  Advanced filter: To address contains
+  """
   toContains: String
-  """Advanced filter: CC address contains"""
+  """
+  Advanced filter: CC address contains
+  """
   ccContains: String
-  """Advanced filter: BCC address contains"""
+  """
+  Advanced filter: BCC address contains
+  """
   bccContains: String
-  """Advanced filter: subject contains"""
+  """
+  Advanced filter: subject contains
+  """
   subjectContains: String
-  """Advanced filter: body contains"""
+  """
+  Advanced filter: body contains
+  """
   bodyContains: String
-  """Filter by applied tag IDs (emails must have ALL specified tags)"""
+  """
+  Filter by applied tag IDs (emails must have ALL specified tags)
+  """
   tagIds: [String!]
 }
 
@@ -867,7 +1468,9 @@ input GetEmailsInput {
 Input for fetching a single email by ID.
 """
 input GetEmailInput {
-  """ID of the email to fetch"""
+  """
+  ID of the email to fetch
+  """
   id: String!
 }
 
@@ -876,13 +1479,21 @@ Input for an attachment when composing/sending an email.
 Attachment data is provided as base64-encoded string.
 """
 input AttachmentInput {
-  """Filename for the attachment"""
+  """
+  Filename for the attachment
+  """
   filename: String!
-  """MIME type of the attachment"""
+  """
+  MIME type of the attachment
+  """
   mimeType: String!
-  """File size in bytes (for validation)"""
+  """
+  File size in bytes (for validation)
+  """
   size: Int!
-  """Base64-encoded file data"""
+  """
+  Base64-encoded file data
+  """
   data: String!
 }
 
@@ -890,27 +1501,49 @@ input AttachmentInput {
 Input for composing and sending an email.
 """
 input ComposeEmailInput {
-  """ID of the email account to send from"""
+  """
+  ID of the email account to send from
+  """
   emailAccountId: String!
-  """ID of the SMTP profile to use for sending"""
+  """
+  ID of the SMTP profile to use for sending
+  """
   smtpProfileId: String!
-  """List of To recipient email addresses"""
+  """
+  List of To recipient email addresses
+  """
   toAddresses: [String!]!
-  """Optional list of CC recipients"""
+  """
+  Optional list of CC recipients
+  """
   ccAddresses: [String!]
-  """Optional list of BCC recipients"""
+  """
+  Optional list of BCC recipients
+  """
   bccAddresses: [String!]
-  """Email subject line"""
+  """
+  Email subject line
+  """
   subject: String!
-  """Plain text body content"""
+  """
+  Plain text body content
+  """
   textBody: String
-  """HTML body content"""
+  """
+  HTML body content
+  """
   htmlBody: String
-  """Message-ID of email being replied to (for threading)"""
+  """
+  Message-ID of email being replied to (for threading)
+  """
   inReplyTo: String
-  """ID of draft to convert to sent (draft will be deleted)"""
+  """
+  ID of draft to convert to sent (draft will be deleted)
+  """
   draftId: String
-  """List of file attachments to include"""
+  """
+  List of file attachments to include
+  """
   attachments: [AttachmentInput!]
 }
 
@@ -918,27 +1551,49 @@ input ComposeEmailInput {
 Input for saving an email draft.
 """
 input SaveDraftInput {
-  """ID of existing draft to update (null = create new draft)"""
+  """
+  ID of existing draft to update (null = create new draft)
+  """
   id: String
-  """Email account this draft belongs to"""
+  """
+  Email account this draft belongs to
+  """
   emailAccountId: String!
-  """SMTP profile for sending (optional for drafts)"""
+  """
+  SMTP profile for sending (optional for drafts)
+  """
   smtpProfileId: String
-  """To recipient addresses"""
+  """
+  To recipient addresses
+  """
   toAddresses: [String!]
-  """CC recipient addresses"""
+  """
+  CC recipient addresses
+  """
   ccAddresses: [String!]
-  """BCC recipient addresses"""
+  """
+  BCC recipient addresses
+  """
   bccAddresses: [String!]
-  """Email subject"""
+  """
+  Email subject
+  """
   subject: String
-  """Plain text body"""
+  """
+  Plain text body
+  """
   textBody: String
-  """HTML body"""
+  """
+  HTML body
+  """
   htmlBody: String
-  """Message-ID of email being replied to"""
+  """
+  Message-ID of email being replied to
+  """
   inReplyTo: String
-  """Attachments for the draft"""
+  """
+  Attachments for the draft
+  """
   attachments: [AttachmentInput!]
 }
 
@@ -946,13 +1601,21 @@ input SaveDraftInput {
 Input for bulk updating multiple emails at once.
 """
 input BulkUpdateEmailsInput {
-  """IDs of emails to update"""
+  """
+  IDs of emails to update
+  """
   ids: [String!]!
-  """Set read status (null = don't change)"""
+  """
+  Set read status (null = don't change)
+  """
   isRead: Boolean
-  """Set starred status (null = don't change)"""
+  """
+  Set starred status (null = don't change)
+  """
   isStarred: Boolean
-  """Move to folder (null = don't change)"""
+  """
+  Move to folder (null = don't change)
+  """
   folder: EmailFolder
 }
 
@@ -960,21 +1623,37 @@ input BulkUpdateEmailsInput {
 Input for forwarding an email.
 """
 input ForwardEmailInput {
-  """ID of the email to forward"""
+  """
+  ID of the email to forward
+  """
   emailId: String!
-  """Email account to send from"""
+  """
+  Email account to send from
+  """
   emailAccountId: String!
-  """SMTP profile to use for sending"""
+  """
+  SMTP profile to use for sending
+  """
   smtpProfileId: String!
-  """To recipient addresses"""
+  """
+  To recipient addresses
+  """
   toAddresses: [String!]!
-  """Optional CC recipients"""
+  """
+  Optional CC recipients
+  """
   ccAddresses: [String!]
-  """Optional BCC recipients"""
+  """
+  Optional BCC recipients
+  """
   bccAddresses: [String!]
-  """Optional text to add before forwarded content"""
+  """
+  Optional text to add before forwarded content
+  """
   additionalText: String
-  """Whether to include original attachments (default: true)"""
+  """
+  Whether to include original attachments (default: true)
+  """
   includeAttachments: Boolean
 }
 
@@ -982,7 +1661,9 @@ input ForwardEmailInput {
 Input for triggering a sync of a specific email account.
 """
 input SyncEmailAccountInput {
-  """ID of the email account to sync"""
+  """
+  ID of the email account to sync
+  """
   emailAccountId: String!
 }
 
@@ -990,7 +1671,9 @@ input SyncEmailAccountInput {
 Input for unsubscribing from a sender's mailing list.
 """
 input UnsubscribeInput {
-  """ID of the email to unsubscribe from"""
+  """
+  ID of the email to unsubscribe from
+  """
   emailId: String!
 }
 
@@ -1000,9 +1683,13 @@ input UnsubscribeInput {
 Result of testing an email account or SMTP connection.
 """
 type TestConnectionResult {
-  """Whether the connection was successful"""
+  """
+  Whether the connection was successful
+  """
   success: Boolean!
-  """Human-readable message describing the result or error"""
+  """
+  Human-readable message describing the result or error
+  """
   message: String!
 }
 
@@ -1010,17 +1697,29 @@ type TestConnectionResult {
 Input for testing an IMAP/POP3 connection before saving.
 """
 input TestEmailAccountConnectionInput {
-  """Server hostname"""
+  """
+  Server hostname
+  """
   host: String!
-  """Server port"""
+  """
+  Server port
+  """
   port: Int!
-  """Username for authentication"""
+  """
+  Username for authentication
+  """
   username: String!
-  """Password for authentication"""
+  """
+  Password for authentication
+  """
   password: String!
-  """Protocol type (IMAP or POP3)"""
+  """
+  Protocol type (IMAP or POP3)
+  """
   accountType: EmailAccountType!
-  """Whether to use SSL/TLS"""
+  """
+  Whether to use SSL/TLS
+  """
   useSsl: Boolean!
 }
 
@@ -1028,15 +1727,25 @@ input TestEmailAccountConnectionInput {
 Input for testing an SMTP connection before saving.
 """
 input TestSmtpConnectionInput {
-  """SMTP server hostname"""
+  """
+  SMTP server hostname
+  """
   host: String!
-  """SMTP server port"""
+  """
+  SMTP server port
+  """
   port: Int!
-  """Username for authentication"""
+  """
+  Username for authentication
+  """
   username: String!
-  """Password for authentication"""
+  """
+  Password for authentication
+  """
   password: String!
-  """Whether to use SSL/TLS"""
+  """
+  Whether to use SSL/TLS
+  """
   useSsl: Boolean!
 }
 
@@ -1047,11 +1756,17 @@ Aggregated information about a unique email sender.
 Used for inbox triage and identifying frequent senders.
 """
 type EmailSource {
-  """Email address of the sender"""
+  """
+  Email address of the sender
+  """
   fromAddress: String!
-  """Display name of the sender (if available)"""
+  """
+  Display name of the sender (if available)
+  """
   fromName: String
-  """Number of emails received from this sender"""
+  """
+  Number of emails received from this sender
+  """
   count: Int!
 }
 
@@ -1087,7 +1802,9 @@ type Query {
   Returns null if not found or not owned by the current user.
   """
   getEmailAccount(
-    """ID of the email account to fetch"""
+    """
+    ID of the email account to fetch
+    """
     id: String!
   ): EmailAccount
 
@@ -1103,7 +1820,9 @@ type Query {
   Returns null if not found or not owned by the current user.
   """
   getSmtpProfile(
-    """ID of the SMTP profile to fetch"""
+    """
+    ID of the SMTP profile to fetch
+    """
     id: String!
   ): SmtpProfile
 
@@ -1113,7 +1832,9 @@ type Query {
   Supports pagination, folder filtering, read/starred status, and full-text search.
   """
   getEmails(
-    """Filter and pagination options"""
+    """
+    Filter and pagination options
+    """
     input: GetEmailsInput!
   ): [Email!]!
 
@@ -1122,7 +1843,9 @@ type Query {
   Returns null if not found or not accessible by the current user.
   """
   getEmail(
-    """Email ID wrapped in input object"""
+    """
+    Email ID wrapped in input object
+    """
     input: GetEmailInput!
   ): Email
 
@@ -1131,7 +1854,9 @@ type Query {
   Useful for pagination and unread counts.
   """
   getEmailCount(
-    """Filter options (same as getEmails)"""
+    """
+    Filter options (same as getEmails)
+    """
     input: GetEmailsInput!
   ): Int!
 
@@ -1140,7 +1865,9 @@ type Query {
   Returns emails ordered by receivedAt ascending.
   """
   getEmailsByThread(
-    """Thread ID to fetch emails for"""
+    """
+    Thread ID to fetch emails for
+    """
     threadId: String!
   ): [Email!]!
 
@@ -1149,7 +1876,9 @@ type Query {
   Aggregates senders by email count.
   """
   getTopEmailSources(
-    """Maximum number of sources to return (default: 10)"""
+    """
+    Maximum number of sources to return (default: 10)
+    """
     limit: Int
   ): [EmailSource!]!
 
@@ -1159,7 +1888,9 @@ type Query {
   Returns null if not found or not accessible.
   """
   getAttachment(
-    """ID of the attachment to fetch"""
+    """
+    ID of the attachment to fetch
+    """
     id: String!
   ): Attachment
 
@@ -1169,7 +1900,9 @@ type Query {
   In development, returns a local API endpoint.
   """
   getAttachmentDownloadUrl(
-    """ID of the attachment"""
+    """
+    ID of the attachment
+    """
     id: String!
   ): String!
 
@@ -1185,7 +1918,9 @@ type Query {
   Returns null if not found or not owned by the current user.
   """
   getContact(
-    """ID of the contact to fetch"""
+    """
+    ID of the contact to fetch
+    """
     id: String!
   ): Contact
 
@@ -1194,7 +1929,9 @@ type Query {
   Performs case-insensitive partial matching.
   """
   searchContacts(
-    """Search query string"""
+    """
+    Search query string
+    """
     query: String!
   ): [Contact!]!
 
@@ -1210,7 +1947,9 @@ type Query {
   Returns null if not found or not owned by the current user.
   """
   getTag(
-    """ID of the tag to fetch"""
+    """
+    ID of the tag to fetch
+    """
     id: String!
   ): Tag
 
@@ -1226,7 +1965,9 @@ type Query {
   Returns null if not found or not owned by the current user.
   """
   getMailRule(
-    """ID of the mail rule to fetch"""
+    """
+    ID of the mail rule to fetch
+    """
     id: String!
   ): MailRule
 
@@ -1235,9 +1976,30 @@ type Query {
   Useful for testing rules before running them.
   """
   previewMailRule(
-    """ID of the mail rule to preview"""
+    """
+    ID of the mail rule to preview
+    """
     id: String!
   ): Int!
+
+  # Billing
+  """
+  Get the current user's billing information including subscription and usage.
+  Creates a free tier subscription if one doesn't exist.
+  """
+  getBillingInfo: BillingInfo!
+
+  """
+  Get only the current user's storage usage (cached from materialized view).
+  Returns null if usage hasn't been calculated yet.
+  """
+  getStorageUsage: StorageUsage
+
+  """
+  Get real-time storage usage (bypasses cache, slower but accurate).
+  Use this before syncing to check current limits.
+  """
+  getStorageUsageRealtime: StorageUsage
 }
 
 # ============ Mutations ============
@@ -1252,7 +2014,9 @@ type Mutation {
   Cannot delete the last remaining auth method.
   """
   deleteAuthenticationMethod(
-    """ID of the auth method to delete"""
+    """
+    ID of the auth method to delete
+    """
     id: String!
   ): Boolean!
 
@@ -1260,7 +2024,9 @@ type Mutation {
   Update the user's theme preference (LIGHT, DARK, or AUTO).
   """
   updateThemePreference(
-    """New theme preference"""
+    """
+    New theme preference
+    """
     themePreference: ThemePreference!
   ): User!
 
@@ -1269,7 +2035,9 @@ type Mutation {
   Only provided fields will be updated.
   """
   updateUserPreferences(
-    """Preference updates"""
+    """
+    Preference updates
+    """
     input: UpdateUserPreferencesInput!
   ): User!
 
@@ -1280,7 +2048,9 @@ type Mutation {
   or a local file (development).
   """
   createEmailAccount(
-    """Account details and credentials"""
+    """
+    Account details and credentials
+    """
     input: CreateEmailAccountInput!
   ): EmailAccount!
 
@@ -1289,7 +2059,9 @@ type Mutation {
   If password is provided, the stored credentials are also updated.
   """
   updateEmailAccount(
-    """Fields to update"""
+    """
+    Fields to update
+    """
     input: UpdateEmailAccountInput!
   ): EmailAccount!
 
@@ -1298,7 +2070,9 @@ type Mutation {
   This is a permanent, irreversible operation.
   """
   deleteEmailAccount(
-    """ID of the account to delete"""
+    """
+    ID of the account to delete
+    """
     id: String!
   ): Boolean!
 
@@ -1307,7 +2081,9 @@ type Mutation {
   Downloads new emails from the IMAP/POP3 server.
   """
   syncEmailAccount(
-    """Account to sync"""
+    """
+    Account to sync
+    """
     input: SyncEmailAccountInput!
   ): Boolean!
 
@@ -1316,7 +2092,9 @@ type Mutation {
   Create a new SMTP profile for sending emails.
   """
   createSmtpProfile(
-    """Profile details and credentials"""
+    """
+    Profile details and credentials
+    """
     input: CreateSmtpProfileInput!
   ): SmtpProfile!
 
@@ -1324,7 +2102,9 @@ type Mutation {
   Update an existing SMTP profile.
   """
   updateSmtpProfile(
-    """Fields to update"""
+    """
+    Fields to update
+    """
     input: UpdateSmtpProfileInput!
   ): SmtpProfile!
 
@@ -1333,7 +2113,9 @@ type Mutation {
   Cannot delete a profile that is set as default for an email account.
   """
   deleteSmtpProfile(
-    """ID of the profile to delete"""
+    """
+    ID of the profile to delete
+    """
     id: String!
   ): Boolean!
 
@@ -1343,7 +2125,9 @@ type Mutation {
   Returns success/failure with an error message if applicable.
   """
   testEmailAccountConnection(
-    """Connection details to test"""
+    """
+    Connection details to test
+    """
     input: TestEmailAccountConnectionInput!
   ): TestConnectionResult!
 
@@ -1352,7 +2136,9 @@ type Mutation {
   Returns success/failure with an error message if applicable.
   """
   testSmtpConnection(
-    """Connection details to test"""
+    """
+    Connection details to test
+    """
     input: TestSmtpConnectionInput!
   ): TestConnectionResult!
 
@@ -1362,7 +2148,9 @@ type Mutation {
   Stores a copy in the Sent folder and handles attachments.
   """
   sendEmail(
-    """Email composition details"""
+    """
+    Email composition details
+    """
     input: ComposeEmailInput!
   ): Email!
 
@@ -1371,7 +2159,9 @@ type Mutation {
   If id is provided, updates an existing draft; otherwise creates a new one.
   """
   saveDraft(
-    """Draft content"""
+    """
+    Draft content
+    """
     input: SaveDraftInput!
   ): Email!
 
@@ -1380,7 +2170,9 @@ type Mutation {
   Returns the updated emails.
   """
   bulkUpdateEmails(
-    """Update parameters"""
+    """
+    Update parameters
+    """
     input: BulkUpdateEmailsInput!
   ): [Email!]!
 
@@ -1389,7 +2181,9 @@ type Mutation {
   Returns the number of emails deleted.
   """
   bulkDeleteEmails(
-    """IDs of emails to delete"""
+    """
+    IDs of emails to delete
+    """
     ids: [String!]!
   ): Int!
 
@@ -1398,7 +2192,9 @@ type Mutation {
   Optionally includes original attachments.
   """
   forwardEmail(
-    """Forward parameters"""
+    """
+    Forward parameters
+    """
     input: ForwardEmailInput!
   ): Email!
 
@@ -1407,7 +2203,9 @@ type Mutation {
   Uses List-Unsubscribe header if available.
   """
   unsubscribe(
-    """Email to unsubscribe from"""
+    """
+    Email to unsubscribe from
+    """
     input: UnsubscribeInput!
   ): Email!
 
@@ -1416,7 +2214,9 @@ type Mutation {
   Create a new contact.
   """
   createContact(
-    """Contact details"""
+    """
+    Contact details
+    """
     input: CreateContactInput!
   ): Contact!
 
@@ -1424,7 +2224,9 @@ type Mutation {
   Update an existing contact.
   """
   updateContact(
-    """Fields to update"""
+    """
+    Fields to update
+    """
     input: UpdateContactInput!
   ): Contact!
 
@@ -1432,7 +2234,9 @@ type Mutation {
   Delete a contact.
   """
   deleteContact(
-    """ID of the contact to delete"""
+    """
+    ID of the contact to delete
+    """
     id: String!
   ): Boolean!
 
@@ -1441,7 +2245,9 @@ type Mutation {
   Extracts name and email from the fromAddress/fromName fields.
   """
   createContactFromEmail(
-    """ID of the email to create contact from"""
+    """
+    ID of the email to create contact from
+    """
     emailId: String!
   ): Contact!
 
@@ -1449,7 +2255,9 @@ type Mutation {
   Add an email address to an existing contact.
   """
   addEmailToContact(
-    """Email details to add"""
+    """
+    Email details to add
+    """
     input: AddEmailToContactInput!
   ): Contact!
 
@@ -1466,7 +2274,9 @@ type Mutation {
   Permanently deletes emails older than the specified date.
   """
   nukeOldEmails(
-    """Filter for which emails to delete"""
+    """
+    Filter for which emails to delete
+    """
     input: NukeOldEmailsInput!
   ): Int!
 
@@ -1475,7 +2285,9 @@ type Mutation {
   Create a new tag.
   """
   createTag(
-    """Tag details"""
+    """
+    Tag details
+    """
     input: CreateTagInput!
   ): Tag!
 
@@ -1483,7 +2295,9 @@ type Mutation {
   Update an existing tag.
   """
   updateTag(
-    """Fields to update"""
+    """
+    Fields to update
+    """
     input: UpdateTagInput!
   ): Tag!
 
@@ -1492,7 +2306,9 @@ type Mutation {
   Removes the tag from all emails but does not delete the emails.
   """
   deleteTag(
-    """ID of the tag to delete"""
+    """
+    ID of the tag to delete
+    """
     id: String!
   ): Boolean!
 
@@ -1501,7 +2317,9 @@ type Mutation {
   Returns the updated emails.
   """
   addTagsToEmails(
-    """Emails and tags to add"""
+    """
+    Emails and tags to add
+    """
     input: AddTagsToEmailsInput!
   ): [Email!]!
 
@@ -1510,7 +2328,9 @@ type Mutation {
   Returns the updated emails.
   """
   removeTagsFromEmails(
-    """Emails and tags to remove"""
+    """
+    Emails and tags to remove
+    """
     input: RemoveTagsFromEmailsInput!
   ): [Email!]!
 
@@ -1519,7 +2339,9 @@ type Mutation {
   Create a new mail rule.
   """
   createMailRule(
-    """Rule details"""
+    """
+    Rule details
+    """
     input: CreateMailRuleInput!
   ): MailRule!
 
@@ -1527,7 +2349,9 @@ type Mutation {
   Update an existing mail rule.
   """
   updateMailRule(
-    """Fields to update"""
+    """
+    Fields to update
+    """
     input: UpdateMailRuleInput!
   ): MailRule!
 
@@ -1535,7 +2359,9 @@ type Mutation {
   Delete a mail rule.
   """
   deleteMailRule(
-    """ID of the rule to delete"""
+    """
+    ID of the rule to delete
+    """
     id: String!
   ): Boolean!
 
@@ -1545,17 +2371,266 @@ type Mutation {
   Returns counts of matched and processed emails.
   """
   runMailRule(
-    """ID of the rule to run"""
+    """
+    ID of the rule to run
+    """
     id: String!
   ): RunRuleResult!
+
+  # Billing
+  """
+  Create a Stripe Checkout session to upgrade subscription.
+  Returns the URL to redirect the user to.
+  Requires Stripe to be configured on the server.
+  """
+  createCheckoutSession(
+    """
+    Storage tier to subscribe to
+    """
+    storageTier: StorageTier!
+    """
+    Account tier to subscribe to
+    """
+    accountTier: AccountTier!
+  ): String!
+
+  """
+  Create a Stripe Billing Portal session to manage subscription.
+  Returns the URL to redirect the user to.
+  Requires Stripe to be configured on the server.
+  """
+  createBillingPortalSession: String!
+
+  """
+  Force refresh the storage usage materialized view.
+  Normally this runs automatically at midnight UTC.
+  Returns true if successful.
+  """
+  refreshStorageUsage: Boolean!
 }
 
 """
 Input for bulk deleting old emails.
 """
 input NukeOldEmailsInput {
-  """Delete emails older than this date"""
+  """
+  Delete emails older than this date
+  """
   olderThan: Date
+}
+
+# ============ Billing ============
+
+"""
+Storage tier for billing. Each tier has a storage limit.
+"""
+enum StorageTier {
+  """
+  Free tier - 5GB storage
+  """
+  FREE
+  """
+  Basic tier - 10GB storage
+  """
+  BASIC
+  """
+  Pro tier - 20GB storage
+  """
+  PRO
+  """
+  Enterprise tier - 100GB storage
+  """
+  ENTERPRISE
+}
+
+"""
+Account tier for billing. Each tier has an email account limit.
+"""
+enum AccountTier {
+  """
+  Free tier - 1 email account
+  """
+  FREE
+  """
+  Basic tier - 2 email accounts
+  """
+  BASIC
+  """
+  Pro tier - 5 email accounts
+  """
+  PRO
+  """
+  Enterprise tier - unlimited accounts
+  """
+  ENTERPRISE
+}
+
+"""
+Status of a billing subscription.
+"""
+enum BillingSubscriptionStatus {
+  """
+  Subscription is active and in good standing
+  """
+  ACTIVE
+  """
+  Payment is past due but subscription still active
+  """
+  PAST_DUE
+  """
+  Payment failed and subscription is unpaid
+  """
+  UNPAID
+  """
+  Subscription has been canceled
+  """
+  CANCELED
+  """
+  Initial payment is incomplete
+  """
+  INCOMPLETE
+  """
+  Initial payment expired before completion
+  """
+  INCOMPLETE_EXPIRED
+  """
+  Subscription is in trial period
+  """
+  TRIALING
+  """
+  Subscription is paused
+  """
+  PAUSED
+}
+
+"""
+User's billing subscription information.
+"""
+type BillingSubscription implements BaseEntityProps {
+  """
+  Unique identifier for this subscription
+  """
+  id: String!
+  """
+  Timestamp when the subscription was created
+  """
+  createdAt: Date
+  """
+  Timestamp when the subscription was last updated
+  """
+  updatedAt: Date
+  """
+  ID of the user this subscription belongs to
+  """
+  userId: String!
+  """
+  Current subscription status
+  """
+  status: BillingSubscriptionStatus!
+  """
+  Current storage tier
+  """
+  storageTier: StorageTier!
+  """
+  Current account tier
+  """
+  accountTier: AccountTier!
+  """
+  Storage limit in bytes for the current tier
+  """
+  storageLimitBytes: Float!
+  """
+  Maximum number of email accounts allowed (-1 for unlimited)
+  """
+  accountLimit: Int!
+  """
+  Whether the subscription is valid for syncing emails
+  """
+  isValid: Boolean!
+  """
+  When the current billing period ends
+  """
+  currentPeriodEnd: Date
+  """
+  Whether the subscription will cancel at period end
+  """
+  cancelAtPeriodEnd: Boolean!
+}
+
+"""
+Current storage usage statistics for a user.
+"""
+type StorageUsage {
+  """
+  ID of the user
+  """
+  userId: String!
+  """
+  Number of email accounts
+  """
+  accountCount: Int!
+  """
+  Total size of email bodies in bytes
+  """
+  totalBodySizeBytes: Float!
+  """
+  Total size of attachments in bytes
+  """
+  totalAttachmentSizeBytes: Float!
+  """
+  Combined total storage used in bytes
+  """
+  totalStorageBytes: Float!
+  """
+  Total storage used in GB (rounded to 0.1)
+  """
+  totalStorageGB: Float!
+  """
+  Total number of emails
+  """
+  emailCount: Int!
+  """
+  Total number of attachments
+  """
+  attachmentCount: Int!
+  """
+  When the usage was last calculated
+  """
+  lastRefreshedAt: Date
+}
+
+"""
+Combined billing information including subscription and usage.
+"""
+type BillingInfo {
+  """
+  User's subscription details
+  """
+  subscription: BillingSubscription!
+  """
+  Current storage usage
+  """
+  usage: StorageUsage!
+  """
+  Storage usage as a percentage (0-100)
+  """
+  storageUsagePercent: Float!
+  """
+  Account usage as a percentage (0-100, 0 for unlimited)
+  """
+  accountUsagePercent: Float!
+  """
+  Whether the user has exceeded their storage limit
+  """
+  isStorageLimitExceeded: Boolean!
+  """
+  Whether the user has exceeded their account limit
+  """
+  isAccountLimitExceeded: Boolean!
+  """
+  Whether Stripe billing is configured on the server
+  """
+  isStripeConfigured: Boolean!
 }
 
 # ============ Subscriptions ============
@@ -1564,13 +2639,21 @@ input NukeOldEmailsInput {
 Real-time mailbox update event.
 """
 type MailboxUpdate {
-  """Type of update that occurred"""
+  """
+  Type of update that occurred
+  """
   type: MailboxUpdateType!
-  """ID of the email account that was updated"""
+  """
+  ID of the email account that was updated
+  """
   emailAccountId: String!
-  """New or updated emails (for NEW_EMAILS, EMAIL_UPDATED events)"""
+  """
+  New or updated emails (for NEW_EMAILS, EMAIL_UPDATED events)
+  """
   emails: [Email!]
-  """Human-readable message describing the update"""
+  """
+  Human-readable message describing the update
+  """
   message: String
 }
 
@@ -1578,21 +2661,37 @@ type MailboxUpdate {
 Types of mailbox update events.
 """
 enum MailboxUpdateType {
-  """New emails have arrived"""
+  """
+  New emails have arrived
+  """
   NEW_EMAILS
-  """An existing email was updated (flags changed, etc.)"""
+  """
+  An existing email was updated (flags changed, etc.)
+  """
   EMAIL_UPDATED
-  """An email was deleted from the server"""
+  """
+  An email was deleted from the server
+  """
   EMAIL_DELETED
-  """Email sync has started"""
+  """
+  Email sync has started
+  """
   SYNC_STARTED
-  """Email sync has completed"""
+  """
+  Email sync has completed
+  """
   SYNC_COMPLETED
-  """IMAP IDLE connection was established"""
+  """
+  IMAP IDLE connection was established
+  """
   CONNECTION_ESTABLISHED
-  """IMAP IDLE connection was closed (client should reconnect)"""
+  """
+  IMAP IDLE connection was closed (client should reconnect)
+  """
   CONNECTION_CLOSED
-  """An error occurred"""
+  """
+  An error occurred
+  """
   ERROR
 }
 
@@ -1604,11 +2703,11 @@ type Subscription {
   """
   Subscribe to mailbox updates for all of the user's email accounts.
   Uses IMAP IDLE to listen for new emails in real-time.
-  
+
   Important: The connection will automatically close after approximately
   4.5 minutes due to IMAP IDLE timeout. Clients should reconnect when
   they receive a CONNECTION_CLOSED event.
-  
+
   Events include:
   - NEW_EMAILS: New messages arrived
   - EMAIL_UPDATED: Email flags changed

@@ -14,6 +14,7 @@ import { uploadAttachment } from './attachment-storage.js';
 import { getImapCredentials } from './secrets.js';
 import { Readable } from 'stream';
 import { publishMailboxUpdate } from './pubsub.js';
+import { checkBillingLimits } from './billing-checks.js';
 
 export interface SyncResult {
   synced: number;
@@ -115,6 +116,21 @@ export async function startAsyncSync(
 ): Promise<boolean> {
   // Reload to get latest sync state
   await emailAccount.reload();
+
+  // Check billing limits before syncing
+  const billingCheck = await checkBillingLimits(emailAccount.userId);
+  if (!billingCheck.canSync) {
+    console.log(
+      `[IMAP] Sync blocked for ${emailAccount.email}: ${billingCheck.reason}`,
+    );
+    // Notify subscribers about the billing issue
+    publishMailboxUpdate(emailAccount.userId, {
+      type: 'ERROR',
+      emailAccountId: emailAccount.id,
+      message: billingCheck.reason || 'Usage limit exceeded',
+    });
+    return false;
+  }
 
   // Check if already syncing
   if (emailAccount.syncId) {

@@ -2,6 +2,8 @@ import { makeMutation } from '../../types.js';
 import { EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { storeImapCredentials } from '../../helpers/secrets.js';
+import { getOrCreateSubscription } from '../../helpers/stripe.js';
+import { ACCOUNT_LIMITS } from '../../db/models/subscription.model.js';
 
 export const createEmailAccount = makeMutation(
   'createEmailAccount',
@@ -13,6 +15,16 @@ export const createEmailAccount = makeMutation(
       where: { userId },
     });
     const isFirstAccount = existingAccountsCount === 0;
+
+    // Check account limit before creating
+    const subscription = await getOrCreateSubscription(userId);
+    const accountLimit = ACCOUNT_LIMITS[subscription.accountTier];
+    // accountLimit of -1 means unlimited
+    if (accountLimit > 0 && existingAccountsCount >= accountLimit) {
+      throw new Error(
+        `Account limit reached (${accountLimit} accounts). Please upgrade your plan to add more email accounts.`,
+      );
+    }
 
     // If setting as default or this is the first account, unset any existing default
     const shouldBeDefault = input.isDefault || isFirstAccount;

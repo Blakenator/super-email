@@ -76,6 +76,9 @@ type Documents = {
     "\n  mutation DeleteMailRule($id: String!) {\n    deleteMailRule(id: $id)\n  }\n": typeof types.DeleteMailRuleDocument,
     "\n  query PreviewMailRule($id: String!) {\n    previewMailRule(id: $id)\n  }\n": typeof types.PreviewMailRuleDocument,
     "\n  mutation RunMailRule($id: String!) {\n    runMailRule(id: $id) {\n      matchedCount\n      processedCount\n    }\n  }\n": typeof types.RunMailRuleDocument,
+    "\n  query GetBillingInfo {\n    getBillingInfo {\n      subscription {\n        id\n        status\n        storageTier\n        accountTier\n        storageLimitBytes\n        accountLimit\n        isValid\n        currentPeriodEnd\n        cancelAtPeriodEnd\n      }\n      usage {\n        userId\n        accountCount\n        totalStorageBytes\n        totalStorageGB\n        emailCount\n        attachmentCount\n        lastRefreshedAt\n      }\n      storageUsagePercent\n      accountUsagePercent\n      isStorageLimitExceeded\n      isAccountLimitExceeded\n      isStripeConfigured\n    }\n  }\n": typeof types.GetBillingInfoDocument,
+    "\n  mutation CreateBillingPortalSession {\n    createBillingPortalSession\n  }\n": typeof types.CreateBillingPortalSessionDocument,
+    "\n  mutation RefreshStorageUsage {\n    refreshStorageUsage\n  }\n": typeof types.RefreshStorageUsageDocument,
     "\n  query GetTopEmailSources($limit: Int) {\n    getTopEmailSources(limit: $limit) {\n      fromAddress\n      fromName\n      count\n    }\n  }\n": typeof types.GetTopEmailSourcesDocument,
     "\n  query GetEmailsForTriage($input: GetEmailsInput!) {\n    getEmails(input: $input) {\n      id\n      messageId\n      folder\n      fromAddress\n      fromName\n      toAddresses\n      subject\n      textBody\n      receivedAt\n      isRead\n      isStarred\n      emailAccountId\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": typeof types.GetEmailsForTriageDocument,
     "\n  query GetEmailCountForTriage($input: GetEmailsInput!) {\n    getEmailCount(input: $input)\n  }\n": typeof types.GetEmailCountForTriageDocument,
@@ -145,6 +148,9 @@ const documents: Documents = {
     "\n  mutation DeleteMailRule($id: String!) {\n    deleteMailRule(id: $id)\n  }\n": types.DeleteMailRuleDocument,
     "\n  query PreviewMailRule($id: String!) {\n    previewMailRule(id: $id)\n  }\n": types.PreviewMailRuleDocument,
     "\n  mutation RunMailRule($id: String!) {\n    runMailRule(id: $id) {\n      matchedCount\n      processedCount\n    }\n  }\n": types.RunMailRuleDocument,
+    "\n  query GetBillingInfo {\n    getBillingInfo {\n      subscription {\n        id\n        status\n        storageTier\n        accountTier\n        storageLimitBytes\n        accountLimit\n        isValid\n        currentPeriodEnd\n        cancelAtPeriodEnd\n      }\n      usage {\n        userId\n        accountCount\n        totalStorageBytes\n        totalStorageGB\n        emailCount\n        attachmentCount\n        lastRefreshedAt\n      }\n      storageUsagePercent\n      accountUsagePercent\n      isStorageLimitExceeded\n      isAccountLimitExceeded\n      isStripeConfigured\n    }\n  }\n": types.GetBillingInfoDocument,
+    "\n  mutation CreateBillingPortalSession {\n    createBillingPortalSession\n  }\n": types.CreateBillingPortalSessionDocument,
+    "\n  mutation RefreshStorageUsage {\n    refreshStorageUsage\n  }\n": types.RefreshStorageUsageDocument,
     "\n  query GetTopEmailSources($limit: Int) {\n    getTopEmailSources(limit: $limit) {\n      fromAddress\n      fromName\n      count\n    }\n  }\n": types.GetTopEmailSourcesDocument,
     "\n  query GetEmailsForTriage($input: GetEmailsInput!) {\n    getEmails(input: $input) {\n      id\n      messageId\n      folder\n      fromAddress\n      fromName\n      toAddresses\n      subject\n      textBody\n      receivedAt\n      isRead\n      isStarred\n      emailAccountId\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": types.GetEmailsForTriageDocument,
     "\n  query GetEmailCountForTriage($input: GetEmailsInput!) {\n    getEmailCount(input: $input)\n  }\n": types.GetEmailCountForTriageDocument,
@@ -414,6 +420,18 @@ export function gql(source: "\n  query PreviewMailRule($id: String!) {\n    prev
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "\n  mutation RunMailRule($id: String!) {\n    runMailRule(id: $id) {\n      matchedCount\n      processedCount\n    }\n  }\n"): (typeof documents)["\n  mutation RunMailRule($id: String!) {\n    runMailRule(id: $id) {\n      matchedCount\n      processedCount\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  query GetBillingInfo {\n    getBillingInfo {\n      subscription {\n        id\n        status\n        storageTier\n        accountTier\n        storageLimitBytes\n        accountLimit\n        isValid\n        currentPeriodEnd\n        cancelAtPeriodEnd\n      }\n      usage {\n        userId\n        accountCount\n        totalStorageBytes\n        totalStorageGB\n        emailCount\n        attachmentCount\n        lastRefreshedAt\n      }\n      storageUsagePercent\n      accountUsagePercent\n      isStorageLimitExceeded\n      isAccountLimitExceeded\n      isStripeConfigured\n    }\n  }\n"): (typeof documents)["\n  query GetBillingInfo {\n    getBillingInfo {\n      subscription {\n        id\n        status\n        storageTier\n        accountTier\n        storageLimitBytes\n        accountLimit\n        isValid\n        currentPeriodEnd\n        cancelAtPeriodEnd\n      }\n      usage {\n        userId\n        accountCount\n        totalStorageBytes\n        totalStorageGB\n        emailCount\n        attachmentCount\n        lastRefreshedAt\n      }\n      storageUsagePercent\n      accountUsagePercent\n      isStorageLimitExceeded\n      isAccountLimitExceeded\n      isStripeConfigured\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation CreateBillingPortalSession {\n    createBillingPortalSession\n  }\n"): (typeof documents)["\n  mutation CreateBillingPortalSession {\n    createBillingPortalSession\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation RefreshStorageUsage {\n    refreshStorageUsage\n  }\n"): (typeof documents)["\n  mutation RefreshStorageUsage {\n    refreshStorageUsage\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

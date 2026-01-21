@@ -42,6 +42,7 @@ import {
   MailRulesManager,
   NotificationSettings,
   ThemeSettings,
+  BillingSettings,
 } from './components';
 import { ResponsiveTabs } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
@@ -62,6 +63,7 @@ import {
   faBell,
   faPalette,
   faSignOutAlt,
+  faCreditCard,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faGoogle,
@@ -109,6 +111,7 @@ const TAB_MAPPING: Record<string, string> = {
   rules: 'rules',
   notifications: 'notifications',
   appearance: 'appearance',
+  billing: 'billing',
 };
 
 const REVERSE_TAB_MAPPING = Object.fromEntries(
@@ -1208,6 +1211,18 @@ export function Settings() {
               }
             >
               <ThemeSettings />
+            </Tab>
+
+            <Tab
+              eventKey="billing"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faCreditCard} className="me-1" />
+                  Billing
+                </>
+              }
+            >
+              <BillingSettings />
             </Tab>
           </Tabs>
         </ResponsiveTabsWrapper>

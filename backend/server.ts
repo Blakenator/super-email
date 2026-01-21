@@ -37,6 +37,8 @@ import {
   startBackgroundSync,
   stopBackgroundSync,
 } from './helpers/background-sync.js';
+import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
+import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
 import { API_ROUTES } from '@main/common';
 
 // Default models - imported from db
@@ -77,6 +79,8 @@ export interface ServerDependencies {
   skipWebSocket?: boolean;
   /** Skip background sync scheduler (for testing) */
   skipBackgroundSync?: boolean;
+  /** Skip usage daemon (for testing) */
+  skipUsageDaemon?: boolean;
   /** Custom port (defaults to 4000) */
   port?: number;
   /** Enable verbose logging */
@@ -103,6 +107,7 @@ export function getDefaultDependencies(): ServerDependencies {
     skipDbSync: false,
     skipWebSocket: false,
     skipBackgroundSync: false,
+    skipUsageDaemon: false,
     port: 4000,
     enableLogging: true,
   };
@@ -595,6 +600,30 @@ export async function createServer(
     }
   });
 
+  // Stripe webhook endpoint (must use raw body for signature verification)
+  app.post(
+    '/api/webhooks/stripe',
+    express.raw({ type: 'application/json' }),
+    async (req, res) => {
+      if (!isStripeConfigured()) {
+        return res.status(503).json({ error: 'Stripe is not configured' });
+      }
+
+      const signature = req.headers['stripe-signature'];
+      if (!signature || typeof signature !== 'string') {
+        return res.status(400).json({ error: 'Missing Stripe signature' });
+      }
+
+      try {
+        await handleStripeWebhook(req.body, signature);
+        res.json({ received: true });
+      } catch (error: any) {
+        logger.error('Stripe Webhook', error.message);
+        res.status(400).json({ error: error.message });
+      }
+    },
+  );
+
   const port = deps.port ?? 4000;
 
   return {
@@ -613,11 +642,17 @@ export async function createServer(
       if (!deps.skipBackgroundSync) {
         startBackgroundSync();
       }
+      // Start usage calculation daemon (unless disabled)
+      if (!deps.skipUsageDaemon) {
+        startUsageDaemon();
+      }
     },
     
     stop: async () => {
       // Stop background sync scheduler
       stopBackgroundSync();
+      // Stop usage daemon
+      stopUsageDaemon();
       await apolloServer.stop();
       httpServer.close();
     },

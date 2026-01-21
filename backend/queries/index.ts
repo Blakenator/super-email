@@ -20,6 +20,9 @@ import { getMailRule } from './mail-rule/getMailRule.js';
 import { previewMailRule } from './mail-rule/previewMailRule.js';
 import { getAttachment } from './attachment/getAttachment.js';
 import { getAttachmentDownloadUrl } from './attachment/getAttachmentDownloadUrl.js';
+import { getBillingInfo } from './billing/getBillingInfo.js';
+import { getStorageUsage } from './billing/getStorageUsage.js';
+import { getStorageUsageRealtime } from './billing/getStorageUsageRealtime.js';
 
 export const QueryResolvers: AllQueries = {
   fetchProfile,
@@ -43,4 +46,7 @@ export const QueryResolvers: AllQueries = {
   previewMailRule,
   getAttachment,
   getAttachmentDownloadUrl,
+  getBillingInfo,
+  getStorageUsage,
+  getStorageUsageRealtime,
 };
