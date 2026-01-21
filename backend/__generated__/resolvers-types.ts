@@ -21,6 +21,18 @@ export type Scalars = {
   JSON: { input: Record<string, unknown>; output: Record<string, unknown>; }
 };
 
+/** Account tier for billing. Each tier has an email account limit. */
+export enum AccountTier {
+  /** Basic tier - 2 email accounts */
+  Basic = 'BASIC',
+  /** Enterprise tier - unlimited accounts */
+  Enterprise = 'ENTERPRISE',
+  /** Free tier - 1 email account */
+  Free = 'FREE',
+  /** Pro tier - 5 email accounts */
+  Pro = 'PRO'
+}
+
 /** Input for adding an email address to an existing contact. */
 export type AddEmailToContactInput = {
   /** ID of the contact to add the email to */
@@ -144,6 +156,74 @@ export type BaseEntityProps = {
   /** Timestamp when the entity was last updated */
   updatedAt?: Maybe<Scalars['Date']['output']>;
 };
+
+/** Combined billing information including subscription and usage. */
+export type BillingInfo = {
+  __typename?: 'BillingInfo';
+  /** Account usage as a percentage (0-100, 0 for unlimited) */
+  accountUsagePercent: Scalars['Float']['output'];
+  /** Whether the user has exceeded their account limit */
+  isAccountLimitExceeded: Scalars['Boolean']['output'];
+  /** Whether the user has exceeded their storage limit */
+  isStorageLimitExceeded: Scalars['Boolean']['output'];
+  /** Whether Stripe billing is configured on the server */
+  isStripeConfigured: Scalars['Boolean']['output'];
+  /** Storage usage as a percentage (0-100) */
+  storageUsagePercent: Scalars['Float']['output'];
+  /** User's subscription details */
+  subscription: BillingSubscription;
+  /** Current storage usage */
+  usage: StorageUsage;
+};
+
+/** User's billing subscription information. */
+export type BillingSubscription = BaseEntityProps & {
+  __typename?: 'BillingSubscription';
+  /** Maximum number of email accounts allowed (-1 for unlimited) */
+  accountLimit: Scalars['Int']['output'];
+  /** Current account tier */
+  accountTier: AccountTier;
+  /** Whether the subscription will cancel at period end */
+  cancelAtPeriodEnd: Scalars['Boolean']['output'];
+  /** Timestamp when the subscription was created */
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** When the current billing period ends */
+  currentPeriodEnd?: Maybe<Scalars['Date']['output']>;
+  /** Unique identifier for this subscription */
+  id: Scalars['String']['output'];
+  /** Whether the subscription is valid for syncing emails */
+  isValid: Scalars['Boolean']['output'];
+  /** Current subscription status */
+  status: BillingSubscriptionStatus;
+  /** Storage limit in bytes for the current tier */
+  storageLimitBytes: Scalars['Float']['output'];
+  /** Current storage tier */
+  storageTier: StorageTier;
+  /** Timestamp when the subscription was last updated */
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the user this subscription belongs to */
+  userId: Scalars['String']['output'];
+};
+
+/** Status of a billing subscription. */
+export enum BillingSubscriptionStatus {
+  /** Subscription is active and in good standing */
+  Active = 'ACTIVE',
+  /** Subscription has been canceled */
+  Canceled = 'CANCELED',
+  /** Initial payment is incomplete */
+  Incomplete = 'INCOMPLETE',
+  /** Initial payment expired before completion */
+  IncompleteExpired = 'INCOMPLETE_EXPIRED',
+  /** Payment is past due but subscription still active */
+  PastDue = 'PAST_DUE',
+  /** Subscription is paused */
+  Paused = 'PAUSED',
+  /** Subscription is in trial period */
+  Trialing = 'TRIALING',
+  /** Payment failed and subscription is unpaid */
+  Unpaid = 'UNPAID'
+}
 
 /** Input for bulk updating multiple emails at once. */
 export type BulkUpdateEmailsInput = {
@@ -646,6 +726,18 @@ export type Mutation = {
    * Returns the updated emails.
    */
   bulkUpdateEmails: Array<Email>;
+  /**
+   * Create a Stripe Billing Portal session to manage subscription.
+   * Returns the URL to redirect the user to.
+   * Requires Stripe to be configured on the server.
+   */
+  createBillingPortalSession: Scalars['String']['output'];
+  /**
+   * Create a Stripe Checkout session to upgrade subscription.
+   * Returns the URL to redirect the user to.
+   * Requires Stripe to be configured on the server.
+   */
+  createCheckoutSession: Scalars['String']['output'];
   /** Create a new contact. */
   createContact: Contact;
   /**
@@ -699,6 +791,12 @@ export type Mutation = {
    * Permanently deletes emails older than the specified date.
    */
   nukeOldEmails: Scalars['Int']['output'];
+  /**
+   * Force refresh the storage usage materialized view.
+   * Normally this runs automatically at midnight UTC.
+   * Returns true if successful.
+   */
+  refreshStorageUsage: Scalars['Boolean']['output'];
   /**
    * Remove tags from multiple emails (bulk operation).
    * Returns the updated emails.
@@ -789,6 +887,13 @@ export type MutationBulkDeleteEmailsArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationBulkUpdateEmailsArgs = {
   input: BulkUpdateEmailsInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationCreateCheckoutSessionArgs = {
+  accountTier: AccountTier;
+  storageTier: StorageTier;
 };
 
 
@@ -1007,6 +1112,11 @@ export type Query = {
    */
   getAuthenticationMethods: Array<AuthenticationMethod>;
   /**
+   * Get the current user's billing information including subscription and usage.
+   * Creates a free tier subscription if one doesn't exist.
+   */
+  getBillingInfo: BillingInfo;
+  /**
    * Get a specific contact by ID.
    * Returns null if not found or not owned by the current user.
    */
@@ -1066,6 +1176,16 @@ export type Query = {
    * Ordered by creation date, newest first.
    */
   getSmtpProfiles: Array<SmtpProfile>;
+  /**
+   * Get only the current user's storage usage (cached from materialized view).
+   * Returns null if usage hasn't been calculated yet.
+   */
+  getStorageUsage?: Maybe<StorageUsage>;
+  /**
+   * Get real-time storage usage (bypasses cache, slower but accurate).
+   * Use this before syncing to check current limits.
+   */
+  getStorageUsageRealtime?: Maybe<StorageUsage>;
   /**
    * Get a specific tag by ID.
    * Returns null if not found or not owned by the current user.
@@ -1364,6 +1484,41 @@ export type SmtpProfile = BaseEntityProps & {
   /** Whether to use SSL/TLS encryption */
   useSsl: Scalars['Boolean']['output'];
   /** ID of the user who owns this profile */
+  userId: Scalars['String']['output'];
+};
+
+/** Storage tier for billing. Each tier has a storage limit. */
+export enum StorageTier {
+  /** Basic tier - 10GB storage */
+  Basic = 'BASIC',
+  /** Enterprise tier - 100GB storage */
+  Enterprise = 'ENTERPRISE',
+  /** Free tier - 5GB storage */
+  Free = 'FREE',
+  /** Pro tier - 20GB storage */
+  Pro = 'PRO'
+}
+
+/** Current storage usage statistics for a user. */
+export type StorageUsage = {
+  __typename?: 'StorageUsage';
+  /** Number of email accounts */
+  accountCount: Scalars['Int']['output'];
+  /** Total number of attachments */
+  attachmentCount: Scalars['Int']['output'];
+  /** Total number of emails */
+  emailCount: Scalars['Int']['output'];
+  /** When the usage was last calculated */
+  lastRefreshedAt?: Maybe<Scalars['Date']['output']>;
+  /** Total size of attachments in bytes */
+  totalAttachmentSizeBytes: Scalars['Float']['output'];
+  /** Total size of email bodies in bytes */
+  totalBodySizeBytes: Scalars['Float']['output'];
+  /** Combined total storage used in bytes */
+  totalStorageBytes: Scalars['Float']['output'];
+  /** Total storage used in GB (rounded to 0.1) */
+  totalStorageGB: Scalars['Float']['output'];
+  /** ID of the user */
   userId: Scalars['String']['output'];
 };
 
@@ -1704,6 +1859,7 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
   BaseEntityProps:
     | ( Attachment )
     | ( AuthenticationMethod )
+    | ( BillingSubscription )
     | ( Contact )
     | ( ContactEmail )
     | ( Email )
@@ -1717,6 +1873,7 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
 
 /** Mapping between all available schema types and the resolvers types */
 export type ResolversTypes = ResolversObject<{
+  AccountTier: AccountTier;
   AddEmailToContactInput: AddEmailToContactInput;
   AddTagsToEmailsInput: AddTagsToEmailsInput;
   Attachment: ResolverTypeWrapper<Attachment>;
@@ -1725,6 +1882,9 @@ export type ResolversTypes = ResolversObject<{
   AuthProvider: AuthProvider;
   AuthenticationMethod: ResolverTypeWrapper<AuthenticationMethod>;
   BaseEntityProps: ResolverTypeWrapper<ResolversInterfaceTypes<ResolversTypes>['BaseEntityProps']>;
+  BillingInfo: ResolverTypeWrapper<BillingInfo>;
+  BillingSubscription: ResolverTypeWrapper<BillingSubscription>;
+  BillingSubscriptionStatus: BillingSubscriptionStatus;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   BulkUpdateEmailsInput: BulkUpdateEmailsInput;
   ComposeEmailInput: ComposeEmailInput;
@@ -1742,6 +1902,7 @@ export type ResolversTypes = ResolversObject<{
   EmailAccountType: EmailAccountType;
   EmailFolder: EmailFolder;
   EmailSource: ResolverTypeWrapper<EmailSource>;
+  Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
@@ -1762,6 +1923,8 @@ export type ResolversTypes = ResolversObject<{
   RunRuleResult: ResolverTypeWrapper<RunRuleResult>;
   SaveDraftInput: SaveDraftInput;
   SmtpProfile: ResolverTypeWrapper<SmtpProfile>;
+  StorageTier: StorageTier;
+  StorageUsage: ResolverTypeWrapper<StorageUsage>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
   SyncEmailAccountInput: SyncEmailAccountInput;
@@ -1788,6 +1951,8 @@ export type ResolversParentTypes = ResolversObject<{
   AttachmentInput: AttachmentInput;
   AuthenticationMethod: AuthenticationMethod;
   BaseEntityProps: ResolversInterfaceTypes<ResolversParentTypes>['BaseEntityProps'];
+  BillingInfo: BillingInfo;
+  BillingSubscription: BillingSubscription;
   Boolean: Scalars['Boolean']['output'];
   BulkUpdateEmailsInput: BulkUpdateEmailsInput;
   ComposeEmailInput: ComposeEmailInput;
@@ -1803,6 +1968,7 @@ export type ResolversParentTypes = ResolversObject<{
   Email: Email;
   EmailAccount: EmailAccount;
   EmailSource: EmailSource;
+  Float: Scalars['Float']['output'];
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
@@ -1821,6 +1987,7 @@ export type ResolversParentTypes = ResolversObject<{
   RunRuleResult: RunRuleResult;
   SaveDraftInput: SaveDraftInput;
   SmtpProfile: SmtpProfile;
+  StorageUsage: StorageUsage;
   String: Scalars['String']['output'];
   Subscription: Record<PropertyKey, never>;
   SyncEmailAccountInput: SyncEmailAccountInput;
@@ -1869,7 +2036,33 @@ export type AuthenticationMethodResolvers<ContextType = MyContext, ParentType ex
 }>;
 
 export type BaseEntityPropsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BaseEntityProps'] = ResolversParentTypes['BaseEntityProps']> = ResolversObject<{
-  __resolveType: TypeResolveFn<'Attachment' | 'AuthenticationMethod' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
+  __resolveType: TypeResolveFn<'Attachment' | 'AuthenticationMethod' | 'BillingSubscription' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
+}>;
+
+export type BillingInfoResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BillingInfo'] = ResolversParentTypes['BillingInfo']> = ResolversObject<{
+  accountUsagePercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  isAccountLimitExceeded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  isStorageLimitExceeded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  isStripeConfigured?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  storageUsagePercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  subscription?: Resolver<ResolversTypes['BillingSubscription'], ParentType, ContextType>;
+  usage?: Resolver<ResolversTypes['StorageUsage'], ParentType, ContextType>;
+}>;
+
+export type BillingSubscriptionResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BillingSubscription'] = ResolversParentTypes['BillingSubscription']> = ResolversObject<{
+  accountLimit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  accountTier?: Resolver<ResolversTypes['AccountTier'], ParentType, ContextType>;
+  cancelAtPeriodEnd?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  currentPeriodEnd?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isValid?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['BillingSubscriptionStatus'], ParentType, ContextType>;
+  storageLimitBytes?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  storageTier?: Resolver<ResolversTypes['StorageTier'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
 export type ContactResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Contact'] = ResolversParentTypes['Contact']> = ResolversObject<{
@@ -2003,6 +2196,8 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   addTagsToEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationAddTagsToEmailsArgs, 'input'>>;
   bulkDeleteEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationBulkDeleteEmailsArgs, 'ids'>>;
   bulkUpdateEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationBulkUpdateEmailsArgs, 'input'>>;
+  createBillingPortalSession?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  createCheckoutSession?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<MutationCreateCheckoutSessionArgs, 'accountTier' | 'storageTier'>>;
   createContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactArgs, 'input'>>;
   createContactFromEmail?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactFromEmailArgs, 'emailId'>>;
   createEmailAccount?: Resolver<ResolversTypes['EmailAccount'], ParentType, ContextType, RequireFields<MutationCreateEmailAccountArgs, 'input'>>;
@@ -2017,6 +2212,7 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   deleteTag?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteTagArgs, 'id'>>;
   forwardEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationForwardEmailArgs, 'input'>>;
   nukeOldEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationNukeOldEmailsArgs, 'input'>>;
+  refreshStorageUsage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   removeTagsFromEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationRemoveTagsFromEmailsArgs, 'input'>>;
   runMailRule?: Resolver<ResolversTypes['RunRuleResult'], ParentType, ContextType, RequireFields<MutationRunMailRuleArgs, 'id'>>;
   saveDraft?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSaveDraftArgs, 'input'>>;
@@ -2040,6 +2236,7 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getAttachment?: Resolver<Maybe<ResolversTypes['Attachment']>, ParentType, ContextType, RequireFields<QueryGetAttachmentArgs, 'id'>>;
   getAttachmentDownloadUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QueryGetAttachmentDownloadUrlArgs, 'id'>>;
   getAuthenticationMethods?: Resolver<Array<ResolversTypes['AuthenticationMethod']>, ParentType, ContextType>;
+  getBillingInfo?: Resolver<ResolversTypes['BillingInfo'], ParentType, ContextType>;
   getContact?: Resolver<Maybe<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QueryGetContactArgs, 'id'>>;
   getContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType>;
   getEmail?: Resolver<Maybe<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<QueryGetEmailArgs, 'input'>>;
@@ -2052,6 +2249,8 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getMailRules?: Resolver<Array<ResolversTypes['MailRule']>, ParentType, ContextType>;
   getSmtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType, RequireFields<QueryGetSmtpProfileArgs, 'id'>>;
   getSmtpProfiles?: Resolver<Array<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
+  getStorageUsage?: Resolver<Maybe<ResolversTypes['StorageUsage']>, ParentType, ContextType>;
+  getStorageUsageRealtime?: Resolver<Maybe<ResolversTypes['StorageUsage']>, ParentType, ContextType>;
   getTag?: Resolver<Maybe<ResolversTypes['Tag']>, ParentType, ContextType, RequireFields<QueryGetTagArgs, 'id'>>;
   getTags?: Resolver<Array<ResolversTypes['Tag']>, ParentType, ContextType>;
   getTopEmailSources?: Resolver<Array<ResolversTypes['EmailSource']>, ParentType, ContextType, Partial<QueryGetTopEmailSourcesArgs>>;
@@ -2098,6 +2297,18 @@ export type SmtpProfileResolvers<ContextType = MyContext, ParentType extends Res
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type StorageUsageResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['StorageUsage'] = ResolversParentTypes['StorageUsage']> = ResolversObject<{
+  accountCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  attachmentCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  emailCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  lastRefreshedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  totalAttachmentSizeBytes?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  totalBodySizeBytes?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  totalStorageBytes?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  totalStorageGB?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+}>;
+
 export type SubscriptionResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
   mailboxUpdates?: SubscriptionResolver<ResolversTypes['MailboxUpdate'], "mailboxUpdates", ParentType, ContextType>;
 }>;
@@ -2141,6 +2352,8 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   Attachment?: AttachmentResolvers<ContextType>;
   AuthenticationMethod?: AuthenticationMethodResolvers<ContextType>;
   BaseEntityProps?: BaseEntityPropsResolvers<ContextType>;
+  BillingInfo?: BillingInfoResolvers<ContextType>;
+  BillingSubscription?: BillingSubscriptionResolvers<ContextType>;
   Contact?: ContactResolvers<ContextType>;
   ContactEmail?: ContactEmailResolvers<ContextType>;
   Date?: GraphQLScalarType;
@@ -2156,6 +2369,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   RuleConditions?: RuleConditionsResolvers<ContextType>;
   RunRuleResult?: RunRuleResultResolvers<ContextType>;
   SmtpProfile?: SmtpProfileResolvers<ContextType>;
+  StorageUsage?: StorageUsageResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   Tag?: TagResolvers<ContextType>;
   TestConnectionResult?: TestConnectionResultResolvers<ContextType>;

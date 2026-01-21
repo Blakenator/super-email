@@ -20,6 +20,18 @@ export type Scalars = {
   JSON: { input: Record<string, unknown>; output: Record<string, unknown>; }
 };
 
+/** Account tier for billing. Each tier has an email account limit. */
+export enum AccountTier {
+  /** Basic tier - 2 email accounts */
+  Basic = 'BASIC',
+  /** Enterprise tier - unlimited accounts */
+  Enterprise = 'ENTERPRISE',
+  /** Free tier - 1 email account */
+  Free = 'FREE',
+  /** Pro tier - 5 email accounts */
+  Pro = 'PRO'
+}
+
 /** Input for adding an email address to an existing contact. */
 export type AddEmailToContactInput = {
   /** ID of the contact to add the email to */
@@ -143,6 +155,74 @@ export type BaseEntityProps = {
   /** Timestamp when the entity was last updated */
   updatedAt?: Maybe<Scalars['Date']['output']>;
 };
+
+/** Combined billing information including subscription and usage. */
+export type BillingInfo = {
+  __typename?: 'BillingInfo';
+  /** Account usage as a percentage (0-100, 0 for unlimited) */
+  accountUsagePercent: Scalars['Float']['output'];
+  /** Whether the user has exceeded their account limit */
+  isAccountLimitExceeded: Scalars['Boolean']['output'];
+  /** Whether the user has exceeded their storage limit */
+  isStorageLimitExceeded: Scalars['Boolean']['output'];
+  /** Whether Stripe billing is configured on the server */
+  isStripeConfigured: Scalars['Boolean']['output'];
+  /** Storage usage as a percentage (0-100) */
+  storageUsagePercent: Scalars['Float']['output'];
+  /** User's subscription details */
+  subscription: BillingSubscription;
+  /** Current storage usage */
+  usage: StorageUsage;
+};
+
+/** User's billing subscription information. */
+export type BillingSubscription = BaseEntityProps & {
+  __typename?: 'BillingSubscription';
+  /** Maximum number of email accounts allowed (-1 for unlimited) */
+  accountLimit: Scalars['Int']['output'];
+  /** Current account tier */
+  accountTier: AccountTier;
+  /** Whether the subscription will cancel at period end */
+  cancelAtPeriodEnd: Scalars['Boolean']['output'];
+  /** Timestamp when the subscription was created */
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** When the current billing period ends */
+  currentPeriodEnd?: Maybe<Scalars['Date']['output']>;
+  /** Unique identifier for this subscription */
+  id: Scalars['String']['output'];
+  /** Whether the subscription is valid for syncing emails */
+  isValid: Scalars['Boolean']['output'];
+  /** Current subscription status */
+  status: BillingSubscriptionStatus;
+  /** Storage limit in bytes for the current tier */
+  storageLimitBytes: Scalars['Float']['output'];
+  /** Current storage tier */
+  storageTier: StorageTier;
+  /** Timestamp when the subscription was last updated */
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the user this subscription belongs to */
+  userId: Scalars['String']['output'];
+};
+
+/** Status of a billing subscription. */
+export enum BillingSubscriptionStatus {
+  /** Subscription is active and in good standing */
+  Active = 'ACTIVE',
+  /** Subscription has been canceled */
+  Canceled = 'CANCELED',
+  /** Initial payment is incomplete */
+  Incomplete = 'INCOMPLETE',
+  /** Initial payment expired before completion */
+  IncompleteExpired = 'INCOMPLETE_EXPIRED',
+  /** Payment is past due but subscription still active */
+  PastDue = 'PAST_DUE',
+  /** Subscription is paused */
+  Paused = 'PAUSED',
+  /** Subscription is in trial period */
+  Trialing = 'TRIALING',
+  /** Payment failed and subscription is unpaid */
+  Unpaid = 'UNPAID'
+}
 
 /** Input for bulk updating multiple emails at once. */
 export type BulkUpdateEmailsInput = {
@@ -645,6 +725,18 @@ export type Mutation = {
    * Returns the updated emails.
    */
   bulkUpdateEmails: Array<Email>;
+  /**
+   * Create a Stripe Billing Portal session to manage subscription.
+   * Returns the URL to redirect the user to.
+   * Requires Stripe to be configured on the server.
+   */
+  createBillingPortalSession: Scalars['String']['output'];
+  /**
+   * Create a Stripe Checkout session to upgrade subscription.
+   * Returns the URL to redirect the user to.
+   * Requires Stripe to be configured on the server.
+   */
+  createCheckoutSession: Scalars['String']['output'];
   /** Create a new contact. */
   createContact: Contact;
   /**
@@ -698,6 +790,12 @@ export type Mutation = {
    * Permanently deletes emails older than the specified date.
    */
   nukeOldEmails: Scalars['Int']['output'];
+  /**
+   * Force refresh the storage usage materialized view.
+   * Normally this runs automatically at midnight UTC.
+   * Returns true if successful.
+   */
+  refreshStorageUsage: Scalars['Boolean']['output'];
   /**
    * Remove tags from multiple emails (bulk operation).
    * Returns the updated emails.
@@ -788,6 +886,13 @@ export type MutationBulkDeleteEmailsArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationBulkUpdateEmailsArgs = {
   input: BulkUpdateEmailsInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationCreateCheckoutSessionArgs = {
+  accountTier: AccountTier;
+  storageTier: StorageTier;
 };
 
 
@@ -1006,6 +1111,11 @@ export type Query = {
    */
   getAuthenticationMethods: Array<AuthenticationMethod>;
   /**
+   * Get the current user's billing information including subscription and usage.
+   * Creates a free tier subscription if one doesn't exist.
+   */
+  getBillingInfo: BillingInfo;
+  /**
    * Get a specific contact by ID.
    * Returns null if not found or not owned by the current user.
    */
@@ -1065,6 +1175,16 @@ export type Query = {
    * Ordered by creation date, newest first.
    */
   getSmtpProfiles: Array<SmtpProfile>;
+  /**
+   * Get only the current user's storage usage (cached from materialized view).
+   * Returns null if usage hasn't been calculated yet.
+   */
+  getStorageUsage?: Maybe<StorageUsage>;
+  /**
+   * Get real-time storage usage (bypasses cache, slower but accurate).
+   * Use this before syncing to check current limits.
+   */
+  getStorageUsageRealtime?: Maybe<StorageUsage>;
   /**
    * Get a specific tag by ID.
    * Returns null if not found or not owned by the current user.
@@ -1363,6 +1483,41 @@ export type SmtpProfile = BaseEntityProps & {
   /** Whether to use SSL/TLS encryption */
   useSsl: Scalars['Boolean']['output'];
   /** ID of the user who owns this profile */
+  userId: Scalars['String']['output'];
+};
+
+/** Storage tier for billing. Each tier has a storage limit. */
+export enum StorageTier {
+  /** Basic tier - 10GB storage */
+  Basic = 'BASIC',
+  /** Enterprise tier - 100GB storage */
+  Enterprise = 'ENTERPRISE',
+  /** Free tier - 5GB storage */
+  Free = 'FREE',
+  /** Pro tier - 20GB storage */
+  Pro = 'PRO'
+}
+
+/** Current storage usage statistics for a user. */
+export type StorageUsage = {
+  __typename?: 'StorageUsage';
+  /** Number of email accounts */
+  accountCount: Scalars['Int']['output'];
+  /** Total number of attachments */
+  attachmentCount: Scalars['Int']['output'];
+  /** Total number of emails */
+  emailCount: Scalars['Int']['output'];
+  /** When the usage was last calculated */
+  lastRefreshedAt?: Maybe<Scalars['Date']['output']>;
+  /** Total size of attachments in bytes */
+  totalAttachmentSizeBytes: Scalars['Float']['output'];
+  /** Total size of email bodies in bytes */
+  totalBodySizeBytes: Scalars['Float']['output'];
+  /** Combined total storage used in bytes */
+  totalStorageBytes: Scalars['Float']['output'];
+  /** Total storage used in GB (rounded to 0.1) */
+  totalStorageGB: Scalars['Float']['output'];
+  /** ID of the user */
   userId: Scalars['String']['output'];
 };
 
@@ -2031,6 +2186,21 @@ export type RunMailRuleMutationVariables = Exact<{
 
 export type RunMailRuleMutation = { __typename?: 'Mutation', runMailRule: { __typename?: 'RunRuleResult', matchedCount: number, processedCount: number } };
 
+export type GetBillingInfoQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type GetBillingInfoQuery = { __typename?: 'Query', getBillingInfo: { __typename?: 'BillingInfo', storageUsagePercent: number, accountUsagePercent: number, isStorageLimitExceeded: boolean, isAccountLimitExceeded: boolean, isStripeConfigured: boolean, subscription: { __typename?: 'BillingSubscription', id: string, status: BillingSubscriptionStatus, storageTier: StorageTier, accountTier: AccountTier, storageLimitBytes: number, accountLimit: number, isValid: boolean, currentPeriodEnd?: string | null, cancelAtPeriodEnd: boolean }, usage: { __typename?: 'StorageUsage', userId: string, accountCount: number, totalStorageBytes: number, totalStorageGB: number, emailCount: number, attachmentCount: number, lastRefreshedAt?: string | null } } };
+
+export type CreateBillingPortalSessionMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type CreateBillingPortalSessionMutation = { __typename?: 'Mutation', createBillingPortalSession: string };
+
+export type RefreshStorageUsageMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type RefreshStorageUsageMutation = { __typename?: 'Mutation', refreshStorageUsage: boolean };
+
 export type GetTopEmailSourcesQueryVariables = Exact<{
   limit?: InputMaybe<Scalars['Int']['input']>;
 }>;
@@ -2129,6 +2299,9 @@ export const UpdateMailRuleDocument = {"kind":"Document","definitions":[{"kind":
 export const DeleteMailRuleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteMailRule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteMailRule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteMailRuleMutation, DeleteMailRuleMutationVariables>;
 export const PreviewMailRuleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PreviewMailRule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"previewMailRule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<PreviewMailRuleQuery, PreviewMailRuleQueryVariables>;
 export const RunMailRuleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RunMailRule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runMailRule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"matchedCount"}},{"kind":"Field","name":{"kind":"Name","value":"processedCount"}}]}}]}}]} as unknown as DocumentNode<RunMailRuleMutation, RunMailRuleMutationVariables>;
+export const GetBillingInfoDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetBillingInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getBillingInfo"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"subscription"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"storageTier"}},{"kind":"Field","name":{"kind":"Name","value":"accountTier"}},{"kind":"Field","name":{"kind":"Name","value":"storageLimitBytes"}},{"kind":"Field","name":{"kind":"Name","value":"accountLimit"}},{"kind":"Field","name":{"kind":"Name","value":"isValid"}},{"kind":"Field","name":{"kind":"Name","value":"currentPeriodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"cancelAtPeriodEnd"}}]}},{"kind":"Field","name":{"kind":"Name","value":"usage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userId"}},{"kind":"Field","name":{"kind":"Name","value":"accountCount"}},{"kind":"Field","name":{"kind":"Name","value":"totalStorageBytes"}},{"kind":"Field","name":{"kind":"Name","value":"totalStorageGB"}},{"kind":"Field","name":{"kind":"Name","value":"emailCount"}},{"kind":"Field","name":{"kind":"Name","value":"attachmentCount"}},{"kind":"Field","name":{"kind":"Name","value":"lastRefreshedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"storageUsagePercent"}},{"kind":"Field","name":{"kind":"Name","value":"accountUsagePercent"}},{"kind":"Field","name":{"kind":"Name","value":"isStorageLimitExceeded"}},{"kind":"Field","name":{"kind":"Name","value":"isAccountLimitExceeded"}},{"kind":"Field","name":{"kind":"Name","value":"isStripeConfigured"}}]}}]}}]} as unknown as DocumentNode<GetBillingInfoQuery, GetBillingInfoQueryVariables>;
+export const CreateBillingPortalSessionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateBillingPortalSession"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createBillingPortalSession"}}]}}]} as unknown as DocumentNode<CreateBillingPortalSessionMutation, CreateBillingPortalSessionMutationVariables>;
+export const RefreshStorageUsageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RefreshStorageUsage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"refreshStorageUsage"}}]}}]} as unknown as DocumentNode<RefreshStorageUsageMutation, RefreshStorageUsageMutationVariables>;
 export const GetTopEmailSourcesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetTopEmailSources"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getTopEmailSources"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"count"}}]}}]}}]} as unknown as DocumentNode<GetTopEmailSourcesQuery, GetTopEmailSourcesQueryVariables>;
 export const GetEmailsForTriageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailsForTriage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmails"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageId"}},{"kind":"Field","name":{"kind":"Name","value":"folder"}},{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"toAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"textBody"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isRead"}},{"kind":"Field","name":{"kind":"Name","value":"isStarred"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}},{"kind":"Field","name":{"kind":"Name","value":"tags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailsForTriageQuery, GetEmailsForTriageQueryVariables>;
 export const GetEmailCountForTriageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailCountForTriage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailCount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<GetEmailCountForTriageQuery, GetEmailCountForTriageQueryVariables>;

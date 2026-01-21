@@ -9,3 +9,4 @@ export * from './tag.model.js';
 export * from './email-tag.model.js';
 export * from './mail-rule.model.js';
 export * from './attachment.model.js';
+export * from './subscription.model.js';

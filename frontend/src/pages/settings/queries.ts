@@ -318,3 +318,49 @@ export const RUN_MAIL_RULE_MUTATION = gql(`
     }
   }
 `);
+
+// ============ Billing ============
+
+export const GET_BILLING_INFO_QUERY = gql(`
+  query GetBillingInfo {
+    getBillingInfo {
+      subscription {
+        id
+        status
+        storageTier
+        accountTier
+        storageLimitBytes
+        accountLimit
+        isValid
+        currentPeriodEnd
+        cancelAtPeriodEnd
+      }
+      usage {
+        userId
+        accountCount
+        totalStorageBytes
+        totalStorageGB
+        emailCount
+        attachmentCount
+        lastRefreshedAt
+      }
+      storageUsagePercent
+      accountUsagePercent
+      isStorageLimitExceeded
+      isAccountLimitExceeded
+      isStripeConfigured
+    }
+  }
+`);
+
+export const CREATE_BILLING_PORTAL_SESSION_MUTATION = gql(`
+  mutation CreateBillingPortalSession {
+    createBillingPortalSession
+  }
+`);
+
+export const REFRESH_STORAGE_USAGE_MUTATION = gql(`
+  mutation RefreshStorageUsage {
+    refreshStorageUsage
+  }
+`);

@@ -12,6 +12,7 @@ import { MailRule } from './models/mail-rule.model.js';
 // Import Email before Attachment to avoid circular dependency
 import { Email } from './models/email.model.js';
 import { Attachment } from './models/attachment.model.js';
+import { Subscription } from './models/subscription.model.js';
 
 // Validate environment in production
 const envValidation = validateEnv();
@@ -42,6 +43,7 @@ export const sequelize = new Sequelize({
     EmailTag,
     MailRule,
     Attachment,
+    Subscription,
   ],
   logging: false,
   // Enable SSL for production (required by AWS RDS)
