@@ -1,8 +1,13 @@
 import Stripe from 'stripe';
 import { config } from '../config/env.js';
 import { logger } from './logger.js';
-import { Subscription, SubscriptionStatus, StorageTier, AccountTier } from '../db/models/subscription.model.js';
-import { User } from '../db/models/user.model.js';
+import {
+  Subscription,
+  SubscriptionStatus,
+  StorageTier,
+  AccountTier,
+} from '../db/models/subscription.model.js';
+import type { User } from '../db/models/user.model.js';
 
 // Initialize Stripe client (only if secret key is configured)
 let stripe: Stripe | null = null;
@@ -14,7 +19,9 @@ let stripe: Stripe | null = null;
 export function getStripeClient(): Stripe {
   if (!stripe) {
     if (!config.stripe.secretKey) {
-      throw new Error('Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable.');
+      throw new Error(
+        'Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable.',
+      );
     }
     stripe = new Stripe(config.stripe.secretKey);
   }
@@ -25,6 +32,7 @@ export function getStripeClient(): Stripe {
  * Check if Stripe is configured
  */
 export function isStripeConfigured(): boolean {
+  console.log(config.stripe);
   return !!config.stripe.secretKey;
 }
 
@@ -119,7 +127,10 @@ export async function createCheckoutSession(
     },
   });
 
-  logger.info('Stripe', `Created checkout session ${session.id} for user ${user.id}`);
+  logger.info(
+    'Stripe',
+    `Created checkout session ${session.id} for user ${user.id}`,
+  );
   return session.url!;
 }
 
@@ -178,9 +189,15 @@ function getPriceIdForAccountTier(tier: AccountTier): string | null {
  * Map Stripe price ID to storage tier
  */
 function getStorageTierFromPriceId(priceId: string): StorageTier | null {
-  if (priceId === config.stripe.storagePriceIds.basic) return StorageTier.BASIC;
-  if (priceId === config.stripe.storagePriceIds.pro) return StorageTier.PRO;
-  if (priceId === config.stripe.storagePriceIds.enterprise) return StorageTier.ENTERPRISE;
+  if (priceId === config.stripe.storagePriceIds.basic) {
+    return StorageTier.BASIC;
+  }
+  if (priceId === config.stripe.storagePriceIds.pro) {
+    return StorageTier.PRO;
+  }
+  if (priceId === config.stripe.storagePriceIds.enterprise) {
+    return StorageTier.ENTERPRISE;
+  }
   return null;
 }
 
@@ -188,9 +205,15 @@ function getStorageTierFromPriceId(priceId: string): StorageTier | null {
  * Map Stripe price ID to account tier
  */
 function getAccountTierFromPriceId(priceId: string): AccountTier | null {
-  if (priceId === config.stripe.accountPriceIds.basic) return AccountTier.BASIC;
-  if (priceId === config.stripe.accountPriceIds.pro) return AccountTier.PRO;
-  if (priceId === config.stripe.accountPriceIds.enterprise) return AccountTier.ENTERPRISE;
+  if (priceId === config.stripe.accountPriceIds.basic) {
+    return AccountTier.BASIC;
+  }
+  if (priceId === config.stripe.accountPriceIds.pro) {
+    return AccountTier.PRO;
+  }
+  if (priceId === config.stripe.accountPriceIds.enterprise) {
+    return AccountTier.ENTERPRISE;
+  }
   return null;
 }
 
@@ -220,20 +243,20 @@ export async function handleStripeWebhook(
 
   switch (event.type) {
     case 'checkout.session.completed':
-      await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+      await handleCheckoutCompleted(event.data.object);
       break;
 
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
-      await handleSubscriptionUpdated(event.data.object as Stripe.Subscription);
+      await handleSubscriptionUpdated(event.data.object);
       break;
 
     case 'customer.subscription.deleted':
-      await handleSubscriptionDeleted(event.data.object as Stripe.Subscription);
+      await handleSubscriptionDeleted(event.data.object);
       break;
 
     case 'invoice.payment_failed':
-      await handlePaymentFailed(event.data.object as Stripe.Invoice);
+      await handlePaymentFailed(event.data.object);
       break;
 
     default:
@@ -244,7 +267,9 @@ export async function handleStripeWebhook(
 /**
  * Handle checkout.session.completed event
  */
-async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
+async function handleCheckoutCompleted(
+  session: Stripe.Checkout.Session,
+): Promise<void> {
   const userId = session.metadata?.userId;
   if (!userId) {
     logger.warn('Stripe Webhook', 'No userId in checkout session metadata');
@@ -270,7 +295,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
 /**
  * Handle subscription created/updated events
  */
-async function handleSubscriptionUpdated(stripeSubscription: Stripe.Subscription): Promise<void> {
+async function handleSubscriptionUpdated(
+  stripeSubscription: Stripe.Subscription,
+): Promise<void> {
   const customerId = stripeSubscription.customer as string;
 
   const subscription = await Subscription.findOne({
@@ -278,7 +305,10 @@ async function handleSubscriptionUpdated(stripeSubscription: Stripe.Subscription
   });
 
   if (!subscription) {
-    logger.warn('Stripe Webhook', `No subscription found for customer ${customerId}`);
+    logger.warn(
+      'Stripe Webhook',
+      `No subscription found for customer ${customerId}`,
+    );
     return;
   }
 
@@ -293,10 +323,14 @@ async function handleSubscriptionUpdated(stripeSubscription: Stripe.Subscription
     const priceId = item.price.id;
 
     const storage = getStorageTierFromPriceId(priceId);
-    if (storage) storageTier = storage;
+    if (storage) {
+      storageTier = storage;
+    }
 
     const account = getAccountTierFromPriceId(priceId);
-    if (account) accountTier = account;
+    if (account) {
+      accountTier = account;
+    }
   }
 
   await subscription.update({
@@ -304,21 +338,25 @@ async function handleSubscriptionUpdated(stripeSubscription: Stripe.Subscription
     status,
     storageTier,
     accountTier,
-    currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
+    currentPeriodEnd: new Date(
+      (stripeSubscription as any).current_period_end * 1000,
+    ),
     cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
   });
 
   logger.info(
     'Stripe Webhook',
     `Updated subscription for user ${subscription.userId}: ` +
-    `storage=${storageTier}, accounts=${accountTier}, status=${status}`,
+      `storage=${storageTier}, accounts=${accountTier}, status=${status}`,
   );
 }
 
 /**
  * Handle subscription deleted event
  */
-async function handleSubscriptionDeleted(stripeSubscription: Stripe.Subscription): Promise<void> {
+async function handleSubscriptionDeleted(
+  stripeSubscription: Stripe.Subscription,
+): Promise<void> {
   const customerId = stripeSubscription.customer as string;
 
   const subscription = await Subscription.findOne({
@@ -326,7 +364,10 @@ async function handleSubscriptionDeleted(stripeSubscription: Stripe.Subscription
   });
 
   if (!subscription) {
-    logger.warn('Stripe Webhook', `No subscription found for customer ${customerId}`);
+    logger.warn(
+      'Stripe Webhook',
+      `No subscription found for customer ${customerId}`,
+    );
     return;
   }
 
@@ -339,7 +380,10 @@ async function handleSubscriptionDeleted(stripeSubscription: Stripe.Subscription
     cancelAtPeriodEnd: false,
   });
 
-  logger.info('Stripe Webhook', `Subscription canceled for user ${subscription.userId}`);
+  logger.info(
+    'Stripe Webhook',
+    `Subscription canceled for user ${subscription.userId}`,
+  );
 }
 
 /**
@@ -353,7 +397,10 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
   });
 
   if (!subscription) {
-    logger.warn('Stripe Webhook', `No subscription found for customer ${customerId}`);
+    logger.warn(
+      'Stripe Webhook',
+      `No subscription found for customer ${customerId}`,
+    );
     return;
   }
 
@@ -361,13 +408,18 @@ async function handlePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
     status: SubscriptionStatus.PAST_DUE,
   });
 
-  logger.warn('Stripe Webhook', `Payment failed for user ${subscription.userId}`);
+  logger.warn(
+    'Stripe Webhook',
+    `Payment failed for user ${subscription.userId}`,
+  );
 }
 
 /**
  * Map Stripe subscription status to our enum
  */
-function mapStripeStatus(stripeStatus: Stripe.Subscription.Status): SubscriptionStatus {
+function mapStripeStatus(
+  stripeStatus: Stripe.Subscription.Status,
+): SubscriptionStatus {
   switch (stripeStatus) {
     case 'active':
       return SubscriptionStatus.ACTIVE;
@@ -393,7 +445,9 @@ function mapStripeStatus(stripeStatus: Stripe.Subscription.Status): Subscription
 /**
  * Get or create a subscription record for a user (ensures one exists)
  */
-export async function getOrCreateSubscription(userId: string): Promise<Subscription> {
+export async function getOrCreateSubscription(
+  userId: string,
+): Promise<Subscription> {
   let subscription = await Subscription.findOne({ where: { userId } });
 
   if (!subscription) {

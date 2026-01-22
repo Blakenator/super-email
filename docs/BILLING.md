@@ -5,6 +5,7 @@ This document explains how to set up and configure the usage-based billing syste
 ## Overview
 
 The billing system provides:
+
 - **Storage-based billing**: Users are billed based on total email body size + attachment size
 - **Account-based billing**: Users are limited by the number of email accounts they can add
 - **Stripe integration**: Subscriptions are managed via Stripe
@@ -14,27 +15,49 @@ The billing system provides:
 
 ### Storage Tiers
 
-| Tier | Storage Limit |
-|------|--------------|
-| Free | 5 GB |
-| Basic | 10 GB |
-| Pro | 20 GB |
-| Enterprise | 100 GB |
+| Tier       | Storage Limit |
+| ---------- | ------------- |
+| Free       | 5 GB          |
+| Basic      | 10 GB         |
+| Pro        | 20 GB         |
+| Enterprise | 100 GB        |
 
 ### Account Tiers
 
-| Tier | Account Limit |
-|------|--------------|
-| Free | 1 account |
-| Basic | 2 accounts |
-| Pro | 5 accounts |
-| Enterprise | Unlimited |
+| Tier       | Account Limit |
+| ---------- | ------------- |
+| Free       | 1 account     |
+| Basic      | 2 accounts    |
+| Pro        | 5 accounts    |
+| Enterprise | Unlimited     |
 
 ## Stripe Setup
 
 ### 1. Create Stripe Products and Prices
 
-In the [Stripe Dashboard](https://dashboard.stripe.com):
+In the [Stripe Dashboard](https://dashboard.stripe.com), you can organize your products in two ways:
+
+#### Option A: Single Product with Multiple Prices (Recommended)
+
+This approach uses one product for storage and one for accounts, each with multiple price options:
+
+1. Go to **Products** → **Add product**
+2. Create a product called "Email Storage"
+3. Add multiple prices to this product:
+   - **Basic (10GB)**: $X/month - note the Price ID
+   - **Pro (20GB)**: $X/month - note the Price ID
+   - **Enterprise (100GB)**: $X/month - note the Price ID
+4. Create another product called "Email Accounts"
+5. Add multiple prices:
+   - **Basic (2 accounts)**: $X/month - note the Price ID
+   - **Pro (5 accounts)**: $X/month - note the Price ID
+   - **Enterprise (Unlimited)**: $X/month - note the Price ID
+
+This approach keeps your product catalog organized and allows customers to upgrade/downgrade between tiers easily in the Stripe Customer Portal.
+
+#### Option B: Separate Products per Tier
+
+Alternatively, create separate products for each tier combination:
 
 1. Go to **Products** and create products for each tier:
    - Storage Tiers: "Basic Storage (10GB)", "Pro Storage (20GB)", "Enterprise Storage (100GB)"
@@ -42,7 +65,14 @@ In the [Stripe Dashboard](https://dashboard.stripe.com):
 
 2. For each product, create a recurring price (monthly or yearly)
 
-3. Note down the Price IDs (starting with `price_...`)
+#### Price Configuration Tips
+
+- Use **recurring** prices for subscriptions (not one-time)
+- Consider offering both monthly and yearly options (with a discount for yearly)
+- Use Stripe's **lookup_key** feature to make price management easier
+- For metered billing, you could also configure usage-based prices
+
+3. Note down the Price IDs (starting with `price_...`) for each tier
 
 ### 2. Configure Webhook
 
@@ -98,6 +128,7 @@ psql -d your_database -f backend/db/migrations/create-billing-views.sql
 ```
 
 The view calculates:
+
 - Total email body size (textBody + htmlBody)
 - Total attachment size
 - Number of email accounts per user
@@ -106,6 +137,7 @@ The view calculates:
 ### Subscription Table
 
 The `subscriptions` table stores user billing information:
+
 - Stripe customer ID
 - Stripe subscription ID
 - Current storage and account tiers
@@ -123,6 +155,7 @@ The `subscriptions` table stores user billing information:
 ### Sync Blocking
 
 When a user exceeds their limits:
+
 - **Storage exceeded**: Email syncing is paused
 - **Account limit exceeded**: Cannot add new email accounts
 
@@ -131,6 +164,7 @@ Users receive error messages explaining the issue and how to resolve it (upgrade
 ### Webhook Handling
 
 When Stripe sends webhook events:
+
 1. `checkout.session.completed`: Links the Stripe subscription to the user
 2. `customer.subscription.updated`: Updates tier levels based on active prices
 3. `customer.subscription.deleted`: Resets user to free tier
@@ -143,6 +177,7 @@ When Stripe sends webhook events:
 Access via: `/settings/billing`
 
 Features:
+
 - View current subscription status
 - See storage and account usage with progress bars
 - Warning when approaching limits
@@ -151,11 +186,13 @@ Features:
 ### GraphQL API
 
 **Queries:**
+
 - `getBillingInfo`: Get subscription and usage information
 - `getStorageUsage`: Get cached usage from materialized view
 - `getStorageUsageRealtime`: Get real-time usage (slower but accurate)
 
 **Mutations:**
+
 - `createCheckoutSession`: Create Stripe Checkout for upgrading
 - `createBillingPortalSession`: Get URL to Stripe Customer Portal
 - `refreshStorageUsage`: Force refresh the materialized view
@@ -163,12 +200,14 @@ Features:
 ## Local Development
 
 For local development without Stripe:
+
 1. Leave the Stripe environment variables empty
 2. Users will see "Billing not configured" in the UI
 3. All users get free tier limits (5GB, 1 account)
 
 To test Stripe locally:
-1. Use Stripe test mode keys (sk_test_..., pk_test_...)
+
+1. Use Stripe test mode keys (sk*test*..., pk*test*...)
 2. Use the [Stripe CLI](https://stripe.com/docs/stripe-cli) to forward webhooks:
    ```bash
    stripe listen --forward-to localhost:4000/api/webhooks/stripe
@@ -186,6 +225,7 @@ To test Stripe locally:
 ### Usage not updating
 
 The materialized view refreshes at midnight UTC. To force a refresh:
+
 - Use the "Refresh" button in Settings > Billing
 - Or call the `refreshStorageUsage` mutation
 

@@ -325,6 +325,7 @@ export function SmtpProfileForm({
           <Form.Group className="mb-3">
             <Form.Check
               type="checkbox"
+              id="smtp-isDefault"
               label="Set as default sending profile"
               checked={formData.isDefault}
               onChange={(e) =>

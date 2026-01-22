@@ -6,7 +6,8 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "pnpm run db:start && tsx --watch bootstrap.ts",
+    "start": "pnpm run db:start && tsx --watch bootstrap.ts & pnpm run start:stripe",
+    "start:stripe": "(command -v stripe >/dev/null 2>&1 && stripe listen --forward-to localhost:4000/api/webhooks/stripe && echo 'Stripe CLI forwarding webhooks...' || echo 'Stripe CLI not installed - webhooks will not be forwarded locally')",
     "dev": "tsx --watch bootstrap.ts",
     "typecheck": "tsc --noEmit",
     "db:setup": "docker-compose -f ../docker-compose.yml up -d",
@@ -37,6 +38,7 @@
     "@supabase/supabase-js": "^2.90.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "graphql": "^16.11.0",
     "graphql-subscriptions": "^2.0.0",

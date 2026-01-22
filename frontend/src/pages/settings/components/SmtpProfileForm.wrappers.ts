@@ -18,7 +18,8 @@ export const ProviderCard = styled.div<{ $selected?: boolean }>`
     ${({ $selected, theme }) =>
       $selected ? theme.colors.primary : theme.colors.border};
   background: ${({ $selected, theme }) =>
-    $selected ? `${theme.colors.primary}10` : 'white'};
+    $selected ? `${theme.colors.primary}10` : theme.colors.background};
+  color: ${({ theme }) => theme.colors.text};
   cursor: pointer;
   transition: all 0.15s ease;
 
@@ -36,6 +37,7 @@ export const ProviderCard = styled.div<{ $selected?: boolean }>`
     font-size: 0.75rem;
     text-align: center;
     font-weight: 500;
+    color: ${({ theme }) => theme.colors.text};
   }
 `;
 

@@ -5,6 +5,7 @@ import {
 } from '../../helpers/stripe.js';
 import { User } from '../../db/models/user.model.js';
 import { config } from '../../config/env.js';
+import { requireAuth } from '../../helpers/auth.js';
 
 /**
  * Create a Stripe Billing Portal session to manage subscription.
@@ -13,15 +14,13 @@ import { config } from '../../config/env.js';
 export const createBillingPortalSession = makeMutation(
   'createBillingPortalSession',
   async (_parent, _args, context) => {
-    if (!context.user) {
-      throw new Error('Not authenticated');
-    }
+    const userId = requireAuth(context);
 
     if (!isStripeConfigured()) {
       throw new Error('Stripe is not configured on this server');
     }
 
-    const user = await User.findByPk(context.user.id);
+    const user = await User.findByPk(userId);
     if (!user) {
       throw new Error('User not found');
     }

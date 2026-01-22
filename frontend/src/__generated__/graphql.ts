@@ -1586,12 +1586,14 @@ export type TestConnectionResult = {
 
 /** Input for testing an IMAP/POP3 connection before saving. */
 export type TestEmailAccountConnectionInput = {
+  /** Optional: ID of existing account to use saved password from */
+  accountId?: InputMaybe<Scalars['String']['input']>;
   /** Protocol type (IMAP or POP3) */
   accountType: EmailAccountType;
   /** Server hostname */
   host: Scalars['String']['input'];
-  /** Password for authentication */
-  password: Scalars['String']['input'];
+  /** Password for authentication. Optional when editing - if not provided and accountId is set, uses saved password. */
+  password?: InputMaybe<Scalars['String']['input']>;
   /** Server port */
   port: Scalars['Int']['input'];
   /** Whether to use SSL/TLS */
@@ -1604,10 +1606,12 @@ export type TestEmailAccountConnectionInput = {
 export type TestSmtpConnectionInput = {
   /** SMTP server hostname */
   host: Scalars['String']['input'];
-  /** Password for authentication */
-  password: Scalars['String']['input'];
+  /** Password for authentication. Optional when editing - if not provided and profileId is set, uses saved password. */
+  password?: InputMaybe<Scalars['String']['input']>;
   /** SMTP server port */
   port: Scalars['Int']['input'];
+  /** Optional: ID of existing profile to use saved password from */
+  profileId?: InputMaybe<Scalars['String']['input']>;
   /** Whether to use SSL/TLS */
   useSsl: Scalars['Boolean']['input'];
   /** Username for authentication */

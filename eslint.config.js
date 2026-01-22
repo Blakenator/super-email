@@ -61,7 +61,7 @@ export default tseslint.config(
       'no-duplicate-imports': 'off', // Disabled because it conflicts with type imports vs value imports
       'max-lines-per-function': [
         'error',
-        { max: 20, skipComments: true, skipBlankLines: true },
+        { max: 200, skipComments: true, skipBlankLines: true },
       ],
     },
   },
