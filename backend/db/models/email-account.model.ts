@@ -90,7 +90,7 @@ export class EmailAccount extends Model {
   declare syncExpiresAt: Date | null;
 
   // ===== HISTORICAL SYNC FIELDS (initial sync of old emails) =====
-  // Historical sync fetches emails from oldest to newest on first sync
+  // Historical sync fetches emails from newest to oldest on first sync
   @Column({ type: DataType.TEXT, allowNull: true })
   declare historicalSyncId: string | null;
 
@@ -105,6 +105,12 @@ export class EmailAccount extends Model {
 
   @Column({ type: DataType.DATE, allowNull: true })
   declare historicalSyncLastAt: Date | null;
+
+  // Resume point for interrupted historical syncs - stores the oldest message date synced so far
+  // This allows historical syncs to resume from where they left off instead of starting over
+  // Uses timestamp-based pagination which is more reliable than sequence numbers
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare historicalSyncOldestDate: Date | null;
 
   // ===== UPDATE SYNC FIELDS (sync of new emails) =====
   // Update sync fetches only new emails since last sync
