@@ -1,5 +1,10 @@
 import { makeMutation } from '../../types.js';
-import { Contact, ContactEmail, Email, EmailAccount } from '../../db/models/index.js';
+import {
+  Contact,
+  ContactEmail,
+  Email,
+  EmailAccount,
+} from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const createContactFromEmail = makeMutation(
@@ -30,13 +35,20 @@ export const createContactFromEmail = makeMutation(
     if (existingContactEmail) {
       // Contact exists, update it if it was auto-created
       const existing = existingContactEmail.contact;
-      if (existing && existing.isAutoCreated && !existing.name && email.fromName) {
+      if (
+        existing &&
+        existing.isAutoCreated &&
+        !existing.name &&
+        email.fromName
+      ) {
         await existing.update({
           name: email.fromName,
           isAutoCreated: false,
         });
       }
-      return existing ? Contact.findByPk(existing.id, { include: [ContactEmail] }) : null;
+      return existing
+        ? Contact.findByPk(existing.id, { include: [ContactEmail] })
+        : null;
     }
 
     // Also check the legacy email field
@@ -51,7 +63,10 @@ export const createContactFromEmail = makeMutation(
     if (existingByEmail) {
       // Migrate to ContactEmail if not already
       const hasContactEmail = await ContactEmail.findOne({
-        where: { contactId: existingByEmail.id, email: email.fromAddress.toLowerCase() },
+        where: {
+          contactId: existingByEmail.id,
+          email: email.fromAddress.toLowerCase(),
+        },
       });
       if (!hasContactEmail) {
         await ContactEmail.create({
@@ -60,7 +75,11 @@ export const createContactFromEmail = makeMutation(
           isPrimary: true,
         });
       }
-      if (existingByEmail.isAutoCreated && !existingByEmail.name && email.fromName) {
+      if (
+        existingByEmail.isAutoCreated &&
+        !existingByEmail.name &&
+        email.fromName
+      ) {
         await existingByEmail.update({
           name: email.fromName,
           isAutoCreated: false,

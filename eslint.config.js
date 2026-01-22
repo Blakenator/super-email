@@ -15,12 +15,12 @@ export default tseslint.config(
       '**/CHANGELOG.md',
     ],
   },
-  
+
   // Base configurations
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   ...tseslint.configs.stylistic,
-  
+
   {
     languageOptions: {
       parserOptions: {
@@ -29,16 +29,19 @@ export default tseslint.config(
       },
     },
   },
-  
+
   {
     // Custom rules for the entire project
     rules: {
       // TypeScript specific rules
       '@typescript-eslint/consistent-type-imports': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/no-explicit-any': 'off', // IPC interfaces need 'any' for flexibility
       '@typescript-eslint/no-var-requires': 'error',
-      
+
       // Disable strict type checking rules for IPC library
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
@@ -46,19 +49,23 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-return': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/no-redundant-type-constituents': 'off',
-      
+
       // General rules
       'no-console': 'warn',
       'prefer-const': 'error',
       'no-var': 'error',
-      'eqeqeq': ['error', 'always'],
-      'curly': ['error', 'all'],
-      
+      eqeqeq: ['error', 'always'],
+      curly: ['error', 'all'],
+
       // Import/export rules
       'no-duplicate-imports': 'off', // Disabled because it conflicts with type imports vs value imports
+      'max-lines-per-function': [
+        'error',
+        { max: 20, skipComments: true, skipBlankLines: true },
+      ],
     },
   },
-  
+
   {
     // React-specific configuration
     files: ['react/**/*.ts', 'react/**/*.tsx'],
@@ -67,7 +74,7 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
-  
+
   {
     // Backend-specific configuration
     files: ['backend/**/*.ts'],
@@ -76,7 +83,7 @@ export default tseslint.config(
       'no-console': 'off',
     },
   },
-  
+
   {
     // Test files (if any)
     files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
@@ -84,5 +91,5 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'off',
       'no-console': 'off',
     },
-  }
+  },
 );

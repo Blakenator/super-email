@@ -148,7 +148,10 @@ declare module 'styled-components' {
 }
 
 // Helper to get theme based on preference and system setting
-export function getTheme(preference: ThemePreference, systemDark: boolean): Theme {
+export function getTheme(
+  preference: ThemePreference,
+  systemDark: boolean,
+): Theme {
   if (preference === 'DARK') return darkTheme;
   if (preference === 'LIGHT') return lightTheme;
   // AUTO - follow system preference

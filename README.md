@@ -16,6 +16,7 @@ A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Su
 ## Tech Stack
 
 ### Backend
+
 - **Node.js** with Express
 - **TypeScript**
 - **Apollo GraphQL** Server
@@ -25,6 +26,7 @@ A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Su
 - **AWS Secrets Manager** for credential storage
 
 ### Frontend
+
 - **React 19** with Vite
 - **TypeScript**
 - **Apollo Client** for GraphQL
@@ -33,6 +35,7 @@ A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Su
 - **React Router** for navigation
 
 ### Infrastructure
+
 - **AWS ECS Fargate** for backend containers
 - **AWS S3 + CloudFront** for frontend hosting
 - **AWS RDS PostgreSQL** for database
@@ -40,6 +43,7 @@ A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Su
 - **Pulumi** for Infrastructure as Code
 
 ### Database
+
 - **PostgreSQL 15** (Docker locally, RDS in production)
 
 ## Project Structure
@@ -84,21 +88,25 @@ email/
 ### Setup
 
 1. **Start the database:**
+
    ```bash
    docker-compose up -d
    ```
 
 2. **Install dependencies:**
+
    ```bash
    pnpm install
    ```
 
 3. **Generate GraphQL types:**
+
    ```bash
    cd common && pnpm run generate
    ```
 
 4. **Start the development servers:**
+
    ```bash
    pnpm start
    ```
@@ -111,15 +119,15 @@ email/
 
 The backend uses a centralized configuration in `backend/config/env.ts`. Default values work for local development:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `NODE_ENV` | `development` | Environment mode |
-| `PORT` | `4000` | Backend server port |
-| `DB_HOST` | `localhost` | PostgreSQL host |
-| `DB_PORT` | `5433` | PostgreSQL port |
-| `DB_NAME` | `email_client` | Database name |
-| `DB_USER` | `postgres` | Database user |
-| `DB_PASSWORD` | `password` | Database password |
+| Variable      | Default        | Description         |
+| ------------- | -------------- | ------------------- |
+| `NODE_ENV`    | `development`  | Environment mode    |
+| `PORT`        | `4000`         | Backend server port |
+| `DB_HOST`     | `localhost`    | PostgreSQL host     |
+| `DB_PORT`     | `5433`         | PostgreSQL port     |
+| `DB_NAME`     | `email_client` | Database name       |
+| `DB_USER`     | `postgres`     | Database user       |
+| `DB_PASSWORD` | `password`     | Database password   |
 
 ### Local Secrets Storage
 
@@ -140,11 +148,13 @@ In development, IMAP/SMTP credentials are stored in `data/secrets.json` (gitigno
 **IMPORTANT**: Sensitive credentials are no longer hardcoded in the codebase.
 
 1. **Copy the template file:**
+
    ```bash
    cp .env.template .env
    ```
 
 2. **Fill in your actual values:**
+
    ```bash
    # .env file
    SUPABASE_URL=https://your-project.supabase.co
@@ -166,6 +176,7 @@ In development, IMAP/SMTP credentials are stored in `data/secrets.json` (gitigno
 ### Required AWS Permissions
 
 The deploying IAM user/role needs permissions for:
+
 - ECR (create repositories, push images)
 - ECS (create clusters, services, task definitions)
 - EC2 (VPC, security groups, subnets)
@@ -180,30 +191,32 @@ The deploying IAM user/role needs permissions for:
 
 These are set automatically by Pulumi in the ECS task definition:
 
-| Variable | Description |
-|----------|-------------|
-| `NODE_ENV` | Set to `production` |
-| `DB_HOST` | RDS endpoint |
-| `DB_PORT` | RDS port (5432) |
-| `DB_NAME` | Database name |
-| `DB_USER` | Database username |
-| `DB_PASSWORD` | Database password (from Secrets Manager) |
-| `ATTACHMENTS_S3_BUCKET` | S3 bucket for attachments |
-| `AWS_REGION` | AWS region |
-| `SECRETS_BASE_PATH` | Base path for Secrets Manager (`email-client`) |
+| Variable                | Description                                    |
+| ----------------------- | ---------------------------------------------- |
+| `NODE_ENV`              | Set to `production`                            |
+| `DB_HOST`               | RDS endpoint                                   |
+| `DB_PORT`               | RDS port (5432)                                |
+| `DB_NAME`               | Database name                                  |
+| `DB_USER`               | Database username                              |
+| `DB_PASSWORD`           | Database password (from Secrets Manager)       |
+| `ATTACHMENTS_S3_BUCKET` | S3 bucket for attachments                      |
+| `AWS_REGION`            | AWS region                                     |
+| `SECRETS_BASE_PATH`     | Base path for Secrets Manager (`email-client`) |
 
 ### Manual Deployment
 
 1. **Deploy using the script:**
+
    ```bash
    # Deploy to dev environment
    pnpm run deploy:dev
-   
+
    # Deploy to production
    pnpm run deploy:prod
    ```
 
    Or directly:
+
    ```bash
    ./scripts/deploy.sh dev
    ```
@@ -222,15 +235,15 @@ These are set automatically by Pulumi in the ECS task definition:
 
 Go to your GitHub repository → Settings → Secrets and variables → Actions, and add:
 
-| Secret | Description |
-|--------|-------------|
-| `AWS_ACCESS_KEY_ID` | AWS access key with deployment permissions |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret access key |
-| `AWS_REGION` | AWS region (e.g., `us-west-1`) |
-| `PULUMI_ACCESS_TOKEN` | Pulumi access token ([get one here](https://app.pulumi.com/account/tokens)) |
-| `SUPABASE_URL` | Your Supabase project URL |
-| `SUPABASE_ANON_KEY` | Your Supabase anon/public key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service role key |
+| Secret                      | Description                                                                 |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`         | AWS access key with deployment permissions                                  |
+| `AWS_SECRET_ACCESS_KEY`     | AWS secret access key                                                       |
+| `AWS_REGION`                | AWS region (e.g., `us-west-1`)                                              |
+| `PULUMI_ACCESS_TOKEN`       | Pulumi access token ([get one here](https://app.pulumi.com/account/tokens)) |
+| `SUPABASE_URL`              | Your Supabase project URL                                                   |
+| `SUPABASE_ANON_KEY`         | Your Supabase anon/public key                                               |
+| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service role key                                              |
 
 #### Triggering Deployment
 
@@ -246,11 +259,13 @@ Go to your GitHub repository → Settings → Secrets and variables → Actions,
 ### Pulumi Stack Setup
 
 1. **Login to Pulumi:**
+
    ```bash
    pulumi login
    ```
 
 2. **Initialize the stack (first time only):**
+
    ```bash
    cd infra
    pulumi stack init dev
@@ -259,6 +274,7 @@ Go to your GitHub repository → Settings → Secrets and variables → Actions,
    ```
 
 3. **Preview changes:**
+
    ```bash
    pnpm run infra:preview
    ```
@@ -272,17 +288,18 @@ Go to your GitHub repository → Settings → Secrets and variables → Actions,
 
 After deployment, Pulumi provides these outputs:
 
-| Output | Description |
-|--------|-------------|
-| `frontendUrl` | CloudFront URL for the frontend |
-| `backendApiUrl` | ALB URL for the backend API |
-| `frontendBucketName` | S3 bucket name for frontend files |
-| `backendRepoUrl` | ECR repository URL for backend images |
-| `databaseEndpoint` | RDS PostgreSQL endpoint |
+| Output               | Description                           |
+| -------------------- | ------------------------------------- |
+| `frontendUrl`        | CloudFront URL for the frontend       |
+| `backendApiUrl`      | ALB URL for the backend API           |
+| `frontendBucketName` | S3 bucket name for frontend files     |
+| `backendRepoUrl`     | ECR repository URL for backend images |
+| `databaseEndpoint`   | RDS PostgreSQL endpoint               |
 
 ### Cost Considerations
 
 Approximate monthly costs (us-east-1, dev environment):
+
 - **ECS Fargate** (1 task, 0.25 vCPU, 0.5GB): ~$10/month
 - **RDS PostgreSQL** (db.t3.micro): ~$15/month
 - **ALB**: ~$16/month + data transfer
@@ -292,6 +309,7 @@ Approximate monthly costs (us-east-1, dev environment):
 **Total**: ~$45-50/month for dev environment
 
 For production, consider:
+
 - Larger RDS instance
 - Multiple ECS tasks for redundancy
 - Reserved capacity for cost savings
@@ -310,6 +328,7 @@ For production, consider:
 The GraphQL API is available at `/api/graphql`. Key operations include:
 
 ### Queries
+
 - `me` - Get current user
 - `getEmails(input)` - Fetch emails with filters
 - `getEmail(input)` - Get single email details
@@ -317,6 +336,7 @@ The GraphQL API is available at `/api/graphql`. Key operations include:
 - `getSmtpProfiles` - List SMTP profiles
 
 ### Mutations
+
 - `signUp(input)` - Create new account
 - `login(input)` - Authenticate user
 - `createEmailAccount(input)` - Add IMAP/POP account

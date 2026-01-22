@@ -4,7 +4,7 @@
   "description": "A self-hosted email client with IMAP/POP and SMTP support",
   "main": "index.js",
   "scripts": {
-    "start": "pnpm run --parallel -r start",
+    "start": "pnpm run --parallel -r --filter=!@main/mobile start",
     "stop": "pnpm run --parallel -r stop",
     "typecheck": "pnpm run --parallel --filter=!@main/infra -r typecheck",
     "build": "pnpm run --filter @main/backend build && pnpm run --filter @main/frontend build",

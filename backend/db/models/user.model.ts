@@ -1,10 +1,4 @@
-import {
-  Column,
-  DataType,
-  Model,
-  Table,
-  HasMany,
-} from 'sequelize-typescript';
+import { Column, DataType, Model, Table, HasMany } from 'sequelize-typescript';
 // Dual import pattern for circular dependencies
 import { EmailAccount } from './email-account.model.js';
 import type { EmailAccount as EmailAccountType } from './email-account.model.js';
