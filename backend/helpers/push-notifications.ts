@@ -41,7 +41,7 @@ export async function sendPushNotification(
     );
     
     if (validTokens.length === 0) {
-      logger.warn('No valid Expo push tokens provided');
+      logger.warn('push','No valid Expo push tokens provided');
       return [];
     }
     
@@ -87,7 +87,7 @@ export async function sendPushNotification(
       }
     });
   } catch (error) {
-    logger.error('Error sending push notification:', error);
+    logger.error('push','Error sending push notification:', error);
     return [{ success: false, error: String(error) }];
   }
 }
