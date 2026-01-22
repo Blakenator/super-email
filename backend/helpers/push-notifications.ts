@@ -29,22 +29,24 @@ export interface PushNotificationResult {
  * Send a push notification via Expo Push API
  */
 export async function sendPushNotification(
-  payload: PushNotificationPayload
+  payload: PushNotificationPayload,
 ): Promise<PushNotificationResult[]> {
   try {
     // Normalize to array
     const tokens = Array.isArray(payload.to) ? payload.to : [payload.to];
-    
+
     // Filter out invalid tokens
-    const validTokens = tokens.filter((token) =>
-      token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken[')
+    const validTokens = tokens.filter(
+      (token) =>
+        token.startsWith('ExponentPushToken[') ||
+        token.startsWith('ExpoPushToken['),
     );
-    
+
     if (validTokens.length === 0) {
-      logger.warn('No valid Expo push tokens provided');
+      logger.warn('push', 'No valid Expo push tokens provided');
       return [];
     }
-    
+
     // Build messages
     const messages = validTokens.map((token) => ({
       to: token,
@@ -57,27 +59,27 @@ export async function sendPushNotification(
       priority: payload.priority ?? 'high',
       ttl: payload.ttl ?? 60 * 60 * 24, // 24 hours
     }));
-    
+
     // Send to Expo Push API
     const response = await fetch(EXPO_PUSH_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Accept-Encoding': 'gzip, deflate',
       },
       body: JSON.stringify(messages),
     });
-    
+
     if (!response.ok) {
       const error = await response.text();
       logger.error('Expo Push API error:', error);
       return messages.map(() => ({ success: false, error }));
     }
-    
+
     const result = await response.json();
     const tickets = result.data || [];
-    
+
     return tickets.map((ticket: any, index: number) => {
       if (ticket.status === 'ok') {
         return { success: true, ticketId: ticket.id };
@@ -87,7 +89,7 @@ export async function sendPushNotification(
       }
     });
   } catch (error) {
-    logger.error('Error sending push notification:', error);
+    logger.error('push', 'Error sending push notification:', error);
     return [{ success: false, error: String(error) }];
   }
 }
@@ -104,15 +106,17 @@ export async function sendNewEmailNotification(
     subject: string;
     preview?: string;
   },
-  detailLevel: 'MINIMAL' | 'FULL' = 'FULL'
+  detailLevel: 'MINIMAL' | 'FULL' = 'FULL',
 ): Promise<void> {
-  if (pushTokens.length === 0) return;
-  
+  if (pushTokens.length === 0) {
+    return;
+  }
+
   const senderName = emailData.fromName || emailData.fromAddress;
-  
+
   let title: string;
   let body: string;
-  
+
   if (detailLevel === 'MINIMAL') {
     title = 'New Email';
     body = `From: ${senderName}`;
@@ -123,7 +127,7 @@ export async function sendNewEmailNotification(
       body += `\n${emailData.preview.substring(0, 100)}`;
     }
   }
-  
+
   await sendPushNotification({
     to: pushTokens,
     title,
@@ -141,10 +145,12 @@ export async function sendNewEmailNotification(
  */
 export async function sendSyncCompleteNotification(
   pushTokens: string[],
-  newEmailCount: number
+  newEmailCount: number,
 ): Promise<void> {
-  if (pushTokens.length === 0 || newEmailCount === 0) return;
-  
+  if (pushTokens.length === 0 || newEmailCount === 0) {
+    return;
+  }
+
   await sendPushNotification({
     to: pushTokens,
     title: 'Sync Complete',
