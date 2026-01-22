@@ -257,6 +257,21 @@ const attachmentsBucket = new aws.s3.Bucket(`${stackName}-attachments`, {
       applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' },
     },
   },
+  // CORS configuration for frontend access via presigned URLs
+  corsRules: [
+    {
+      allowedHeaders: ['*'],
+      allowedMethods: ['GET', 'HEAD'],
+      allowedOrigins: ['*'], // Presigned URLs are already secure; allow any origin
+      exposeHeaders: [
+        'ETag',
+        'Content-Length',
+        'Content-Type',
+        'x-amz-checksum-crc32',
+      ],
+      maxAgeSeconds: 3600,
+    },
+  ],
   lifecycleRules: [
     {
       id: 'transition-to-infrequent-access',
