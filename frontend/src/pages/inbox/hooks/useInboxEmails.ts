@@ -87,17 +87,19 @@ export function useInboxEmails({
     fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
   });
   const serverAccounts = accountsData?.getEmailAccounts ?? [];
-  
+
   // Cache accounts when fetched, fall back to cached accounts when offline
   useEffect(() => {
     if (serverAccounts.length > 0) {
-      setEmailAccounts(serverAccounts.map((a) => ({
-        id: a.id,
-        name: a.name,
-        email: a.email,
-        host: a.host,
-        providerId: a.providerId,
-      })));
+      setEmailAccounts(
+        serverAccounts.map((a) => ({
+          id: a.id,
+          name: a.name,
+          email: a.email,
+          host: a.host,
+          providerId: a.providerId,
+        })),
+      );
     }
   }, [serverAccounts, setEmailAccounts]);
 
@@ -211,7 +213,11 @@ export function useInboxEmails({
         inReplyTo: email.inReplyTo,
         threadId: email.threadId,
         threadCount: email.threadCount,
-        tags: email.tags?.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+        tags: email.tags?.map((t) => ({
+          id: t.id,
+          name: t.name,
+          color: t.color,
+        })),
       }));
       setEmails(emailsToCache);
     }
@@ -224,12 +230,14 @@ export function useInboxEmails({
     // Count cached emails matching the current folder/account
     return Object.values(cachedEmails).filter((email) => {
       if (email.folder !== folder) return false;
-      if (emailAccountId && email.emailAccountId !== emailAccountId) return false;
+      if (emailAccountId && email.emailAccountId !== emailAccountId)
+        return false;
       return true;
     }).length;
   }, [serverTotalCount, isOnline, cachedEmails, folder, emailAccountId]);
-  
-  const totalCount = serverTotalCount > 0 ? serverTotalCount : (offlineTotalCount ?? 0);
+
+  const totalCount =
+    serverTotalCount > 0 ? serverTotalCount : (offlineTotalCount ?? 0);
   const totalPages = Math.ceil(totalCount / pageSize);
 
   // Subscribe to real-time email updates from the store
@@ -476,11 +484,11 @@ export function useInboxEmails({
 
   // Use server data if available, otherwise fall back to zustand cache when offline
   const serverEmails = data?.getEmails ?? [];
-  
+
   // When offline and no server data, use cached emails filtered by folder/account
   const offlineFallbackEmails = useMemo(() => {
     if (serverEmails.length > 0 || isOnline) return null;
-    
+
     // Convert cached emails object to array and filter
     const allCached = Object.values(cachedEmails);
     return allCached
@@ -488,7 +496,8 @@ export function useInboxEmails({
         // Filter by folder
         if (email.folder !== folder) return false;
         // Filter by account if specified
-        if (emailAccountId && email.emailAccountId !== emailAccountId) return false;
+        if (emailAccountId && email.emailAccountId !== emailAccountId)
+          return false;
         // Basic search filter
         if (searchQuery) {
           const query = searchQuery.toLowerCase();
@@ -499,11 +508,24 @@ export function useInboxEmails({
         }
         return true;
       })
-      .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())
+      .sort(
+        (a, b) =>
+          new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime(),
+      )
       .slice(offset, offset + pageSize);
-  }, [serverEmails.length, isOnline, cachedEmails, folder, emailAccountId, searchQuery, offset, pageSize]);
-  
-  const emails = serverEmails.length > 0 ? serverEmails : (offlineFallbackEmails ?? []);
+  }, [
+    serverEmails.length,
+    isOnline,
+    cachedEmails,
+    folder,
+    emailAccountId,
+    searchQuery,
+    offset,
+    pageSize,
+  ]);
+
+  const emails =
+    serverEmails.length > 0 ? serverEmails : (offlineFallbackEmails ?? []);
   const showTabs = folder === EmailFolder.Inbox && accounts.length > 1;
   const allSelected = emails.length > 0 && selectedIds.size === emails.length;
   const someSelected = selectedIds.size > 0 && selectedIds.size < emails.length;

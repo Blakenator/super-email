@@ -2,6 +2,47 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import fs from 'fs';
+
+/**
+ * Find a package directory in the pnpm store by matching a prefix pattern.
+ * This handles version differences across different machines/lockfiles.
+ */
+function findPnpmPackage(
+  nodeModulesPath: string,
+  packagePrefix: string,
+): string | null {
+  const pnpmPath = path.join(nodeModulesPath, '.pnpm');
+  if (!fs.existsSync(pnpmPath)) {
+    return null;
+  }
+
+  const dirs = fs.readdirSync(pnpmPath);
+  // Match directories that start with the package prefix followed by @version
+  const matchingDir = dirs.find(
+    (dir) => dir === packagePrefix || dir.startsWith(`${packagePrefix}@`),
+  );
+
+  if (matchingDir) {
+    // Extract the actual package name (e.g., "react" from "react@19.2.3")
+    const packageName = packagePrefix.split('@')[0] || packagePrefix;
+    const fullPath = path.join(
+      pnpmPath,
+      matchingDir,
+      'node_modules',
+      packageName,
+    );
+    if (fs.existsSync(fullPath)) {
+      return fullPath;
+    }
+  }
+  return null;
+}
+
+// Find React packages dynamically to handle version differences across machines
+const rootNodeModules = path.resolve(__dirname, '../node_modules');
+const reactPath = findPnpmPackage(rootNodeModules, 'react');
+const reactDomPath = findPnpmPackage(rootNodeModules, 'react-dom');
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -88,14 +129,9 @@ export default defineConfig({
       // Resolve @main/common from source for Vite
       '@main/common': path.resolve(__dirname, '../common/src/index.ts'),
       // Force Vite to use a single React instance from pnpm store to avoid conflicts
-      react: path.resolve(
-        __dirname,
-        '../node_modules/.pnpm/react@19.2.3/node_modules/react',
-      ),
-      'react-dom': path.resolve(
-        __dirname,
-        '../node_modules/.pnpm/react-dom@19.2.3_react@19.2.3/node_modules/react-dom',
-      ),
+      // Paths are resolved dynamically to handle version differences across machines
+      ...(reactPath && { react: reactPath }),
+      ...(reactDomPath && { 'react-dom': reactDomPath }),
     },
   },
   server: {
