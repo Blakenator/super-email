@@ -252,3 +252,6 @@ data/
 .deploy-outputs
 .backend-image-tag
 coverage/
+
+.idea
+Pulumi.*.yaml
