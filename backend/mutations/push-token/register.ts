@@ -3,6 +3,7 @@
  * Registers a push notification token for a mobile device
  */
 
+import type { MutationResolvers } from '../../__generated__/resolvers-types.js';
 import { PushToken } from '../../db/models/push-token.model.js';
 import { logger } from '../../helpers/logger.js';
 
@@ -22,7 +23,7 @@ export interface RegisterPushTokenResult {
 
 export async function registerPushToken(
   userId: string,
-  input: RegisterPushTokenInput,
+  input: RegisterPushTokenInput
 ): Promise<RegisterPushTokenResult> {
   try {
     // Check if token already exists
@@ -31,7 +32,7 @@ export async function registerPushToken(
         token: input.token,
       },
     });
-
+    
     if (existing) {
       // Update existing token
       await existing.update({
@@ -41,10 +42,10 @@ export async function registerPushToken(
         isActive: true,
         lastUsedAt: new Date(),
       });
-
+      
       return { success: true, message: 'Push token updated' };
     }
-
+    
     // Deactivate old tokens for this device name (if provided)
     if (input.deviceName) {
       await PushToken.update(
@@ -55,10 +56,10 @@ export async function registerPushToken(
             deviceName: input.deviceName,
             isActive: true,
           },
-        },
+        }
       );
     }
-
+    
     // Create new token
     await PushToken.create({
       userId,
@@ -68,15 +69,12 @@ export async function registerPushToken(
       isActive: true,
       lastUsedAt: new Date(),
     });
-
-    logger.info(
-      'push',
-      `Push token registered for user ${userId} on ${input.platform}`,
-    );
-
+    
+    logger.info(`Push token registered for user ${userId} on ${input.platform}`);
+    
     return { success: true, message: 'Push token registered' };
   } catch (error) {
-    logger.error('push', 'Error registering push token:', error);
+    logger.error('Error registering push token:', error);
     return { success: false, message: 'Failed to register push token' };
   }
 }
@@ -92,7 +90,7 @@ export async function getUserPushTokens(userId: string): Promise<string[]> {
     },
     attributes: ['token'],
   });
-
+  
   return tokens.map((t) => t.token);
 }
 
@@ -104,7 +102,7 @@ export async function deactivatePushToken(token: string): Promise<void> {
     { isActive: false },
     {
       where: { token },
-    },
+    }
   );
 }
 
@@ -116,6 +114,6 @@ export async function deactivateUserPushTokens(userId: string): Promise<void> {
     { isActive: false },
     {
       where: { userId },
-    },
+    }
   );
 }
