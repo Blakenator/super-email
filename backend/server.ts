@@ -39,6 +39,7 @@ import {
 } from './helpers/background-sync.js';
 import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
+import { setupBillingDatabase } from './db/setup-billing.js';
 import { API_ROUTES } from '@main/common';
 
 // Default models - imported from db
@@ -506,6 +507,9 @@ export async function createServer(
 
   // Sync database (optional)
   if (!deps.skipDbSync) {
+    // Clean up old materialized view if it exists (we now use a table)
+    await setupBillingDatabase();
+    
     await deps.sequelize.sync({ alter: true });
     if (deps.enableLogging) logger.info('Database', 'Database synchronized');
   }

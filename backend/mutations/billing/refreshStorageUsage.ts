@@ -1,19 +1,17 @@
 import { makeMutation } from '../../types.js';
-import { refreshUsageMaterializedView } from '../../helpers/usage-calculator.js';
+import { recalculateUserUsage } from '../../helpers/usage-calculator.js';
+import { requireAuth } from '../../helpers/auth.js';
 
 /**
- * Force refresh the storage usage materialized view.
- * Normally this runs automatically at midnight UTC.
+ * Force refresh storage usage for the current user.
  * Returns true if successful.
  */
 export const refreshStorageUsage = makeMutation(
   'refreshStorageUsage',
   async (_parent, _args, context) => {
-    if (!context.user) {
-      throw new Error('Not authenticated');
-    }
+    const userId = requireAuth(context);
 
-    await refreshUsageMaterializedView();
+    await recalculateUserUsage(userId);
     return true;
   },
 );

@@ -1,10 +1,17 @@
 import { makeQuery } from '../../types.js';
-import { getOrCreateSubscription, isStripeConfigured } from '../../helpers/stripe.js';
 import {
-  getUserStorageUsage,
+  getOrCreateSubscription,
+  isStripeConfigured,
+} from '../../helpers/stripe.js';
+import {
+  getOrCreateUserUsage,
   bytesToGB,
 } from '../../helpers/usage-calculator.js';
-import { STORAGE_LIMITS, ACCOUNT_LIMITS } from '../../db/models/subscription.model.js';
+import {
+  STORAGE_LIMITS,
+  ACCOUNT_LIMITS,
+} from '../../db/models/subscription.model.js';
+import { requireAuth } from '../../helpers/auth.js';
 
 /**
  * Get the current user's billing information including subscription and usage.
@@ -13,19 +20,17 @@ import { STORAGE_LIMITS, ACCOUNT_LIMITS } from '../../db/models/subscription.mod
 export const getBillingInfo = makeQuery(
   'getBillingInfo',
   async (_parent, _args, context) => {
-    if (!context.user) {
-      throw new Error('Not authenticated');
-    }
+    const userId = requireAuth(context);
 
     // Get or create subscription
-    const subscription = await getOrCreateSubscription(context.user.id);
+    const subscription = await getOrCreateSubscription(userId);
 
-    // Get usage from materialized view
-    const usage = await getUserStorageUsage(context.user.id);
+    // Get usage from cache table (or calculate if not exists)
+    const usage = await getOrCreateUserUsage(userId);
 
     // Build usage object (default to zeros if not calculated yet)
     const storageUsage = {
-      userId: context.user.id,
+      userId: userId,
       accountCount: usage?.accountCount ?? 0,
       totalBodySizeBytes: usage?.totalBodySizeBytes ?? 0,
       totalAttachmentSizeBytes: usage?.totalAttachmentSizeBytes ?? 0,
@@ -43,7 +48,10 @@ export const getBillingInfo = makeQuery(
     // Calculate percentages
     const storageUsagePercent =
       storageLimitBytes > 0
-        ? Math.min(100, (storageUsage.totalStorageBytes / storageLimitBytes) * 100)
+        ? Math.min(
+            100,
+            (storageUsage.totalStorageBytes / storageLimitBytes) * 100,
+          )
         : 0;
 
     const accountUsagePercent =

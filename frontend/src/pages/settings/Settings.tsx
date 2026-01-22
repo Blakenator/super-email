@@ -412,8 +412,10 @@ export function Settings() {
             host: smtpProfileForm.host,
             port: smtpProfileForm.port,
             username: smtpProfileForm.username,
-            password: smtpProfileForm.password,
+            password: smtpProfileForm.password || null,
             useSsl: smtpProfileForm.useSsl,
+            // Pass profileId when editing to use saved password
+            profileId: editingSmtpProfileId || null,
           },
         },
       });
@@ -440,9 +442,11 @@ export function Settings() {
             host: formData.host,
             port: formData.port,
             username: formData.username,
-            password: formData.password,
+            password: formData.password || null,
             accountType: formData.accountType,
             useSsl: formData.useSsl,
+            // Pass accountId when editing to use saved password
+            accountId: editingEmailAccountId || null,
           },
         },
       });
@@ -522,8 +526,10 @@ export function Settings() {
             host: formData.host,
             port: formData.port,
             username: formData.username,
-            password: formData.password,
+            password: formData.password || null,
             useSsl: formData.useSsl,
+            // Pass profileId when editing to use saved password
+            profileId: editingSmtpProfileId || null,
           },
         },
       });

@@ -18,6 +18,7 @@ alwaysApply: true
   - Used so frequently that consistency is important (e.g., Button bootstrap wrapper, filters, EmailChipInput)
 - Use `.wrappers.ts` files whenever styled-components are needed (following the pattern of Button.wrappers.ts, EmailChipInput.wrappers.ts)
 - Prefer using existing core components over bespoke new components where possible
+- Ensure that wrappers don't use bespoke colors, but instead use theme colors and values
 
 ## AWS Dependencies & Local Development
 
@@ -101,3 +102,4 @@ alwaysApply: true
 - All environment variables should be accessed through `backend/config/env.ts`
 - Never hardcode AWS credentials or secrets
 - Use `config.isProduction` and `config.isDevelopment` flags for environment checks
+- When you encounter a pattern you feel is important to keep consistent, update the project-standards.mdc file with a very concise version of that rule

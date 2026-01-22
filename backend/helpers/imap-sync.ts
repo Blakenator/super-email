@@ -15,6 +15,7 @@ import { getImapCredentials } from './secrets.js';
 import { Readable } from 'stream';
 import { publishMailboxUpdate } from './pubsub.js';
 import { checkBillingLimits } from './billing-checks.js';
+import { recalculateUserUsage } from './usage-calculator.js';
 
 export interface SyncResult {
   synced: number;
@@ -196,6 +197,13 @@ export async function startAsyncSync(
       console.log(
         `[IMAP] Sync complete for ${emailAccount.email}: ${result.synced} synced`,
       );
+
+      // Recalculate usage after sync
+      try {
+        await recalculateUserUsage(emailAccount.userId);
+      } catch (usageError) {
+        console.error('[IMAP] Failed to recalculate usage:', usageError);
+      }
 
       // Notify subscribers that sync is complete
       publishMailboxUpdate(emailAccount.userId, {

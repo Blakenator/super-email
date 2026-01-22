@@ -1710,9 +1710,9 @@ input TestEmailAccountConnectionInput {
   """
   username: String!
   """
-  Password for authentication
+  Password for authentication. Optional when editing - if not provided and accountId is set, uses saved password.
   """
-  password: String!
+  password: String
   """
   Protocol type (IMAP or POP3)
   """
@@ -1721,6 +1721,10 @@ input TestEmailAccountConnectionInput {
   Whether to use SSL/TLS
   """
   useSsl: Boolean!
+  """
+  Optional: ID of existing account to use saved password from
+  """
+  accountId: String
 }
 
 """
@@ -1740,13 +1744,17 @@ input TestSmtpConnectionInput {
   """
   username: String!
   """
-  Password for authentication
+  Password for authentication. Optional when editing - if not provided and profileId is set, uses saved password.
   """
-  password: String!
+  password: String
   """
   Whether to use SSL/TLS
   """
   useSsl: Boolean!
+  """
+  Optional: ID of existing profile to use saved password from
+  """
+  profileId: String
 }
 
 # ============ Email Sources (Triage) ============

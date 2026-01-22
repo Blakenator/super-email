@@ -6,6 +6,7 @@ import {
 import { User } from '../../db/models/user.model.js';
 import { StorageTier, AccountTier } from '../../db/models/subscription.model.js';
 import { config } from '../../config/env.js';
+import { requireAuth } from '../../helpers/auth.js';
 
 /**
  * Create a Stripe Checkout session to upgrade subscription.
@@ -14,15 +15,13 @@ import { config } from '../../config/env.js';
 export const createCheckoutSession = makeMutation(
   'createCheckoutSession',
   async (_parent, args, context) => {
-    if (!context.user) {
-      throw new Error('Not authenticated');
-    }
+    const userId = requireAuth(context);
 
     if (!isStripeConfigured()) {
       throw new Error('Stripe is not configured on this server');
     }
 
-    const user = await User.findByPk(context.user.id);
+    const user = await User.findByPk(userId);
     if (!user) {
       throw new Error('User not found');
     }
