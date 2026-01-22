@@ -42,10 +42,7 @@ export interface RuleActions {
 @Table({
   timestamps: true,
   tableName: 'mail_rules',
-  indexes: [
-    { fields: ['userId'] },
-    { fields: ['emailAccountId'] },
-  ],
+  indexes: [{ fields: ['userId'] }, { fields: ['emailAccountId'] }],
 })
 export class MailRule extends Model {
   @Column({

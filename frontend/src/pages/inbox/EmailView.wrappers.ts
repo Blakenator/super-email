@@ -294,7 +294,8 @@ export const MoreActionsDropdown = styled.div`
     display: flex;
     align-items: center;
     gap: ${({ theme }) => theme.spacing.sm};
-    padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+    padding: ${({ theme }) => theme.spacing.sm}
+      ${({ theme }) => theme.spacing.md};
     font-size: ${({ theme }) => theme.fontSizes.sm};
 
     svg {

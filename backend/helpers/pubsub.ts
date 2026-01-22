@@ -12,7 +12,10 @@ export const MAILBOX_UPDATES = 'MAILBOX_UPDATES';
 /**
  * Publish a mailbox update event to all subscribers for a given user
  */
-export function publishMailboxUpdate(userId: string, event: MailboxUpdateEvent) {
+export function publishMailboxUpdate(
+  userId: string,
+  event: MailboxUpdateEvent,
+) {
   // Publish to user-specific topic
   pubSub.publish(`${MAILBOX_UPDATES}:${userId}`, event);
 }
