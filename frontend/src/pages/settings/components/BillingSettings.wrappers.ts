@@ -63,6 +63,83 @@ export const StyledProgressBar = styled(ProgressBar)<{ $variant?: 'success' | 'w
   }
 `;
 
+export const SegmentedProgressContainer = styled.div`
+  position: relative;
+  height: 16px;
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  background: ${({ theme }) => theme.colors.background};
+  overflow: hidden;
+  display: flex;
+`;
+
+export const ProgressSegment = styled.div<{ 
+  $width: number; 
+  $color: 'email' | 'attachment';
+}>`
+  height: 100%;
+  width: ${({ $width }) => $width}%;
+  background: ${({ theme, $color }) => 
+    $color === 'email' ? theme.colors.info : theme.colors.primary};
+  transition: width 0.3s ease;
+  
+  &:first-child {
+    border-top-left-radius: ${({ theme }) => theme.borderRadius.md};
+    border-bottom-left-radius: ${({ theme }) => theme.borderRadius.md};
+  }
+  
+  &:last-child {
+    border-top-right-radius: ${({ theme }) => theme.borderRadius.md};
+    border-bottom-right-radius: ${({ theme }) => theme.borderRadius.md};
+  }
+`;
+
+export const ProgressLegend = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.spacing.lg};
+  margin-top: ${({ theme }) => theme.spacing.sm};
+`;
+
+export const LegendItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.xs};
+  font-size: ${({ theme }) => theme.fontSizes.xs};
+  color: ${({ theme }) => theme.colors.textSecondary};
+`;
+
+export const LegendDot = styled.span<{ $color: 'email' | 'attachment' }>`
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: ${({ theme, $color }) => 
+    $color === 'email' ? theme.colors.info : theme.colors.primary};
+`;
+
+export const DowngradeWarning = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: ${({ theme }) => theme.spacing.md};
+  padding: ${({ theme }) => theme.spacing.md};
+  background: ${({ theme }) => `${theme.colors.warning}15`};
+  border: 1px solid ${({ theme }) => theme.colors.warning};
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  margin-top: ${({ theme }) => theme.spacing.md};
+  color: ${({ theme }) => theme.colors.textPrimary};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+
+  svg {
+    color: ${({ theme }) => theme.colors.warning};
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  
+  strong {
+    display: block;
+    margin-bottom: ${({ theme }) => theme.spacing.xs};
+  }
+`;
+
 export const TierBadge = styled.span<{ $tier: string }>`
   display: inline-flex;
   align-items: center;
@@ -258,4 +335,93 @@ export const LastRefreshed = styled.div`
   color: ${({ theme }) => theme.colors.textSecondary};
   margin-top: ${({ theme }) => theme.spacing.md};
   text-align: right;
+`;
+
+export const TierSelectionGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: ${({ theme }) => theme.spacing.md};
+`;
+
+export const TierCard = styled.div<{ $selected?: boolean; $current?: boolean }>`
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: ${({ theme }) => theme.spacing.lg};
+  border: 2px solid ${({ theme, $selected, $current }) => {
+    if ($selected) return theme.colors.primary;
+    if ($current) return theme.colors.success;
+    return theme.colors.borderLight;
+  }};
+  border-radius: ${({ theme }) => theme.borderRadius.lg};
+  background: ${({ theme, $selected }) =>
+    $selected ? `${theme.colors.primary}08` : theme.colors.backgroundWhite};
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary};
+    transform: translateY(-2px);
+    box-shadow: ${({ theme }) => theme.shadows.md};
+  }
+`;
+
+export const TierCardHeader = styled.h5`
+  margin: 0;
+  font-size: ${({ theme }) => theme.fontSizes.lg};
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.textPrimary};
+`;
+
+export const TierCardPrice = styled.div`
+  font-size: ${({ theme }) => theme.fontSizes.xl};
+  font-weight: 700;
+  color: ${({ theme }) => theme.colors.primary};
+  margin: ${({ theme }) => theme.spacing.sm} 0;
+`;
+
+export const TierCardFeatures = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing.xs};
+  margin-top: ${({ theme }) => theme.spacing.sm};
+`;
+
+export const TierCardFeature = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.xs};
+  font-size: ${({ theme }) => theme.fontSizes.sm};
+  color: ${({ theme }) => theme.colors.textSecondary};
+
+  svg {
+    color: ${({ theme }) => theme.colors.success};
+    font-size: 12px;
+  }
+`;
+
+export const CurrentBadge = styled.span`
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${({ theme }) => theme.colors.success};
+  color: white;
+  padding: 2px 10px;
+  border-radius: ${({ theme }) => theme.borderRadius.sm};
+  font-size: ${({ theme }) => theme.fontSizes.xs};
+  font-weight: 600;
+  text-transform: uppercase;
+`;
+
+export const PendingChangesBar = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
+  background: ${({ theme }) => theme.colors.primary};
+  color: white;
+  border-radius: ${({ theme }) => theme.borderRadius.md};
+  margin-bottom: ${({ theme }) => theme.spacing.md};
 `;

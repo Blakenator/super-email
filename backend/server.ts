@@ -1,6 +1,6 @@
 /**
  * Server Factory - Creates Apollo Server with injectable dependencies
- * 
+ *
  * For production/development: Call createServer() with no arguments
  * For testing: Call createServer() with mock dependencies
  */
@@ -196,7 +196,9 @@ const jsonScalar = new GraphQLScalarType({
 /**
  * Create logging plugin for Apollo Server
  */
-function createLoggingPlugin(enabled: boolean): ApolloServerPlugin<BackendContext> {
+function createLoggingPlugin(
+  enabled: boolean,
+): ApolloServerPlugin<BackendContext> {
   if (!enabled) {
     return {};
   }
@@ -230,7 +232,7 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
     Mutation: MutationResolvers,
     Date: dateScalar,
     JSON: jsonScalar,
-    
+
     // Field resolvers using injected models
     User: {
       emailAccounts: async (parent) => {
@@ -256,11 +258,16 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
       },
     },
     EmailAccount: {
-      isSyncing: (parent: any) => !!parent.syncId,
+      isSyncing: (parent: any) =>
+        !!parent.syncId || !!parent.historicalSyncId || !!parent.updateSyncId,
+      isHistoricalSyncing: (parent: any) => !!parent.historicalSyncId,
+      isUpdateSyncing: (parent: any) => !!parent.updateSyncId,
     },
     Email: {
       threadCount: async (parent: any) => {
-        if (!parent.threadId) return 1;
+        if (!parent.threadId) {
+          return 1;
+        }
         const count = await models.Email.count({
           where: { threadId: parent.threadId },
         });
@@ -271,7 +278,9 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
           where: { emailId: parent.id },
           attributes: ['tagId'],
         });
-        if (emailTags.length === 0) return [];
+        if (emailTags.length === 0) {
+          return [];
+        }
         const tagIds = emailTags.map((et: any) => et.tagId);
         const tags = await models.Tag.findAll({
           where: { id: tagIds },
@@ -299,27 +308,41 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
     Tag: {
       emailCount: (parent: any) => parent.emailCount ?? 0,
     },
-    
+
     // Subscription resolvers
     Subscription: {
       mailboxUpdates: {
-        subscribe: async (_parent: any, _args: any, context: BackendContext) => {
+        subscribe: async (
+          _parent: any,
+          _args: any,
+          context: BackendContext,
+        ) => {
           if (!context.userId) {
             throw new Error('Authentication required');
           }
 
           const userId = context.userId;
-          logger.info('Subscription', `Starting mailboxUpdates subscription for user ${userId}`);
+          logger.info(
+            'Subscription',
+            `Starting mailboxUpdates subscription for user ${userId}`,
+          );
 
           const updates: MailboxUpdateEvent[] = [];
-          let resolveWaiting: ((value: IteratorResult<{ mailboxUpdates: MailboxUpdateEvent }>) => void) | null = null;
+          let resolveWaiting:
+            | ((
+                value: IteratorResult<{ mailboxUpdates: MailboxUpdateEvent }>,
+              ) => void)
+            | null = null;
           let isComplete = false;
           let cleanedUp = false;
 
           const pubSubSubscriptionId = await pubSub.subscribe(
             `${MAILBOX_UPDATES}:${userId}`,
             (update: MailboxUpdateEvent) => {
-              logger.info('Subscription', `[User ${userId}] Received PubSub event`);
+              logger.info(
+                'Subscription',
+                `[User ${userId}] Received PubSub event`,
+              );
               onUpdate(update);
             },
           );
@@ -339,7 +362,9 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
           };
 
           const cleanup = async () => {
-            if (cleanedUp) return;
+            if (cleanedUp) {
+              return;
+            }
             cleanedUp = true;
             await pubSub.unsubscribe(pubSubSubscriptionId);
             await stopIdleForUser(userId);
@@ -348,11 +373,16 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
           try {
             await startIdleForUser(userId, onUpdate);
           } catch (error: any) {
-            logger.error('Subscription', `Failed to start IDLE: ${error.message}`);
+            logger.error(
+              'Subscription',
+              `Failed to start IDLE: ${error.message}`,
+            );
             throw error;
           }
 
-          const asyncIterator: AsyncIterator<{ mailboxUpdates: MailboxUpdateEvent }> = {
+          const asyncIterator: AsyncIterator<{
+            mailboxUpdates: MailboxUpdateEvent;
+          }> = {
             async next() {
               if (updates.length > 0) {
                 const update = updates.shift()!;
@@ -362,7 +392,9 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
                 await cleanup();
                 return { value: undefined as any, done: true };
               }
-              return new Promise((resolve) => { resolveWaiting = resolve; });
+              return new Promise((resolve) => {
+                resolveWaiting = resolve;
+              });
             },
             async return() {
               isComplete = true;
@@ -380,7 +412,11 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
             },
           };
 
-          return { [Symbol.asyncIterator]() { return asyncIterator; } };
+          return {
+            [Symbol.asyncIterator]() {
+              return asyncIterator;
+            },
+          };
         },
       },
     } as any,
@@ -402,7 +438,9 @@ export async function createServer(
   const httpServer = http.createServer(app);
 
   // Load GraphQL schema
-  const schemaPath = deps.schemaPath || path.join(process.cwd(), '..', 'common', 'schema.graphql');
+  const schemaPath =
+    deps.schemaPath ||
+    path.join(process.cwd(), '..', 'common', 'schema.graphql');
   const typeDefs = readFileSync(schemaPath, { encoding: 'utf-8' });
 
   // Build resolvers with injected dependencies
@@ -424,8 +462,14 @@ export async function createServer(
         schema,
         context: async (ctx) => {
           const token =
-            (ctx.connectionParams?.authorization as string)?.replace('Bearer ', '') ??
-            (ctx.connectionParams?.Authorization as string)?.replace('Bearer ', '') ??
+            (ctx.connectionParams?.authorization as string)?.replace(
+              'Bearer ',
+              '',
+            ) ??
+            (ctx.connectionParams?.Authorization as string)?.replace(
+              'Bearer ',
+              '',
+            ) ??
             '';
 
           let userId: string | undefined;
@@ -437,14 +481,23 @@ export async function createServer(
             supabaseUserId = payload?.supabaseUserId;
           }
 
-          return { token, userId, supabaseUserId, sequelize: deps.sequelize } satisfies BackendContext;
+          return {
+            token,
+            userId,
+            supabaseUserId,
+            sequelize: deps.sequelize,
+          } satisfies BackendContext;
         },
         onConnect: async () => {
-          if (deps.enableLogging) logger.info('WebSocket', 'Client connected');
+          if (deps.enableLogging) {
+            logger.info('WebSocket', 'Client connected');
+          }
           return true;
         },
         onDisconnect: async (ctx, code, reason) => {
-          if (deps.enableLogging) logger.info('WebSocket', `Client disconnected: ${code} ${reason}`);
+          if (deps.enableLogging) {
+            logger.info('WebSocket', `Client disconnected: ${code} ${reason}`);
+          }
         },
       },
       wsServer,
@@ -471,7 +524,7 @@ export async function createServer(
       async serverWillStart() {
         return {
           async drainServer() {
-            await serverCleanup!.dispose();
+            await serverCleanup.dispose();
           },
         };
       },
@@ -495,7 +548,11 @@ export async function createServer(
     plugins,
     formatError: (formattedError, error) => {
       if (deps.enableLogging) {
-        logger.error('GraphQL', 'Uncaught error:', (error as any)?.originalError ?? error);
+        logger.error(
+          'GraphQL',
+          'Uncaught error:',
+          (error as any)?.originalError ?? error,
+        );
       }
       return formattedError;
     },
@@ -503,15 +560,19 @@ export async function createServer(
 
   // Start Apollo Server
   await apolloServer.start();
-  if (deps.enableLogging) logger.info('Server', 'Apollo Server started');
+  if (deps.enableLogging) {
+    logger.info('Server', 'Apollo Server started');
+  }
 
   // Sync database (optional)
   if (!deps.skipDbSync) {
     // Clean up old materialized view if it exists (we now use a table)
     await setupBillingDatabase();
-    
+
     await deps.sequelize.sync({ alter: true });
-    if (deps.enableLogging) logger.info('Database', 'Database synchronized');
+    if (deps.enableLogging) {
+      logger.info('Database', 'Database synchronized');
+    }
   }
 
   // Setup Express middleware
@@ -550,7 +611,7 @@ export async function createServer(
     try {
       const attachmentId = req.params.id;
       const token = req.headers.authorization?.replace('Bearer ', '') ?? '';
-      
+
       if (!token) {
         return res.status(401).json({ error: 'Not authenticated' });
       }
@@ -580,21 +641,28 @@ export async function createServer(
         return res.status(404).json({ error: 'Attachment not found' });
       }
 
-      const attachmentData = attachment.get({ plain: true }) as any;
+      const attachmentData = attachment.get({ plain: true });
 
       if (process.env.NODE_ENV !== 'production') {
-        const { getLocalAttachmentPath } = await import('./helpers/attachment-storage.js');
+        const { getLocalAttachmentPath } = await import(
+          './helpers/attachment-storage.js'
+        );
         const filePath = getLocalAttachmentPath(attachmentId);
 
         res.setHeader('Content-Type', attachmentData.mimeType);
-        res.setHeader('Content-Disposition', `attachment; filename="${attachmentData.filename}"`);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${attachmentData.filename}"`,
+        );
         res.setHeader('Content-Length', attachmentData.size.toString());
 
         const { createReadStream } = await import('fs');
         const stream = createReadStream(filePath);
         stream.pipe(res);
       } else {
-        const { getAttachmentDownloadUrl } = await import('./helpers/attachment-storage.js');
+        const { getAttachmentDownloadUrl } = await import(
+          './helpers/attachment-storage.js'
+        );
         const url = await getAttachmentDownloadUrl(attachmentId);
         res.redirect(url);
       }
@@ -609,6 +677,7 @@ export async function createServer(
     '/api/webhooks/stripe',
     express.raw({ type: 'application/json' }),
     async (req, res) => {
+      console.log('webhook triggered');
       if (!isStripeConfigured()) {
         return res.status(503).json({ error: 'Stripe is not configured' });
       }
@@ -636,11 +705,16 @@ export async function createServer(
     httpServer,
     schema,
     dependencies: deps,
-    
+
     start: async () => {
-      await new Promise<void>((resolve) => httpServer.listen({ port }, resolve));
+      await new Promise<void>((resolve) =>
+        httpServer.listen({ port }, resolve),
+      );
       if (deps.enableLogging) {
-        logger.info('Server', `📧 Email Client API ready at http://localhost:${port}${API_ROUTES.GRAPHQL}`);
+        logger.info(
+          'Server',
+          `📧 Email Client API ready at http://localhost:${port}${API_ROUTES.GRAPHQL}`,
+        );
       }
       // Start background sync for stale email accounts (unless disabled)
       if (!deps.skipBackgroundSync) {
@@ -651,7 +725,7 @@ export async function createServer(
         startUsageDaemon();
       }
     },
-    
+
     stop: async () => {
       // Stop background sync scheduler
       stopBackgroundSync();
@@ -660,7 +734,7 @@ export async function createServer(
       await apolloServer.stop();
       httpServer.close();
     },
-    
+
     executeOperation: async <T = any>(
       query: string,
       variables?: Record<string, any>,

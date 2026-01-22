@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Form, Button } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { DateTime } from 'luxon';
+import { getEmailPreviewText } from '../../../utils/emailPreview';
 import {
   faStar as faStarSolid,
   faReply,
@@ -238,7 +239,7 @@ export function EmailListItem({
             )}
           </Subject>
           <Preview>
-            {email.textBody?.substring(0, 100) || '(No content)'}
+            {getEmailPreviewText(email.textBody, email.htmlBody, 100)}
           </Preview>
           {showTags && email.tags && email.tags.length > 0 && (
             <TagsRow>

@@ -16,6 +16,14 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       isSyncing
       syncProgress
       syncStatus
+      isHistoricalSyncing
+      historicalSyncProgress
+      historicalSyncStatus
+      historicalSyncLastAt
+      isUpdateSyncing
+      updateSyncProgress
+      updateSyncStatus
+      updateSyncLastAt
       defaultSmtpProfileId
       defaultSmtpProfile {
         id
@@ -335,9 +343,12 @@ export const GET_BILLING_INFO_QUERY = gql(`
         currentPeriodEnd
         cancelAtPeriodEnd
       }
+      hasStripeCustomer
       usage {
         userId
         accountCount
+        totalBodySizeBytes
+        totalAttachmentSizeBytes
         totalStorageBytes
         totalStorageGB
         emailCount
@@ -349,6 +360,15 @@ export const GET_BILLING_INFO_QUERY = gql(`
       isStorageLimitExceeded
       isAccountLimitExceeded
       isStripeConfigured
+      prices {
+        id
+        tier
+        type
+        name
+        unitAmount
+        currency
+        interval
+      }
     }
   }
 `);
@@ -362,5 +382,11 @@ export const CREATE_BILLING_PORTAL_SESSION_MUTATION = gql(`
 export const REFRESH_STORAGE_USAGE_MUTATION = gql(`
   mutation RefreshStorageUsage {
     refreshStorageUsage
+  }
+`);
+
+export const CREATE_CHECKOUT_SESSION_MUTATION = gql(`
+  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!) {
+    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier)
   }
 `);

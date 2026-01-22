@@ -21,6 +21,7 @@ import {
   faFilter,
   faShieldAlt,
   faBolt,
+  faCreditCard,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import { EmailFolder } from '../../__generated__/graphql';
@@ -303,6 +304,10 @@ export function Sidebar({
                 <PopoverMenuItem onClick={() => navigate('/settings/auth')}>
                   <FontAwesomeIcon icon={faShieldAlt} />
                   Login Methods
+                </PopoverMenuItem>
+                <PopoverMenuItem onClick={() => navigate('/settings/billing')}>
+                  <FontAwesomeIcon icon={faCreditCard} />
+                  Billing
                 </PopoverMenuItem>
 
                 <PopoverDivider />

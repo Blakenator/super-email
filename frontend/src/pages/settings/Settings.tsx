@@ -155,6 +155,14 @@ export function Settings() {
     string | null
   >(null);
 
+  // Pending SMTP profile creation (for "also create SMTP" flow)
+  const [pendingSmtpData, setPendingSmtpData] = useState<{
+    name: string;
+    email: string;
+    providerId: string;
+    password: string;
+  } | null>(null);
+
   // Email Account form state
   const [emailAccountForm, setEmailAccountForm] = useState({
     name: '',
@@ -207,6 +215,13 @@ export function Settings() {
     return () => stopPolling();
   }, [isSyncing, startPolling, stopPolling]);
 
+  // Open SMTP modal when email account is created with "also create SMTP" checked
+  useEffect(() => {
+    if (pendingSmtpData) {
+      setShowSmtpProfileModal(true);
+    }
+  }, [pendingSmtpData]);
+
   const {
     data: smtpProfilesData,
     loading: smtpProfilesLoading,
@@ -234,14 +249,6 @@ export function Settings() {
 
   const [createEmailAccount, { loading: creatingEmailAccount }] = useMutation(
     CREATE_EMAIL_ACCOUNT_MUTATION,
-    {
-      onCompleted: () => {
-        setShowEmailAccountModal(false);
-        refetchEmailAccounts();
-        resetEmailAccountForm();
-      },
-      onError: (err) => setError(err.message),
-    },
   );
 
   const [deleteEmailAccount] = useMutation(DELETE_EMAIL_ACCOUNT_MUTATION, {
@@ -272,14 +279,6 @@ export function Settings() {
 
   const [createSmtpProfile, { loading: creatingSmtpProfile }] = useMutation(
     CREATE_SMTP_PROFILE_MUTATION,
-    {
-      onCompleted: () => {
-        setShowSmtpProfileModal(false);
-        refetchSmtpProfiles();
-        resetSmtpProfileForm();
-      },
-      onError: (err) => setError(err.message),
-    },
   );
 
   const [deleteSmtpProfile] = useMutation(DELETE_SMTP_PROFILE_MUTATION, {
@@ -348,7 +347,7 @@ export function Settings() {
         port: account.port,
         username: '', // Don't populate - user must re-enter for security
         password: '', // Don't populate - user must re-enter for security
-        accountType: account.accountType as EmailAccountType,
+        accountType: account.accountType,
         useSsl: account.useSsl,
         defaultSmtpProfileId: account.defaultSmtpProfileId || null,
       });
@@ -468,49 +467,71 @@ export function Settings() {
   ) => {
     setError(null);
 
-    if (editingEmailAccountId) {
-      // Update existing account
-      await updateEmailAccount({
-        variables: {
-          input: {
-            id: editingEmailAccountId,
-            name: formData.name,
-            host: formData.host,
-            port: formData.port,
-            username: formData.username || undefined,
-            password: formData.password || undefined,
-            useSsl: formData.useSsl,
-            defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
-            providerId: formData.providerId || undefined,
-            isDefault: formData.isDefault,
+    try {
+      if (editingEmailAccountId) {
+        // Update existing account
+        const result = await updateEmailAccount({
+          variables: {
+            input: {
+              id: editingEmailAccountId,
+              name: formData.name,
+              host: formData.host,
+              port: formData.port,
+              username: formData.username || undefined,
+              password: formData.password || undefined,
+              useSsl: formData.useSsl,
+              defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
+              providerId: formData.providerId || undefined,
+              isDefault: formData.isDefault,
+            },
           },
-        },
-      });
-      toast.success('Email account updated!');
-    } else {
-      // Create new account
-      await createEmailAccount({
-        variables: {
-          input: {
-            name: formData.name,
-            email: formData.email,
-            host: formData.host,
-            port: formData.port,
-            username: formData.username,
-            password: formData.password,
-            accountType: formData.accountType,
-            useSsl: formData.useSsl,
-            defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
-            providerId: formData.providerId || undefined,
-            isDefault: formData.isDefault,
+        });
+        if (result.error) {
+          throw new Error(result.error?.message);
+        }
+        toast.success('Email account updated!');
+      } else {
+        // Create new account
+        const result = await createEmailAccount({
+          variables: {
+            input: {
+              name: formData.name,
+              email: formData.email,
+              host: formData.host,
+              port: formData.port,
+              username: formData.username,
+              password: formData.password,
+              accountType: formData.accountType,
+              useSsl: formData.useSsl,
+              defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
+              providerId: formData.providerId || undefined,
+              isDefault: formData.isDefault,
+            },
           },
-        },
-      });
-      toast.success('Email account added!');
+        });
+        if (result.error) {
+          throw new Error(result.error?.message);
+        }
+        toast.success('Email account added!');
+
+        // If user wants to also create SMTP profile, save the data and open modal after 1s
+        if (formData.alsoCreateSmtpProfile) {
+          setTimeout(() => {
+            setPendingSmtpData({
+              name: formData.name,
+              email: formData.email,
+              providerId: formData.providerId,
+              password: formData.password,
+            });
+          }, 1000);
+        }
+      }
+      setShowEmailAccountModal(false);
+      resetEmailAccountForm();
+      refetchEmailAccounts();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save email account');
     }
-    setShowEmailAccountModal(false);
-    resetEmailAccountForm();
-    refetchEmailAccounts();
   };
 
   // Handler for the new SmtpProfileForm component
@@ -549,48 +570,58 @@ export function Settings() {
   const handleSmtpProfileFormSubmit = async (formData: SmtpProfileFormData) => {
     setError(null);
 
-    if (editingSmtpProfileId) {
-      // Update existing profile
-      await updateSmtpProfile({
-        variables: {
-          input: {
-            id: editingSmtpProfileId,
-            name: formData.name,
-            alias: formData.alias || undefined,
-            host: formData.host,
-            port: formData.port,
-            username: formData.username || undefined,
-            password: formData.password || undefined,
-            useSsl: formData.useSsl,
-            isDefault: formData.isDefault,
-            providerId: formData.providerId || undefined,
+    try {
+      if (editingSmtpProfileId) {
+        // Update existing profile
+        const result = await updateSmtpProfile({
+          variables: {
+            input: {
+              id: editingSmtpProfileId,
+              name: formData.name,
+              alias: formData.alias || undefined,
+              host: formData.host,
+              port: formData.port,
+              username: formData.username || undefined,
+              password: formData.password || undefined,
+              useSsl: formData.useSsl,
+              isDefault: formData.isDefault,
+              providerId: formData.providerId || undefined,
+            },
           },
-        },
-      });
-      toast.success('SMTP profile updated!');
-    } else {
-      // Create new profile
-      await createSmtpProfile({
-        variables: {
-          input: {
-            name: formData.name,
-            email: formData.email,
-            alias: formData.alias || undefined,
-            host: formData.host,
-            port: formData.port,
-            username: formData.username,
-            password: formData.password,
-            useSsl: formData.useSsl,
-            isDefault: formData.isDefault,
-            providerId: formData.providerId || undefined,
+        });
+        if (result.errors?.length) {
+          throw new Error(result.errors[0].message);
+        }
+        toast.success('SMTP profile updated!');
+      } else {
+        // Create new profile
+        const result = await createSmtpProfile({
+          variables: {
+            input: {
+              name: formData.name,
+              email: formData.email,
+              alias: formData.alias || undefined,
+              host: formData.host,
+              port: formData.port,
+              username: formData.username,
+              password: formData.password,
+              useSsl: formData.useSsl,
+              isDefault: formData.isDefault,
+              providerId: formData.providerId || undefined,
+            },
           },
-        },
-      });
-      toast.success('SMTP profile added!');
+        });
+        if (result.errors?.length) {
+          throw new Error(result.errors[0].message);
+        }
+        toast.success('SMTP profile added!');
+      }
+      setShowSmtpProfileModal(false);
+      resetSmtpProfileForm();
+      refetchSmtpProfiles();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save SMTP profile');
     }
-    setShowSmtpProfileModal(false);
-    resetSmtpProfileForm();
-    refetchSmtpProfiles();
   };
 
   const handleSaveEmailAccount = async (e: React.FormEvent) => {
@@ -970,10 +1001,33 @@ export function Settings() {
                       <Spinner animation="border" size="sm" />
                     </div>
                   ) : emailAccounts.length === 0 ? (
-                    <p className="text-muted text-center py-4">
-                      No email accounts configured. Add one to start receiving
-                      emails.
-                    </p>
+                    <div className="text-center py-5">
+                      <FontAwesomeIcon
+                        icon={faInbox}
+                        size="3x"
+                        className="text-muted mb-3"
+                      />
+                      <h5>No Email Accounts Yet</h5>
+                      <p className="text-muted mb-3">
+                        Add an email account to start receiving emails. You'll
+                        need your email server's IMAP settings (host, port) and
+                        your credentials (usually your email and an app
+                        password).
+                      </p>
+                      <p className="text-muted small mb-4">
+                        <strong>First time setup:</strong> After adding an email
+                        account, you'll also need to add an SMTP profile to send
+                        emails. You can check "Also create an SMTP profile" when
+                        adding your account to set this up automatically.
+                      </p>
+                      <Button
+                        variant="primary"
+                        onClick={() => setShowEmailAccountModal(true)}
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-1" />
+                        Add Your First Account
+                      </Button>
+                    </div>
                   ) : (
                     <AccountCardGrid>
                       {emailAccounts.map((account) => (
@@ -1025,10 +1079,32 @@ export function Settings() {
                       <Spinner animation="border" size="sm" />
                     </div>
                   ) : smtpProfiles.length === 0 ? (
-                    <p className="text-muted text-center py-4">
-                      No SMTP profiles configured. Add one to start sending
-                      emails.
-                    </p>
+                    <div className="text-center py-5">
+                      <FontAwesomeIcon
+                        icon={faPaperPlane}
+                        size="3x"
+                        className="text-muted mb-3"
+                      />
+                      <h5>No SMTP Profiles Yet</h5>
+                      <p className="text-muted mb-3">
+                        Add an SMTP profile to send emails. You'll need your
+                        email server's SMTP settings (host, port) and your
+                        credentials (usually your email and an app password).
+                      </p>
+                      <p className="text-muted small mb-4">
+                        <strong>Tip:</strong> Most email providers use the same
+                        credentials for IMAP and SMTP, but different servers.
+                        For example, Gmail uses <code>imap.gmail.com</code> for
+                        receiving and <code>smtp.gmail.com</code> for sending.
+                      </p>
+                      <Button
+                        variant="primary"
+                        onClick={() => setShowSmtpProfileModal(true)}
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-1" />
+                        Add Your First Profile
+                      </Button>
+                    </div>
                   ) : (
                     <SmtpCardGrid>
                       {smtpProfiles.map((profile) => (
@@ -1259,14 +1335,19 @@ export function Settings() {
           onHide={() => {
             setShowSmtpProfileModal(false);
             resetSmtpProfileForm();
+            setPendingSmtpData(null);
           }}
-          onSubmit={handleSmtpProfileFormSubmit}
+          onSubmit={(formData) => {
+            handleSmtpProfileFormSubmit(formData);
+            setPendingSmtpData(null);
+          }}
           onTest={handleSmtpProfileFormTest}
           editingProfile={
             editingSmtpProfileId
               ? smtpProfiles.find((p) => p.id === editingSmtpProfileId)
               : null
           }
+          initialData={pendingSmtpData}
           isSubmitting={creatingSmtpProfile}
           isTesting={testingSmtp}
           testResult={testResult}

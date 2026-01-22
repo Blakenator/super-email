@@ -42,6 +42,7 @@ export interface EmailAccountFormData {
   defaultSmtpProfileId: string;
   providerId: string;
   isDefault: boolean;
+  alsoCreateSmtpProfile: boolean;
 }
 
 const defaultFormData: EmailAccountFormData = {
@@ -56,6 +57,7 @@ const defaultFormData: EmailAccountFormData = {
   defaultSmtpProfileId: '',
   providerId: 'custom',
   isDefault: false,
+  alsoCreateSmtpProfile: false,
 };
 
 interface SmtpProfile {
@@ -116,6 +118,7 @@ export function EmailAccountForm({
           defaultSmtpProfileId: editingAccount.defaultSmtpProfileId || '',
           providerId: editingAccount.providerId || 'custom',
           isDefault: editingAccount.isDefault || false,
+          alsoCreateSmtpProfile: false,
         });
       } else {
         setFormData(defaultFormData);
@@ -341,6 +344,23 @@ export function EmailAccountForm({
               }
             />
           </Form.Group>
+
+          {!editingAccount && (
+            <Form.Group className="mb-3">
+              <Form.Check
+                type="checkbox"
+                id="alsoCreateSmtpProfile"
+                label="Also create an SMTP profile for sending emails from this account"
+                checked={formData.alsoCreateSmtpProfile}
+                onChange={(e) =>
+                  setFormData({ ...formData, alsoCreateSmtpProfile: e.target.checked })
+                }
+              />
+              <Form.Text className="text-muted">
+                To send emails, you'll need an SMTP profile with the same credentials.
+              </Form.Text>
+            </Form.Group>
+          )}
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={onHide}>

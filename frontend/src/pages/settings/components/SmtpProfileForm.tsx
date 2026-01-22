@@ -71,6 +71,13 @@ interface SmtpProfileFormProps {
     isDefault: boolean;
     providerId?: string | null;
   } | null;
+  /** Initial data for pre-filling the form (e.g., from email account creation) */
+  initialData?: {
+    name: string;
+    email: string;
+    providerId: string;
+    password?: string;
+  } | null;
   isSubmitting: boolean;
   isTesting: boolean;
   testResult: { success: boolean; message: string } | null;
@@ -82,6 +89,7 @@ export function SmtpProfileForm({
   onSubmit,
   onTest,
   editingProfile,
+  initialData,
   isSubmitting,
   isTesting,
   testResult,
@@ -104,11 +112,26 @@ export function SmtpProfileForm({
           isDefault: editingProfile.isDefault,
           providerId: editingProfile.providerId || 'custom',
         });
+      } else if (initialData) {
+        // Pre-fill from email account creation
+        const provider = getProviderById(initialData.providerId);
+        setFormData({
+          name: initialData.name,
+          email: initialData.email,
+          alias: initialData.name,
+          host: provider?.smtp.host || '',
+          port: provider?.smtp.port || 587,
+          username: initialData.email,
+          password: initialData.password || '',
+          useSsl: provider?.smtp.useSsl ?? false,
+          isDefault: false,
+          providerId: initialData.providerId,
+        });
       } else {
         setFormData(defaultFormData);
       }
     }
-  }, [show, editingProfile]);
+  }, [show, editingProfile, initialData]);
 
   const handleProviderSelect = (provider: EmailProviderPreset) => {
     setFormData((prev) => ({

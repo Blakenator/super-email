@@ -11,6 +11,9 @@ import {
   faBars,
   faCalendarAlt,
   faCalendar,
+  faShieldAlt,
+  faImage,
+  faEyeSlash,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -98,6 +101,26 @@ const groupByDateOptions: {
   },
 ];
 
+const imageBlockingOptions: {
+  id: 'block' | 'allow';
+  name: string;
+  description: string;
+  icon: typeof faImage;
+}[] = [
+  {
+    id: 'block',
+    name: 'Block Images',
+    description: 'Block external images by default for privacy and security',
+    icon: faEyeSlash,
+  },
+  {
+    id: 'allow',
+    name: 'Allow Images',
+    description: 'Load external images automatically in emails',
+    icon: faImage,
+  },
+];
+
 export function ThemeSettings() {
   const { themePreference, setThemePreference, theme, isDarkMode } = useTheme();
   const { user, updatePreferences } = useAuth();
@@ -122,6 +145,15 @@ export function ThemeSettings() {
       toast.success(`Group by date ${groupByDate ? 'enabled' : 'disabled'}`);
     } catch (error) {
       toast.error('Failed to update group by date preference');
+    }
+  };
+
+  const handleBlockExternalImagesChange = async (block: boolean) => {
+    try {
+      await updatePreferences({ blockExternalImages: block });
+      toast.success(`External images will be ${block ? 'blocked' : 'loaded'} by default`);
+    } catch (error) {
+      toast.error('Failed to update image blocking preference');
     }
   };
 
@@ -286,6 +318,61 @@ export function ThemeSettings() {
                           checked={isSelected}
                           onChange={() =>
                             handleInboxGroupByDateChange(option.id === 'enabled')
+                          }
+                          className="ms-auto"
+                        />
+                      </ThemeOption>
+                    );
+                  })}
+                </OptionsContainer>
+              </div>
+            </SectionContainer>
+          </Form>
+        </Card.Body>
+      </ThemeCard>
+
+      <ThemeCard>
+        <Card.Header>
+          <FontAwesomeIcon icon={faShieldAlt} className="me-2" />
+          Privacy & Security
+        </Card.Header>
+        <Card.Body>
+          <p className="text-muted" style={{ marginBottom: '1rem' }}>
+            Control how external content is loaded in emails. Blocking images can help
+            protect your privacy by preventing senders from tracking when you open emails.
+          </p>
+
+          <Form>
+            <SectionContainer>
+              <div>
+                <SectionLabel>External Images</SectionLabel>
+                <OptionsContainer>
+                  {imageBlockingOptions.map((option) => {
+                    const isSelected =
+                      option.id === 'block'
+                        ? user?.blockExternalImages ?? false
+                        : !(user?.blockExternalImages ?? false);
+                    return (
+                      <ThemeOption
+                        key={option.id}
+                        $selected={isSelected}
+                        onClick={() =>
+                          handleBlockExternalImagesChange(option.id === 'block')
+                        }
+                      >
+                        <ThemeIcon $selected={isSelected}>
+                          <FontAwesomeIcon icon={option.icon} />
+                        </ThemeIcon>
+                        <ThemeLabel>
+                          <ThemeName>{option.name}</ThemeName>
+                          <ThemeDescription>{option.description}</ThemeDescription>
+                        </ThemeLabel>
+                        <Form.Check
+                          type="radio"
+                          name="blockExternalImages"
+                          checked={isSelected}
+                          onChange={() =>
+                            handleBlockExternalImagesChange(option.id === 'block')
                           }
                           className="ms-auto"
                         />

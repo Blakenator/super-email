@@ -12,6 +12,7 @@ export const FETCH_PROFILE_QUERY = gql(`
       notificationDetailLevel
       inboxDensity
       inboxGroupByDate
+      blockExternalImages
     }
   }
 `);
@@ -25,6 +26,7 @@ export const UPDATE_USER_PREFERENCES_MUTATION = gql(`
       notificationDetailLevel
       inboxDensity
       inboxGroupByDate
+      blockExternalImages
     }
   }
 `);

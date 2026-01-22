@@ -2,6 +2,8 @@ import { makeQuery } from '../../types.js';
 import {
   getOrCreateSubscription,
   isStripeConfigured,
+  syncSubscriptionFromStripe,
+  getStripePrices,
 } from '../../helpers/stripe.js';
 import {
   getOrCreateUserUsage,
@@ -16,6 +18,8 @@ import { requireAuth } from '../../helpers/auth.js';
 /**
  * Get the current user's billing information including subscription and usage.
  * Creates a free tier subscription if one doesn't exist.
+ * Syncs subscription status from Stripe if the user has an active subscription.
+ * Also fetches current prices from Stripe for display in the UI.
  */
 export const getBillingInfo = makeQuery(
   'getBillingInfo',
@@ -23,7 +27,12 @@ export const getBillingInfo = makeQuery(
     const userId = requireAuth(context);
 
     // Get or create subscription
-    const subscription = await getOrCreateSubscription(userId);
+    let subscription = await getOrCreateSubscription(userId);
+    // Sync subscription status from Stripe (if they have a Stripe subscription)
+    subscription = await syncSubscriptionFromStripe(subscription);
+
+    // Fetch prices from Stripe
+    const prices = await getStripePrices();
 
     // Get usage from cache table (or calculate if not exists)
     const usage = await getOrCreateUserUsage(userId);
@@ -80,12 +89,14 @@ export const getBillingInfo = makeQuery(
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       },
+      hasStripeCustomer: !!subscription.stripeCustomerId,
       usage: storageUsage,
       storageUsagePercent,
       accountUsagePercent,
       isStorageLimitExceeded,
       isAccountLimitExceeded,
       isStripeConfigured: isStripeConfigured(),
+      prices,
     };
   },
 );

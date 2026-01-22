@@ -71,6 +71,7 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare lastSyncedAt: Date | null;
 
+  // ===== LEGACY FIELDS (kept for backwards compatibility, will be removed) =====
   // Unique sync ID to prevent overlapping syncs
   // If syncId is null, no sync is in progress
   // If syncId is set, only that sync instance should write progress
@@ -87,6 +88,40 @@ export class EmailAccount extends Model {
   // and a new sync can be started. Updated periodically during active syncs.
   @Column({ type: DataType.DATE, allowNull: true })
   declare syncExpiresAt: Date | null;
+
+  // ===== HISTORICAL SYNC FIELDS (initial sync of old emails) =====
+  // Historical sync fetches emails from oldest to newest on first sync
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare historicalSyncId: string | null;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare historicalSyncProgress: number | null;
+
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare historicalSyncStatus: string | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare historicalSyncExpiresAt: Date | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare historicalSyncLastAt: Date | null;
+
+  // ===== UPDATE SYNC FIELDS (sync of new emails) =====
+  // Update sync fetches only new emails since last sync
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare updateSyncId: string | null;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare updateSyncProgress: number | null;
+
+  @Column({ type: DataType.TEXT, allowNull: true })
+  declare updateSyncStatus: string | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare updateSyncExpiresAt: Date | null;
+
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare updateSyncLastAt: Date | null;
 
   @ForeignKey(() => SmtpProfile)
   @Column({ type: DataType.UUID, allowNull: true })
