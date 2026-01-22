@@ -56,33 +56,47 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
-  // Fetch the attachment with auth header and create an object URL
+  // Fetch the attachment and create an object URL
   useEffect(() => {
     if (!data?.getAttachmentDownloadUrl) return;
 
     const fetchAttachment = async () => {
       try {
-        // Get token from Supabase session
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
+        const url = data.getAttachmentDownloadUrl;
+
+        // Check if this is an S3 presigned URL (contains X-Amz-Algorithm query param)
+        // S3 presigned URLs already contain authentication via query parameters,
+        // so we must NOT send an Authorization header (S3 rejects requests with multiple auth mechanisms)
+        // Local backend URLs require Supabase auth header
+        const isS3PresignedUrl = url.includes('X-Amz-Algorithm');
 
         console.log('[AttachmentPreview] Fetching attachment:', {
-          url: data.getAttachmentDownloadUrl,
-          hasToken: !!token,
-          tokenLength: token?.length,
+          url,
+          isS3PresignedUrl,
         });
 
-        if (!token) {
-          throw new Error('No authentication token available');
+        let response: Response;
+
+        if (isS3PresignedUrl) {
+          // S3 presigned URL - no auth header needed
+          response = await fetch(url);
+        } else {
+          // Local backend URL - requires Supabase auth
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+          const token = session?.access_token;
+
+          if (!token) {
+            throw new Error('No authentication token available');
+          }
+
+          response = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
         }
-
-        const response = await fetch(data.getAttachmentDownloadUrl, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
 
         console.log('[AttachmentPreview] Response:', {
           status: response.status,
