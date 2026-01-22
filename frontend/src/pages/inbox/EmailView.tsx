@@ -160,13 +160,23 @@ export function EmailView({
         throw new Error('Failed to get download URL');
       }
 
-      // Fetch the actual file with auth header
-      console.log('[EmailView] Fetching file from:', downloadUrl);
-      const fileResponse = await fetch(downloadUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      // Fetch the actual file
+      // Check if this is an S3 presigned URL (contains X-Amz-Algorithm query param)
+      // S3 presigned URLs already contain authentication via query parameters,
+      // so we must NOT send an Authorization header (S3 rejects requests with multiple auth mechanisms)
+      // Local backend URLs require Supabase auth header
+      const isS3PresignedUrl = downloadUrl.includes('X-Amz-Algorithm');
+      console.log('[EmailView] Fetching file from:', downloadUrl, {
+        isS3PresignedUrl,
       });
+
+      const fileResponse = isS3PresignedUrl
+        ? await fetch(downloadUrl)
+        : await fetch(downloadUrl, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
       console.log('[EmailView] File response:', {
         status: fileResponse.status,
