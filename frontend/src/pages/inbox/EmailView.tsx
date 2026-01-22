@@ -44,7 +44,8 @@ import toast from 'react-hot-toast';
 import { useEmailStore } from '../../stores/emailStore';
 import { AttachmentList, AttachmentPreview } from '../../components';
 import type { Attachment } from '../../__generated__/graphql';
-import { supabase } from '../../contexts/AuthContext';
+import { supabase, useAuth } from '../../contexts/AuthContext';
+import { getEmailPreviewText } from '../../utils/emailPreview';
 import {
   Wrapper,
   Toolbar,
@@ -95,6 +96,7 @@ export function EmailView({
   onUnarchive,
 }: EmailViewProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
   const [showAddContactModal, setShowAddContactModal] = useState(false);
   const [showHeadersModal, setShowHeadersModal] = useState(false);
@@ -707,8 +709,11 @@ export function EmailView({
                       </SenderRow>
                       {!isExpanded && (
                         <CollapsedPreview>
-                          {threadEmail.textBody?.substring(0, 100) ||
-                            '(No content)'}
+                          {getEmailPreviewText(
+                            threadEmail.textBody,
+                            threadEmail.htmlBody,
+                            100,
+                          )}
                         </CollapsedPreview>
                       )}
                     </ThreadEmailMeta>
@@ -752,7 +757,10 @@ export function EmailView({
                       </Recipients>
                       {threadEmail.htmlBody ? (
                         <HtmlBodyContainer>
-                          <HtmlViewer html={threadEmail.htmlBody} />
+                          <HtmlViewer
+                            html={threadEmail.htmlBody}
+                            blockExternalImages={user?.blockExternalImages}
+                          />
                         </HtmlBodyContainer>
                       ) : (
                         <Body>{threadEmail.textBody || '(No content)'}</Body>
@@ -814,7 +822,10 @@ export function EmailView({
 
             {email.htmlBody ? (
               <HtmlBodyContainer>
-                <HtmlViewer html={email.htmlBody} />
+                <HtmlViewer
+                  html={email.htmlBody}
+                  blockExternalImages={user?.blockExternalImages}
+                />
               </HtmlBodyContainer>
             ) : (
               <Body>{email.textBody || '(No content)'}</Body>

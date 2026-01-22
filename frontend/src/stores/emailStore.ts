@@ -1,10 +1,69 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 
 /**
  * Email cache store using Zustand
  * Provides centralized email caching with tab synchronization and offline support
  */
+
+// Maximum number of emails to persist in localStorage
+const MAX_CACHED_EMAILS = 200;
+
+/**
+ * Custom storage that handles quota exceeded errors gracefully
+ */
+const safeLocalStorage: StateStorage = {
+  getItem: (name: string): string | null => {
+    try {
+      return localStorage.getItem(name);
+    } catch (e) {
+      console.warn('[EmailStore] Failed to read from localStorage:', e);
+      return null;
+    }
+  },
+  setItem: (name: string, value: string): void => {
+    try {
+      localStorage.setItem(name, value);
+    } catch (e) {
+      // Handle quota exceeded error
+      if (e instanceof DOMException && (e.name === 'QuotaExceededError' || e.code === 22)) {
+        console.warn('[EmailStore] localStorage quota exceeded, clearing email cache');
+        // Try to clear the old data and retry
+        try {
+          localStorage.removeItem(name);
+          // Parse the value and keep only essential data
+          const parsed = JSON.parse(value);
+          if (parsed.state?.emails) {
+            // Keep only the most recent emails
+            const emailEntries = Object.entries(parsed.state.emails) as [string, CachedEmail][];
+            const sortedEmails = emailEntries
+              .sort((a, b) => new Date(b[1].receivedAt).getTime() - new Date(a[1].receivedAt).getTime())
+              .slice(0, MAX_CACHED_EMAILS / 2); // Keep even fewer on error
+            parsed.state.emails = Object.fromEntries(sortedEmails);
+          }
+          localStorage.setItem(name, JSON.stringify(parsed));
+        } catch (retryError) {
+          console.error('[EmailStore] Failed to recover from quota error:', retryError);
+          // Last resort: clear the cache entirely
+          try {
+            localStorage.removeItem(name);
+          } catch {
+            // Ignore
+          }
+        }
+      } else {
+        console.error('[EmailStore] Failed to write to localStorage:', e);
+      }
+    }
+  },
+  removeItem: (name: string): void => {
+    try {
+      localStorage.removeItem(name);
+    } catch (e) {
+      console.warn('[EmailStore] Failed to remove from localStorage:', e);
+    }
+  },
+};
 
 export interface CachedEmail {
   id: string;
@@ -46,6 +105,7 @@ export interface CachedUser {
   notificationDetailLevel?: string;
   inboxDensity?: boolean;
   inboxGroupByDate?: boolean;
+  blockExternalImages?: boolean;
 }
 
 export interface SavedUser {
@@ -133,6 +193,8 @@ interface EmailStoreState {
 
   // Computed helpers
   hasCachedData: () => boolean;
+  getEmailCount: () => number;
+  pruneOldEmails: (maxToKeep?: number) => void;
 }
 
 // Generate a unique ID for this tab
@@ -164,10 +226,28 @@ export const useEmailStore = create<EmailStoreState>()(
         for (const email of emails) {
           emailMap[email.id] = email;
         }
-        set((state) => ({
-          emails: { ...state.emails, ...emailMap },
-          lastUpdate: new Date().toISOString(),
-        }));
+        set((state) => {
+          const newEmails = { ...state.emails, ...emailMap };
+          
+          // If we have too many emails, prune the oldest ones
+          const emailEntries = Object.entries(newEmails) as [string, CachedEmail][];
+          if (emailEntries.length > MAX_CACHED_EMAILS * 1.5) {
+            // Only prune if significantly over limit to avoid excessive operations
+            const sortedEmails = emailEntries
+              .sort((a, b) => new Date(b[1].receivedAt).getTime() - new Date(a[1].receivedAt).getTime())
+              .slice(0, MAX_CACHED_EMAILS);
+            console.log(`[EmailStore] Auto-pruned emails from ${emailEntries.length} to ${sortedEmails.length}`);
+            return {
+              emails: Object.fromEntries(sortedEmails),
+              lastUpdate: new Date().toISOString(),
+            };
+          }
+          
+          return {
+            emails: newEmails,
+            lastUpdate: new Date().toISOString(),
+          };
+        });
       },
 
       updateEmail: (email) => {
@@ -350,19 +430,62 @@ export const useEmailStore = create<EmailStoreState>()(
         const state = get();
         return Object.keys(state.emails).length > 0;
       },
+
+      // Get the current email count (useful for debugging)
+      getEmailCount: () => {
+        const state = get();
+        return Object.keys(state.emails).length;
+      },
+
+      // Prune old emails to stay within limits
+      pruneOldEmails: (maxToKeep: number = MAX_CACHED_EMAILS) => {
+        const state = get();
+        const emailEntries = Object.entries(state.emails) as [string, CachedEmail][];
+        
+        if (emailEntries.length <= maxToKeep) return;
+
+        const sortedEmails = emailEntries
+          .sort((a, b) => new Date(b[1].receivedAt).getTime() - new Date(a[1].receivedAt).getTime())
+          .slice(0, maxToKeep);
+
+        set({
+          emails: Object.fromEntries(sortedEmails),
+          lastUpdate: new Date().toISOString(),
+        });
+        
+        console.log(`[EmailStore] Pruned emails from ${emailEntries.length} to ${sortedEmails.length}`);
+      },
     }),
     {
       name: 'email-cache-storage',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage),
       // Persist emails, accounts, user cache, saved users, and offline timestamp
-      partialize: (state) => ({
-        emails: state.emails,
-        emailAccounts: state.emailAccounts,
-        cachedUser: state.cachedUser,
-        savedUsers: state.savedUsers,
-        lastUpdate: state.lastUpdate,
-        lastOnlineAt: state.lastOnlineAt,
-      }),
+      // Limit emails to avoid quota issues
+      partialize: (state) => {
+        // Only persist the most recent emails, and strip out large body content
+        const emailEntries = Object.entries(state.emails) as [string, CachedEmail][];
+        const limitedEmails = emailEntries
+          .sort((a, b) => new Date(b[1].receivedAt).getTime() - new Date(a[1].receivedAt).getTime())
+          .slice(0, MAX_CACHED_EMAILS)
+          .map(([id, email]) => [
+            id,
+            {
+              ...email,
+              // Don't persist full body content - it will be fetched when needed
+              textBody: email.textBody ? email.textBody.slice(0, 500) : null,
+              htmlBody: null, // Never persist HTML - too large
+            },
+          ]);
+
+        return {
+          emails: Object.fromEntries(limitedEmails),
+          emailAccounts: state.emailAccounts,
+          cachedUser: state.cachedUser,
+          savedUsers: state.savedUsers,
+          lastUpdate: state.lastUpdate,
+          lastOnlineAt: state.lastOnlineAt,
+        };
+      },
     },
   ),
 );

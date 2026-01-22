@@ -36,6 +36,7 @@ interface User {
   notificationDetailLevel: NotificationDetailLevel;
   inboxDensity: boolean;
   inboxGroupByDate: boolean;
+  blockExternalImages: boolean;
 }
 
 interface UpdatePreferencesInput {
@@ -44,6 +45,7 @@ interface UpdatePreferencesInput {
   notificationDetailLevel?: NotificationDetailLevel;
   inboxDensity?: boolean;
   inboxGroupByDate?: boolean;
+  blockExternalImages?: boolean;
 }
 
 interface AuthContextType {
@@ -135,6 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 .notificationDetailLevel as NotificationDetailLevel) || 'FULL',
             inboxDensity: data.fetchProfile.inboxDensity ?? false,
             inboxGroupByDate: data.fetchProfile.inboxGroupByDate ?? false,
+            blockExternalImages: data.fetchProfile.blockExternalImages ?? false,
           };
           setUser(userData);
 
@@ -149,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             notificationDetailLevel: userData.notificationDetailLevel,
             inboxDensity: userData.inboxDensity,
             inboxGroupByDate: userData.inboxGroupByDate,
+            blockExternalImages: userData.blockExternalImages,
           };
           setCachedUser(cachedUserData);
 
@@ -180,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               (cachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
             inboxDensity: cachedUser.inboxDensity ?? false,
             inboxGroupByDate: cachedUser.inboxGroupByDate ?? false,
+            blockExternalImages: cachedUser.blockExternalImages ?? false,
           });
           return cachedUser;
         }
@@ -229,6 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
                 inboxDensity: currentCachedUser.inboxDensity ?? false,
                 inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
+                blockExternalImages: currentCachedUser.blockExternalImages ?? false,
               });
             } else {
               // Set minimal user data so app doesn't get stuck
@@ -242,6 +248,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 notificationDetailLevel: 'FULL',
                 inboxDensity: false,
                 inboxGroupByDate: false,
+                blockExternalImages: false,
               });
             }
           }
@@ -263,6 +270,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
               inboxDensity: currentCachedUser.inboxDensity ?? false,
               inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
+              blockExternalImages: currentCachedUser.blockExternalImages ?? false,
             });
             // Set a placeholder token for offline mode
             setToken('offline-mode');
@@ -286,6 +294,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
             inboxDensity: currentCachedUser.inboxDensity ?? false,
             inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
+            blockExternalImages: currentCachedUser.blockExternalImages ?? false,
           });
           setToken('offline-mode');
         }
@@ -498,6 +507,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }),
               ...(input.notificationDetailLevel !== undefined && {
                 notificationDetailLevel: input.notificationDetailLevel,
+              }),
+              ...(input.inboxDensity !== undefined && {
+                inboxDensity: input.inboxDensity,
+              }),
+              ...(input.inboxGroupByDate !== undefined && {
+                inboxGroupByDate: input.inboxGroupByDate,
+              }),
+              ...(input.blockExternalImages !== undefined && {
+                blockExternalImages: input.blockExternalImages,
               }),
             }
           : null,

@@ -32,7 +32,6 @@ export function getStripeClient(): Stripe {
  * Check if Stripe is configured
  */
 export function isStripeConfigured(): boolean {
-  console.log(config.stripe);
   return !!config.stripe.secretKey;
 }
 
@@ -333,16 +332,31 @@ async function handleSubscriptionUpdated(
     }
   }
 
-  await subscription.update({
+  // Safely extract period end and cancel status
+  const stripeSub = stripeSubscription as any;
+  const periodEnd = stripeSub.current_period_end;
+  const cancelAtEnd = stripeSub.cancel_at_period_end ?? false;
+
+  const updateData: {
+    stripeSubscriptionId: string;
+    status: typeof status;
+    storageTier: typeof storageTier;
+    accountTier: typeof accountTier;
+    currentPeriodEnd?: Date;
+    cancelAtPeriodEnd: boolean;
+  } = {
     stripeSubscriptionId: stripeSubscription.id,
     status,
     storageTier,
     accountTier,
-    currentPeriodEnd: new Date(
-      (stripeSubscription as any).current_period_end * 1000,
-    ),
-    cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
-  });
+    cancelAtPeriodEnd: cancelAtEnd,
+  };
+
+  if (periodEnd && typeof periodEnd === 'number') {
+    updateData.currentPeriodEnd = new Date(periodEnd * 1000);
+  }
+
+  await subscription.update(updateData);
 
   logger.info(
     'Stripe Webhook',
@@ -460,4 +474,195 @@ export async function getOrCreateSubscription(
   }
 
   return subscription;
+}
+
+/**
+ * Sync subscription status from Stripe and update local database
+ * Called when loading billing page to ensure local data is in sync
+ */
+export async function syncSubscriptionFromStripe(
+  subscription: Subscription,
+): Promise<Subscription> {
+  // If no Stripe subscription ID, nothing to sync
+  if (!subscription.stripeSubscriptionId) {
+    return subscription;
+  }
+
+  // If Stripe is not configured, can't sync
+  if (!isStripeConfigured()) {
+    return subscription;
+  }
+
+  try {
+    const stripeClient = getStripeClient();
+    const stripeSubscription = await stripeClient.subscriptions.retrieve(
+      subscription.stripeSubscriptionId,
+    );
+
+    // Map Stripe status to our status enum
+    const status = mapStripeStatus(stripeSubscription.status);
+
+    // Extract tiers from subscription items
+    let storageTier = StorageTier.FREE;
+    let accountTier = AccountTier.FREE;
+
+    for (const item of stripeSubscription.items.data) {
+      const priceId = item.price.id;
+
+      const storage = getStorageTierFromPriceId(priceId);
+      if (storage) {
+        storageTier = storage;
+      }
+
+      const account = getAccountTierFromPriceId(priceId);
+      if (account) {
+        accountTier = account;
+      }
+    }
+
+    // Safely extract period end and cancel status
+    // Stripe SDK v20 uses snake_case for API properties
+    const stripeSub = stripeSubscription as any;
+    
+    // Try to get current_period_end, fall back to calculating from billing_cycle_anchor
+    let periodEnd = stripeSub.current_period_end;
+    if (!periodEnd && stripeSub.billing_cycle_anchor) {
+      // If no current_period_end, calculate next period from billing_cycle_anchor
+      // Assume monthly billing - add 30 days
+      const anchorDate = new Date(stripeSub.billing_cycle_anchor * 1000);
+      const nextPeriod = new Date(anchorDate);
+      nextPeriod.setMonth(nextPeriod.getMonth() + 1);
+      periodEnd = Math.floor(nextPeriod.getTime() / 1000);
+    }
+    
+    const cancelAtEnd = stripeSub.cancel_at_period_end ?? false;
+
+    logger.debug('Stripe', `Syncing subscription: periodEnd=${periodEnd}, cancelAtEnd=${cancelAtEnd}, raw=${JSON.stringify({ current_period_end: stripeSub.current_period_end, billing_cycle_anchor: stripeSub.billing_cycle_anchor })}`);
+
+    // Build update object, only including period end if it exists
+    const updateData: {
+      status: typeof status;
+      storageTier: typeof storageTier;
+      accountTier: typeof accountTier;
+      currentPeriodEnd?: Date;
+      cancelAtPeriodEnd: boolean;
+    } = {
+      status,
+      storageTier,
+      accountTier,
+      cancelAtPeriodEnd: cancelAtEnd,
+    };
+
+    // Only set currentPeriodEnd if we have a valid timestamp
+    if (periodEnd && typeof periodEnd === 'number') {
+      updateData.currentPeriodEnd = new Date(periodEnd * 1000);
+    }
+
+    // Update local subscription
+    await subscription.update(updateData);
+
+    await subscription.reload();
+    logger.debug(
+      'Stripe',
+      `Synced subscription for user ${subscription.userId}: status=${status}`,
+    );
+    return subscription;
+  } catch (error: any) {
+    logger.error('Stripe', `Error syncing subscription: ${error.message}`);
+    // Return existing subscription on error
+    return subscription;
+  }
+}
+
+/**
+ * Price info from Stripe
+ */
+export interface StripePriceInfo {
+  id: string;
+  tier: string;
+  type: 'storage' | 'account';
+  name: string;
+  unitAmount: number; // in cents
+  currency: string;
+  interval: string;
+}
+
+/**
+ * Fetch all product prices from Stripe for display in billing UI
+ */
+export async function getStripePrices(): Promise<StripePriceInfo[]> {
+  if (!isStripeConfigured()) {
+    return [];
+  }
+
+  try {
+    const stripeClient = getStripeClient();
+    const prices: StripePriceInfo[] = [];
+
+    // Get all configured price IDs
+    const storagePriceIds = [
+      { tier: 'BASIC', id: config.stripe.storagePriceIds.basic },
+      { tier: 'PRO', id: config.stripe.storagePriceIds.pro },
+      { tier: 'ENTERPRISE', id: config.stripe.storagePriceIds.enterprise },
+    ].filter((p) => p.id);
+
+    const accountPriceIds = [
+      { tier: 'BASIC', id: config.stripe.accountPriceIds.basic },
+      { tier: 'PRO', id: config.stripe.accountPriceIds.pro },
+      { tier: 'ENTERPRISE', id: config.stripe.accountPriceIds.enterprise },
+    ].filter((p) => p.id);
+
+    // Fetch storage prices
+    for (const { tier, id } of storagePriceIds) {
+      if (!id) {
+        continue;
+      }
+      try {
+        const price = await stripeClient.prices.retrieve(id, {
+          expand: ['product'],
+        });
+        const product = price.product as Stripe.Product;
+        prices.push({
+          id: price.id,
+          tier,
+          type: 'storage',
+          name: product.name || `Storage ${tier}`,
+          unitAmount: price.unit_amount || 0,
+          currency: price.currency,
+          interval: price.recurring?.interval || 'month',
+        });
+      } catch (e: any) {
+        logger.warn('Stripe', `Failed to fetch price ${id}: ${e.message}`);
+      }
+    }
+
+    // Fetch account prices
+    for (const { tier, id } of accountPriceIds) {
+      if (!id) {
+        continue;
+      }
+      try {
+        const price = await stripeClient.prices.retrieve(id, {
+          expand: ['product'],
+        });
+        const product = price.product as Stripe.Product;
+        prices.push({
+          id: price.id,
+          tier,
+          type: 'account',
+          name: product.name || `Accounts ${tier}`,
+          unitAmount: price.unit_amount || 0,
+          currency: price.currency,
+          interval: price.recurring?.interval || 'month',
+        });
+      } catch (e: any) {
+        logger.warn('Stripe', `Failed to fetch price ${id}: ${e.message}`);
+      }
+    }
+
+    return prices;
+  } catch (error: any) {
+    logger.error('Stripe', `Error fetching prices: ${error.message}`);
+    return [];
+  }
 }

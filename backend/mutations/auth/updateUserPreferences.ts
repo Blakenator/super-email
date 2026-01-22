@@ -18,6 +18,7 @@ export const updateUserPreferences = makeMutation(
       notificationDetailLevel: NotificationDetailLevel;
       inboxDensity: boolean;
       inboxGroupByDate: boolean;
+      blockExternalImages: boolean;
     }> = {};
 
     // Validate and set theme preference
@@ -49,6 +50,11 @@ export const updateUserPreferences = makeMutation(
     // Set inbox group by date preference
     if (input.inboxGroupByDate !== undefined && input.inboxGroupByDate !== null) {
       updates.inboxGroupByDate = input.inboxGroupByDate;
+    }
+
+    // Set block external images preference
+    if (input.blockExternalImages !== undefined && input.blockExternalImages !== null) {
+      updates.blockExternalImages = input.blockExternalImages;
     }
 
     // Only update if there are changes

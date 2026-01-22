@@ -19,6 +19,7 @@ import {
   faTag,
   faFilter,
   faShieldAlt,
+  faCreditCard,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import { EmailFolder } from '../../__generated__/graphql';
@@ -200,6 +201,10 @@ export function MobileNavbar({ user, unreadCount, onLogout }: MobileNavbarProps)
             <MobileNavItem onClick={() => handleNavigate('/settings/auth')}>
               <FontAwesomeIcon icon={faShieldAlt} />
               Login Methods
+            </MobileNavItem>
+            <MobileNavItem onClick={() => handleNavigate('/settings/billing')}>
+              <FontAwesomeIcon icon={faCreditCard} />
+              Billing
             </MobileNavItem>
 
             <MobileNavDivider />

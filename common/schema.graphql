@@ -110,6 +110,10 @@ type User implements BaseEntityProps {
   """
   inboxGroupByDate: Boolean!
   """
+  Whether to block external images in emails by default (privacy/security)
+  """
+  blockExternalImages: Boolean!
+  """
   List of email accounts configured for this user (IMAP/POP3)
   """
   emailAccounts: [EmailAccount!]!
@@ -147,6 +151,10 @@ input UpdateUserPreferencesInput {
   Whether to group emails by date
   """
   inboxGroupByDate: Boolean
+  """
+  Whether to block external images in emails by default
+  """
+  blockExternalImages: Boolean
 }
 
 """
@@ -280,25 +288,57 @@ type EmailAccount implements BaseEntityProps {
   """
   useSsl: Boolean!
   """
-  Timestamp of the last successful sync
+  Timestamp of the last successful sync (legacy, for backwards compatibility)
   """
   lastSyncedAt: Date
   """
-  Whether a sync operation is currently in progress
+  Whether a sync operation is currently in progress (legacy)
   """
   isSyncing: Boolean!
   """
-  Progress percentage (0-100) during sync
+  Progress percentage (0-100) during sync (legacy)
   """
   syncProgress: Int
   """
-  Human-readable status message during sync
+  Human-readable status message during sync (legacy)
   """
   syncStatus: String
   """
-  When the current sync operation will timeout
+  When the current sync operation will timeout (legacy)
   """
   syncExpiresAt: Date
+  """
+  Whether a historical sync (initial import) is in progress
+  """
+  isHistoricalSyncing: Boolean!
+  """
+  Progress percentage (0-100) during historical sync
+  """
+  historicalSyncProgress: Int
+  """
+  Human-readable status message during historical sync
+  """
+  historicalSyncStatus: String
+  """
+  Timestamp of the last historical sync
+  """
+  historicalSyncLastAt: Date
+  """
+  Whether an update sync (new emails) is in progress
+  """
+  isUpdateSyncing: Boolean!
+  """
+  Progress percentage (0-100) during update sync
+  """
+  updateSyncProgress: Int
+  """
+  Human-readable status message during update sync
+  """
+  updateSyncStatus: String
+  """
+  Timestamp of the last update sync
+  """
+  updateSyncLastAt: Date
   """
   ID of the default SMTP profile for sending from this account
   """
@@ -2616,6 +2656,10 @@ type BillingInfo {
   """
   subscription: BillingSubscription!
   """
+  Whether the user has a Stripe customer ID (required for paid plans)
+  """
+  hasStripeCustomer: Boolean!
+  """
   Current storage usage
   """
   usage: StorageUsage!
@@ -2639,6 +2683,44 @@ type BillingInfo {
   Whether Stripe billing is configured on the server
   """
   isStripeConfigured: Boolean!
+  """
+  Available prices from Stripe for subscription tiers
+  """
+  prices: [StripePrice!]!
+}
+
+"""
+Price information fetched from Stripe for a subscription tier.
+"""
+type StripePrice {
+  """
+  Stripe price ID
+  """
+  id: String!
+  """
+  Tier this price is for (BASIC, PRO, ENTERPRISE)
+  """
+  tier: String!
+  """
+  Type of tier (storage or account)
+  """
+  type: String!
+  """
+  Product name from Stripe
+  """
+  name: String!
+  """
+  Price in cents
+  """
+  unitAmount: Int!
+  """
+  Currency code (e.g., "usd")
+  """
+  currency: String!
+  """
+  Billing interval (e.g., "month", "year")
+  """
+  interval: String!
 }
 
 # ============ Subscriptions ============

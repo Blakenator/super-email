@@ -5,7 +5,7 @@ import {
   type Headers,
   type Attachment as MailAttachment,
 } from 'mailparser';
-import { EmailAccount } from '../db/models/email-account.model.js';
+import type { EmailAccount } from '../db/models/email-account.model.js';
 import { Email, EmailFolder } from '../db/models/email.model.js';
 import { Attachment, AttachmentType } from '../db/models/attachment.model.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,8 +25,11 @@ export interface SyncResult {
 }
 
 // Sync expiration settings
-const SYNC_EXPIRATION_MINUTES = 60; // Sync expires after 10 minutes of inactivity
+const SYNC_EXPIRATION_MINUTES = 60; // Sync expires after 60 minutes of inactivity
 const SYNC_EXPIRATION_UPDATE_INTERVAL = 30; // Update expiration every 30 seconds during sync
+
+// Sync type enum
+export type SyncType = 'historical' | 'update';
 
 // Larger batch sizes for faster imports
 const BATCH_SIZE = 200; // Messages to fetch from IMAP per batch
@@ -40,7 +43,9 @@ const RETRY_DELAY_MS = 2000;
  * Check if an error is a timeout or connection error that should be retried
  */
 function isRetryableError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
+  if (!(error instanceof Error)) {
+    return false;
+  }
   const message = error.message.toLowerCase();
   return (
     message.includes('timeout') ||
@@ -103,14 +108,194 @@ function getSyncExpirationTime(): Date {
  * Check if a sync has expired (expiration time has passed)
  */
 function isSyncExpired(expiresAt: Date | null): boolean {
-  if (!expiresAt) return true;
+  if (!expiresAt) {
+    return true;
+  }
   return new Date() > expiresAt;
+}
+
+/**
+ * Get the sync field names based on sync type
+ */
+function getSyncFields(syncType: SyncType) {
+  if (syncType === 'historical') {
+    return {
+      syncIdField: 'historicalSyncId' as const,
+      progressField: 'historicalSyncProgress' as const,
+      statusField: 'historicalSyncStatus' as const,
+      expiresAtField: 'historicalSyncExpiresAt' as const,
+      lastAtField: 'historicalSyncLastAt' as const,
+    };
+  }
+  return {
+    syncIdField: 'updateSyncId' as const,
+    progressField: 'updateSyncProgress' as const,
+    statusField: 'updateSyncStatus' as const,
+    expiresAtField: 'updateSyncExpiresAt' as const,
+    lastAtField: 'updateSyncLastAt' as const,
+  };
+}
+
+/**
+ * Check if a sync of the given type can start
+ * Returns true if no sync of this type is running (or the running one has expired)
+ */
+async function canStartSync(
+  emailAccount: EmailAccount,
+  syncType: SyncType,
+): Promise<boolean> {
+  const fields = getSyncFields(syncType);
+  const syncId = emailAccount[fields.syncIdField];
+  const expiresAt = emailAccount[fields.expiresAtField];
+
+  if (!syncId) {
+    return true;
+  }
+  if (isSyncExpired(expiresAt)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Clear expired sync state for a given sync type
+ */
+async function clearExpiredSync(
+  emailAccount: EmailAccount,
+  syncType: SyncType,
+): Promise<void> {
+  const fields = getSyncFields(syncType);
+  await emailAccount.update({
+    [fields.syncIdField]: null,
+    [fields.progressField]: null,
+    [fields.statusField]: null,
+    [fields.expiresAtField]: null,
+  });
+}
+
+/**
+ * Start a sync of the given type
+ */
+async function markSyncStarted(
+  emailAccount: EmailAccount,
+  syncType: SyncType,
+  syncId: string,
+): Promise<void> {
+  const fields = getSyncFields(syncType);
+  await emailAccount.update({
+    [fields.syncIdField]: syncId,
+    [fields.progressField]: 0,
+    [fields.statusField]:
+      syncType === 'historical'
+        ? 'Starting historical sync...'
+        : 'Starting sync...',
+    [fields.expiresAtField]: getSyncExpirationTime(),
+  });
+}
+
+/**
+ * Update sync progress for the given type
+ */
+async function updateSyncProgress(
+  emailAccount: EmailAccount,
+  syncType: SyncType,
+  syncId: string,
+  progress: number,
+  status: string,
+): Promise<boolean> {
+  await emailAccount.reload();
+  const fields = getSyncFields(syncType);
+
+  // Check if we're still the active sync
+  if (emailAccount[fields.syncIdField] !== syncId) {
+    return false;
+  }
+
+  await emailAccount.update({
+    [fields.progressField]: progress,
+    [fields.statusField]: status,
+    [fields.expiresAtField]: getSyncExpirationTime(),
+  });
+  return true;
+}
+
+/**
+ * Mark sync as completed
+ */
+async function markSyncCompleted(
+  emailAccount: EmailAccount,
+  syncType: SyncType,
+  syncId: string,
+  result: SyncResult,
+): Promise<boolean> {
+  await emailAccount.reload();
+  const fields = getSyncFields(syncType);
+
+  // Check if we're still the active sync
+  if (emailAccount[fields.syncIdField] !== syncId) {
+    return false;
+  }
+
+  await emailAccount.update({
+    [fields.syncIdField]: null,
+    [fields.progressField]: 100,
+    [fields.statusField]: result.cancelled
+      ? 'Sync cancelled'
+      : `Synced ${result.synced} emails`,
+    [fields.lastAtField]: new Date(),
+    [fields.expiresAtField]: null,
+    // Also update legacy field for backwards compatibility
+    lastSyncedAt: new Date(),
+  });
+  return true;
+}
+
+/**
+ * Mark sync as failed
+ */
+async function markSyncFailed(
+  emailAccount: EmailAccount,
+  syncType: SyncType,
+  syncId: string,
+  errorMsg: string,
+): Promise<void> {
+  await emailAccount.reload();
+  const fields = getSyncFields(syncType);
+
+  // Check if we're still the active sync
+  if (emailAccount[fields.syncIdField] !== syncId) {
+    return;
+  }
+
+  await emailAccount.update({
+    [fields.syncIdField]: null,
+    [fields.progressField]: null,
+    [fields.statusField]: `Sync failed: ${errorMsg}`,
+    [fields.expiresAtField]: null,
+  });
+}
+
+/**
+ * Check if sync should continue (sync ID still matches for this type)
+ */
+async function shouldContinueSyncOfType(
+  emailAccount: EmailAccount,
+  syncType: SyncType,
+  syncId: string,
+): Promise<boolean> {
+  await emailAccount.reload();
+  const fields = getSyncFields(syncType);
+  return emailAccount[fields.syncIdField] === syncId;
 }
 
 /**
  * Start an async sync for an email account
  * Uses syncId to prevent overlapping syncs and allow cancellation
  * Uses syncExpiresAt to detect and recover from stale/stuck syncs
+ *
+ * Historical syncs (first-time full import) and update syncs (new emails only)
+ * run independently - a historical sync does not block an update sync and vice versa.
  */
 export async function startAsyncSync(
   emailAccount: EmailAccount,
@@ -133,23 +318,28 @@ export async function startAsyncSync(
     return false;
   }
 
-  // Check if already syncing
-  if (emailAccount.syncId) {
+  // Determine sync type based on whether we've done an initial sync
+  // If we've never done a historical sync, we need to do one
+  // Otherwise, we do an update sync
+  const needsHistoricalSync = !emailAccount.historicalSyncLastAt;
+  const syncType: SyncType = needsHistoricalSync ? 'historical' : 'update';
+  const fields = getSyncFields(syncType);
+
+  // Check if a sync of this type is already in progress
+  const existingSyncId = emailAccount[fields.syncIdField];
+  const existingExpiresAt = emailAccount[fields.expiresAtField];
+
+  if (existingSyncId) {
     // Check if the sync has expired (stuck/stale)
-    if (isSyncExpired(emailAccount.syncExpiresAt)) {
+    if (isSyncExpired(existingExpiresAt)) {
       console.log(
-        `[IMAP] Sync for ${emailAccount.email} has expired (syncId: ${emailAccount.syncId}), starting new sync`,
+        `[IMAP] ${syncType} sync for ${emailAccount.email} has expired (syncId: ${existingSyncId}), starting new sync`,
       );
       // Clear the stale sync
-      await emailAccount.update({
-        syncId: null,
-        syncProgress: null,
-        syncStatus: null,
-        syncExpiresAt: null,
-      });
+      await clearExpiredSync(emailAccount, syncType);
     } else {
       console.log(
-        `[IMAP] Sync already in progress for ${emailAccount.email} (syncId: ${emailAccount.syncId}), skipping`,
+        `[IMAP] ${syncType} sync already in progress for ${emailAccount.email} (syncId: ${existingSyncId}), skipping`,
       );
       return false;
     }
@@ -159,10 +349,16 @@ export async function startAsyncSync(
   const syncId = uuidv4();
 
   // Mark as syncing with our sync ID and initial expiration time
+  await markSyncStarted(emailAccount, syncType, syncId);
+
+  // Also update legacy fields for backwards compatibility during transition
   await emailAccount.update({
     syncId,
     syncProgress: 0,
-    syncStatus: 'Starting sync...',
+    syncStatus:
+      syncType === 'historical'
+        ? 'Starting historical sync...'
+        : 'Starting sync...',
     syncExpiresAt: getSyncExpirationTime(),
   });
 
@@ -170,32 +366,45 @@ export async function startAsyncSync(
   publishMailboxUpdate(emailAccount.userId, {
     type: 'SYNC_STARTED',
     emailAccountId: emailAccount.id,
-    message: 'Starting email sync...',
+    message:
+      syncType === 'historical'
+        ? 'Starting historical sync...'
+        : 'Starting email sync...',
   });
 
   // Run sync in background
-  syncEmailsFromImapAccount(emailAccount, syncId)
+  syncEmailsFromImapAccount(emailAccount, syncId, syncType)
     .then(async (result) => {
-      // Check if we're still the active sync
-      await emailAccount.reload();
-      if (emailAccount.syncId !== syncId) {
+      // Update the type-specific sync status
+      const updated = await markSyncCompleted(
+        emailAccount,
+        syncType,
+        syncId,
+        result,
+      );
+      if (!updated) {
         console.log(
-          `[IMAP] Sync ${syncId} was superseded, not updating status`,
+          `[IMAP] ${syncType} sync ${syncId} was superseded, not updating status`,
         );
         return;
       }
 
-      await emailAccount.update({
-        syncId: null,
-        syncProgress: 100,
-        syncStatus: result.cancelled
-          ? 'Sync cancelled'
-          : `Synced ${result.synced} emails`,
-        lastSyncedAt: new Date(),
-        syncExpiresAt: null,
-      });
+      // Also update legacy fields for backwards compatibility
+      await emailAccount.reload();
+      if (emailAccount.syncId === syncId) {
+        await emailAccount.update({
+          syncId: null,
+          syncProgress: 100,
+          syncStatus: result.cancelled
+            ? 'Sync cancelled'
+            : `Synced ${result.synced} emails`,
+          lastSyncedAt: new Date(),
+          syncExpiresAt: null,
+        });
+      }
+
       console.log(
-        `[IMAP] Sync complete for ${emailAccount.email}: ${result.synced} synced`,
+        `[IMAP] ${syncType} sync complete for ${emailAccount.email}: ${result.synced} synced`,
       );
 
       // Recalculate usage after sync
@@ -218,8 +427,12 @@ export async function startAsyncSync(
       setTimeout(async () => {
         try {
           await emailAccount.reload();
-          if (!emailAccount.syncId) {
+          const currentSyncId = emailAccount[fields.syncIdField];
+          if (!currentSyncId) {
             await emailAccount.update({
+              [fields.progressField]: null,
+              [fields.statusField]: null,
+              // Legacy fields
               syncProgress: null,
               syncStatus: null,
             });
@@ -232,20 +445,24 @@ export async function startAsyncSync(
     .catch(async (err) => {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
 
-      // Check if we're still the active sync
+      // Update the type-specific sync status
+      await markSyncFailed(emailAccount, syncType, syncId, errorMsg);
+
+      // Also update legacy fields for backwards compatibility
       await emailAccount.reload();
-      if (emailAccount.syncId !== syncId) {
-        console.log(`[IMAP] Sync ${syncId} failed but was superseded`);
-        return;
+      if (emailAccount.syncId === syncId) {
+        await emailAccount.update({
+          syncId: null,
+          syncProgress: null,
+          syncStatus: `Sync failed: ${errorMsg}`,
+          syncExpiresAt: null,
+        });
       }
 
-      await emailAccount.update({
-        syncId: null,
-        syncProgress: null,
-        syncStatus: `Sync failed: ${errorMsg}`,
-        syncExpiresAt: null,
-      });
-      console.error(`[IMAP] Sync failed for ${emailAccount.email}:`, err);
+      console.error(
+        `[IMAP] ${syncType} sync failed for ${emailAccount.email}:`,
+        err,
+      );
 
       // Notify subscribers that sync failed
       publishMailboxUpdate(emailAccount.userId, {
@@ -258,8 +475,11 @@ export async function startAsyncSync(
       setTimeout(async () => {
         try {
           await emailAccount.reload();
-          if (!emailAccount.syncId) {
+          const currentSyncId = emailAccount[fields.syncIdField];
+          if (!currentSyncId) {
             await emailAccount.update({
+              [fields.statusField]: null,
+              // Legacy field
               syncStatus: null,
             });
           }
@@ -274,11 +494,17 @@ export async function startAsyncSync(
 
 /**
  * Check if sync should continue (sync ID still matches)
+ * @deprecated Use shouldContinueSyncOfType instead
  */
 async function shouldContinueSync(
   emailAccount: EmailAccount,
   syncId: string,
+  syncType?: SyncType,
 ): Promise<boolean> {
+  if (syncType) {
+    return shouldContinueSyncOfType(emailAccount, syncType, syncId);
+  }
+  // Legacy fallback
   await emailAccount.reload();
   return emailAccount.syncId === syncId;
 }
@@ -290,13 +516,26 @@ async function shouldContinueSync(
 async function updateSyncExpiration(
   emailAccount: EmailAccount,
   syncId: string,
+  syncType?: SyncType,
 ): Promise<void> {
-  // Only update if we're still the active sync
   await emailAccount.reload();
-  if (emailAccount.syncId === syncId) {
-    await emailAccount.update({
-      syncExpiresAt: getSyncExpirationTime(),
-    });
+
+  if (syncType) {
+    const fields = getSyncFields(syncType);
+    if (emailAccount[fields.syncIdField] === syncId) {
+      await emailAccount.update({
+        [fields.expiresAtField]: getSyncExpirationTime(),
+        // Also update legacy field
+        syncExpiresAt: getSyncExpirationTime(),
+      });
+    }
+  } else {
+    // Legacy fallback
+    if (emailAccount.syncId === syncId) {
+      await emailAccount.update({
+        syncExpiresAt: getSyncExpirationTime(),
+      });
+    }
   }
 }
 
@@ -306,6 +545,7 @@ async function updateSyncExpiration(
 export async function syncEmailsFromImapAccount(
   emailAccount: EmailAccount,
   syncId: string,
+  syncType: SyncType = 'update',
 ): Promise<SyncResult> {
   const result: SyncResult = {
     synced: 0,
@@ -333,15 +573,23 @@ export async function syncEmailsFromImapAccount(
   // Track last expiration update time
   let lastExpirationUpdate = Date.now();
 
+  const fields = getSyncFields(syncType);
+
   try {
-    await emailAccount.update({ syncStatus: 'Connecting to server...' });
-    await updateSyncExpiration(emailAccount, syncId);
+    await emailAccount.update({
+      syncStatus: 'Connecting to server...',
+      [fields.statusField]: 'Connecting to server...',
+    });
+    await updateSyncExpiration(emailAccount, syncId, syncType);
 
     await withRetry(() => client.connect(), `Connect to ${emailAccount.host}`);
     console.log(`[IMAP] Connected to ${emailAccount.host}`);
 
-    await emailAccount.update({ syncStatus: 'Opening mailbox...' });
-    await updateSyncExpiration(emailAccount, syncId);
+    await emailAccount.update({
+      syncStatus: 'Opening mailbox...',
+      [fields.statusField]: 'Opening mailbox...',
+    });
+    await updateSyncExpiration(emailAccount, syncId, syncType);
 
     const mailbox = await withRetry(
       () => client.mailboxOpen('INBOX'),
@@ -354,13 +602,15 @@ export async function syncEmailsFromImapAccount(
       return result;
     }
 
-    // Get the last synced date - if null, sync entire history
-    const isFullSync = !emailAccount.lastSyncedAt;
+    // Historical sync = full sync from scratch, Update sync = incremental
+    const isFullSync = syncType === 'historical' || !emailAccount.lastSyncedAt;
+    const statusMsg = isFullSync
+      ? 'Fetching message list (first sync)...'
+      : 'Searching for new messages...';
 
     await emailAccount.update({
-      syncStatus: isFullSync
-        ? 'Fetching message list (first sync)...'
-        : 'Searching for new messages...',
+      syncStatus: statusMsg,
+      [fields.statusField]: statusMsg,
     });
 
     let totalToProcess = 0;
@@ -369,15 +619,17 @@ export async function syncEmailsFromImapAccount(
       // Full sync: process from newest to oldest using sequence numbers
       totalToProcess = mailbox.exists;
 
+      const processingMsg = `Processing ${totalToProcess} messages...`;
       await emailAccount.update({
-        syncStatus: `Processing ${totalToProcess} messages...`,
+        syncStatus: processingMsg,
+        [fields.statusField]: processingMsg,
       });
 
       // Process in batches from newest (highest seq) to oldest (1)
       for (let start = mailbox.exists; start >= 1; start -= BATCH_SIZE) {
         // Check if sync was cancelled
-        if (!(await shouldContinueSync(emailAccount, syncId))) {
-          console.log(`[IMAP] Sync ${syncId} cancelled`);
+        if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
+          console.log(`[IMAP] ${syncType} sync ${syncId} cancelled`);
           result.cancelled = true;
           break;
         }
@@ -388,9 +640,12 @@ export async function syncEmailsFromImapAccount(
         const progress = Math.round(
           ((mailbox.exists - start + 1) / totalToProcess) * 100,
         );
+        const progressMsg = `Processing messages ${end}-${start} of ${totalToProcess}...`;
         await emailAccount.update({
           syncProgress: Math.min(99, progress),
-          syncStatus: `Processing messages ${end}-${start} of ${totalToProcess}...`,
+          syncStatus: progressMsg,
+          [fields.progressField]: Math.min(99, progress),
+          [fields.statusField]: progressMsg,
         });
 
         // Update expiration time every SYNC_EXPIRATION_UPDATE_INTERVAL seconds
@@ -399,7 +654,7 @@ export async function syncEmailsFromImapAccount(
           now - lastExpirationUpdate >
           SYNC_EXPIRATION_UPDATE_INTERVAL * 1000
         ) {
-          await updateSyncExpiration(emailAccount, syncId);
+          await updateSyncExpiration(emailAccount, syncId, syncType);
           lastExpirationUpdate = now;
         }
 
@@ -422,7 +677,10 @@ export async function syncEmailsFromImapAccount(
       }
     } else {
       // Incremental sync: search for messages since last sync
-      const sinceDate = new Date(emailAccount.lastSyncedAt!);
+      // Use the update-sync-specific lastAt, or fall back to legacy lastSyncedAt
+      const lastSyncTime =
+        emailAccount.updateSyncLastAt || emailAccount.lastSyncedAt;
+      const sinceDate = new Date(lastSyncTime!);
       const searchResult = await withRetry(
         () => client.search({ since: sinceDate }),
         'Search for new messages',
@@ -430,7 +688,7 @@ export async function syncEmailsFromImapAccount(
       const messageUids = searchResult === false ? [] : searchResult;
 
       console.log(
-        `[IMAP] Incremental sync: found ${messageUids.length} messages since ${sinceDate.toISOString()}`,
+        `[IMAP] Incremental ${syncType} sync: found ${messageUids.length} messages since ${sinceDate.toISOString()}`,
       );
 
       if (messageUids.length === 0) {
@@ -443,18 +701,21 @@ export async function syncEmailsFromImapAccount(
       // Process UIDs in batches
       for (let i = 0; i < messageUids.length; i += BATCH_SIZE) {
         // Check if sync was cancelled
-        if (!(await shouldContinueSync(emailAccount, syncId))) {
-          console.log(`[IMAP] Sync ${syncId} cancelled`);
+        if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
+          console.log(`[IMAP] ${syncType} sync ${syncId} cancelled`);
           result.cancelled = true;
           break;
         }
 
         const batchUids = messageUids.slice(i, i + BATCH_SIZE);
         const progress = Math.round((i / totalToProcess) * 100);
+        const progressMsg = `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`;
 
         await emailAccount.update({
           syncProgress: Math.min(99, progress),
-          syncStatus: `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`,
+          syncStatus: progressMsg,
+          [fields.progressField]: Math.min(99, progress),
+          [fields.statusField]: progressMsg,
         });
 
         // Update expiration time every SYNC_EXPIRATION_UPDATE_INTERVAL seconds
@@ -463,7 +724,7 @@ export async function syncEmailsFromImapAccount(
           now - lastExpirationUpdate >
           SYNC_EXPIRATION_UPDATE_INTERVAL * 1000
         ) {
-          await updateSyncExpiration(emailAccount, syncId);
+          await updateSyncExpiration(emailAccount, syncId, syncType);
           lastExpirationUpdate = now;
         }
 
@@ -490,7 +751,7 @@ export async function syncEmailsFromImapAccount(
     );
 
     // Now sync Sent mail folder
-    await syncSentFolder(client, emailAccount, syncId, result);
+    await syncSentFolder(client, emailAccount, syncId, syncType, result);
 
     await client.logout();
     console.log(
@@ -518,8 +779,10 @@ async function syncSentFolder(
   client: ImapFlow,
   emailAccount: EmailAccount,
   syncId: string,
+  syncType: SyncType,
   result: SyncResult,
 ): Promise<void> {
+  const fields = getSyncFields(syncType);
   // Common sent folder names across providers
   const sentFolderNames = [
     '[Gmail]/Sent Mail',
@@ -562,24 +825,26 @@ async function syncSentFolder(
     return;
   }
 
+  const sentStatusMsg = 'Syncing sent mail...';
   await emailAccount.update({
-    syncStatus: 'Syncing sent mail...',
+    syncStatus: sentStatusMsg,
+    [fields.statusField]: sentStatusMsg,
   });
 
   // Update expiration since we're moving to a new phase
-  await updateSyncExpiration(emailAccount, syncId);
+  await updateSyncExpiration(emailAccount, syncId, syncType);
 
-  const isFullSync = !emailAccount.lastSyncedAt;
+  const isFullSync = syncType === 'historical' || !emailAccount.lastSyncedAt;
 
   if (isFullSync) {
     // Full sync: process from newest to oldest
     const totalToProcess = sentMailbox.exists;
     console.log(
-      `[IMAP] ${emailAccount.email} Full sync of ${totalToProcess} sent messages`,
+      `[IMAP] ${emailAccount.email} Full ${syncType} sync of ${totalToProcess} sent messages`,
     );
 
     for (let start = sentMailbox.exists; start >= 1; start -= BATCH_SIZE) {
-      if (!(await shouldContinueSync(emailAccount, syncId))) {
+      if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
         result.cancelled = true;
         break;
       }
@@ -606,7 +871,9 @@ async function syncSentFolder(
     }
   } else {
     // Incremental sync
-    const sinceDate = new Date(emailAccount.lastSyncedAt!);
+    const lastSyncTime =
+      emailAccount.updateSyncLastAt || emailAccount.lastSyncedAt;
+    const sinceDate = new Date(lastSyncTime!);
     const searchResult = await withRetry(
       () => client.search({ since: sinceDate }),
       'Search Sent folder for new messages',
@@ -614,12 +881,12 @@ async function syncSentFolder(
     const messageUids = searchResult === false ? [] : searchResult;
 
     console.log(
-      `[IMAP] ${emailAccount.email} Incremental Sent sync: ${messageUids.length} messages since ${sinceDate.toISOString()}`,
+      `[IMAP] ${emailAccount.email} Incremental ${syncType} Sent sync: ${messageUids.length} messages since ${sinceDate.toISOString()}`,
     );
 
     if (messageUids.length > 0) {
       for (let i = 0; i < messageUids.length; i += BATCH_SIZE) {
-        if (!(await shouldContinueSync(emailAccount, syncId))) {
+        if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
           result.cancelled = true;
           break;
         }
@@ -711,7 +978,7 @@ async function processEmailAttachments(
   });
 
   // Process uploads with concurrency control
-  const attachmentsToCreate: Array<Partial<Attachment>> = [];
+  const attachmentsToCreate: Partial<Attachment>[] = [];
   for (let i = 0; i < uploadPromises.length; i += CONCURRENCY_LIMIT) {
     const batch = uploadPromises.slice(i, i + CONCURRENCY_LIMIT);
     const results = await Promise.all(batch);
@@ -732,7 +999,7 @@ async function processEmailAttachments(
  */
 async function insertEmailBatch(
   emailAccountId: string,
-  emailsToCreate: Array<Record<string, unknown>>,
+  emailsToCreate: Record<string, unknown>[],
   parsedEmails: ParsedMail[],
   messageIdsInBatch: string[],
   userId?: string,
@@ -764,10 +1031,10 @@ async function insertEmailBatch(
   const existingIds = new Set(existingEmails.map((e) => e.messageId));
 
   // Filter out existing emails and their corresponding parsed emails
-  const newEmailsData: Array<{
+  const newEmailsData: {
     emailData: Record<string, unknown>;
     parsed: ParsedMail;
-  }> = [];
+  }[] = [];
   for (let i = 0; i < emailsToCreate.length; i++) {
     if (!existingIds.has(emailsToCreate[i].messageId as string)) {
       newEmailsData.push({
@@ -843,7 +1110,7 @@ async function processBatch(
   userId?: string,
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
   const batchResult = { synced: 0, skipped: 0, errors: [] as string[] };
-  const emailsToCreate: Array<Record<string, unknown>> = [];
+  const emailsToCreate: Record<string, unknown>[] = [];
   const parsedEmails: ParsedMail[] = [];
   const messageIdsInBatch: string[] = [];
 
@@ -962,7 +1229,9 @@ function parseUnsubscribeHeader(header: string | undefined): {
   url?: string;
   email?: string;
 } {
-  if (!header) return {};
+  if (!header) {
+    return {};
+  }
 
   const result: { url?: string; email?: string } = {};
 
@@ -983,9 +1252,70 @@ function parseUnsubscribeHeader(header: string | undefined): {
 }
 
 /**
+ * Decode Q-encoded (MIME) strings like =?us-ascii?Q?=3Chttps=3A=2F=2F...?=
+ * These are used in email headers for non-ASCII or special characters.
+ */
+function decodeMimeEncodedString(encoded: string): string {
+  if (!encoded || !encoded.includes('=?')) {
+    return encoded;
+  }
+
+  // Pattern to match MIME encoded words: =?charset?encoding?encoded_text?=
+  const mimeWordPattern = /=\?([^?]+)\?([QqBb])\?([^?]*)\?=/g;
+
+  // Collect all encoded parts first (they may be split across multiple words)
+  const parts: string[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = mimeWordPattern.exec(encoded)) !== null) {
+    // Add any non-encoded text before this match
+    if (match.index > lastIndex) {
+      const between = encoded.slice(lastIndex, match.index);
+      // Skip whitespace between consecutive encoded words
+      if (between.trim()) {
+        parts.push(between);
+      }
+    }
+
+    const [, , encoding, text] = match;
+
+    if (encoding.toUpperCase() === 'Q') {
+      // Q-encoding: = followed by hex, _ is space
+      const decodedPart = text
+        .replace(/_/g, ' ')
+        .replace(/=([0-9A-Fa-f]{2})/g, (_, hex) =>
+          String.fromCharCode(parseInt(hex, 16)),
+        );
+      parts.push(decodedPart);
+    } else if (encoding.toUpperCase() === 'B') {
+      // Base64 encoding
+      try {
+        parts.push(Buffer.from(text, 'base64').toString('utf-8'));
+      } catch {
+        parts.push(text);
+      }
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add any remaining non-encoded text
+  if (lastIndex < encoded.length) {
+    parts.push(encoded.slice(lastIndex));
+  }
+
+  if (parts.length > 0) {
+    return parts.join('');
+  }
+
+  return encoded;
+}
+
+/**
  * Extract unsubscribe info from both list-unsubscribe and list headers
  * The list header can contain structured unsubscribe info like:
- * { "unsubscribe": { "url": "...", "mail": "..." } }
+ * { "unsubscribe": { "url": "...", "mail": "...", "name": "..." } }
  */
 function extractUnsubscribeInfo(headers: Headers): {
   url?: string;
@@ -1003,12 +1333,21 @@ function extractUnsubscribeInfo(headers: Headers): {
       listUnsubscribeStr = listUnsubscribeRaw.join(', ');
     } else if (typeof listUnsubscribeRaw === 'object') {
       const rawObj = listUnsubscribeRaw as any;
-      listUnsubscribeStr =
-        rawObj.text || rawObj.value || JSON.stringify(rawObj);
+      // Try text, value, or name fields, then decode if MIME-encoded
+      listUnsubscribeStr = rawObj.text || rawObj.value || rawObj.name;
+      if (listUnsubscribeStr) {
+        listUnsubscribeStr = decodeMimeEncodedString(listUnsubscribeStr);
+      }
     }
-    const parsed = parseUnsubscribeHeader(listUnsubscribeStr);
-    if (parsed.url) result.url = parsed.url;
-    if (parsed.email) result.email = parsed.email;
+    if (listUnsubscribeStr) {
+      const parsed = parseUnsubscribeHeader(listUnsubscribeStr);
+      if (parsed.url) {
+        result.url = parsed.url;
+      }
+      if (parsed.email) {
+        result.email = parsed.email;
+      }
+    }
   }
 
   // Also check the "list" header which can contain structured unsubscribe info
@@ -1016,12 +1355,25 @@ function extractUnsubscribeInfo(headers: Headers): {
   if (listHeaderRaw && typeof listHeaderRaw === 'object') {
     const listHeader = listHeaderRaw as any;
 
-    // Check for unsubscribe object: { unsubscribe: { url: "...", mail: "..." } }
+    // Check for unsubscribe object: { unsubscribe: { url: "...", mail: "...", name: "..." } }
     if (listHeader.unsubscribe) {
       const unsub = listHeader.unsubscribe;
+
+      // Try url first, then decode name field (which may contain MIME-encoded URL)
       if (unsub.url && !result.url) {
         result.url = unsub.url;
+      } else if (unsub.name && !result.url) {
+        // The name field often contains MIME-encoded URL in angle brackets
+        const decoded = decodeMimeEncodedString(unsub.name);
+        const parsed = parseUnsubscribeHeader(decoded);
+        if (parsed.url) {
+          result.url = parsed.url;
+        }
+        if (parsed.email && !result.email) {
+          result.email = parsed.email;
+        }
       }
+
       if (unsub.mail && !result.email) {
         // Parse the mail field - it may contain email?subject=...&body=...
         const mailValue = unsub.mail;

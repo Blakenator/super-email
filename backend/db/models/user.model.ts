@@ -78,6 +78,13 @@ export class User extends Model {
   })
   declare inboxGroupByDate: boolean;
 
+  @Column({
+    type: DataType.BOOLEAN,
+    allowNull: false,
+    defaultValue: false,
+  })
+  declare blockExternalImages: boolean;
+
   // Associations
   @HasMany(() => EmailAccount)
   declare emailAccounts?: EmailAccountType[];

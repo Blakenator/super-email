@@ -10,10 +10,6 @@ export const IframeContainer = styled.div`
 `;
 
 export const ThemeToggleButton = styled(Button)`
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
   opacity: 0.7;
   transition: opacity 0.2s ease;
 
@@ -32,6 +28,30 @@ export const BackgroundDetectedBadge = styled.span`
   color: ${({ theme }) => theme.colors.success};
   font-size: 10px;
   pointer-events: none;
+`;
+
+export const EmailViewerToolbar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.sm};
+  padding: ${({ theme }) => theme.spacing.xs} ${({ theme }) => theme.spacing.sm};
+  background: ${({ theme }) => theme.colors.background};
+  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+export const ToolbarSpacer = styled.div`
+  flex: 1;
+`;
+
+export const ShowImagesButton = styled(Button)`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.spacing.xs};
+  font-size: 12px;
+  
+  svg {
+    font-size: 14px;
+  }
 `;
 
 export const ViewerContainer = styled.div`

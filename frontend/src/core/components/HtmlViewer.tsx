@@ -1,17 +1,27 @@
 import { useMemo, useRef, useEffect, useState } from 'react';
 import DOMPurify from 'dompurify';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMoon, faSun, faCircle } from '@fortawesome/free-solid-svg-icons';
+import {
+  faMoon,
+  faSun,
+  faCircle,
+  faImage,
+} from '@fortawesome/free-solid-svg-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
   IframeContainer,
   ThemeToggleButton,
   BackgroundDetectedBadge,
+  EmailViewerToolbar,
+  ShowImagesButton,
+  ToolbarSpacer,
 } from './HtmlViewer.wrappers';
 
 interface HtmlViewerProps {
   html: string;
   className?: string;
+  /** Whether external images should be blocked by default */
+  blockExternalImages?: boolean;
 }
 
 /**
@@ -24,11 +34,20 @@ interface HtmlViewerProps {
  * 4. Navigation control - links in sandboxed iframe can be controlled
  * 5. Prevents CSS-based attacks (data exfiltration via CSS selectors)
  */
-export function HtmlViewer({ html, className }: HtmlViewerProps) {
+export function HtmlViewer({
+  html,
+  className,
+  blockExternalImages = false,
+}: HtmlViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeHeight, setIframeHeight] = useState(200);
   const { isDarkMode } = useTheme();
   const [emailDarkMode, setEmailDarkMode] = useState<boolean | null>(null);
+  // Temporary override to show images for this email only (not persisted)
+  const [showImagesForThisEmail, setShowImagesForThisEmail] = useState(false);
+
+  // Determine if images should be blocked for this view
+  const shouldBlockImages = blockExternalImages && !showImagesForThisEmail;
 
   // Detect if the email has explicit background colors
   const detectedBackground = useMemo(() => {
@@ -88,7 +107,7 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
 
   const sanitizedHtml = useMemo(() => {
     // Configure DOMPurify for email viewing
-    return DOMPurify.sanitize(html, {
+    let result = DOMPurify.sanitize(html, {
       ALLOWED_TAGS: [
         'a',
         'abbr',
@@ -164,6 +183,8 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
         'wbr',
         'center',
         'font',
+        'video',
+        'source',
       ],
       ALLOWED_ATTR: [
         'href',
@@ -190,6 +211,7 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
         'color',
         'face',
         'size',
+        'poster',
       ],
       ALLOW_DATA_ATTR: false,
       ADD_ATTR: ['target'],
@@ -205,7 +227,60 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
       ],
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
     });
-  }, [html]);
+
+    // If blocking external images, strip src from img tags and poster/src from video
+    if (shouldBlockImages) {
+      // Parse the sanitized HTML and remove external image/video sources
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(result, 'text/html');
+
+      // Block img src (except data: URIs)
+      doc.querySelectorAll('img[src]').forEach((img) => {
+        const src = img.getAttribute('src') || '';
+        if (!src.startsWith('data:')) {
+          img.removeAttribute('src');
+          img.setAttribute('data-blocked-src', src);
+          // Add alt text indication if not present
+          if (!img.getAttribute('alt')) {
+            img.setAttribute('alt', '[Image blocked]');
+          }
+        }
+      });
+
+      // Block video poster and source src
+      doc.querySelectorAll('video[poster]').forEach((video) => {
+        const poster = video.getAttribute('poster') || '';
+        if (!poster.startsWith('data:')) {
+          video.removeAttribute('poster');
+          video.setAttribute('data-blocked-poster', poster);
+        }
+      });
+
+      doc.querySelectorAll('video source[src], video[src]').forEach((el) => {
+        const src = el.getAttribute('src') || '';
+        if (!src.startsWith('data:')) {
+          el.removeAttribute('src');
+          el.setAttribute('data-blocked-src', src);
+        }
+      });
+
+      // Block background images in inline styles
+      doc.querySelectorAll('[style*="background"]').forEach((el) => {
+        const style = el.getAttribute('style') || '';
+        if (style.includes('url(') && !style.includes('data:')) {
+          const newStyle = style.replace(
+            /background(-image)?\s*:\s*[^;]*url\([^)]+\)[^;]*/gi,
+            '',
+          );
+          el.setAttribute('style', newStyle);
+        }
+      });
+
+      result = doc.body.innerHTML;
+    }
+
+    return result;
+  }, [html, shouldBlockImages]);
 
   // Build the complete HTML document for the iframe
   const iframeContent = useMemo(() => {
@@ -380,29 +455,42 @@ export function HtmlViewer({ html, className }: HtmlViewerProps) {
 
   return (
     <IframeContainer className={className}>
-      <ThemeToggleButton
-        variant="outline-secondary"
-        size="sm"
-        onClick={() =>
-          setEmailDarkMode((prev) => (prev === null ? !isDarkMode : !prev))
-        }
-        title={
-          matchesAutoDetect
-            ? `${effectiveDarkMode ? 'Light' : 'Dark'} mode (auto-detected from email)`
-            : effectiveDarkMode
-              ? 'Switch to light mode'
-              : 'Switch to dark mode'
-        }
-      >
-        <span style={{ position: 'relative', display: 'inline-block' }}>
-          <FontAwesomeIcon icon={effectiveDarkMode ? faMoon : faSun} />
-          {matchesAutoDetect && (
-            <BackgroundDetectedBadge>
-              <FontAwesomeIcon icon={faCircle} />
-            </BackgroundDetectedBadge>
-          )}
-        </span>
-      </ThemeToggleButton>
+      <EmailViewerToolbar>
+        {shouldBlockImages && (
+          <ShowImagesButton
+            variant="outline-warning"
+            size="sm"
+            onClick={() => setShowImagesForThisEmail(true)}
+          >
+            <FontAwesomeIcon icon={faImage} />
+            Show blocked images
+          </ShowImagesButton>
+        )}
+        <ToolbarSpacer />
+        <ThemeToggleButton
+          variant="outline-secondary"
+          size="sm"
+          onClick={() =>
+            setEmailDarkMode((prev) => (prev === null ? !isDarkMode : !prev))
+          }
+          title={
+            matchesAutoDetect
+              ? `${effectiveDarkMode ? 'Light' : 'Dark'} mode (auto-detected from email)`
+              : effectiveDarkMode
+                ? 'Switch to light mode'
+                : 'Switch to dark mode'
+          }
+        >
+          <span style={{ position: 'relative', display: 'inline-block' }}>
+            <FontAwesomeIcon icon={effectiveDarkMode ? faMoon : faSun} />
+            {matchesAutoDetect && (
+              <BackgroundDetectedBadge>
+                <FontAwesomeIcon icon={faCircle} />
+              </BackgroundDetectedBadge>
+            )}
+          </span>
+        </ThemeToggleButton>
+      </EmailViewerToolbar>
       <iframe
         ref={iframeRef}
         src={blobUrl}

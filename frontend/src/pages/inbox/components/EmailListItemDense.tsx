@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Modal, Form } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { DateTime } from 'luxon';
+import { getEmailPreviewText } from '../../../utils/emailPreview';
 import {
   faStar as faStarSolid,
   faReply,
@@ -229,7 +230,7 @@ export function EmailListItemDense({
           )}
         </SubjectCell>
         <PreviewCell>
-          {email.textBody?.substring(0, 60) || '(No content)'}
+          {getEmailPreviewText(email.textBody, email.htmlBody, 60)}
         </PreviewCell>
         <DateCell>{formatDate(email.receivedAt)}</DateCell>
 

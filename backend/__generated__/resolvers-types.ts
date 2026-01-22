@@ -162,12 +162,16 @@ export type BillingInfo = {
   __typename?: 'BillingInfo';
   /** Account usage as a percentage (0-100, 0 for unlimited) */
   accountUsagePercent: Scalars['Float']['output'];
+  /** Whether the user has a Stripe customer ID (required for paid plans) */
+  hasStripeCustomer: Scalars['Boolean']['output'];
   /** Whether the user has exceeded their account limit */
   isAccountLimitExceeded: Scalars['Boolean']['output'];
   /** Whether the user has exceeded their storage limit */
   isStorageLimitExceeded: Scalars['Boolean']['output'];
   /** Whether Stripe billing is configured on the server */
   isStripeConfigured: Scalars['Boolean']['output'];
+  /** Available prices from Stripe for subscription tiers */
+  prices: Array<StripePrice>;
   /** Storage usage as a percentage (0-100) */
   storageUsagePercent: Scalars['Float']['output'];
   /** User's subscription details */
@@ -511,15 +515,25 @@ export type EmailAccount = BaseEntityProps & {
   defaultSmtpProfileId?: Maybe<Scalars['String']['output']>;
   /** Email address for this account */
   email: Scalars['String']['output'];
+  /** Timestamp of the last historical sync */
+  historicalSyncLastAt?: Maybe<Scalars['Date']['output']>;
+  /** Progress percentage (0-100) during historical sync */
+  historicalSyncProgress?: Maybe<Scalars['Int']['output']>;
+  /** Human-readable status message during historical sync */
+  historicalSyncStatus?: Maybe<Scalars['String']['output']>;
   /** IMAP/POP3 server hostname (e.g., "imap.gmail.com") */
   host: Scalars['String']['output'];
   /** Unique identifier for this email account */
   id: Scalars['String']['output'];
   /** Whether this is the user's default/primary email account */
   isDefault: Scalars['Boolean']['output'];
-  /** Whether a sync operation is currently in progress */
+  /** Whether a historical sync (initial import) is in progress */
+  isHistoricalSyncing: Scalars['Boolean']['output'];
+  /** Whether a sync operation is currently in progress (legacy) */
   isSyncing: Scalars['Boolean']['output'];
-  /** Timestamp of the last successful sync */
+  /** Whether an update sync (new emails) is in progress */
+  isUpdateSyncing: Scalars['Boolean']['output'];
+  /** Timestamp of the last successful sync (legacy, for backwards compatibility) */
   lastSyncedAt?: Maybe<Scalars['Date']['output']>;
   /** Display name for this account (e.g., "Work Gmail") */
   name: Scalars['String']['output'];
@@ -527,12 +541,18 @@ export type EmailAccount = BaseEntityProps & {
   port: Scalars['Int']['output'];
   /** External provider ID (for OAuth-linked accounts like Google Workspace) */
   providerId?: Maybe<Scalars['String']['output']>;
-  /** When the current sync operation will timeout */
+  /** When the current sync operation will timeout (legacy) */
   syncExpiresAt?: Maybe<Scalars['Date']['output']>;
-  /** Progress percentage (0-100) during sync */
+  /** Progress percentage (0-100) during sync (legacy) */
   syncProgress?: Maybe<Scalars['Int']['output']>;
-  /** Human-readable status message during sync */
+  /** Human-readable status message during sync (legacy) */
   syncStatus?: Maybe<Scalars['String']['output']>;
+  /** Timestamp of the last update sync */
+  updateSyncLastAt?: Maybe<Scalars['Date']['output']>;
+  /** Progress percentage (0-100) during update sync */
+  updateSyncProgress?: Maybe<Scalars['Int']['output']>;
+  /** Human-readable status message during update sync */
+  updateSyncStatus?: Maybe<Scalars['String']['output']>;
   /** Timestamp when the account was last modified */
   updatedAt?: Maybe<Scalars['Date']['output']>;
   /** Whether to use SSL/TLS encryption */
@@ -1522,6 +1542,25 @@ export type StorageUsage = {
   userId: Scalars['String']['output'];
 };
 
+/** Price information fetched from Stripe for a subscription tier. */
+export type StripePrice = {
+  __typename?: 'StripePrice';
+  /** Currency code (e.g., "usd") */
+  currency: Scalars['String']['output'];
+  /** Stripe price ID */
+  id: Scalars['String']['output'];
+  /** Billing interval (e.g., "month", "year") */
+  interval: Scalars['String']['output'];
+  /** Product name from Stripe */
+  name: Scalars['String']['output'];
+  /** Tier this price is for (BASIC, PRO, ENTERPRISE) */
+  tier: Scalars['String']['output'];
+  /** Type of tier (storage or account) */
+  type: Scalars['String']['output'];
+  /** Price in cents */
+  unitAmount: Scalars['Int']['output'];
+};
+
 /**
  * GraphQL subscriptions for real-time updates.
  * Requires WebSocket connection with authentication.
@@ -1739,6 +1778,8 @@ export type UpdateTagInput = {
 
 /** Input for updating user preferences. All fields are optional - only provided fields will be updated. */
 export type UpdateUserPreferencesInput = {
+  /** Whether to block external images in emails by default */
+  blockExternalImages?: InputMaybe<Scalars['Boolean']['input']>;
   /** Whether to use compact inbox display */
   inboxDensity?: InputMaybe<Scalars['Boolean']['input']>;
   /** Whether to group emails by date */
@@ -1759,6 +1800,8 @@ export type User = BaseEntityProps & {
   __typename?: 'User';
   /** List of authentication methods linked to this account (OAuth, email/password) */
   authenticationMethods: Array<AuthenticationMethod>;
+  /** Whether to block external images in emails by default (privacy/security) */
+  blockExternalImages: Scalars['Boolean']['output'];
   /** Timestamp when the user account was created */
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** User's primary email address (used for login) */
@@ -1930,6 +1973,7 @@ export type ResolversTypes = ResolversObject<{
   StorageTier: StorageTier;
   StorageUsage: ResolverTypeWrapper<StorageUsage>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
+  StripePrice: ResolverTypeWrapper<StripePrice>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
   SyncEmailAccountInput: SyncEmailAccountInput;
   Tag: ResolverTypeWrapper<Tag>;
@@ -1993,6 +2037,7 @@ export type ResolversParentTypes = ResolversObject<{
   SmtpProfile: SmtpProfile;
   StorageUsage: StorageUsage;
   String: Scalars['String']['output'];
+  StripePrice: StripePrice;
   Subscription: Record<PropertyKey, never>;
   SyncEmailAccountInput: SyncEmailAccountInput;
   Tag: Tag;
@@ -2045,9 +2090,11 @@ export type BaseEntityPropsResolvers<ContextType = MyContext, ParentType extends
 
 export type BillingInfoResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BillingInfo'] = ResolversParentTypes['BillingInfo']> = ResolversObject<{
   accountUsagePercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  hasStripeCustomer?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isAccountLimitExceeded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isStorageLimitExceeded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isStripeConfigured?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  prices?: Resolver<Array<ResolversTypes['StripePrice']>, ParentType, ContextType>;
   storageUsagePercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
   subscription?: Resolver<ResolversTypes['BillingSubscription'], ParentType, ContextType>;
   usage?: Resolver<ResolversTypes['StorageUsage'], ParentType, ContextType>;
@@ -2144,10 +2191,15 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   defaultSmtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
   defaultSmtpProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  historicalSyncLastAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  historicalSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  historicalSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  isHistoricalSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  isUpdateSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastSyncedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
@@ -2155,6 +2207,9 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   syncExpiresAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   syncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   syncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  updateSyncLastAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  updateSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  updateSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   useSsl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -2313,6 +2368,16 @@ export type StorageUsageResolvers<ContextType = MyContext, ParentType extends Re
   userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 }>;
 
+export type StripePriceResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['StripePrice'] = ResolversParentTypes['StripePrice']> = ResolversObject<{
+  currency?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  interval?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  tier?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  unitAmount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+}>;
+
 export type SubscriptionResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Subscription'] = ResolversParentTypes['Subscription']> = ResolversObject<{
   mailboxUpdates?: SubscriptionResolver<ResolversTypes['MailboxUpdate'], "mailboxUpdates", ParentType, ContextType>;
 }>;
@@ -2336,6 +2401,7 @@ export type TestConnectionResultResolvers<ContextType = MyContext, ParentType ex
 
 export type UserResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['User'] = ResolversParentTypes['User']> = ResolversObject<{
   authenticationMethods?: Resolver<Array<ResolversTypes['AuthenticationMethod']>, ParentType, ContextType>;
+  blockExternalImages?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   emailAccounts?: Resolver<Array<ResolversTypes['EmailAccount']>, ParentType, ContextType>;
@@ -2374,6 +2440,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   RunRuleResult?: RunRuleResultResolvers<ContextType>;
   SmtpProfile?: SmtpProfileResolvers<ContextType>;
   StorageUsage?: StorageUsageResolvers<ContextType>;
+  StripePrice?: StripePriceResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
   Tag?: TagResolvers<ContextType>;
   TestConnectionResult?: TestConnectionResultResolvers<ContextType>;
