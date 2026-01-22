@@ -52,15 +52,26 @@ log_info "Calculating backend content hash from build outputs..."
 HASH_FILES=$(mktemp)
 trap "rm -f $HASH_FILES" EXIT
 
+# Use cross-platform hash command (sha256sum on Linux, shasum -a 256 on macOS)
+if command -v sha256sum >/dev/null 2>&1; then
+    SHA256_CMD="sha256sum"
+else
+    SHA256_CMD="shasum -a 256"
+fi
+
 # Collect all files that affect the deployed image
 {
     # Built JavaScript outputs (what actually runs)
-    find backend/dist common/dist -type f \( -name "*.js" -o -name "*.d.ts" -o -name "*.js.map" -o -name "*.d.ts.map" \) 2>/dev/null
+    find backend common -type f \( -name "*.ts" -name "*.json" \) 2>/dev/null
     # GraphQL schema (copied to Docker image)
     find common -name "schema.graphql" 2>/dev/null
     # Dockerfile and .dockerignore (affect Docker build)
     find backend -maxdepth 1 -type f -name "Dockerfile" 2>/dev/null
     find . -maxdepth 1 -type f -name ".dockerignore" 2>/dev/null
+    # Package files that affect dependencies (copied into Docker image)
+    echo "pnpm-lock.yaml"
+    echo "pnpm-workspace.yaml"
+    echo "package.json"
 } | sort > "$HASH_FILES"
 
 # Check if we found any files
@@ -69,8 +80,8 @@ if [ ! -s "$HASH_FILES" ]; then
     exit 1
 fi
 
-# Calculate hash
-CONTENT_HASH=$(cat "$HASH_FILES" | xargs sha256sum 2>/dev/null | sha256sum | cut -d' ' -f1 | cut -c1-12)
+# Calculate hash using cross-platform command
+CONTENT_HASH=$(cat "$HASH_FILES" | xargs $SHA256_CMD 2>/dev/null | $SHA256_CMD | cut -d' ' -f1 | cut -c1-12)
 
 # Ensure we got a valid hash
 if [ -z "$CONTENT_HASH" ] || [ ${#CONTENT_HASH} -ne 12 ]; then
@@ -98,20 +109,20 @@ if command -v jq >/dev/null 2>&1; then
         --region "$AWS_REGION" \
         2>&1)
     ECR_EXIT=$?
-    
+
     if [ $ECR_EXIT -eq 0 ] && [ -n "$ECR_OUTPUT" ]; then
         # Try to parse JSON (may fail if output is error message)
         IMAGE_COUNT=$(echo "$ECR_OUTPUT" | jq -r '.imageDetails | length' 2>/dev/null)
         JQ_EXIT=$?
-        
+
         if [ $JQ_EXIT -eq 0 ] && [ -n "$IMAGE_COUNT" ] && [ "$IMAGE_COUNT" != "null" ]; then
             # Validate it's a number using basic pattern matching
             case "$IMAGE_COUNT" in
-                ''|*[!0-9]*) 
-                    IMAGE_EXISTS="0" 
+                ''|*[!0-9]*)
+                    IMAGE_EXISTS="0"
                     ;;
-                *) 
-                    IMAGE_EXISTS="$IMAGE_COUNT" 
+                *)
+                    IMAGE_EXISTS="$IMAGE_COUNT"
                     ;;
             esac
         fi
@@ -125,7 +136,7 @@ set -e
 
 if [ "$IMAGE_EXISTS" != "0" ]; then
     log_info "✓ Image with hash $CONTENT_HASH already exists in ECR. Skipping build."
-    
+
     # Tag the existing image with latest and git SHA
     MANIFEST=$(aws ecr batch-get-image \
         --repository-name "email-client-$ENVIRONMENT-backend" \
@@ -133,19 +144,19 @@ if [ "$IMAGE_EXISTS" != "0" ]; then
         --region "$AWS_REGION" \
         --query 'images[0].imageManifest' \
         --output text)
-    
+
     aws ecr put-image \
         --repository-name "email-client-$ENVIRONMENT-backend" \
         --image-tag "latest" \
         --image-manifest "$MANIFEST" \
         --region "$AWS_REGION" > /dev/null 2>&1 || true
-        
+
     aws ecr put-image \
         --repository-name "email-client-$ENVIRONMENT-backend" \
         --image-tag "$GIT_COMMIT_SHA" \
         --image-manifest "$MANIFEST" \
         --region "$AWS_REGION" > /dev/null 2>&1 || true
-    
+
     log_info "Backend deployment complete (reused existing image)."
     echo "BACKEND_IMAGE_TAG=content-$CONTENT_HASH" > "$PROJECT_ROOT/.backend-image-tag"
     exit 0
