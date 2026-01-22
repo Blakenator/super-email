@@ -72,6 +72,7 @@ alwaysApply: true
   - `pnpm test:integration` - run only integration tests
 - Use the shared test server in `test/integration/server-setup.ts` for integration tests
 - Integration tests share a single server instance across all test files
+- Anytime test files are modified, you **must** add a todo item to verify that the test files are actually testing what they are trying to test. Ensure they are NOT just 1) creating a mock, 2) call the mock, 3) test that the mock was called, without ever testing the function/endpoint
 
 ## Code Style
 

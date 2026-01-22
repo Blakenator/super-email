@@ -209,17 +209,21 @@ export function EmailView({
   // Fall back to cached email when offline and no server data
   const serverEmail = data?.getEmail;
   const cachedEmail = cachedEmails[emailId];
-  const email = serverEmail ?? (cachedEmail ? {
-    ...cachedEmail,
-    attachments: [],
-    headers: null,
-    references: null,
-    isUnsubscribed: false,
-    unsubscribeUrl: null,
-    unsubscribeEmail: null,
-    hasAttachments: false,
-    attachmentCount: 0,
-  } : null);
+  const email =
+    serverEmail ??
+    (cachedEmail
+      ? {
+          ...cachedEmail,
+          attachments: [],
+          headers: null,
+          references: null,
+          isUnsubscribed: false,
+          unsubscribeUrl: null,
+          unsubscribeEmail: null,
+          hasAttachments: false,
+          attachmentCount: 0,
+        }
+      : null);
 
   const {
     data: threadData,

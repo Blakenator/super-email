@@ -31,11 +31,7 @@ export const OfflineBannerWrapper = styled.div<{ $isVisible: boolean }>`
   justify-content: center;
   gap: ${({ theme }) => theme.spacing.sm};
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
-  background: linear-gradient(
-    135deg,
-    #f97316 0%,
-    #ea580c 100%
-  );
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
   color: white;
   font-size: ${({ theme }) => theme.fontSizes.sm};
   font-weight: 500;

@@ -3,12 +3,19 @@ import fs from 'fs/promises';
 import path from 'path';
 import { createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './logger.js';
 import { config } from '../config/env.js';
 
-const LOCAL_ATTACHMENTS_DIR = path.join(process.cwd(), config.attachments.localDir);
+const LOCAL_ATTACHMENTS_DIR = path.join(
+  process.cwd(),
+  config.attachments.localDir,
+);
 
 // Initialize S3 client for production
 let s3Client: S3Client | null = null;
@@ -21,7 +28,11 @@ async function ensureLocalDirectory() {
   try {
     await fs.mkdir(LOCAL_ATTACHMENTS_DIR, { recursive: true });
   } catch (error) {
-    logger.error('AttachmentStorage', 'Failed to create attachments directory', { error });
+    logger.error(
+      'AttachmentStorage',
+      'Failed to create attachments directory',
+      { error },
+    );
     throw error;
   }
 }
@@ -43,10 +54,10 @@ interface UploadResult {
  * Returns the storage key and size in bytes
  */
 export async function uploadAttachment(
-  options: UploadOptions
+  options: UploadOptions,
 ): Promise<UploadResult> {
   const { attachmentId, mimeType, stream } = options;
-  
+
   // Use the attachment UUID directly as the storage key (flat structure)
   const storageKey = attachmentId;
 
@@ -63,7 +74,7 @@ export async function uploadAttachment(
 async function uploadToS3(
   key: string,
   mimeType: string,
-  stream: Readable
+  stream: Readable,
 ): Promise<UploadResult> {
   if (!s3Client) {
     throw new Error('S3 client not initialized');
@@ -72,7 +83,7 @@ async function uploadToS3(
   // Collect stream data to get size
   const chunks: Buffer[] = [];
   stream.on('data', (chunk) => chunks.push(chunk));
-  
+
   await new Promise((resolve, reject) => {
     stream.on('end', resolve);
     stream.on('error', reject);
@@ -99,7 +110,7 @@ async function uploadToS3(
  */
 async function uploadToLocalDisk(
   key: string,
-  stream: Readable
+  stream: Readable,
 ): Promise<UploadResult> {
   await ensureLocalDirectory();
 
@@ -109,7 +120,10 @@ async function uploadToLocalDisk(
   await pipeline(stream, writeStream);
 
   const stats = await fs.stat(filePath);
-  logger.info('AttachmentStorage', 'Uploaded attachment to local disk', { key, size: stats.size });
+  logger.info('AttachmentStorage', 'Uploaded attachment to local disk', {
+    key,
+    size: stats.size,
+  });
 
   return { storageKey: key, size: stats.size };
 }
@@ -122,7 +136,7 @@ async function uploadToLocalDisk(
  */
 export async function getAttachmentDownloadUrl(
   attachmentId: string,
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
 ): Promise<string> {
   if (config.isProduction && s3Client) {
     const command = new GetObjectCommand({
@@ -153,7 +167,9 @@ export function getLocalAttachmentPath(attachmentId: string): string {
  * Stream an attachment from storage
  * Uses the attachment UUID as the storage key
  */
-export async function streamAttachment(attachmentId: string): Promise<Readable> {
+export async function streamAttachment(
+  attachmentId: string,
+): Promise<Readable> {
   if (config.isProduction && s3Client) {
     const command = new GetObjectCommand({
       Bucket: config.attachments.s3Bucket,
@@ -184,10 +200,14 @@ export async function deleteAttachment(attachmentId: string): Promise<void> {
       Key: attachmentId,
     });
     await s3Client.send(command);
-    logger.info('AttachmentStorage', 'Deleted attachment from S3', { key: attachmentId });
+    logger.info('AttachmentStorage', 'Deleted attachment from S3', {
+      key: attachmentId,
+    });
   } else {
     const filePath = getLocalAttachmentPath(attachmentId);
     await fs.unlink(filePath);
-    logger.info('AttachmentStorage', 'Deleted attachment from local disk', { key: attachmentId });
+    logger.info('AttachmentStorage', 'Deleted attachment from local disk', {
+      key: attachmentId,
+    });
   }
 }
