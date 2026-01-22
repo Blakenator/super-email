@@ -500,6 +500,8 @@ const secretsPolicy = new aws.iam.Policy(`${stackName}-secrets-policy`, {
           'secretsmanager:CreateSecret',
           'secretsmanager:UpdateSecret',
           'secretsmanager:DeleteSecret',
+          'secretsmanager:TagResource',
+          'secretsmanager:UntagResource',
         ],
         Resource: [
           `arn:aws:secretsmanager:*:*:secret:${stackName}-*`,
