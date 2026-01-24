@@ -10,9 +10,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Pressable,
+  Animated,
 } from 'react-native';
+import { Swipeable, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
-import { Icon } from '../ui';
+import { Icon, IconName } from '../ui';
 import type { Email } from '../../stores/emailStore';
 import { DateTime } from 'luxon';
 
@@ -23,6 +25,9 @@ interface EmailListItemProps {
   onSelectPress?: () => void;
   isSelected?: boolean;
   showCheckbox?: boolean;
+  onArchive?: () => void;
+  onDelete?: () => void;
+  onMarkRead?: () => void;
 }
 
 export function EmailListItem({
@@ -32,8 +37,86 @@ export function EmailListItem({
   onSelectPress,
   isSelected = false,
   showCheckbox = false,
+  onArchive,
+  onDelete,
+  onMarkRead,
 }: EmailListItemProps) {
   const theme = useTheme();
+  const swipeableRef = React.useRef<Swipeable>(null);
+  
+  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>) => {
+    const translateX = progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [150, 0],
+    });
+    
+    return (
+      <View style={styles.swipeActionsContainer}>
+        <Animated.View style={[styles.swipeAction, { transform: [{ translateX }] }]}>
+          <TouchableOpacity
+            style={[styles.swipeButton, { backgroundColor: theme.colors.info }]}
+            onPress={() => {
+              swipeableRef.current?.close();
+              onMarkRead?.();
+            }}
+          >
+            <Icon name={email.isRead ? 'mail' : 'check'} size="md" color={theme.colors.textInverse} />
+            <Text style={[styles.swipeButtonText, { color: theme.colors.textInverse }]}>
+              {email.isRead ? 'Unread' : 'Read'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
+        <Animated.View style={[styles.swipeAction, { transform: [{ translateX }] }]}>
+          <TouchableOpacity
+            style={[styles.swipeButton, { backgroundColor: theme.colors.success }]}
+            onPress={() => {
+              swipeableRef.current?.close();
+              onArchive?.();
+            }}
+          >
+            <Icon name="archive" size="md" color={theme.colors.textInverse} />
+            <Text style={[styles.swipeButtonText, { color: theme.colors.textInverse }]}>Archive</Text>
+          </TouchableOpacity>
+        </Animated.View>
+        <Animated.View style={[styles.swipeAction, { transform: [{ translateX }] }]}>
+          <TouchableOpacity
+            style={[styles.swipeButton, { backgroundColor: theme.colors.error }]}
+            onPress={() => {
+              swipeableRef.current?.close();
+              onDelete?.();
+            }}
+          >
+            <Icon name="trash-2" size="md" color={theme.colors.textInverse} />
+            <Text style={[styles.swipeButtonText, { color: theme.colors.textInverse }]}>Delete</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    );
+  };
+  
+  const renderLeftActions = (progress: Animated.AnimatedInterpolation<number>) => {
+    const translateX = progress.interpolate({
+      inputRange: [0, 1],
+      outputRange: [-80, 0],
+    });
+    
+    return (
+      <Animated.View style={[styles.swipeLeftAction, { transform: [{ translateX }] }]}>
+        <TouchableOpacity
+          style={[styles.swipeButton, { backgroundColor: theme.colors.starred }]}
+          onPress={() => {
+            swipeableRef.current?.close();
+            onStarPress();
+          }}
+        >
+          <Icon name="star" size="md" color={theme.colors.textInverse} />
+          <Text style={[styles.swipeButtonText, { color: theme.colors.textInverse }]}>
+            {email.isStarred ? 'Unstar' : 'Star'}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
   
   const formatDate = (dateString: string) => {
     const date = DateTime.fromISO(dateString);
@@ -71,117 +154,126 @@ export function EmailListItem({
   };
   
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.container,
-        {
-          backgroundColor: pressed
-            ? theme.colors.backgroundSecondary
-            : email.isRead
-              ? theme.colors.background
-              : theme.colors.surface,
-          borderBottomColor: theme.colors.border,
-        },
-      ]}
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={onArchive || onDelete ? renderRightActions : undefined}
+      renderLeftActions={renderLeftActions}
+      friction={2}
+      rightThreshold={40}
+      leftThreshold={40}
     >
-      {showCheckbox && (
-        <TouchableOpacity
-          onPress={onSelectPress}
-          style={styles.checkbox}
-        >
-          <View
-            style={[
-              styles.checkboxInner,
-              {
-                borderColor: isSelected ? theme.colors.primary : theme.colors.border,
-                backgroundColor: isSelected ? theme.colors.primary : 'transparent',
-              },
-            ]}
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.container,
+          {
+            backgroundColor: pressed
+              ? theme.colors.backgroundSecondary
+              : email.isRead
+                ? theme.colors.background
+                : theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+          },
+        ]}
+      >
+        {showCheckbox && (
+          <TouchableOpacity
+            onPress={onSelectPress}
+            style={styles.checkbox}
           >
-            {isSelected && (
-              <Icon name="check" size="xs" color="#fff" />
-            )}
+            <View
+              style={[
+                styles.checkboxInner,
+                {
+                  borderColor: isSelected ? theme.colors.primary : theme.colors.border,
+                  backgroundColor: isSelected ? theme.colors.primary : 'transparent',
+                },
+              ]}
+            >
+              {isSelected && (
+                <Icon name="check" size="xs" color={theme.colors.textInverse} />
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
+        
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text
+              style={[
+                styles.sender,
+                {
+                  color: theme.colors.text,
+                  fontWeight: email.isRead ? '400' : '600',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {getSenderDisplay()}
+            </Text>
+            
+            <View style={styles.headerRight}>
+              {email.hasAttachments && (
+                <Icon name="paperclip" size="xs" color={theme.colors.textMuted} />
+              )}
+              <Text style={[styles.date, { color: theme.colors.textMuted }]}>
+                {formatDate(email.receivedAt)}
+              </Text>
+            </View>
           </View>
-        </TouchableOpacity>
-      )}
-      
-      <View style={styles.content}>
-        <View style={styles.header}>
+          
           <Text
             style={[
-              styles.sender,
+              styles.subject,
               {
                 color: theme.colors.text,
-                fontWeight: email.isRead ? '400' : '600',
+                fontWeight: email.isRead ? '400' : '500',
               },
             ]}
             numberOfLines={1}
           >
-            {getSenderDisplay()}
+            {email.subject || '(No Subject)'}
           </Text>
           
-          <View style={styles.headerRight}>
-            {email.hasAttachments && (
-              <Icon name="paperclip" size="xs" color={theme.colors.textMuted} />
-            )}
-            <Text style={[styles.date, { color: theme.colors.textMuted }]}>
-              {formatDate(email.receivedAt)}
-            </Text>
-          </View>
+          <Text
+            style={[styles.preview, { color: theme.colors.textMuted }]}
+            numberOfLines={1}
+          >
+            {getPreview()}
+          </Text>
+          
+          {email.tags.length > 0 && (
+            <View style={styles.tags}>
+              {email.tags.slice(0, 3).map((tag) => (
+                <View
+                  key={tag.id}
+                  style={[styles.tag, { backgroundColor: tag.color + '20' }]}
+                >
+                  <View
+                    style={[styles.tagDot, { backgroundColor: tag.color }]}
+                  />
+                  <Text style={[styles.tagText, { color: tag.color }]}>
+                    {tag.name}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
         
-        <Text
-          style={[
-            styles.subject,
-            {
-              color: theme.colors.text,
-              fontWeight: email.isRead ? '400' : '500',
-            },
-          ]}
-          numberOfLines={1}
+        <TouchableOpacity
+          onPress={onStarPress}
+          style={styles.starButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          {email.subject || '(No Subject)'}
-        </Text>
-        
-        <Text
-          style={[styles.preview, { color: theme.colors.textMuted }]}
-          numberOfLines={1}
-        >
-          {getPreview()}
-        </Text>
-        
-        {email.tags.length > 0 && (
-          <View style={styles.tags}>
-            {email.tags.slice(0, 3).map((tag) => (
-              <View
-                key={tag.id}
-                style={[styles.tag, { backgroundColor: tag.color + '20' }]}
-              >
-                <View
-                  style={[styles.tagDot, { backgroundColor: tag.color }]}
-                />
-                <Text style={[styles.tagText, { color: tag.color }]}>
-                  {tag.name}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-      
-      <TouchableOpacity
-        onPress={onStarPress}
-        style={styles.starButton}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Icon
-          name="star"
-          size="md"
-          color={email.isStarred ? theme.colors.starred : theme.colors.border}
-        />
-      </TouchableOpacity>
-    </Pressable>
+          <Icon
+            name="star"
+            size="md"
+            color={email.isStarred ? theme.colors.starred : theme.colors.border}
+          />
+        </TouchableOpacity>
+      </Pressable>
+    </Swipeable>
   );
 }
 
@@ -192,6 +284,27 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  swipeActionsContainer: {
+    flexDirection: 'row',
+  },
+  swipeAction: {
+    justifyContent: 'center',
+  },
+  swipeLeftAction: {
+    justifyContent: 'center',
+  },
+  swipeButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 75,
+    height: '100%',
+    paddingVertical: SPACING.sm,
+  },
+  swipeButtonText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+    marginTop: SPACING.xs,
   },
   checkbox: {
     marginRight: SPACING.sm,

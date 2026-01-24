@@ -2,7 +2,27 @@
  * Shared style constants for consistent UI
  */
 
-import { StyleSheet } from 'react-native';
+import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+
+/**
+ * Create a color with alpha transparency
+ * @param hex - Hex color string (e.g., '#667eea')
+ * @param alpha - Alpha value from 0 to 1 (e.g., 0.2 for 20% opacity)
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  // Convert alpha to hex (0-255)
+  const alphaHex = Math.round(alpha * 255).toString(16).padStart(2, '0');
+  return `${hex}${alphaHex}`;
+}
+
+/**
+ * Common color values for white text (use theme.colors.textInverse when possible)
+ */
+export const COLORS = {
+  white: '#ffffff',
+  black: '#000000',
+  transparent: 'transparent',
+} as const;
 
 // Standard spacing values
 export const SPACING = {

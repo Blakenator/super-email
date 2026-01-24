@@ -71,8 +71,8 @@ export function RichTextEditor({
 
   const execCommand = useCallback((command: FormatAction, value?: string) => {
     const script = value
-      ? `document.execCommand('${command}', false, '${value}'); updateContent();`
-      : `document.execCommand('${command}', false, null); updateContent();`;
+      ? `document.execCommand('${command}', false, '${value}'); updateContent(); updateFormats(); true;`
+      : `document.execCommand('${command}', false, null); updateContent(); updateFormats(); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 

@@ -15,11 +15,13 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
-import { Icon, Button, RichTextEditor } from '../../components/ui';
+import { Icon, Button, RichTextEditor, EmailChipInput } from '../../components/ui';
 import { useEmailStore, EmailAccount } from '../../stores/emailStore';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
+import { wrapReplyContent } from '../../../../common/src/emailHtmlStyles';
 
 const SEND_EMAIL_MUTATION = gql`
   mutation SendEmail($input: SendEmailInput!) {
@@ -54,11 +56,13 @@ interface ComposeScreenProps {
     emailId: string;
     toAddress: string;
     subject: string;
+    htmlBody?: string;
   };
 }
 
 export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { emailAccounts, fetchEmailAccounts } = useEmailStore();
   
   const [smtpProfiles, setSmtpProfiles] = useState<SmtpProfile[]>([]);
@@ -73,6 +77,12 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
   const [bodyText, setBodyText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showCcBcc, setShowCcBcc] = useState(false);
+  
+  // Format quoted original email for reply using shared utility
+  const getQuotedOriginalEmail = (): string => {
+    if (!replyTo?.htmlBody) return '';
+    return wrapReplyContent(replyTo.htmlBody, replyTo.toAddress, new Date());
+  };
 
   const handleEditorChange = (html: string, text: string) => {
     setBodyHtml(html);
@@ -122,6 +132,12 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
     setIsSending(true);
 
     try {
+      // Include quoted original email in replies
+      const quotedEmail = replyTo ? getQuotedOriginalEmail() : '';
+      const fullHtmlBody = bodyHtml 
+        ? `${bodyHtml}${quotedEmail}` 
+        : `<p>${bodyText.replace(/\n/g, '<br/>')}</p>${quotedEmail}`;
+      
       await apolloClient.mutate({
         mutation: SEND_EMAIL_MUTATION,
         variables: {
@@ -132,7 +148,7 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
             bcc: bcc ? bcc.split(',').map(e => e.trim()) : [],
             subject: subject.trim(),
             textBody: bodyText,
-            htmlBody: bodyHtml || `<p>${bodyText.replace(/\n/g, '<br/>')}</p>`,
+            htmlBody: fullHtmlBody,
           },
         },
       });
@@ -154,9 +170,10 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={0}
     >
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+      {/* Header with safe area padding */}
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border, paddingTop: insets.top + SPACING.sm }]}>
         <TouchableOpacity onPress={onClose} style={styles.headerButton}>
           <Icon name="x" size="md" color={theme.colors.text} />
         </TouchableOpacity>
@@ -168,8 +185,8 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
           disabled={isSending}
           style={[styles.sendButton, { backgroundColor: theme.colors.primary }]}
         >
-          <Icon name="send" size="sm" color="#fff" />
-          <Text style={styles.sendButtonText}>{isSending ? 'Sending...' : 'Send'}</Text>
+          <Icon name="send" size="sm" color={theme.colors.textInverse} />
+          <Text style={[styles.sendButtonText, { color: theme.colors.textInverse }]}>{isSending ? 'Sending...' : 'Send'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -187,50 +204,39 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
         </TouchableOpacity>
 
         {/* To */}
-        <View style={[styles.fieldRow, { borderBottomColor: theme.colors.border }]}>
-          <Text style={[styles.fieldLabel, { color: theme.colors.textMuted }]}>To:</Text>
-          <TextInput
-            style={[styles.fieldInput, { color: theme.colors.text }]}
+        <View style={[styles.chipFieldRow, { borderBottomColor: theme.colors.border }]}>
+          <View style={styles.chipFieldHeader}>
+            <Text style={[styles.fieldLabel, { color: theme.colors.textMuted }]}>To:</Text>
+            {!showCcBcc && (
+              <TouchableOpacity onPress={() => setShowCcBcc(true)}>
+                <Text style={[styles.ccBccToggle, { color: theme.colors.primary }]}>Cc/Bcc</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <EmailChipInput
             value={to}
-            onChangeText={setTo}
-            placeholder="Recipient email"
-            placeholderTextColor={theme.colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
+            onChange={setTo}
+            placeholder="Recipient email addresses"
           />
-          {!showCcBcc && (
-            <TouchableOpacity onPress={() => setShowCcBcc(true)}>
-              <Text style={[styles.ccBccToggle, { color: theme.colors.primary }]}>Cc/Bcc</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {/* CC & BCC */}
         {showCcBcc && (
           <>
-            <View style={[styles.fieldRow, { borderBottomColor: theme.colors.border }]}>
+            <View style={[styles.chipFieldRow, { borderBottomColor: theme.colors.border }]}>
               <Text style={[styles.fieldLabel, { color: theme.colors.textMuted }]}>Cc:</Text>
-              <TextInput
-                style={[styles.fieldInput, { color: theme.colors.text }]}
+              <EmailChipInput
                 value={cc}
-                onChangeText={setCc}
+                onChange={setCc}
                 placeholder="CC recipients"
-                placeholderTextColor={theme.colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
               />
             </View>
-            <View style={[styles.fieldRow, { borderBottomColor: theme.colors.border }]}>
+            <View style={[styles.chipFieldRow, { borderBottomColor: theme.colors.border }]}>
               <Text style={[styles.fieldLabel, { color: theme.colors.textMuted }]}>Bcc:</Text>
-              <TextInput
-                style={[styles.fieldInput, { color: theme.colors.text }]}
+              <EmailChipInput
                 value={bcc}
-                onChangeText={setBcc}
+                onChange={setBcc}
                 placeholder="BCC recipients"
-                placeholderTextColor={theme.colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
               />
             </View>
           </>
@@ -255,8 +261,12 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
             placeholder="Compose your email..."
             minHeight={250}
             autoFocus={!replyTo}
+            initialHtml={replyTo?.htmlBody ? getQuotedOriginalEmail() : undefined}
           />
         </View>
+
+        {/* Bottom spacer to prevent overlap with tab bar */}
+        <View style={{ height: insets.bottom + SPACING.xl * 2 }} />
       </ScrollView>
 
       {/* From Picker Modal */}
@@ -329,7 +339,6 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   sendButtonText: {
-    color: '#fff',
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
   },
@@ -344,9 +353,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: SPACING.sm,
   },
+  chipFieldRow: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  chipFieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SPACING.xs,
+  },
   fieldLabel: {
     fontSize: FONT_SIZE.md,
-    width: 60,
   },
   fieldValue: {
     flex: 1,

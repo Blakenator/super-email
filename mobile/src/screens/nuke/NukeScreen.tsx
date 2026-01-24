@@ -151,14 +151,14 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
     >
       {/* Header */}
       <LinearGradient
-        colors={['#ff6b6b', '#ee5a24']}
+        colors={[theme.colors.error, theme.colors.primaryDark]}
         style={styles.header}
       >
         <View style={styles.headerIconContainer}>
-          <Icon name="zap" size="xl" color="#fff" />
+          <Icon name="zap" size="xl" color={theme.colors.textInverse} />
         </View>
-        <Text style={styles.headerTitle}>Inbox Nuke</Text>
-        <Text style={styles.headerSubtitle}>
+        <Text style={[styles.headerTitle, { color: theme.colors.textInverse }]}>Inbox Nuke</Text>
+        <Text style={[styles.headerSubtitle, { color: theme.colors.textInverse }]}>
           Archive old emails to reach inbox zero
         </Text>
       </LinearGradient>
@@ -239,7 +239,7 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
           loading={isNuking}
           disabled={isNuking}
           fullWidth
-          style={{ backgroundColor: '#ee5a24' }}
+          style={{ backgroundColor: theme.colors.error }}
         />
       </View>
     </ScrollView>
@@ -267,13 +267,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: FONT_SIZE.xxxl,
     fontWeight: 'bold',
-    color: '#ffffff',
     marginBottom: SPACING.xs,
   },
   headerSubtitle: {
     fontSize: FONT_SIZE.lg,
-    color: 'rgba(255, 255, 255, 0.9)',
     textAlign: 'center',
+    opacity: 0.9,
   },
   optionsContainer: {
     padding: SPACING.md,

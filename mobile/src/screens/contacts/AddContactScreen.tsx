@@ -15,18 +15,23 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon, Button } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
 
 const SEARCH_CONTACTS_QUERY = gql`
-  query SearchContactsForMerge($email: String!) {
-    getContacts(input: { searchQuery: $email, limit: 10 }) {
+  query SearchContactsForMerge($query: String!) {
+    searchContacts(query: $query) {
       id
       firstName
       lastName
-      emails
+      emails {
+        id
+        email
+        isPrimary
+      }
       company
       isAutoCreated
     }
@@ -39,27 +44,41 @@ const CREATE_CONTACT_MUTATION = gql`
       id
       firstName
       lastName
-      emails
+      emails {
+        id
+        email
+        isPrimary
+      }
     }
   }
 `;
 
 const UPDATE_CONTACT_MUTATION = gql`
-  mutation UpdateContactEmails($id: String!, $input: UpdateContactInput!) {
-    updateContact(id: $id, input: $input) {
+  mutation UpdateContactEmails($input: UpdateContactInput!) {
+    updateContact(input: $input) {
       id
       firstName
       lastName
-      emails
+      emails {
+        id
+        email
+        isPrimary
+      }
     }
   }
 `;
+
+interface ContactEmail {
+  id: string;
+  email: string;
+  isPrimary: boolean;
+}
 
 interface Contact {
   id: string;
   firstName: string;
   lastName: string;
-  emails: string[];
+  emails: ContactEmail[];
   company?: string;
   isAutoCreated: boolean;
 }
@@ -71,6 +90,7 @@ interface AddContactScreenProps {
 export function AddContactScreen({ onClose }: AddContactScreenProps) {
   const theme = useTheme();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const params = route.params as { email?: string; name?: string } | undefined;
 
   // Pre-fill from route params
@@ -105,11 +125,14 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
     try {
       const { data } = await apolloClient.query({
         query: SEARCH_CONTACTS_QUERY,
-        variables: { email },
+        variables: { query: email },
         fetchPolicy: 'network-only',
       });
-      const contacts = data?.getContacts ?? [];
-      setMatchingContacts(contacts.filter((c: Contact) => !c.emails.includes(email)));
+      const contacts = data?.searchContacts ?? [];
+      // Filter out contacts that already have this email address
+      setMatchingContacts(contacts.filter((c: Contact) => 
+        !c.emails.some(e => e.email.toLowerCase() === email.toLowerCase())
+      ));
     } catch (error) {
       console.error('Error searching contacts:', error);
     } finally {
@@ -129,12 +152,17 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
         // Add email to existing contact
         const existingContact = matchingContacts.find(c => c.id === selectedContactId);
         if (existingContact) {
+          // Build new emails array with ContactEmailInput format
+          const updatedEmails = [
+            ...existingContact.emails.map(e => ({ email: e.email, isPrimary: e.isPrimary })),
+            { email: email.trim(), isPrimary: false },
+          ];
           await apolloClient.mutate({
             mutation: UPDATE_CONTACT_MUTATION,
             variables: {
-              id: selectedContactId,
               input: {
-                emails: [...existingContact.emails, email.trim()],
+                id: selectedContactId,
+                emails: updatedEmails,
               },
             },
           });
@@ -143,14 +171,14 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
           ]);
         }
       } else {
-        // Create new contact
+        // Create new contact with ContactEmailInput format
         await apolloClient.mutate({
           mutation: CREATE_CONTACT_MUTATION,
           variables: {
             input: {
               firstName: firstName.trim() || email.split('@')[0],
-              lastName: lastName.trim(),
-              emails: [email.trim()],
+              lastName: lastName.trim() || undefined,
+              emails: [{ email: email.trim(), isPrimary: true }],
               company: company.trim() || undefined,
               notes: notes.trim() || undefined,
             },
@@ -175,7 +203,7 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border, paddingTop: insets.top }]}>
         <TouchableOpacity onPress={onClose} style={styles.headerButton}>
           <Icon name="x" size="md" color={theme.colors.text} />
         </TouchableOpacity>
@@ -192,11 +220,11 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
           ]}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={theme.colors.textInverse} />
           ) : (
             <>
-              <Icon name="check" size="sm" color="#fff" />
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Icon name="check" size="sm" color={theme.colors.textInverse} />
+              <Text style={[styles.saveButtonText, { color: theme.colors.textInverse }]}>Save</Text>
             </>
           )}
         </TouchableOpacity>
@@ -218,12 +246,12 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
             <Icon
               name="user-plus"
               size="sm"
-              color={mode === 'new' ? '#fff' : theme.colors.text}
+              color={mode === 'new' ? theme.colors.textInverse : theme.colors.text}
             />
             <Text
               style={[
                 styles.modeButtonText,
-                { color: mode === 'new' ? '#fff' : theme.colors.text },
+                { color: mode === 'new' ? theme.colors.textInverse : theme.colors.text },
               ]}
             >
               New Contact
@@ -239,12 +267,12 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
             <Icon
               name="users"
               size="sm"
-              color={mode === 'merge' ? '#fff' : theme.colors.text}
+              color={mode === 'merge' ? theme.colors.textInverse : theme.colors.text}
             />
             <Text
               style={[
                 styles.modeButtonText,
-                { color: mode === 'merge' ? '#fff' : theme.colors.text },
+                { color: mode === 'merge' ? theme.colors.textInverse : theme.colors.text },
               ]}
             >
               Add to Existing
@@ -373,7 +401,7 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
                 onPress={() => setSelectedContactId(contact.id)}
               >
                 <View style={[styles.contactAvatar, { backgroundColor: theme.colors.primary }]}>
-                  <Text style={styles.contactAvatarText}>
+                  <Text style={[styles.contactAvatarText, { color: theme.colors.textInverse }]}>
                     {getContactInitials(contact)}
                   </Text>
                 </View>
@@ -382,7 +410,7 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
                     {contact.firstName} {contact.lastName}
                   </Text>
                   <Text style={[styles.contactEmails, { color: theme.colors.textMuted }]} numberOfLines={1}>
-                    {contact.emails.join(', ')}
+                    {contact.emails.map(e => e.email).join(', ')}
                   </Text>
                   {contact.company && (
                     <Text style={[styles.contactCompany, { color: theme.colors.textMuted }]}>
@@ -535,7 +563,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contactAvatarText: {
-    color: '#fff',
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
   },

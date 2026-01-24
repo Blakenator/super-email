@@ -306,7 +306,7 @@ export function ContactsScreen({ onContactPress, onAddContact }: ContactsScreenP
         style={[styles.fab, { backgroundColor: theme.colors.primary }]}
         onPress={onAddContact}
       >
-        <Icon name="user-plus" size="lg" color="#fff" />
+        <Icon name="user-plus" size="lg" color={theme.colors.textInverse} />
       </TouchableOpacity>
     </View>
   );

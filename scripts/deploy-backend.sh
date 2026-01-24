@@ -29,9 +29,29 @@ if [ -z "$GIT_COMMIT_SHA" ]; then
 fi
 log_info "Git commit SHA: $GIT_COMMIT_SHA"
 
+# Verify PROJECT_ROOT is valid
+if [ ! -d "$PROJECT_ROOT" ]; then
+    log_error "PROJECT_ROOT does not exist: $PROJECT_ROOT"
+    exit 1
+fi
+
+if [ ! -d "$PROJECT_ROOT/common" ]; then
+    log_error "common/ directory not found in PROJECT_ROOT: $PROJECT_ROOT"
+    log_error "Current directory: $(pwd)"
+    log_error "SCRIPT_DIR: $SCRIPT_DIR"
+    exit 1
+fi
+
+if [ ! -d "$PROJECT_ROOT/backend" ]; then
+    log_error "backend/ directory not found in PROJECT_ROOT: $PROJECT_ROOT"
+    exit 1
+fi
+
 # Build backend and common packages first
 # This ensures we hash the actual build outputs (what gets deployed)
 log_info "Building backend and common packages..."
+log_info "PROJECT_ROOT: $PROJECT_ROOT"
+
 cd "$PROJECT_ROOT/common"
 if ! pnpm run build; then
     log_error "Failed to build common package"
@@ -45,6 +65,17 @@ if ! pnpm run build; then
 fi
 
 cd "$PROJECT_ROOT"
+
+# Verify build outputs exist
+if [ ! -d "$PROJECT_ROOT/common/dist" ]; then
+    log_error "common/dist/ not found - build may have failed"
+    exit 1
+fi
+
+if [ ! -d "$PROJECT_ROOT/backend/dist" ]; then
+    log_error "backend/dist/ not found - build may have failed"
+    exit 1
+fi
 
 # Calculate content hash from built outputs
 # This includes all compiled code and dependencies that actually get deployed
@@ -60,18 +91,22 @@ else
 fi
 
 # Collect all files that affect the deployed image
+# Use absolute paths to ensure we find files regardless of current directory
 {
-    # Built JavaScript outputs (what actually runs)
-    find backend common -type f \( -name "*.ts" -name "*.json" \) 2>/dev/null
+    # Built JavaScript outputs (what actually runs in the container)
+    find "$PROJECT_ROOT/backend/dist" -type f \( -name "*.js" -o -name "*.js.map" \) 2>/dev/null
+    find "$PROJECT_ROOT/common/dist" -type f \( -name "*.js" -o -name "*.js.map" \) 2>/dev/null
     # GraphQL schema (copied to Docker image)
-    find common -name "schema.graphql" 2>/dev/null
+    find "$PROJECT_ROOT/common" -maxdepth 1 -name "schema.graphql" -type f 2>/dev/null
     # Dockerfile and .dockerignore (affect Docker build)
-    find backend -maxdepth 1 -type f -name "Dockerfile" 2>/dev/null
-    find . -maxdepth 1 -type f -name ".dockerignore" 2>/dev/null
+    find "$PROJECT_ROOT/backend" -maxdepth 1 -type f -name "Dockerfile" 2>/dev/null
+    find "$PROJECT_ROOT" -maxdepth 1 -type f -name ".dockerignore" 2>/dev/null
     # Package files that affect dependencies (copied into Docker image)
-    echo "pnpm-lock.yaml"
-    echo "pnpm-workspace.yaml"
-    echo "package.json"
+    echo "$PROJECT_ROOT/pnpm-lock.yaml"
+    echo "$PROJECT_ROOT/pnpm-workspace.yaml"
+    echo "$PROJECT_ROOT/package.json"
+    echo "$PROJECT_ROOT/common/package.json"
+    echo "$PROJECT_ROOT/backend/package.json"
 } | sort > "$HASH_FILES"
 
 # Check if we found any files

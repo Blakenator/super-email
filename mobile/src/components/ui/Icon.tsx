@@ -77,7 +77,7 @@ const ICON_MAP: Record<IconName, { set: 'feather' | 'material' | 'ionicons'; nam
   paperclip: { set: 'feather', name: 'paperclip' },
   reply: { set: 'material', name: 'reply' },
   'reply-all': { set: 'material', name: 'reply-all' },
-  forward: { set: 'material', name: 'share' },
+  forward: { set: 'material', name: 'forward' },
   tag: { set: 'feather', name: 'tag' },
   bookmark: { set: 'feather', name: 'bookmark' },
   flag: { set: 'feather', name: 'flag' },

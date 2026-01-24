@@ -7,11 +7,12 @@ import { create } from 'zustand';
 import { apolloClient } from '../services/apollo';
 import { gql } from '@apollo/client';
 import { 
-  secureSetObject, 
-  secureGetObject, 
+  cacheSetObject, 
+  cacheGetObject, 
   secureSet,
   secureGet,
-  STORAGE_KEYS 
+  STORAGE_KEYS,
+  CACHE_KEYS,
 } from '../services/secureStorage';
 
 // GraphQL queries
@@ -224,8 +225,8 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       
       set({ emails, totalCount });
       
-      // Cache emails for offline mode
-      await secureSetObject(STORAGE_KEYS.CACHED_EMAILS, {
+      // Cache emails for offline mode (using AsyncStorage for larger data)
+      await cacheSetObject(CACHE_KEYS.CACHED_EMAILS, {
         folder: currentFolder,
         accountId: currentAccountId,
         emails,
@@ -374,13 +375,13 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   loadCachedData: async () => {
     const { currentFolder, currentAccountId } = get();
     
-    const cached = await secureGetObject<{
+    const cached = await cacheGetObject<{
       folder: EmailFolder;
       accountId: string | null;
       emails: Email[];
       totalCount: number;
       timestamp: string;
-    }>(STORAGE_KEYS.CACHED_EMAILS);
+    }>(CACHE_KEYS.CACHED_EMAILS);
     
     if (
       cached &&

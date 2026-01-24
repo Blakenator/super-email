@@ -39,7 +39,7 @@ export function AccountsSettingsScreen({ onAddAccount, onEditAccount }: Accounts
       onPress={() => onEditAccount?.(account.id)}
     >
       <View style={[styles.accountIcon, { backgroundColor: theme.colors.primary }]}>
-        <Icon name="mail" size="md" color="#fff" />
+        <Icon name="mail" size="md" color={theme.colors.textInverse} />
       </View>
       <View style={styles.accountInfo}>
         <Text style={[styles.accountName, { color: theme.colors.text }]}>
@@ -100,8 +100,8 @@ export function AccountsSettingsScreen({ onAddAccount, onEditAccount }: Accounts
         style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
         onPress={onAddAccount}
       >
-        <Icon name="plus" size="md" color="#fff" />
-        <Text style={styles.addButtonText}>Add Email Account</Text>
+        <Icon name="plus" size="md" color={theme.colors.textInverse} />
+        <Text style={[styles.addButtonText, { color: theme.colors.textInverse }]}>Add Email Account</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -181,7 +181,6 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   addButtonText: {
-    color: '#fff',
     fontSize: FONT_SIZE.lg,
     fontWeight: '600',
   },

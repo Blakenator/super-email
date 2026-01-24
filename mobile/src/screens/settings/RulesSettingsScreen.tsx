@@ -121,8 +121,8 @@ export function RulesSettingsScreen({ onEditRule, onAddRule }: RulesSettingsScre
         style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
         onPress={onAddRule}
       >
-        <Icon name="plus" size="md" color="#fff" />
-        <Text style={styles.addButtonText}>Create Rule</Text>
+        <Icon name="plus" size="md" color={theme.colors.textInverse} />
+        <Text style={[styles.addButtonText, { color: theme.colors.textInverse }]}>Create Rule</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -173,7 +173,6 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   addButtonText: {
-    color: '#fff',
     fontSize: FONT_SIZE.lg,
     fontWeight: '600',
   },

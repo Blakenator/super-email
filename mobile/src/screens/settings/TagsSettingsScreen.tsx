@@ -106,8 +106,8 @@ export function TagsSettingsScreen({ onEditTag, onAddTag }: TagsSettingsScreenPr
         style={[styles.addButton, { backgroundColor: theme.colors.primary }]}
         onPress={onAddTag}
       >
-        <Icon name="plus" size="md" color="#fff" />
-        <Text style={styles.addButtonText}>Create Tag</Text>
+        <Icon name="plus" size="md" color={theme.colors.textInverse} />
+        <Text style={[styles.addButtonText, { color: theme.colors.textInverse }]}>Create Tag</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -156,7 +156,6 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   addButtonText: {
-    color: '#fff',
     fontSize: FONT_SIZE.lg,
     fontWeight: '600',
   },

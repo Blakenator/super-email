@@ -234,11 +234,11 @@ export function EditAccountScreen({ onClose }: EditAccountScreenProps) {
           ]}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={theme.colors.textInverse} />
           ) : (
             <>
-              <Icon name="check" size="sm" color="#fff" />
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Icon name="check" size="sm" color={theme.colors.textInverse} />
+              <Text style={[styles.saveButtonText, { color: theme.colors.textInverse }]}>Save</Text>
             </>
           )}
         </TouchableOpacity>
@@ -315,7 +315,7 @@ export function EditAccountScreen({ onClose }: EditAccountScreenProps) {
                   <Text
                     style={[
                       styles.typeOptionText,
-                      { color: accountType === type ? '#fff' : theme.colors.text },
+                      { color: accountType === type ? theme.colors.textInverse : theme.colors.text },
                     ]}
                   >
                     {type}
@@ -435,7 +435,6 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   saveButtonText: {
-    color: '#fff',
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
   },

@@ -278,4 +278,4 @@ export function useColors(): ThemeColors {
 }
 
 // Re-export shared styles
-export { sharedStyles, SPACING, RADIUS, FONT_SIZE, ICON_SIZE } from './styles';
+export { sharedStyles, SPACING, RADIUS, FONT_SIZE, ICON_SIZE, COLORS, withAlpha } from './styles';

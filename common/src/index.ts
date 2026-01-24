@@ -5,3 +5,9 @@ export interface MyContext {
 }
 
 export { API_ROUTES, API_BASE_PATH } from './routes.js';
+export {
+  getEmailHtmlCss,
+  wrapEmailHtml,
+  wrapReplyContent,
+  type EmailHtmlStyleOptions,
+} from './emailHtmlStyles.js';

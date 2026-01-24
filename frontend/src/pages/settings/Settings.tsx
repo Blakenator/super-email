@@ -155,6 +155,12 @@ export function Settings() {
     string | null
   >(null);
 
+  // Delete confirmation state
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(
+    null,
+  );
+
   // Pending SMTP profile creation (for "also create SMTP" flow)
   const [pendingSmtpData, setPendingSmtpData] = useState<{
     name: string;
@@ -251,10 +257,33 @@ export function Settings() {
     CREATE_EMAIL_ACCOUNT_MUTATION,
   );
 
-  const [deleteEmailAccount] = useMutation(DELETE_EMAIL_ACCOUNT_MUTATION, {
-    onCompleted: () => refetchEmailAccounts(),
-    onError: (err) => setError(err.message),
-  });
+  const [deleteEmailAccount, { loading: deletingAccount }] = useMutation(
+    DELETE_EMAIL_ACCOUNT_MUTATION,
+    {
+      onCompleted: () => {
+        refetchEmailAccounts();
+        setShowDeleteAccountModal(false);
+        setDeletingAccountId(null);
+        toast.success('Email account deleted');
+      },
+      onError: (err) => {
+        setError(err.message);
+        setShowDeleteAccountModal(false);
+        setDeletingAccountId(null);
+      },
+    },
+  );
+
+  const handleDeleteAccountClick = (accountId: string) => {
+    setDeletingAccountId(accountId);
+    setShowDeleteAccountModal(true);
+  };
+
+  const confirmDeleteAccount = () => {
+    if (deletingAccountId) {
+      deleteEmailAccount({ variables: { id: deletingAccountId } });
+    }
+  };
 
   const [syncEmailAccount, { loading: syncingAccount }] = useMutation(
     SYNC_EMAIL_ACCOUNT_MUTATION,
@@ -589,8 +618,8 @@ export function Settings() {
             },
           },
         });
-        if (result.errors?.length) {
-          throw new Error(result.errors[0].message);
+        if (result.error) {
+          throw new Error(result.error.message);
         }
         toast.success('SMTP profile updated!');
       } else {
@@ -611,8 +640,8 @@ export function Settings() {
             },
           },
         });
-        if (result.errors?.length) {
-          throw new Error(result.errors[0].message);
+        if (result.error) {
+          throw new Error(result.error.message);
         }
         toast.success('SMTP profile added!');
       }
@@ -908,6 +937,9 @@ export function Settings() {
 
   const emailAccounts = emailAccountsData?.getEmailAccounts ?? [];
   const smtpProfiles = smtpProfilesData?.getSmtpProfiles ?? [];
+  const deletingAccountData = emailAccounts.find(
+    (a) => a.id === deletingAccountId,
+  );
 
   return (
     <PageWrapper $padding $overflow="auto">
@@ -928,19 +960,19 @@ export function Settings() {
         {user && (
           <UserInfo>
             <Avatar>
-              {user.firstName[0]}
-              {user.lastName[0]}
+              {user.firstName?.[0] ?? ''}
+              {user.lastName?.[0] ?? ''}
             </Avatar>
             <div>
               <strong>
-                {user.firstName} {user.lastName}
+                {user.firstName ?? ''} {user.lastName ?? ''}
               </strong>
               <div className="text-muted">{user.email}</div>
             </div>
             <Button
               variant="outline-danger"
               className="ms-auto"
-              onClick={logout}
+              onClick={() => logout()}
             >
               <FontAwesomeIcon icon={faSignOutAlt} className="me-1" />
               Sign Out
@@ -1040,9 +1072,7 @@ export function Settings() {
                               variables: { input: { emailAccountId: id } },
                             })
                           }
-                          onDelete={(id) =>
-                            deleteEmailAccount({ variables: { id } })
-                          }
+                          onDelete={(id) => handleDeleteAccountClick(id)}
                         />
                       ))}
                     </AccountCardGrid>
@@ -1352,6 +1382,59 @@ export function Settings() {
           isTesting={testingSmtp}
           testResult={testResult}
         />
+
+        {/* Delete Account Confirmation Modal */}
+        <Modal
+          show={showDeleteAccountModal}
+          onHide={() => {
+            setShowDeleteAccountModal(false);
+            setDeletingAccountId(null);
+          }}
+          centered
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Delete Email Account</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>
+              Are you sure you want to delete the account{' '}
+              <strong>{deletingAccountData?.name}</strong>?
+            </p>
+            <Alert variant="danger">
+              <strong>Warning:</strong> This will permanently delete the email
+              account and all associated emails. This action cannot be undone.
+            </Alert>
+            <div className="text-muted small">
+              <strong>Account:</strong> {deletingAccountData?.email}
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowDeleteAccountModal(false);
+                setDeletingAccountId(null);
+              }}
+              disabled={deletingAccount}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmDeleteAccount}
+              disabled={deletingAccount}
+            >
+              {deletingAccount ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-1" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Account'
+              )}
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
         {/* Progress Modal */}
         <Modal

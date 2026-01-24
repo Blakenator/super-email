@@ -308,6 +308,11 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
     Tag: {
       emailCount: (parent: any) => parent.emailCount ?? 0,
     },
+    Contact: {
+      // Sequelize returns the association as 'ContactEmails' based on model name
+      // but GraphQL schema expects 'emails'
+      emails: (parent: any) => parent.ContactEmails || parent.emails || [],
+    },
 
     // Subscription resolvers
     Subscription: {

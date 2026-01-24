@@ -127,7 +127,7 @@ function SettingsScreenWrapper() {
   );
 }
 
-// Main Tab Navigator
+// Main Tab Navigator - Triage moved to more menu in Inbox
 function MainTabNavigator() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();

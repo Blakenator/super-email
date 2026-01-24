@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
@@ -83,6 +84,7 @@ interface EditTagScreenProps {
 export function EditTagScreen({ onClose }: EditTagScreenProps) {
   const theme = useTheme();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const params = route.params as { tagId?: string } | undefined;
   const tagId = params?.tagId;
   const isEditing = !!tagId;
@@ -195,7 +197,7 @@ export function EditTagScreen({ onClose }: EditTagScreenProps) {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border, paddingTop: insets.top }]}>
         <TouchableOpacity onPress={onClose} style={styles.headerButton}>
           <Icon name="x" size="md" color={theme.colors.text} />
         </TouchableOpacity>
@@ -212,11 +214,11 @@ export function EditTagScreen({ onClose }: EditTagScreenProps) {
           ]}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={theme.colors.textInverse} />
           ) : (
             <>
-              <Icon name="check" size="sm" color="#fff" />
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Icon name="check" size="sm" color={theme.colors.textInverse} />
+              <Text style={[styles.saveButtonText, { color: theme.colors.textInverse }]}>Save</Text>
             </>
           )}
         </TouchableOpacity>
@@ -263,7 +265,7 @@ export function EditTagScreen({ onClose }: EditTagScreenProps) {
                 ]}
                 onPress={() => setColor(c)}
               >
-                {color === c && <Icon name="check" size="sm" color="#fff" />}
+                {color === c && <Icon name="check" size="sm" color={theme.colors.textInverse} />}
               </TouchableOpacity>
             ))}
           </View>
@@ -320,7 +322,6 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   saveButtonText: {
-    color: '#fff',
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
   },
