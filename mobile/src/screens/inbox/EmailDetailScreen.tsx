@@ -15,16 +15,18 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
 import { DateTime } from 'luxon';
+import { wrapEmailHtml } from '../../../../common/src/emailHtmlStyles';
 
 const GET_EMAIL_QUERY = gql`
-  query GetEmail($id: String!) {
-    getEmail(id: $id) {
+  query GetEmail($input: GetEmailInput!) {
+    getEmail(input: $input) {
       id
       emailAccountId
       messageId
@@ -49,7 +51,7 @@ const GET_EMAIL_QUERY = gql`
       attachments {
         id
         filename
-        contentType
+        mimeType
         size
       }
     }
@@ -71,20 +73,34 @@ interface Email {
   hasAttachments: boolean;
   attachmentCount: number;
   tags: Array<{ id: string; name: string; color: string }>;
-  attachments?: Array<{ id: string; filename: string; contentType: string; size: number }>;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  }>;
 }
 
 interface EmailDetailScreenProps {
-  onReply: (replyTo: { emailId: string; toAddress: string; subject: string; htmlBody?: string }) => void;
+  onReply: (replyTo: {
+    emailId: string;
+    toAddress: string;
+    subject: string;
+    htmlBody?: string;
+  }) => void;
   onAddContact: (email: string, name?: string) => void;
 }
 
-export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenProps) {
+export function EmailDetailScreen({
+  onReply,
+  onAddContact,
+}: EmailDetailScreenProps) {
   const theme = useTheme();
   const route = useRoute();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { emailId } = route.params as { emailId: string };
-  
+
   const [email, setEmail] = useState<Email | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -98,18 +114,18 @@ export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenPr
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const { data, errors } = await apolloClient.query({
         query: GET_EMAIL_QUERY,
-        variables: { id: emailId },
+        variables: { input: { id: emailId } },
         fetchPolicy: 'network-only',
       });
-      
+
       if (errors?.length) {
         setError(errors[0].message);
         return;
       }
-      
+
       if (data?.getEmail) {
         setEmail(data.getEmail);
       } else {
@@ -140,7 +156,7 @@ export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenPr
 
   const formatDate = (dateString: string) => {
     const date = DateTime.fromISO(dateString);
-    return date.toFormat('EEE, MMM d, yyyy \'at\' h:mm a');
+    return date.toFormat("EEE, MMM d, yyyy 'at' h:mm a");
   };
 
   const formatFileSize = (bytes: number) => {
@@ -149,64 +165,36 @@ export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenPr
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Generate HTML content for WebView
+  // Generate HTML content for WebView using shared styles
   const getHtmlContent = () => {
     if (!email) return '';
-    
+
     const isDark = theme.colors.background === '#121212';
-    const bgColor = theme.colors.background;
-    const textColor = theme.colors.text;
-    const linkColor = theme.colors.primary;
-    
-    const content = email.htmlBody || `<pre style="white-space: pre-wrap; font-family: inherit;">${email.textBody || ''}</pre>`;
-    
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              font-size: 16px;
-              line-height: 1.5;
-              color: ${textColor};
-              background-color: ${bgColor};
-              padding: 0;
-              margin: 0;
-              word-wrap: break-word;
-              overflow-wrap: break-word;
-            }
-            a { color: ${linkColor}; }
-            img { max-width: 100%; height: auto; }
-            pre, code { 
-              background: ${isDark ? '#2d2d2d' : '#f5f5f5'}; 
-              padding: 8px; 
-              border-radius: 4px;
-              overflow-x: auto;
-            }
-            blockquote {
-              border-left: 3px solid ${theme.colors.border};
-              margin: 8px 0;
-              padding-left: 12px;
-              color: ${theme.colors.textMuted};
-            }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid ${theme.colors.border}; padding: 8px; text-align: left; }
-          </style>
-        </head>
-        <body>${content}</body>
-        <script>
-          window.onload = function() {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'height',
-              height: document.body.scrollHeight
-            }));
-          };
-        </script>
-      </html>
-    `;
+    const content =
+      email.htmlBody ||
+      `<pre style="white-space: pre-wrap; font-family: inherit;">${email.textBody || ''}</pre>`;
+
+    const html = wrapEmailHtml(content, {
+      isDarkMode: isDark,
+      backgroundColor: theme.colors.background,
+      textColor: theme.colors.text,
+      linkColor: theme.colors.primary,
+      borderColor: theme.colors.border,
+      mutedColor: theme.colors.textMuted,
+    });
+
+    // Add height reporting script
+    return html.replace(
+      '</body>',
+      `<script>
+        window.onload = function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'height',
+            height: document.body.scrollHeight
+          }));
+        };
+      </script></body>`,
+    );
   };
 
   const handleWebViewMessage = (event: any) => {
@@ -220,39 +208,81 @@ export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenPr
 
   if (isLoading) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[
+          styles.loadingContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
         <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>Loading email...</Text>
+        <Text style={[styles.loadingText, { color: theme.colors.textMuted }]}>
+          Loading email...
+        </Text>
       </View>
     );
   }
 
   if (error || !email) {
     return (
-      <View style={[styles.errorContainer, { backgroundColor: theme.colors.background }]}>
+      <View
+        style={[
+          styles.errorContainer,
+          { backgroundColor: theme.colors.background },
+        ]}
+      >
         <Icon name="alert-circle" size="xl" color={theme.colors.error} />
-        <Text style={[styles.errorTitle, { color: theme.colors.text }]}>Error</Text>
-        <Text style={[styles.errorText, { color: theme.colors.textMuted }]}>{error || 'Email not found'}</Text>
-        <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.colors.primary }]} onPress={loadEmail}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+        <Text style={[styles.errorTitle, { color: theme.colors.text }]}>
+          Error
+        </Text>
+        <Text style={[styles.errorText, { color: theme.colors.textMuted }]}>
+          {error || 'Email not found'}
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.retryButton,
+            { backgroundColor: theme.colors.primary },
+          ]}
+          onPress={loadEmail}
+        >
+          <Text
+            style={[
+              styles.retryButtonText,
+              { color: theme.colors.textInverse },
+            ]}
+          >
+            Retry
+          </Text>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+    <View
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={true}
+      >
         {/* Subject */}
-        <Text style={[styles.subject, { color: theme.colors.text }]}>{email.subject || '(No Subject)'}</Text>
-        
+        <Text style={[styles.subject, { color: theme.colors.text }]}>
+          {email.subject || '(No Subject)'}
+        </Text>
+
         {/* Tags */}
         {email.tags.length > 0 && (
           <View style={styles.tagsRow}>
             {email.tags.map((tag) => (
-              <View key={tag.id} style={[styles.tag, { backgroundColor: tag.color + '20' }]}>
+              <View
+                key={tag.id}
+                style={[styles.tag, { backgroundColor: tag.color + '20' }]}
+              >
                 <View style={[styles.tagDot, { backgroundColor: tag.color }]} />
-                <Text style={[styles.tagText, { color: tag.color }]}>{tag.name}</Text>
+                <Text style={[styles.tagText, { color: tag.color }]}>
+                  {tag.name}
+                </Text>
               </View>
             ))}
           </View>
@@ -263,8 +293,18 @@ export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenPr
           style={[styles.senderCard, { backgroundColor: theme.colors.surface }]}
           onPress={handleAddSenderToContacts}
         >
-          <View style={[styles.senderAvatar, { backgroundColor: theme.colors.primary }]}>
-            <Text style={styles.senderAvatarText}>
+          <View
+            style={[
+              styles.senderAvatar,
+              { backgroundColor: theme.colors.primary },
+            ]}
+          >
+            <Text
+              style={[
+                styles.senderAvatarText,
+                { color: theme.colors.textInverse },
+              ]}
+            >
               {(email.fromName || email.fromAddress)[0].toUpperCase()}
             </Text>
           </View>
@@ -272,28 +312,55 @@ export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenPr
             <Text style={[styles.senderName, { color: theme.colors.text }]}>
               {email.fromName || email.fromAddress.split('@')[0]}
             </Text>
-            <Text style={[styles.senderEmail, { color: theme.colors.textMuted }]}>
+            <Text
+              style={[styles.senderEmail, { color: theme.colors.textMuted }]}
+            >
               {email.fromAddress}
             </Text>
             <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>
               {formatDate(email.receivedAt)}
             </Text>
           </View>
-          <TouchableOpacity onPress={handleAddSenderToContacts} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={handleAddSenderToContacts}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Icon name="user-plus" size="md" color={theme.colors.primary} />
           </TouchableOpacity>
         </TouchableOpacity>
 
         {/* Recipients */}
-        <View style={[styles.recipientsCard, { backgroundColor: theme.colors.surface }]}>
-          <Text style={[styles.recipientLabel, { color: theme.colors.textMuted }]}>To:</Text>
-          <Text style={[styles.recipientText, { color: theme.colors.text }]} numberOfLines={2}>
+        <View
+          style={[
+            styles.recipientsCard,
+            { backgroundColor: theme.colors.surface },
+          ]}
+        >
+          <Text
+            style={[styles.recipientLabel, { color: theme.colors.textMuted }]}
+          >
+            To:
+          </Text>
+          <Text
+            style={[styles.recipientText, { color: theme.colors.text }]}
+            numberOfLines={2}
+          >
             {email.toAddresses.join(', ')}
           </Text>
           {email.ccAddresses && email.ccAddresses.length > 0 && (
             <>
-              <Text style={[styles.recipientLabel, { color: theme.colors.textMuted, marginTop: SPACING.xs }]}>Cc:</Text>
-              <Text style={[styles.recipientText, { color: theme.colors.text }]} numberOfLines={2}>
+              <Text
+                style={[
+                  styles.recipientLabel,
+                  { color: theme.colors.textMuted, marginTop: SPACING.xs },
+                ]}
+              >
+                Cc:
+              </Text>
+              <Text
+                style={[styles.recipientText, { color: theme.colors.text }]}
+                numberOfLines={2}
+              >
                 {email.ccAddresses.join(', ')}
               </Text>
             </>
@@ -301,58 +368,129 @@ export function EmailDetailScreen({ onReply, onAddContact }: EmailDetailScreenPr
         </View>
 
         {/* Attachments */}
-        {email.hasAttachments && email.attachments && email.attachments.length > 0 && (
-          <View style={[styles.attachmentsCard, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.attachmentsTitle, { color: theme.colors.text }]}>
-              <Icon name="paperclip" size="sm" color={theme.colors.textMuted} /> {email.attachmentCount} Attachment{email.attachmentCount !== 1 ? 's' : ''}
-            </Text>
-            {email.attachments.map((attachment) => (
-              <View key={attachment.id} style={[styles.attachmentItem, { borderColor: theme.colors.border }]}>
-                <Icon name="file-text" size="md" color={theme.colors.textMuted} />
-                <View style={styles.attachmentInfo}>
-                  <Text style={[styles.attachmentName, { color: theme.colors.text }]} numberOfLines={1}>
-                    {attachment.filename}
-                  </Text>
-                  <Text style={[styles.attachmentSize, { color: theme.colors.textMuted }]}>
-                    {formatFileSize(attachment.size)}
-                  </Text>
+        {email.hasAttachments &&
+          email.attachments &&
+          email.attachments.length > 0 && (
+            <View
+              style={[
+                styles.attachmentsCard,
+                { backgroundColor: theme.colors.surface },
+              ]}
+            >
+              <Text
+                style={[styles.attachmentsTitle, { color: theme.colors.text }]}
+              >
+                <Icon
+                  name="paperclip"
+                  size="sm"
+                  color={theme.colors.textMuted}
+                />{' '}
+                {email.attachmentCount} Attachment
+                {email.attachmentCount !== 1 ? 's' : ''}
+              </Text>
+              {email.attachments.map((attachment) => (
+                <View
+                  key={attachment.id}
+                  style={[
+                    styles.attachmentItem,
+                    { borderColor: theme.colors.border },
+                  ]}
+                >
+                  <Icon
+                    name="file-text"
+                    size="md"
+                    color={theme.colors.textMuted}
+                  />
+                  <View style={styles.attachmentInfo}>
+                    <Text
+                      style={[
+                        styles.attachmentName,
+                        { color: theme.colors.text },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {attachment.filename}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.attachmentSize,
+                        { color: theme.colors.textMuted },
+                      ]}
+                    >
+                      {formatFileSize(attachment.size)}
+                    </Text>
+                  </View>
+                  <Icon
+                    name="download"
+                    size="md"
+                    color={theme.colors.primary}
+                  />
                 </View>
-                <Icon name="download" size="md" color={theme.colors.primary} />
-              </View>
-            ))}
-          </View>
-        )}
+              ))}
+            </View>
+          )}
 
         {/* Email Body */}
-        <View style={[styles.bodyContainer, { backgroundColor: theme.colors.surface }]}>
+        <View
+          style={[
+            styles.bodyContainer,
+            { backgroundColor: theme.colors.surface, minHeight: 300 },
+          ]}
+        >
           <WebView
             source={{ html: getHtmlContent() }}
-            style={{ height: webViewHeight, width: width - SPACING.md * 2 - 2 }}
-            scrollEnabled={false}
+            style={{
+              height: Math.max(webViewHeight, 300),
+              width: width - SPACING.md * 2 - 2,
+            }}
+            scrollEnabled={true}
+            nestedScrollEnabled={true}
             onMessage={handleWebViewMessage}
             originWhitelist={['*']}
             javaScriptEnabled
+            showsVerticalScrollIndicator={true}
           />
         </View>
       </ScrollView>
 
       {/* Action Bar */}
-      <View style={[styles.actionBar, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
+      <View
+        style={[
+          styles.actionBar,
+          {
+            backgroundColor: theme.colors.surface,
+            borderTopColor: theme.colors.border,
+            paddingBottom: Math.max(insets.bottom, SPACING.sm),
+          },
+        ]}
+      >
         <TouchableOpacity style={styles.actionButton} onPress={handleReply}>
           <Icon name="reply" size="md" color={theme.colors.primary} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.primary }]}>Reply</Text>
+          <Text
+            style={[styles.actionButtonText, { color: theme.colors.primary }]}
+          >
+            Reply
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
           <Icon name="reply-all" size="md" color={theme.colors.text} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>Reply All</Text>
+          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
+            Reply All
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
           <Icon name="forward" size="md" color={theme.colors.text} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>Forward</Text>
+          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
+            Forward
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionButton}>
           <Icon name="trash-2" size="md" color={theme.colors.error} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.error }]}>Delete</Text>
+          <Text
+            style={[styles.actionButtonText, { color: theme.colors.error }]}
+          >
+            Delete
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -402,7 +540,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md,
   },
   retryButtonText: {
-    color: '#fff',
     fontWeight: '600',
     fontSize: FONT_SIZE.md,
   },
@@ -450,7 +587,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   senderAvatarText: {
-    color: '#fff',
     fontSize: FONT_SIZE.lg,
     fontWeight: '600',
   },

@@ -16,7 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from '../../theme';
+import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { useAuthStore } from '../../stores/authStore';
 import { Button, Input, useSafeInsets } from '../../components/ui';
 import { getBiometricTypeName } from '../../services/biometricAuth';
@@ -78,7 +78,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   
   return (
     <LinearGradient
-      colors={['#667eea', '#764ba2']}
+      colors={[theme.colors.primary, theme.colors.secondary]}
       style={styles.gradient}
     >
       <KeyboardAvoidingView
@@ -91,8 +91,8 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
         >
           <View style={styles.header}>
             <Text style={styles.logoIcon}>✉️</Text>
-            <Text style={styles.logoText}>StacksMail</Text>
-            <Text style={styles.tagline}>Sign in to your account</Text>
+            <Text style={[styles.logoText, { color: theme.colors.textInverse }]}>StacksMail</Text>
+            <Text style={[styles.tagline, { color: theme.colors.textInverse, opacity: 0.8 }]}>Sign in to your account</Text>
           </View>
           
           <View
@@ -241,14 +241,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   logoText: {
-    fontSize: 32,
+    fontSize: FONT_SIZE.xxxl,
     fontWeight: 'bold',
-    color: '#ffffff',
   },
   tagline: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 8,
+    fontSize: FONT_SIZE.lg,
+    marginTop: SPACING.sm,
   },
   card: {
     borderRadius: 16,

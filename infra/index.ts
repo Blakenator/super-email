@@ -572,6 +572,57 @@ const supabaseServiceSecretVersion = new aws.secretsmanager.SecretVersion(
 );
 
 // =============================================================================
+// Stripe Secrets in Secrets Manager
+// =============================================================================
+
+// Get Stripe keys from Pulumi config (optional for deployments without billing)
+const stripeSecretKey =
+  config.getSecret('stripeSecretKey') || pulumi.output('');
+const stripeWebhookSecret =
+  config.getSecret('stripeWebhookSecret') || pulumi.output('');
+const stripePublishableKey = config.get('stripePublishableKey') || '';
+
+// Stripe secret key
+const stripeKeySecret = new aws.secretsmanager.Secret(
+  `${stackName}-stripe-key`,
+  {
+    namePrefix: `${stackName}-stripe-`,
+    description: 'Stripe Secret Key',
+    recoveryWindowInDays: 0,
+    tags: { Name: `${stackName}-stripe-key`, Environment: environment },
+  },
+);
+
+const stripeKeySecretVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-stripe-key-version`,
+  {
+    secretId: stripeKeySecret.id,
+    secretString: stripeSecretKey,
+  },
+  { ignoreChanges: ['secretString'] },
+);
+
+// Stripe webhook secret
+const stripeWebhookSecretResource = new aws.secretsmanager.Secret(
+  `${stackName}-stripe-webhook`,
+  {
+    namePrefix: `${stackName}-stripe-webhook-`,
+    description: 'Stripe Webhook Secret',
+    recoveryWindowInDays: 0,
+    tags: { Name: `${stackName}-stripe-webhook`, Environment: environment },
+  },
+);
+
+const stripeWebhookSecretVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-stripe-webhook-version`,
+  {
+    secretId: stripeWebhookSecretResource.id,
+    secretString: stripeWebhookSecret,
+  },
+  { ignoreChanges: ['secretString'] },
+);
+
+// =============================================================================
 // ECS Task Definition
 // =============================================================================
 
@@ -586,17 +637,29 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
     executionRoleArn: taskExecutionRole.arn,
     taskRoleArn: taskRole.arn,
     containerDefinitions: pulumi
-      .all([
-        backendRepo.repositoryUrl,
-        database.address,
-        database.port,
-        dbPassword,
-        attachmentsBucket.bucket,
-        currentRegion.name,
-        supabaseServiceSecretVersion.arn,
-      ])
+      .output({
+        repoUrl: backendRepo.repositoryUrl,
+        dbHost: database.address,
+        dbPort: database.port,
+        dbPass: dbPassword,
+        bucketName: attachmentsBucket.bucket,
+        region: currentRegion.name,
+        supabaseSecretArn: supabaseServiceSecretVersion.arn,
+        stripeKeyArn: stripeKeySecretVersion.arn,
+        stripeWebhookArn: stripeWebhookSecretVersion.arn,
+      })
       .apply(
-        ([repoUrl, dbHost, dbPort, dbPass, bucketName, region, secretArn]) =>
+        ({
+          repoUrl,
+          dbHost,
+          dbPort,
+          dbPass,
+          bucketName,
+          region,
+          supabaseSecretArn,
+          stripeKeyArn,
+          stripeWebhookArn,
+        }) =>
           JSON.stringify([
             {
               name: 'backend',
@@ -619,9 +682,15 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'SECRETS_BASE_PATH', value: 'email-client' },
                 { name: 'SUPABASE_URL', value: supabaseUrl },
                 { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
+                { name: 'STRIPE_PUBLISHABLE_KEY', value: stripePublishableKey },
               ],
               secrets: [
-                { name: 'SUPABASE_SERVICE_ROLE_KEY', valueFrom: secretArn },
+                {
+                  name: 'SUPABASE_SERVICE_ROLE_KEY',
+                  valueFrom: supabaseSecretArn,
+                },
+                { name: 'STRIPE_SECRET_KEY', valueFrom: stripeKeyArn },
+                { name: 'STRIPE_WEBHOOK_SECRET', valueFrom: stripeWebhookArn },
               ],
               logConfiguration: {
                 logDriver: 'awslogs',

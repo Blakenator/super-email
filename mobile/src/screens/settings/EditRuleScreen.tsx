@@ -291,11 +291,11 @@ export function EditRuleScreen({ onClose }: EditRuleScreenProps) {
           ]}
         >
           {isSaving ? (
-            <ActivityIndicator size="small" color="#fff" />
+            <ActivityIndicator size="small" color={theme.colors.textInverse} />
           ) : (
             <>
-              <Icon name="check" size="sm" color="#fff" />
-              <Text style={styles.saveButtonText}>Save</Text>
+              <Icon name="check" size="sm" color={theme.colors.textInverse} />
+              <Text style={[styles.saveButtonText, { color: theme.colors.textInverse }]}>Save</Text>
             </>
           )}
         </TouchableOpacity>
@@ -473,7 +473,6 @@ const styles = StyleSheet.create({
     gap: SPACING.xs,
   },
   saveButtonText: {
-    color: '#fff',
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
   },

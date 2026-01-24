@@ -10,12 +10,18 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
   Alert,
 } from 'react-native';
-import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
+import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS, COLORS } from '../../theme';
 import { useAuthStore, ThemePreference } from '../../stores/authStore';
-import { Icon, IconName, useSafeInsets } from '../../components/ui';
+import {
+  Icon,
+  IconName,
+  useSafeInsets,
+  ListItem,
+  ListItemSwitch,
+  ListSection,
+} from '../../components/ui';
 
 interface SettingsScreenProps {
   onNavigateToAccounts: () => void;
@@ -35,7 +41,7 @@ export function SettingsScreen({
   onNavigateToNuke,
 }: SettingsScreenProps) {
   const theme = useTheme();
-  const { top: topInset } = useSafeInsets(['top']);
+  const { top: topInset, bottom: bottomInset } = useSafeInsets(['top', 'bottom']);
   const {
     user,
     logout,
@@ -44,9 +50,9 @@ export function SettingsScreen({
     setBiometric,
     setThemePreference,
   } = useAuthStore();
-  
+
   const currentTheme = user?.themePreference || 'AUTO';
-  
+
   const handleLogout = () => {
     Alert.alert(
       'Sign Out',
@@ -58,10 +64,10 @@ export function SettingsScreen({
           style: 'destructive',
           onPress: () => logout(),
         },
-      ]
+      ],
     );
   };
-  
+
   const handleBiometricToggle = async (enabled: boolean) => {
     await setBiometric(enabled);
   };
@@ -69,64 +75,22 @@ export function SettingsScreen({
   const handleThemeChange = async (newTheme: ThemePreference) => {
     await setThemePreference(newTheme);
   };
-  
-  const renderSectionHeader = (title: string) => (
-    <View style={sharedStyles.sectionHeader}>
-      <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>
-        {title}
-      </Text>
-    </View>
-  );
-  
-  const renderSettingRow = (
-    icon: IconName,
-    title: string,
-    subtitle?: string,
-    onPress?: () => void,
-    rightElement?: React.ReactNode,
-    destructive?: boolean
-  ) => (
-    <TouchableOpacity
-      onPress={onPress}
-      disabled={!onPress && !rightElement}
-      style={[
-        sharedStyles.listItem,
-        sharedStyles.listItemBorder,
-        { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border },
-      ]}
-    >
-      <View style={styles.iconContainer}>
-        <Icon name={icon} size="md" color={destructive ? theme.colors.error : theme.colors.textMuted} />
-      </View>
-      <View style={sharedStyles.listItemContent}>
-        <Text style={[sharedStyles.listItemTitle, { color: destructive ? theme.colors.error : theme.colors.text }]}>
-          {title}
-        </Text>
-        {subtitle && (
-          <Text style={[sharedStyles.listItemSubtitle, { color: theme.colors.textMuted }]}>
-            {subtitle}
-          </Text>
-        )}
-      </View>
-      {rightElement || (
-        onPress && (
-          <Icon name="chevron-right" size="md" color={theme.colors.textMuted} />
-        )
-      )}
-    </TouchableOpacity>
-  );
-  
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={[sharedStyles.screenScrollContent, { paddingTop: topInset }]}
+      contentContainerStyle={[
+        sharedStyles.screenScrollContent,
+        { paddingTop: topInset, paddingBottom: bottomInset },
+      ]}
     >
       {/* User Info */}
       {user && (
         <View style={[styles.userCard, { backgroundColor: theme.colors.surface }]}>
           <View style={[styles.userAvatar, { backgroundColor: theme.colors.primary }]}>
-            <Text style={styles.userAvatarText}>
-              {user.firstName?.[0] || ''}{user.lastName?.[0] || ''}
+            <Text style={[styles.userAvatarText, { color: theme.colors.textInverse }]}>
+              {user.firstName?.[0] || ''}
+              {user.lastName?.[0] || ''}
             </Text>
           </View>
           <View style={styles.userInfo}>
@@ -139,52 +103,51 @@ export function SettingsScreen({
           </View>
         </View>
       )}
-      
+
       {/* Email Configuration */}
-      {renderSectionHeader('EMAIL CONFIGURATION')}
-      
+      <ListSection title="EMAIL CONFIGURATION" />
       <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        {renderSettingRow(
-          'inbox',
-          'Email Accounts',
-          'IMAP/POP email accounts',
-          onNavigateToAccounts
-        )}
-        {renderSettingRow(
-          'send',
-          'SMTP Profiles',
-          'Outgoing email settings',
-          onNavigateToSmtp
-        )}
-        {renderSettingRow(
-          'tag',
-          'Tags',
-          'Manage email labels',
-          onNavigateToTags
-        )}
-        {renderSettingRow(
-          'zap',
-          'Mail Rules',
-          'Automatic email filtering',
-          onNavigateToRules
-        )}
+        <ListItem
+          icon="inbox"
+          title="Email Accounts"
+          subtitle="IMAP/POP email accounts"
+          onPress={onNavigateToAccounts}
+        />
+        <ListItem
+          icon="send"
+          title="SMTP Profiles"
+          subtitle="Outgoing email settings"
+          onPress={onNavigateToSmtp}
+        />
+        <ListItem
+          icon="tag"
+          title="Tags"
+          subtitle="Manage email labels"
+          onPress={onNavigateToTags}
+        />
+        <ListItem
+          icon="zap"
+          title="Mail Rules"
+          subtitle="Automatic email filtering"
+          onPress={onNavigateToRules}
+          showBorder={false}
+        />
       </View>
 
       {/* Inbox Tools */}
-      {renderSectionHeader('INBOX TOOLS')}
-      
+      <ListSection title="INBOX TOOLS" />
       <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        {renderSettingRow(
-          'zap',
-          'Inbox Nuke',
-          'Bulk archive old emails',
-          onNavigateToNuke
-        )}
+        <ListItem
+          icon="zap"
+          title="Inbox Nuke"
+          subtitle="Bulk archive old emails"
+          onPress={onNavigateToNuke}
+          showBorder={false}
+        />
       </View>
-      
+
       {/* Appearance */}
-      {renderSectionHeader('APPEARANCE')}
-      
+      <ListSection title="APPEARANCE" />
       <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
         <View style={[styles.themeSelector, { backgroundColor: theme.colors.surface }]}>
           <View style={styles.iconContainer}>
@@ -196,11 +159,13 @@ export function SettingsScreen({
             </Text>
           </View>
           <View style={styles.themeOptions}>
-            {([
-              { value: 'LIGHT' as ThemePreference, icon: 'sun' as IconName },
-              { value: 'DARK' as ThemePreference, icon: 'moon' as IconName },
-              { value: 'AUTO' as ThemePreference, icon: 'smartphone' as IconName },
-            ]).map(({ value, icon }) => (
+            {(
+              [
+                { value: 'LIGHT' as ThemePreference, icon: 'sun' as IconName },
+                { value: 'DARK' as ThemePreference, icon: 'moon' as IconName },
+                { value: 'AUTO' as ThemePreference, icon: 'smartphone' as IconName },
+              ] as const
+            ).map(({ value, icon }) => (
               <TouchableOpacity
                 key={value}
                 onPress={() => handleThemeChange(value)}
@@ -217,59 +182,55 @@ export function SettingsScreen({
                 <Icon
                   name={icon}
                   size="sm"
-                  color={currentTheme === value ? '#fff' : theme.colors.text}
+                  color={currentTheme === value ? theme.colors.textInverse : theme.colors.text}
                 />
               </TouchableOpacity>
             ))}
           </View>
         </View>
       </View>
-      
+
       {/* Security */}
-      {renderSectionHeader('SECURITY')}
-      
-      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        {biometricAvailable && (
-          renderSettingRow(
-            'fingerprint',
-            'Biometric Login',
-            'Use biometrics to unlock the app',
-            undefined,
-            <Switch
+      {biometricAvailable && (
+        <>
+          <ListSection title="SECURITY" />
+          <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+            <ListItemSwitch
+              icon="fingerprint"
+              title="Biometric Login"
+              subtitle="Use biometrics to unlock the app"
               value={biometricEnabled}
               onValueChange={handleBiometricToggle}
-              trackColor={{ true: theme.colors.primary }}
+              showBorder={false}
             />
-          )
-        )}
-      </View>
-      
+          </View>
+        </>
+      )}
+
       {/* Notifications */}
-      {renderSectionHeader('NOTIFICATIONS')}
-      
+      <ListSection title="NOTIFICATIONS" />
       <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        {renderSettingRow(
-          'bell',
-          'Notification Settings',
-          'Configure push notifications',
-          onNavigateToNotifications
-        )}
+        <ListItem
+          icon="bell"
+          title="Notification Settings"
+          subtitle="Configure push notifications"
+          onPress={onNavigateToNotifications}
+          showBorder={false}
+        />
       </View>
-      
+
       {/* Account Actions */}
-      {renderSectionHeader('ACCOUNT')}
-      
+      <ListSection title="ACCOUNT" />
       <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        {renderSettingRow(
-          'log-out',
-          'Sign Out',
-          undefined,
-          handleLogout,
-          undefined,
-          true
-        )}
+        <ListItem
+          icon="log-out"
+          title="Sign Out"
+          onPress={handleLogout}
+          destructive
+          showBorder={false}
+        />
       </View>
-      
+
       {/* App Info */}
       <View style={styles.appInfo}>
         <Text style={[styles.appInfoText, { color: theme.colors.textMuted }]}>
@@ -300,7 +261,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   userAvatarText: {
-    color: '#ffffff',
     fontSize: FONT_SIZE.xl,
     fontWeight: '600',
   },
