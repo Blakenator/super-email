@@ -70,7 +70,7 @@ interface ContactsScreenProps {
 
 export function ContactsScreen({ onContactPress, onAddContact }: ContactsScreenProps) {
   const theme = useTheme();
-  const { top: topInset } = useSafeInsets(['top']);
+  const { top: topInset, bottom: bottomInset } = useSafeInsets(['top', 'bottom']);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -298,12 +298,13 @@ export function ContactsScreen({ onContactPress, onAddContact }: ContactsScreenP
         contentContainerStyle={[
           styles.listContent,
           filteredContacts.length === 0 && styles.listContentEmpty,
+          { paddingBottom: Math.max(SPACING.xl + 56, bottomInset + 56 + SPACING.md) }, // Account for FAB
         ]}
       />
 
       {/* Add Contact FAB */}
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: theme.colors.primary }]}
+        style={[styles.fab, { backgroundColor: theme.colors.primary, bottom: Math.max(SPACING.lg, bottomInset + SPACING.sm) }]}
         onPress={onAddContact}
       >
         <Icon name="user-plus" size="lg" color={theme.colors.textInverse} />

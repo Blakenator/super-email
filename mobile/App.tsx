@@ -1,5 +1,5 @@
 /**
- * StacksMail Mobile App
+ * SuperMail Mobile App
  * React Native app for iOS and Android
  */
 
@@ -46,7 +46,8 @@ export default function App() {
         }
 
         // Check if we should prompt for biometric login
-        const { shouldPromptBiometric, promptBiometricLogin } = useAuthStore.getState();
+        const { shouldPromptBiometric, promptBiometricLogin } =
+          useAuthStore.getState();
         if (shouldPromptBiometric) {
           setLoadingStatus('Authenticating...');
           await promptBiometricLogin();
@@ -79,7 +80,9 @@ export default function App() {
           <StatusBar style="light" />
           <Text style={styles.errorTitle}>⚠️ App Error</Text>
           <Text style={styles.errorText}>{error}</Text>
-          <Text style={styles.errorHint}>Please restart the app or contact support.</Text>
+          <Text style={styles.errorHint}>
+            Please restart the app or contact support.
+          </Text>
         </View>
       </GestureHandlerRootView>
     );
@@ -92,8 +95,12 @@ export default function App() {
         <View style={styles.loadingContainer}>
           <StatusBar style="light" />
           <Text style={styles.appIcon}>✉️</Text>
-          <Text style={styles.appName}>StacksMail</Text>
-          <ActivityIndicator size="large" color="#ffffff" style={{ marginTop: 24 }} />
+          <Text style={styles.appName}>SuperMail</Text>
+          <ActivityIndicator
+            size="large"
+            color="#ffffff"
+            style={{ marginTop: 24 }}
+          />
           <Text style={styles.loadingStatus}>{loadingStatus}</Text>
         </View>
       </GestureHandlerRootView>
@@ -116,9 +123,11 @@ function MainApp() {
 
   useEffect(() => {
     // Set up notification listeners
-    const notificationSubscription = addNotificationReceivedListener((notification) => {
-      console.log('Notification received:', notification);
-    });
+    const notificationSubscription = addNotificationReceivedListener(
+      (notification) => {
+        console.log('Notification received:', notification);
+      },
+    );
 
     const responseSubscription = addNotificationResponseListener((response) => {
       console.log('Notification response:', response);

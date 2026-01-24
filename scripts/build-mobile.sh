@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# StacksMail Mobile Build Script
+# SuperMail Mobile Build Script
 # =============================================================================
 # Builds the mobile app for iOS and/or Android
 #
@@ -38,7 +38,7 @@ MOBILE_DIR="$PROJECT_ROOT/mobile"
 
 # Print header
 echo -e "${BLUE}=============================================${NC}"
-echo -e "${BLUE}  StacksMail Mobile Build${NC}"
+echo -e "${BLUE}  SuperMail Mobile Build${NC}"
 echo -e "${BLUE}=============================================${NC}"
 echo ""
 echo -e "Platform: ${GREEN}$PLATFORM${NC}"
@@ -97,5 +97,5 @@ echo -e "${GREEN}=============================================${NC}"
 echo -e "${GREEN}  Build started successfully!${NC}"
 echo -e "${GREEN}=============================================${NC}"
 echo ""
-echo "Check build status at: https://expo.dev/accounts/[your-account]/projects/stacksmail/builds"
+echo "Check build status at: https://expo.dev/accounts/[your-account]/projects/supermail/builds"
 echo ""

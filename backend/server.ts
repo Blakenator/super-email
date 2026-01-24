@@ -36,6 +36,7 @@ import {
 import {
   startBackgroundSync,
   stopBackgroundSync,
+  runBackgroundSyncCycle,
 } from './helpers/background-sync.js';
 import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
@@ -53,6 +54,7 @@ import {
   Attachment as DefaultAttachment,
 } from './db/models/index.js';
 import { sequelize as defaultSequelize } from './db/database.js';
+import config from './config/env.js';
 
 /**
  * Injectable dependencies for server
@@ -611,6 +613,40 @@ export async function createServer(
     });
   });
 
+  // Internal endpoint for triggering background sync (called by Lambda cron)
+  // Protected by a shared secret token
+  app.post('/api/internal/trigger-sync', async (req, res) => {
+    const internalToken = req.headers['x-internal-token'];
+    const expectedToken = config.internalApiToken;
+
+    // If no token is configured, reject all requests
+    if (!expectedToken) {
+      logger.warn(
+        'Internal API',
+        'Trigger sync called but no internal token configured',
+      );
+      return res.status(503).json({ error: 'Internal API not configured' });
+    }
+
+    // Validate the token
+    if (internalToken !== expectedToken) {
+      logger.warn('Internal API', 'Trigger sync called with invalid token');
+      return res.status(401).json({ error: 'Invalid internal token' });
+    }
+
+    try {
+      logger.info('Internal API', 'Trigger sync requested via internal API');
+      const result = await runBackgroundSyncCycle();
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      logger.error('Internal API', `Trigger sync failed: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Attachment download endpoint
   app.get(`${API_ROUTES.ATTACHMENTS.BASE}/download/:id`, async (req, res) => {
     try {
@@ -649,9 +685,8 @@ export async function createServer(
       const attachmentData = attachment.get({ plain: true });
 
       if (process.env.NODE_ENV !== 'production') {
-        const { getLocalAttachmentPath } = await import(
-          './helpers/attachment-storage.js'
-        );
+        const { getLocalAttachmentPath } =
+          await import('./helpers/attachment-storage.js');
         const filePath = getLocalAttachmentPath(attachmentId);
 
         res.setHeader('Content-Type', attachmentData.mimeType);
@@ -665,9 +700,8 @@ export async function createServer(
         const stream = createReadStream(filePath);
         stream.pipe(res);
       } else {
-        const { getAttachmentDownloadUrl } = await import(
-          './helpers/attachment-storage.js'
-        );
+        const { getAttachmentDownloadUrl } =
+          await import('./helpers/attachment-storage.js');
         const url = await getAttachmentDownloadUrl(attachmentId);
         res.redirect(url);
       }

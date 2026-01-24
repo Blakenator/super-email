@@ -230,7 +230,7 @@ export function AddContactScreen({ onClose }: AddContactScreenProps) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: Math.max(SPACING.xl, insets.bottom + SPACING.md) }} keyboardShouldPersistTaps="handled">
         {/* Mode Toggle */}
         <View style={[styles.modeToggle, { backgroundColor: theme.colors.surface }]}>
           <TouchableOpacity

@@ -76,9 +76,12 @@ export const config = {
       process.env.BACKGROUND_SYNC_INTERVAL_MINUTES || (isProduction ? '60' : '2'),
       10,
     ),
-    // Whether background sync is enabled
+    // Whether background sync is enabled (disable when using Lambda cron in production)
     enabled: process.env.BACKGROUND_SYNC_ENABLED !== 'false',
   },
+
+  // Internal API Token (for Lambda to trigger sync securely)
+  internalApiToken: process.env.INTERNAL_API_TOKEN || '',
 
   // Stripe Configuration (for billing)
   stripe: {
@@ -131,7 +134,8 @@ export const envVarDefinitions = {
     JWT_EXPIRES_IN: 'JWT token expiration time (default: 7d)',
     BACKGROUND_SYNC_STALE_THRESHOLD_MINUTES: 'Minutes before email account is considered stale (default: 15 in prod, 5 in dev)',
     BACKGROUND_SYNC_INTERVAL_MINUTES: 'How often to run background sync (default: 60 in prod, 2 in dev)',
-    BACKGROUND_SYNC_ENABLED: 'Enable/disable background sync (default: true)',
+    BACKGROUND_SYNC_ENABLED: 'Enable/disable background sync (default: true, disable when using Lambda cron)',
+    INTERNAL_API_TOKEN: 'Secret token for internal API endpoints (used by Lambda cron)',
     STRIPE_SECRET_KEY: 'Stripe secret API key (sk_test_... or sk_live_...)',
     STRIPE_WEBHOOK_SECRET: 'Stripe webhook signing secret (whsec_...)',
     STRIPE_PUBLISHABLE_KEY: 'Stripe publishable key for frontend (pk_test_... or pk_live_...)',

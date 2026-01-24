@@ -1,6 +1,6 @@
-# StacksMail Mobile App
+# SuperMail Mobile App
 
-React Native mobile application for StacksMail, built with Expo for iOS and Android.
+React Native mobile application for SuperMail, built with Expo for iOS and Android.
 
 ## Features
 
@@ -91,7 +91,7 @@ pnpm run prebuild
 
 # iOS
 cd ios && pod install && cd ..
-open ios/StacksMail.xcworkspace
+open ios/SuperMail.xcworkspace
 
 # Android
 cd android && ./gradlew assembleDebug
@@ -101,38 +101,140 @@ cd android && ./gradlew assembleDebug
 
 ### Using EAS Build (Recommended)
 
-1. **Install EAS CLI**:
-   ```bash
-   pnpm add -g eas-cli
-   ```
+EAS (Expo Application Services) is Expo's cloud build service for creating production-ready app binaries.
 
-2. **Configure EAS**:
-   ```bash
-   eas build:configure
-   ```
+#### 1. Install EAS CLI
 
-3. **Build for both platforms**:
-   ```bash
-   pnpm run build:all
-   ```
-
-4. **Or build for specific platform**:
-   ```bash
-   pnpm run build:ios      # iOS App Store build
-   pnpm run build:android  # Android Play Store build
-   ```
-
-### Local Builds
-
-For local builds without EAS:
+The EAS CLI must be installed globally. Use npm for global installs (pnpm global installs may have PATH issues):
 
 ```bash
-# iOS Release Build
+# Install globally using npm (recommended)
+npm install -g eas-cli
+
+# Verify installation
+eas --version
+
+# Login to your Expo account
+eas login
+```
+
+**Troubleshooting "eas: not found":**
+- If you installed with `pnpm add -g eas-cli` and get "eas: not found", try using `npm install -g eas-cli` instead
+- Ensure your global npm bin directory is in your PATH: `npm bin -g`
+- On macOS/Linux, you may need to add to your shell profile: `export PATH="$(npm bin -g):$PATH"`
+- Alternatively, use npx: `npx eas-cli build`
+
+#### 2. Configure EAS for Your Project
+
+```bash
+# Initialize EAS configuration (creates eas.json)
+eas build:configure
+
+# This will prompt you to select platforms and create profiles
+```
+
+#### 3. Configure Build Profiles
+
+The `eas.json` file in this project defines build profiles:
+
+```json
+{
+  "cli": {
+    "version": ">= 5.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+```
+
+**Build Profiles:**
+- `development` - Development builds with dev client for testing
+- `preview` - Internal distribution builds (APK for Android, Ad Hoc for iOS)
+- `production` - App Store / Play Store release builds
+
+#### 4. Build Commands
+
+```bash
+# Build for both platforms (production)
+pnpm run build:all
+
+# Or build for specific platform
+pnpm run build:ios      # iOS App Store build
+pnpm run build:android  # Android Play Store build
+
+# Build preview/internal distribution
+eas build --profile preview --platform android  # APK for testing
+eas build --profile preview --platform ios      # Ad Hoc for testing
+
+# Build development client
+eas build --profile development --platform android
+eas build --profile development --platform ios
+```
+
+#### 5. Required Credentials
+
+**For iOS builds:**
+- Apple Developer account ($99/year)
+- App Store Connect access
+- EAS can manage certificates automatically, or you can provide your own
+
+**For Android builds:**
+- Google Play Developer account ($25 one-time)
+- Keystore for signing (EAS can generate or you can provide your own)
+
+```bash
+# Let EAS manage credentials (recommended for first-time setup)
+eas credentials
+
+# View current credentials
+eas credentials --platform ios
+eas credentials --platform android
+```
+
+#### 6. Submitting to Stores
+
+```bash
+# Submit iOS build to App Store Connect
+eas submit --platform ios
+
+# Submit Android build to Google Play
+eas submit --platform android
+```
+
+### Local Builds (Without EAS)
+
+For local builds without cloud services:
+
+```bash
+# Generate native projects first
+pnpm run prebuild
+
+# iOS Release Build (requires macOS + Xcode)
 pnpm run build:local:ios
 
-# Android Release Build  
+# Android Release Build (requires Android Studio + SDK)
 pnpm run build:local:android
 ```
+
+**Note:** Local builds require proper native development environment setup:
+- iOS: macOS with Xcode 15+ and valid certificates
+- Android: Android Studio with SDK 34+ and configured keystore
 
 ## Configuration Reference
 
@@ -168,7 +270,7 @@ pnpm run build:local:android
    {
      "expo": {
        "ios": {
-         "bundleIdentifier": "com.yourcompany.stacksmail"
+         "bundleIdentifier": "com.yourcompany.supermail"
        }
      }
    }

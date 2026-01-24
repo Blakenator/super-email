@@ -8,6 +8,10 @@
 #   - SUPABASE_URL
 #   - SUPABASE_ANON_KEY
 #   - SUPABASE_SERVICE_ROLE_KEY
+# Environment variables optional (for billing):
+#   - STRIPE_SECRET_KEY
+#   - STRIPE_WEBHOOK_SECRET
+#   - STRIPE_PUBLISHABLE_KEY
 # ============================================================================
 
 set -e
@@ -17,6 +21,14 @@ source "$SCRIPT_DIR/common.sh"
 
 ENVIRONMENT="${1:-dev}"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Load .env file if it exists and not already loaded
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    log_info "Loading environment variables from .env file..."
+    set -a  # automatically export all variables
+    source "$PROJECT_ROOT/.env"
+    set +a
+fi
 
 log_info "Deploying infrastructure with Pulumi for environment: $ENVIRONMENT"
 
@@ -46,6 +58,26 @@ pulumi config set aws:region "$AWS_REGION"
 pulumi config set supabaseUrl "$SUPABASE_URL"
 pulumi config set supabaseAnonKey "$SUPABASE_ANON_KEY"
 pulumi config set --secret supabaseServiceRoleKey "$SUPABASE_SERVICE_ROLE_KEY"
+
+# Set Stripe configuration (optional - for billing)
+if [ -n "$STRIPE_SECRET_KEY" ]; then
+    log_info "Setting Stripe secret key..."
+    pulumi config set --secret stripeSecretKey "$STRIPE_SECRET_KEY"
+else
+    log_warn "STRIPE_SECRET_KEY not set - billing features will be disabled"
+fi
+
+if [ -n "$STRIPE_WEBHOOK_SECRET" ]; then
+    log_info "Setting Stripe webhook secret..."
+    pulumi config set --secret stripeWebhookSecret "$STRIPE_WEBHOOK_SECRET"
+else
+    log_warn "STRIPE_WEBHOOK_SECRET not set - Stripe webhooks will not work"
+fi
+
+if [ -n "$STRIPE_PUBLISHABLE_KEY" ]; then
+    log_info "Setting Stripe publishable key..."
+    pulumi config set stripePublishableKey "$STRIPE_PUBLISHABLE_KEY"
+fi
 
 # Deploy infrastructure
 pulumi up --yes

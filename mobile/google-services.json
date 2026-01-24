@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:907765874068:android:51b0434ba4f0fe5deea381",
+        "mobilesdk_app_id": "1:907765874068:android:38af82f56623a9e5eea381",
         "android_client_info": {
-          "package_name": "app.super_mail.android"
+          "package_name": "com.stacksindustries.supermail"
         }
       },
       "oauth_client": [],

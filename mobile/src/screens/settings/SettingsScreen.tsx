@@ -12,11 +12,19 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
-import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS, COLORS } from '../../theme';
-import { useAuthStore, ThemePreference } from '../../stores/authStore';
+import {
+  useTheme,
+  sharedStyles,
+  SPACING,
+  FONT_SIZE,
+  RADIUS,
+  COLORS,
+} from '../../theme';
+import type { ThemePreference } from '../../stores/authStore';
+import { useAuthStore } from '../../stores/authStore';
+import type { IconName } from '../../components/ui';
 import {
   Icon,
-  IconName,
   useSafeInsets,
   ListItem,
   ListItemSwitch,
@@ -41,7 +49,10 @@ export function SettingsScreen({
   onNavigateToNuke,
 }: SettingsScreenProps) {
   const theme = useTheme();
-  const { top: topInset, bottom: bottomInset } = useSafeInsets(['top', 'bottom']);
+  const { top: topInset, bottom: bottomInset } = useSafeInsets([
+    'top',
+    'bottom',
+  ]);
   const {
     user,
     logout,
@@ -54,18 +65,14 @@ export function SettingsScreen({
   const currentTheme = user?.themePreference || 'AUTO';
 
   const handleLogout = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: () => logout(),
-        },
-      ],
-    );
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: () => logout(),
+      },
+    ]);
   };
 
   const handleBiometricToggle = async (enabled: boolean) => {
@@ -86,9 +93,21 @@ export function SettingsScreen({
     >
       {/* User Info */}
       {user && (
-        <View style={[styles.userCard, { backgroundColor: theme.colors.surface }]}>
-          <View style={[styles.userAvatar, { backgroundColor: theme.colors.primary }]}>
-            <Text style={[styles.userAvatarText, { color: theme.colors.textInverse }]}>
+        <View
+          style={[styles.userCard, { backgroundColor: theme.colors.surface }]}
+        >
+          <View
+            style={[
+              styles.userAvatar,
+              { backgroundColor: theme.colors.primary },
+            ]}
+          >
+            <Text
+              style={[
+                styles.userAvatarText,
+                { color: theme.colors.textInverse },
+              ]}
+            >
               {user.firstName?.[0] || ''}
               {user.lastName?.[0] || ''}
             </Text>
@@ -106,7 +125,9 @@ export function SettingsScreen({
 
       {/* Email Configuration */}
       <ListSection title="EMAIL CONFIGURATION" />
-      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+      <View
+        style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+      >
         <ListItem
           icon="inbox"
           title="Email Accounts"
@@ -136,7 +157,9 @@ export function SettingsScreen({
 
       {/* Inbox Tools */}
       <ListSection title="INBOX TOOLS" />
-      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+      <View
+        style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+      >
         <ListItem
           icon="zap"
           title="Inbox Nuke"
@@ -148,13 +171,22 @@ export function SettingsScreen({
 
       {/* Appearance */}
       <ListSection title="APPEARANCE" />
-      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        <View style={[styles.themeSelector, { backgroundColor: theme.colors.surface }]}>
+      <View
+        style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+      >
+        <View
+          style={[
+            styles.themeSelector,
+            { backgroundColor: theme.colors.surface },
+          ]}
+        >
           <View style={styles.iconContainer}>
             <Icon name="sun" size="md" color={theme.colors.textMuted} />
           </View>
           <View style={sharedStyles.listItemContent}>
-            <Text style={[sharedStyles.listItemTitle, { color: theme.colors.text }]}>
+            <Text
+              style={[sharedStyles.listItemTitle, { color: theme.colors.text }]}
+            >
               Theme
             </Text>
           </View>
@@ -163,7 +195,10 @@ export function SettingsScreen({
               [
                 { value: 'LIGHT' as ThemePreference, icon: 'sun' as IconName },
                 { value: 'DARK' as ThemePreference, icon: 'moon' as IconName },
-                { value: 'AUTO' as ThemePreference, icon: 'smartphone' as IconName },
+                {
+                  value: 'AUTO' as ThemePreference,
+                  icon: 'smartphone' as IconName,
+                },
               ] as const
             ).map(({ value, icon }) => (
               <TouchableOpacity
@@ -182,7 +217,11 @@ export function SettingsScreen({
                 <Icon
                   name={icon}
                   size="sm"
-                  color={currentTheme === value ? theme.colors.textInverse : theme.colors.text}
+                  color={
+                    currentTheme === value
+                      ? theme.colors.textInverse
+                      : theme.colors.text
+                  }
                 />
               </TouchableOpacity>
             ))}
@@ -194,7 +233,9 @@ export function SettingsScreen({
       {biometricAvailable && (
         <>
           <ListSection title="SECURITY" />
-          <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+          <View
+            style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+          >
             <ListItemSwitch
               icon="fingerprint"
               title="Biometric Login"
@@ -209,7 +250,9 @@ export function SettingsScreen({
 
       {/* Notifications */}
       <ListSection title="NOTIFICATIONS" />
-      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+      <View
+        style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+      >
         <ListItem
           icon="bell"
           title="Notification Settings"
@@ -221,7 +264,9 @@ export function SettingsScreen({
 
       {/* Account Actions */}
       <ListSection title="ACCOUNT" />
-      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+      <View
+        style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+      >
         <ListItem
           icon="log-out"
           title="Sign Out"
@@ -234,7 +279,7 @@ export function SettingsScreen({
       {/* App Info */}
       <View style={styles.appInfo}>
         <Text style={[styles.appInfoText, { color: theme.colors.textMuted }]}>
-          StacksMail v1.0.0
+          SuperMail v1.0.0
         </Text>
       </View>
     </ScrollView>

@@ -8,27 +8,33 @@ import Constants from 'expo-constants';
 console.log('[Config] Loading config...');
 
 // Environment variables from app.config.js or .env
-const extra = Constants.expirationDate ? {} : (Constants.expoConfig?.extra ?? {});
+const extra = Constants.expirationDate
+  ? {}
+  : (Constants.expoConfig?.extra ?? {});
 
 // Supabase configuration
-const SUPABASE_URL = 
-  extra.SUPABASE_URL || 
-  process.env.EXPO_PUBLIC_SUPABASE_URL || 
+const SUPABASE_URL =
+  extra.SUPABASE_URL ||
+  process.env.EXPO_PUBLIC_SUPABASE_URL ||
   'https://ivqyyttllhpwbducgpih.supabase.co';
 
-const SUPABASE_ANON_KEY = 
-  extra.SUPABASE_ANON_KEY || 
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 
+const SUPABASE_ANON_KEY =
+  extra.SUPABASE_ANON_KEY ||
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
   'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F';
 
 // Backend API URL
-let API_BASE_URL = 
-  extra.API_BASE_URL || 
-  process.env.EXPO_PUBLIC_API_BASE_URL || 
-  'https://api.stacksmail.com';
+let API_BASE_URL =
+  extra.API_BASE_URL ||
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+  'https://api.supermail.com';
 
 // Ensure URL has protocol
-if (API_BASE_URL && !API_BASE_URL.startsWith('http://') && !API_BASE_URL.startsWith('https://')) {
+if (
+  API_BASE_URL &&
+  !API_BASE_URL.startsWith('http://') &&
+  !API_BASE_URL.startsWith('https://')
+) {
   API_BASE_URL = `https://${API_BASE_URL}`;
 }
 
@@ -53,7 +59,7 @@ export const config = {
       .replace('https://', 'wss://'),
   },
   app: {
-    name: 'StacksMail',
+    name: 'SuperMail',
     version: Constants.expoConfig?.version || '1.0.0',
     buildNumber: Constants.expoConfig?.ios?.buildNumber || '1',
   },

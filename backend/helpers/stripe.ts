@@ -13,14 +13,25 @@ import type { User } from '../db/models/user.model.js';
 let stripe: Stripe | null = null;
 
 /**
+ * Check if a Stripe secret key is valid (not empty or placeholder)
+ */
+function isValidStripeKey(key: string | undefined): boolean {
+  if (!key) return false;
+  // Check for placeholder values used in infrastructure when not configured
+  if (key === 'not-configured' || key === '') return false;
+  // Valid Stripe keys start with sk_test_ or sk_live_
+  return key.startsWith('sk_test_') || key.startsWith('sk_live_');
+}
+
+/**
  * Get the Stripe client instance
  * Throws if Stripe is not configured
  */
 export function getStripeClient(): Stripe {
   if (!stripe) {
-    if (!config.stripe.secretKey) {
+    if (!isValidStripeKey(config.stripe.secretKey)) {
       throw new Error(
-        'Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable.',
+        'Stripe is not configured. Please set STRIPE_SECRET_KEY environment variable with a valid Stripe secret key (sk_test_... or sk_live_...).',
       );
     }
     stripe = new Stripe(config.stripe.secretKey);
@@ -29,10 +40,10 @@ export function getStripeClient(): Stripe {
 }
 
 /**
- * Check if Stripe is configured
+ * Check if Stripe is configured with a valid API key
  */
 export function isStripeConfigured(): boolean {
-  return !!config.stripe.secretKey;
+  return isValidStripeKey(config.stripe.secretKey);
 }
 
 /**

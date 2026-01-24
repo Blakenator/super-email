@@ -2,7 +2,7 @@
 set -e
 
 # ============================================================================
-# StacksMail Deploy Script
+# SuperMail Deploy Script
 # ============================================================================
 # This script orchestrates the full deployment to AWS by calling shared
 # deployment scripts that are also used by GitHub Actions.
@@ -37,7 +37,7 @@ else
 fi
 
 echo "=============================================="
-echo "  StacksMail Deploy - Environment: $ENVIRONMENT"
+echo "  SuperMail Deploy - Environment: $ENVIRONMENT"
 echo "=============================================="
 
 # Check prerequisites
@@ -242,17 +242,17 @@ main() {
         # Infrastructure exists, build and push image first
         log_info "Building and pushing Docker image before infrastructure update..."
         deploy_backend
-        
+
         # Now update infrastructure (will use the new image)
         deploy_infrastructure
     else
         # First time deploy: create infrastructure first (including ECR repo)
         log_info "First deployment: creating infrastructure first..."
         deploy_infrastructure
-        
+
         # Now build and push the image
         deploy_backend
-        
+
         # Force ECS service to redeploy with the new image
         log_info "Forcing ECS service to use the new image..."
         aws ecs update-service \

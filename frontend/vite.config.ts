@@ -52,8 +52,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icon-192x192.svg', 'icon-512x512.svg'],
       manifest: {
-        name: 'StacksMail - Email Client',
-        short_name: 'StacksMail',
+        name: 'SuperMail - Email Client',
+        short_name: 'SuperMail',
         description:
           'A modern email client for managing all your email accounts',
         theme_color: '#5c6bc0',

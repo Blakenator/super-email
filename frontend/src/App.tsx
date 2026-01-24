@@ -185,7 +185,7 @@ function App() {
   const [searchParams] = useSearchParams();
 
   if (isLoading) {
-    return <LoadingSpinner fullPage message="Loading StacksMail..." />;
+    return <LoadingSpinner fullPage message="Loading SuperMail..." />;
   }
 
   // Public routes

@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE } from '../../theme';
 import { useEmailStore, EmailAccount } from '../../stores/emailStore';
 import { Icon } from '../../components/ui';
@@ -23,6 +24,7 @@ interface AccountsSettingsScreenProps {
 
 export function AccountsSettingsScreen({ onAddAccount, onEditAccount }: AccountsSettingsScreenProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { emailAccounts, fetchEmailAccounts, isSyncing } = useEmailStore();
 
   useEffect(() => {
@@ -72,7 +74,7 @@ export function AccountsSettingsScreen({ onAddAccount, onEditAccount }: Accounts
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={sharedStyles.screenScrollContent}
+      contentContainerStyle={[sharedStyles.screenScrollContent, { paddingBottom: Math.max(SPACING.xl, insets.bottom + SPACING.md) }]}
     >
       <View style={[sharedStyles.sectionHeader]}>
         <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>

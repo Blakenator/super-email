@@ -1,4 +1,4 @@
-# StacksMail Deployment Workflow
+# SuperMail Deployment Workflow
 #
 # This workflow deploys the application to AWS.
 # It can be triggered manually or automatically on merge to main.
@@ -11,6 +11,11 @@
 #   - SUPABASE_URL: Supabase project URL
 #   - SUPABASE_ANON_KEY: Supabase anon/public key
 #   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
+#
+# Optional GitHub Secrets (for billing):
+#   - STRIPE_SECRET_KEY: Stripe secret API key (sk_test_... or sk_live_...)
+#   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_...)
+#   - STRIPE_PUBLISHABLE_KEY: Stripe publishable key (pk_test_... or pk_live_...)
 
 name: Deploy to AWS
 
@@ -96,6 +101,9 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
           ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"

@@ -234,7 +234,7 @@ export function NotificationSettings() {
         navigator.registerProtocolHandler('mailto', composeUrl);
         localStorage.setItem('mailto-handler-registered', 'true');
         setStatus((prev) => ({ ...prev, mailtoHandlerRegistered: true }));
-        toast.success('StacksMail registered as mailto handler!');
+        toast.success('SuperMail registered as mailto handler!');
       } else {
         toast.error(
           'Protocol handler registration not supported in this browser',
@@ -512,13 +512,13 @@ export function NotificationSettings() {
             {browser === 'chrome' && (
               <>
                 Click the install icon (⊕) in the address bar, or Menu (⋮) →
-                "Install StacksMail..."
+                "Install SuperMail..."
               </>
             )}
             {browser === 'edge' && (
               <>
                 Click the install icon in the address bar, or Menu (···) → Apps
-                → "Install StacksMail"
+                → "Install SuperMail"
               </>
             )}
             {browser === 'firefox' && (

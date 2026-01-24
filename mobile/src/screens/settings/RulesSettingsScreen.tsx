@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Switch,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
@@ -44,6 +45,7 @@ interface RulesSettingsScreenProps {
 
 export function RulesSettingsScreen({ onEditRule, onAddRule }: RulesSettingsScreenProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [rules, setRules] = useState<MailRule[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -93,7 +95,7 @@ export function RulesSettingsScreen({ onEditRule, onAddRule }: RulesSettingsScre
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={sharedStyles.screenScrollContent}
+      contentContainerStyle={[sharedStyles.screenScrollContent, { paddingBottom: Math.max(SPACING.xl, insets.bottom + SPACING.md) }]}
     >
       <View style={[sharedStyles.sectionHeader]}>
         <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>

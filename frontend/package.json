@@ -2,7 +2,7 @@
   "name": "@main/frontend",
   "private": true,
   "version": "1.0.0",
-  "description": "StacksMail - Email Client Frontend",
+  "description": "SuperMail - Email Client Frontend",
   "type": "module",
   "scripts": {
     "start": "vite",
