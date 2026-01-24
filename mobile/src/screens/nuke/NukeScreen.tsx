@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { apolloClient } from '../../services/apollo';
@@ -77,6 +78,7 @@ interface NukeScreenProps {
 
 export function NukeScreen({ onComplete }: NukeScreenProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [selectedOption, setSelectedOption] = useState<string>('1month');
   const [isNuking, setIsNuking] = useState(false);
   const [result, setResult] = useState<number | null>(null);
@@ -147,7 +149,7 @@ export function NukeScreen({ onComplete }: NukeScreenProps) {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={sharedStyles.screenScrollContent}
+      contentContainerStyle={[sharedStyles.screenScrollContent, { paddingBottom: Math.max(SPACING.xl, insets.bottom + SPACING.md) }]}
     >
       {/* Header */}
       <LinearGradient

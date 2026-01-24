@@ -3,6 +3,7 @@ packages:
   - common
   - frontend
   - infra
+  - lambdas
   - mobile
 
 nodeLinker: hoisted

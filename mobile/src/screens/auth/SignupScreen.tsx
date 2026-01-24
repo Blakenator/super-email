@@ -25,44 +25,44 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
   const theme = useTheme();
   const { padding: safeAreaPadding } = useSafeInsets(['top', 'bottom']);
   const { signup, isLoading } = useAuthStore();
-  
+
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  
+
   const handleSignup = async () => {
     setError(null);
-    
+
     if (!firstName.trim() || !lastName.trim()) {
       setError('Please enter your first and last name');
       return;
     }
-    
+
     if (!email.trim()) {
       setError('Please enter your email address');
       return;
     }
-    
+
     if (password.length < 6) {
       setError('Password must be at least 6 characters');
       return;
     }
-    
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
-    
+
     try {
       await signup(email.trim(), password, firstName.trim(), lastName.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed');
     }
   };
-  
+
   return (
     <LinearGradient
       colors={[theme.colors.primary, theme.colors.secondary]}
@@ -78,15 +78,23 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
         >
           <View style={styles.header}>
             <Text style={styles.logoIcon}>✉️</Text>
-            <Text style={[styles.logoText, { color: theme.colors.textInverse }]}>StacksMail</Text>
-            <Text style={[styles.tagline, { color: theme.colors.textInverse, opacity: 0.8 }]}>Create your account</Text>
+            <Text
+              style={[styles.logoText, { color: theme.colors.textInverse }]}
+            >
+              SuperMail
+            </Text>
+            <Text
+              style={[
+                styles.tagline,
+                { color: theme.colors.textInverse, opacity: 0.8 },
+              ]}
+            >
+              Create your account
+            </Text>
           </View>
-          
+
           <View
-            style={[
-              styles.card,
-              { backgroundColor: theme.colors.surface },
-            ]}
+            style={[styles.card, { backgroundColor: theme.colors.surface }]}
           >
             {error && (
               <View
@@ -100,7 +108,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
                 </Text>
               </View>
             )}
-            
+
             <View style={styles.nameRow}>
               <View style={styles.nameField}>
                 <Input
@@ -123,7 +131,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
                 />
               </View>
             </View>
-            
+
             <Input
               label="Email address"
               value={email}
@@ -134,7 +142,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               autoCorrect={false}
               autoComplete="email"
             />
-            
+
             <Input
               label="Password"
               value={password}
@@ -144,7 +152,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               autoComplete="new-password"
               hint="At least 6 characters"
             />
-            
+
             <Input
               label="Confirm password"
               value={confirmPassword}
@@ -153,7 +161,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               secureTextEntry
               autoComplete="new-password"
             />
-            
+
             <Button
               title="Create Account"
               onPress={handleSignup}
@@ -161,13 +169,17 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               fullWidth
               style={styles.signupButton}
             />
-            
+
             <View style={styles.footer}>
-              <Text style={[styles.footerText, { color: theme.colors.textMuted }]}>
+              <Text
+                style={[styles.footerText, { color: theme.colors.textMuted }]}
+              >
                 Already have an account?{' '}
               </Text>
               <TouchableOpacity onPress={onNavigateToLogin}>
-                <Text style={[styles.linkText, { color: theme.colors.primary }]}>
+                <Text
+                  style={[styles.linkText, { color: theme.colors.primary }]}
+                >
                   Sign in
                 </Text>
               </TouchableOpacity>

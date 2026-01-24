@@ -18,7 +18,7 @@ import { Icon, TabIcon } from '../components/ui';
 // Screens
 import { LoginScreen, SignupScreen } from '../screens/auth';
 import { InboxScreen } from '../screens/inbox';
-import { ContactsScreen, AddContactScreen } from '../screens/contacts';
+import { ContactsScreen, AddContactScreen, ContactDetailScreen } from '../screens/contacts';
 import {
   SettingsScreen,
   AccountsSettingsScreen,
@@ -182,13 +182,17 @@ function MainTabNavigator() {
   );
 }
 
-// Placeholder screen for contact detail
-function ContactDetailScreen() {
-  const theme = useTheme();
+// Contact Detail Screen wrapper
+function ContactDetailScreenWrapper() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
   return (
-    <View style={[styles.placeholder, { backgroundColor: theme.colors.background }]}>
-      <Icon name="user" size="xl" color={theme.colors.textMuted} />
-    </View>
+    <ContactDetailScreen
+      onClose={() => navigation.goBack()}
+      onDeleted={() => {
+        // Navigate back to contacts list after deletion
+      }}
+    />
   );
 }
 
@@ -367,8 +371,8 @@ export function AppNavigator() {
             />
             <RootStack.Screen
               name="ContactDetail"
-              component={ContactDetailScreen}
-              options={{ title: 'Contact' }}
+              component={ContactDetailScreenWrapper}
+              options={{ headerShown: false }}
             />
             <RootStack.Screen
               name="Compose"
@@ -437,10 +441,4 @@ export function AppNavigator() {
   );
 }
 
-const styles = StyleSheet.create({
-  placeholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+const styles = StyleSheet.create({});

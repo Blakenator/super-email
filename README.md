@@ -1,4 +1,4 @@
-# StacksMail - Self-Hosted Email Client
+# SuperMail - Self-Hosted Email Client
 
 A modern, self-hosted email client built with React, Node.js, and PostgreSQL. Supports multiple IMAP/POP email accounts and SMTP profiles for sending.
 

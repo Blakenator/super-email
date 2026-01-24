@@ -201,12 +201,12 @@ log_info "✗ Image not found in ECR. Building new image..."
 
 # Build and push Docker image
 log_info "Building Docker image..."
-docker build -t stacksmail-backend -f backend/Dockerfile .
+docker build -t supermail-backend -f backend/Dockerfile .
 
 # Tag with content hash, latest, and git SHA
-docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:content-$CONTENT_HASH"
-docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:latest"
-docker tag stacksmail-backend:latest "$BACKEND_REPO_URL:$GIT_COMMIT_SHA"
+docker tag supermail-backend:latest "$BACKEND_REPO_URL:content-$CONTENT_HASH"
+docker tag supermail-backend:latest "$BACKEND_REPO_URL:latest"
+docker tag supermail-backend:latest "$BACKEND_REPO_URL:$GIT_COMMIT_SHA"
 
 log_info "Pushing Docker image to ECR..."
 docker push "$BACKEND_REPO_URL:content-$CONTENT_HASH"

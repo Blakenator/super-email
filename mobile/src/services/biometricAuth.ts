@@ -21,8 +21,10 @@ export interface BiometricAuthResult {
 export async function isBiometricAvailable(): Promise<boolean> {
   try {
     const compatible = await LocalAuthentication.hasHardwareAsync();
-    if (!compatible) return false;
-    
+    if (!compatible) {
+      return false;
+    }
+
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     return enrolled;
   } catch (error) {
@@ -37,8 +39,10 @@ export async function isBiometricAvailable(): Promise<boolean> {
 export async function getBiometricType(): Promise<BiometricType> {
   try {
     const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
-    
-    if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+
+    if (
+      types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
+    ) {
       return 'facial';
     }
     if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
@@ -47,7 +51,7 @@ export async function getBiometricType(): Promise<BiometricType> {
     if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) {
       return 'iris';
     }
-    
+
     return 'none';
   } catch (error) {
     console.error('Error getting biometric type:', error);
@@ -75,23 +79,23 @@ export function getBiometricTypeName(type: BiometricType): string {
  * Authenticate using biometrics
  */
 export async function authenticateWithBiometrics(
-  promptMessage?: string
+  promptMessage?: string,
 ): Promise<BiometricAuthResult> {
   try {
     const biometricType = await getBiometricType();
     const typeName = getBiometricTypeName(biometricType);
-    
+
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: promptMessage || `Unlock StacksMail with ${typeName}`,
+      promptMessage: promptMessage || `Unlock SuperMail with ${typeName}`,
       cancelLabel: 'Use Password',
       disableDeviceFallback: false,
       fallbackLabel: 'Use Passcode',
     });
-    
+
     if (result.success) {
       return { success: true, biometricType };
     }
-    
+
     return {
       success: false,
       error: result.error || 'Authentication failed',
@@ -137,23 +141,23 @@ export async function attemptBiometricLogin(): Promise<{
   if (!available) {
     return { success: false, error: 'Biometric authentication not available' };
   }
-  
+
   const enabled = await isBiometricEnabled();
   if (!enabled) {
     return { success: false, error: 'Biometric authentication not enabled' };
   }
-  
+
   // Check if we have saved credentials
   const savedEmail = await secureGet(STORAGE_KEYS.SAVED_EMAIL);
   if (!savedEmail) {
     return { success: false, error: 'No saved credentials' };
   }
-  
+
   // Authenticate with biometrics
   const authResult = await authenticateWithBiometrics();
   if (!authResult.success) {
     return { success: false, error: authResult.error };
   }
-  
+
   return { success: true, email: savedEmail };
 }

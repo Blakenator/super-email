@@ -187,7 +187,7 @@ export function Sidebar({
             icon={faEnvelope}
             className={isCollapsed ? '' : 'me-2'}
           />
-          <LogoText $collapsed={isCollapsed}>StacksMail</LogoText>
+          <LogoText $collapsed={isCollapsed}>SuperMail</LogoText>
         </Logo>
 
         <ComposeButton

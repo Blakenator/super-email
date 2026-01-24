@@ -151,7 +151,9 @@ export function ThemeSettings() {
   const handleBlockExternalImagesChange = async (block: boolean) => {
     try {
       await updatePreferences({ blockExternalImages: block });
-      toast.success(`External images will be ${block ? 'blocked' : 'loaded'} by default`);
+      toast.success(
+        `External images will be ${block ? 'blocked' : 'loaded'} by default`,
+      );
     } catch (error) {
       toast.error('Failed to update image blocking preference');
     }
@@ -166,7 +168,7 @@ export function ThemeSettings() {
         </Card.Header>
         <Card.Body>
           <p className="text-muted" style={{ marginBottom: '1rem' }}>
-            Choose how StacksMail looks to you. Select a theme preference below.
+            Choose how SuperMail looks to you. Select a theme preference below.
           </p>
 
           <Form>
@@ -216,10 +218,7 @@ export function ThemeSettings() {
             <ColorSwatch $color={theme.colors.background} title="Background">
               <span>Background</span>
             </ColorSwatch>
-            <ColorSwatch
-              $color={theme.colors.backgroundWhite}
-              title="Surface"
-            >
+            <ColorSwatch $color={theme.colors.backgroundWhite} title="Surface">
               <span>Surface</span>
             </ColorSwatch>
             <ColorSwatch $color={theme.colors.success} title="Success">
@@ -257,7 +256,7 @@ export function ThemeSettings() {
                   {densityOptions.map((option) => {
                     const isSelected =
                       option.id === 'dense'
-                        ? user?.inboxDensity ?? false
+                        ? (user?.inboxDensity ?? false)
                         : !(user?.inboxDensity ?? false);
                     return (
                       <ThemeOption
@@ -272,7 +271,9 @@ export function ThemeSettings() {
                         </ThemeIcon>
                         <ThemeLabel>
                           <ThemeName>{option.name}</ThemeName>
-                          <ThemeDescription>{option.description}</ThemeDescription>
+                          <ThemeDescription>
+                            {option.description}
+                          </ThemeDescription>
                         </ThemeLabel>
                         <Form.Check
                           type="radio"
@@ -295,7 +296,7 @@ export function ThemeSettings() {
                   {groupByDateOptions.map((option) => {
                     const isSelected =
                       option.id === 'enabled'
-                        ? user?.inboxGroupByDate ?? false
+                        ? (user?.inboxGroupByDate ?? false)
                         : !(user?.inboxGroupByDate ?? false);
                     return (
                       <ThemeOption
@@ -310,14 +311,18 @@ export function ThemeSettings() {
                         </ThemeIcon>
                         <ThemeLabel>
                           <ThemeName>{option.name}</ThemeName>
-                          <ThemeDescription>{option.description}</ThemeDescription>
+                          <ThemeDescription>
+                            {option.description}
+                          </ThemeDescription>
                         </ThemeLabel>
                         <Form.Check
                           type="radio"
                           name="inboxGroupByDate"
                           checked={isSelected}
                           onChange={() =>
-                            handleInboxGroupByDateChange(option.id === 'enabled')
+                            handleInboxGroupByDateChange(
+                              option.id === 'enabled',
+                            )
                           }
                           className="ms-auto"
                         />
@@ -338,8 +343,9 @@ export function ThemeSettings() {
         </Card.Header>
         <Card.Body>
           <p className="text-muted" style={{ marginBottom: '1rem' }}>
-            Control how external content is loaded in emails. Blocking images can help
-            protect your privacy by preventing senders from tracking when you open emails.
+            Control how external content is loaded in emails. Blocking images
+            can help protect your privacy by preventing senders from tracking
+            when you open emails.
           </p>
 
           <Form>
@@ -350,7 +356,7 @@ export function ThemeSettings() {
                   {imageBlockingOptions.map((option) => {
                     const isSelected =
                       option.id === 'block'
-                        ? user?.blockExternalImages ?? false
+                        ? (user?.blockExternalImages ?? false)
                         : !(user?.blockExternalImages ?? false);
                     return (
                       <ThemeOption
@@ -365,14 +371,18 @@ export function ThemeSettings() {
                         </ThemeIcon>
                         <ThemeLabel>
                           <ThemeName>{option.name}</ThemeName>
-                          <ThemeDescription>{option.description}</ThemeDescription>
+                          <ThemeDescription>
+                            {option.description}
+                          </ThemeDescription>
                         </ThemeLabel>
                         <Form.Check
                           type="radio"
                           name="blockExternalImages"
                           checked={isSelected}
                           onChange={() =>
-                            handleBlockExternalImagesChange(option.id === 'block')
+                            handleBlockExternalImagesChange(
+                              option.id === 'block',
+                            )
                           }
                           className="ms-auto"
                         />

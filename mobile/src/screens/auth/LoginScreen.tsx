@@ -36,46 +36,46 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
     biometricEnabled,
     biometricType,
   } = useAuthStore();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Attempt biometric login on mount
   useEffect(() => {
     if (biometricEnabled && biometricAvailable) {
       handleBiometricLogin();
     }
   }, [biometricEnabled, biometricAvailable]);
-  
+
   const handleLogin = async () => {
     if (!email.trim() || !password) {
       setError('Please enter your email and password');
       return;
     }
-    
+
     setError(null);
-    
+
     try {
       await login(email.trim(), password, rememberMe);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     }
   };
-  
+
   const handleBiometricLogin = async () => {
     setError(null);
-    
+
     const success = await loginWithBiometric();
-    
+
     if (!success) {
       // Biometric failed, show regular login
     }
   };
-  
+
   const biometricName = getBiometricTypeName(biometricType);
-  
+
   return (
     <LinearGradient
       colors={[theme.colors.primary, theme.colors.secondary]}
@@ -91,15 +91,23 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
         >
           <View style={styles.header}>
             <Text style={styles.logoIcon}>✉️</Text>
-            <Text style={[styles.logoText, { color: theme.colors.textInverse }]}>StacksMail</Text>
-            <Text style={[styles.tagline, { color: theme.colors.textInverse, opacity: 0.8 }]}>Sign in to your account</Text>
+            <Text
+              style={[styles.logoText, { color: theme.colors.textInverse }]}
+            >
+              SuperMail
+            </Text>
+            <Text
+              style={[
+                styles.tagline,
+                { color: theme.colors.textInverse, opacity: 0.8 },
+              ]}
+            >
+              Sign in to your account
+            </Text>
           </View>
-          
+
           <View
-            style={[
-              styles.card,
-              { backgroundColor: theme.colors.surface },
-            ]}
+            style={[styles.card, { backgroundColor: theme.colors.surface }]}
           >
             {error && (
               <View
@@ -113,7 +121,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                 </Text>
               </View>
             )}
-            
+
             <Input
               label="Email address"
               value={email}
@@ -124,7 +132,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               autoCorrect={false}
               autoComplete="email"
             />
-            
+
             <Input
               label="Password"
               value={password}
@@ -133,7 +141,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               secureTextEntry
               autoComplete="password"
             />
-            
+
             <TouchableOpacity
               onPress={() => setRememberMe(!rememberMe)}
               style={styles.rememberMe}
@@ -155,11 +163,13 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                   <Text style={{ color: theme.colors.textInverse }}>✓</Text>
                 )}
               </View>
-              <Text style={[styles.rememberMeText, { color: theme.colors.text }]}>
+              <Text
+                style={[styles.rememberMeText, { color: theme.colors.text }]}
+              >
                 Remember me on this device
               </Text>
             </TouchableOpacity>
-            
+
             <Button
               title="Sign In"
               onPress={handleLogin}
@@ -167,7 +177,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               fullWidth
               style={styles.signInButton}
             />
-            
+
             {biometricAvailable && (
               <>
                 <View style={styles.divider}>
@@ -192,7 +202,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                     ]}
                   />
                 </View>
-                
+
                 <Button
                   title={`Sign in with ${biometricName}`}
                   onPress={handleBiometricLogin}
@@ -202,13 +212,17 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
                 />
               </>
             )}
-            
+
             <View style={styles.footer}>
-              <Text style={[styles.footerText, { color: theme.colors.textMuted }]}>
+              <Text
+                style={[styles.footerText, { color: theme.colors.textMuted }]}
+              >
                 Don't have an account?{' '}
               </Text>
               <TouchableOpacity onPress={onNavigateToSignup}>
-                <Text style={[styles.linkText, { color: theme.colors.primary }]}>
+                <Text
+                  style={[styles.linkText, { color: theme.colors.primary }]}
+                >
                   Sign up
                 </Text>
               </TouchableOpacity>

@@ -576,10 +576,11 @@ const supabaseServiceSecretVersion = new aws.secretsmanager.SecretVersion(
 // =============================================================================
 
 // Get Stripe keys from Pulumi config (optional for deployments without billing)
+// AWS Secrets Manager requires non-empty values, so use placeholder when not configured
 const stripeSecretKey =
-  config.getSecret('stripeSecretKey') || pulumi.output('');
+  config.getSecret('stripeSecretKey') || pulumi.output('not-configured');
 const stripeWebhookSecret =
-  config.getSecret('stripeWebhookSecret') || pulumi.output('');
+  config.getSecret('stripeWebhookSecret') || pulumi.output('not-configured');
 const stripePublishableKey = config.get('stripePublishableKey') || '';
 
 // Stripe secret key
@@ -599,7 +600,7 @@ const stripeKeySecretVersion = new aws.secretsmanager.SecretVersion(
     secretId: stripeKeySecret.id,
     secretString: stripeSecretKey,
   },
-  { ignoreChanges: ['secretString'] },
+  // Note: Not using ignoreChanges so secret can be updated when config changes
 );
 
 // Stripe webhook secret
@@ -618,6 +619,33 @@ const stripeWebhookSecretVersion = new aws.secretsmanager.SecretVersion(
   {
     secretId: stripeWebhookSecretResource.id,
     secretString: stripeWebhookSecret,
+  },
+  // Note: Not using ignoreChanges so secret can be updated when config changes
+);
+
+// Internal API Token for Lambda Sync Trigger (created early so ECS can use it)
+const internalApiTokenSecret = new aws.secretsmanager.Secret(
+  `${stackName}-internal-api-token`,
+  {
+    namePrefix: `${stackName}-internal-api-token-`,
+    description: 'Internal API token for Lambda to trigger sync',
+    recoveryWindowInDays: 0,
+    tags: { Name: `${stackName}-internal-api-token`, Environment: environment },
+  },
+);
+
+const internalApiTokenVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-internal-api-token-version`,
+  {
+    secretId: internalApiTokenSecret.id,
+    secretString: pulumi
+      .output(
+        aws.secretsmanager.getRandomPassword({
+          passwordLength: 64,
+          excludePunctuation: true,
+        }),
+      )
+      .apply((p) => p.randomPassword),
   },
   { ignoreChanges: ['secretString'] },
 );
@@ -647,6 +675,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
         supabaseSecretArn: supabaseServiceSecretVersion.arn,
         stripeKeyArn: stripeKeySecretVersion.arn,
         stripeWebhookArn: stripeWebhookSecretVersion.arn,
+        internalApiTokenArn: internalApiTokenVersion.arn,
       })
       .apply(
         ({
@@ -659,6 +688,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
           supabaseSecretArn,
           stripeKeyArn,
           stripeWebhookArn,
+          internalApiTokenArn,
         }) =>
           JSON.stringify([
             {
@@ -683,6 +713,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'SUPABASE_URL', value: supabaseUrl },
                 { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
                 { name: 'STRIPE_PUBLISHABLE_KEY', value: stripePublishableKey },
+                // Disable in-process background sync - Lambda handles this
+                { name: 'BACKGROUND_SYNC_ENABLED', value: 'false' },
               ],
               secrets: [
                 {
@@ -691,6 +723,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 },
                 { name: 'STRIPE_SECRET_KEY', valueFrom: stripeKeyArn },
                 { name: 'STRIPE_WEBHOOK_SECRET', valueFrom: stripeWebhookArn },
+                { name: 'INTERNAL_API_TOKEN', valueFrom: internalApiTokenArn },
               ],
               logConfiguration: {
                 logDriver: 'awslogs',
@@ -914,6 +947,134 @@ const frontendDistribution = new aws.cloudfront.Distribution(
 );
 
 // =============================================================================
+// Lambda for Sync Cron Trigger
+// =============================================================================
+
+// IAM role for the sync trigger Lambda
+const syncLambdaRole = new aws.iam.Role(`${stackName}-sync-lambda-role`, {
+  name: `${stackName}-sync-lambda-role`,
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Action: 'sts:AssumeRole',
+        Effect: 'Allow',
+        Principal: { Service: 'lambda.amazonaws.com' },
+      },
+    ],
+  }),
+  tags: { Name: `${stackName}-sync-lambda-role`, Environment: environment },
+});
+
+// Basic Lambda execution policy (CloudWatch Logs)
+new aws.iam.RolePolicyAttachment(`${stackName}-sync-lambda-basic-policy`, {
+  role: syncLambdaRole.name,
+  policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+});
+
+// VPC access policy (if Lambda needs to access VPC resources)
+new aws.iam.RolePolicyAttachment(`${stackName}-sync-lambda-vpc-policy`, {
+  role: syncLambdaRole.name,
+  policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+});
+
+// CloudWatch Log Group for Lambda
+const syncLambdaLogGroup = new aws.cloudwatch.LogGroup(
+  `${stackName}-sync-lambda-logs`,
+  {
+    name: `/aws/lambda/${stackName}-sync-trigger`,
+    retentionInDays: 7, // Cost optimization
+    tags: { Name: `${stackName}-sync-lambda-logs`, Environment: environment },
+  },
+);
+
+// The Lambda function
+const syncLambda = new aws.lambda.Function(
+  `${stackName}-sync-trigger`,
+  {
+    name: `${stackName}-sync-trigger`,
+    role: syncLambdaRole.arn,
+    runtime: 'nodejs20.x',
+    handler: 'sync-trigger.handler',
+    timeout: 30, // 30 seconds should be enough to trigger sync
+    memorySize: 128, // Minimal memory needed for HTTP call
+    // For initial deployment, use inline code. In CI/CD, this would be replaced with S3 bucket
+    code: new pulumi.asset.AssetArchive({
+      'sync-trigger.js': new pulumi.asset.StringAsset(`
+        // Placeholder Lambda code - replace with actual build in CI/CD
+        exports.handler = async (event, context) => {
+          const BACKEND_URL = process.env.BACKEND_URL || '';
+          const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN || '';
+          
+          if (!BACKEND_URL || !INTERNAL_API_TOKEN) {
+            console.error('Missing configuration');
+            return { statusCode: 500, body: 'Missing configuration' };
+          }
+          
+          try {
+            const response = await fetch(BACKEND_URL + '/api/internal/trigger-sync', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Token': INTERNAL_API_TOKEN,
+              },
+            });
+            const result = await response.json();
+            console.log('Sync result:', result);
+            return { statusCode: response.status, body: JSON.stringify(result) };
+          } catch (error) {
+            console.error('Error:', error);
+            return { statusCode: 500, body: error.message };
+          }
+        };
+      `),
+    }),
+    environment: {
+      variables: {
+        // Use CloudFront URL to reach the backend via /api/* path
+        BACKEND_URL: pulumi.interpolate`https://${frontendDistribution.domainName}`,
+        INTERNAL_API_TOKEN: internalApiTokenVersion.secretString.apply(s => s || ''),
+      },
+    },
+    tags: { Name: `${stackName}-sync-trigger`, Environment: environment },
+  },
+  { dependsOn: [syncLambdaLogGroup] },
+);
+
+// EventBridge rule to trigger Lambda on a schedule (every 15 minutes in prod, every 5 minutes in dev)
+const syncScheduleExpression = isProd ? 'rate(15 minutes)' : 'rate(5 minutes)';
+
+const syncScheduleRule = new aws.cloudwatch.EventRule(
+  `${stackName}-sync-schedule`,
+  {
+    name: `${stackName}-sync-schedule`,
+    description: 'Trigger email sync Lambda on a schedule',
+    scheduleExpression: syncScheduleExpression,
+    tags: { Name: `${stackName}-sync-schedule`, Environment: environment },
+  },
+);
+
+// Target for the EventBridge rule
+const syncScheduleTarget = new aws.cloudwatch.EventTarget(
+  `${stackName}-sync-schedule-target`,
+  {
+    rule: syncScheduleRule.name,
+    arn: syncLambda.arn,
+  },
+);
+
+// Permission for EventBridge to invoke Lambda
+const syncLambdaPermission = new aws.lambda.Permission(
+  `${stackName}-sync-lambda-permission`,
+  {
+    action: 'lambda:InvokeFunction',
+    function: syncLambda.name,
+    principal: 'events.amazonaws.com',
+    sourceArn: syncScheduleRule.arn,
+  },
+);
+
+// =============================================================================
 // Outputs
 // =============================================================================
 
@@ -930,3 +1091,5 @@ export const clusterArn = cluster.arn;
 export const attachmentsBucketName = attachmentsBucket.bucket;
 export const backendLogGroupName = backendLogGroup.name;
 export const albDnsName = alb.dnsName;
+export const syncLambdaArn = syncLambda.arn;
+export const syncLambdaName = syncLambda.name;

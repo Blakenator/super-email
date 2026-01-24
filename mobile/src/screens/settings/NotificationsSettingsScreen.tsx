@@ -11,12 +11,14 @@ import {
   ScrollView,
   Switch,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE } from '../../theme';
 import { Icon } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
 
 export function NotificationsSettingsScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuthStore();
   
   const [settings, setSettings] = useState({
@@ -62,7 +64,7 @@ export function NotificationsSettingsScreen() {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={sharedStyles.screenScrollContent}
+      contentContainerStyle={[sharedStyles.screenScrollContent, { paddingBottom: Math.max(SPACING.xl, insets.bottom + SPACING.md) }]}
     >
       <View style={[sharedStyles.sectionHeader]}>
         <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>

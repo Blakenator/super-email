@@ -1,0 +1,19 @@
+{
+  "name": "@main/lambdas",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/sync-trigger.ts --bundle --platform=node --target=node20 --outfile=dist/sync-trigger.js --external:@aws-sdk/*",
+    "package": "pnpm build && cd dist && zip -r ../sync-trigger.zip ."
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.500.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^20.11.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.3"
+  }
+}

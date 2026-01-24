@@ -40,7 +40,7 @@ export const unsubscribe = makeMutation(
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'User-Agent': 'StacksMail/1.0 (Unsubscribe)',
+            'User-Agent': 'SuperMail/1.0 (Unsubscribe)',
           },
           body: 'List-Unsubscribe=One-Click',
           // Some servers require just a POST with no body
@@ -60,7 +60,7 @@ export const unsubscribe = makeMutation(
           const getResponse = await fetch(email.unsubscribeUrl, {
             method: 'GET',
             headers: {
-              'User-Agent': 'StacksMail/1.0 (Unsubscribe)',
+              'User-Agent': 'SuperMail/1.0 (Unsubscribe)',
             },
           });
 

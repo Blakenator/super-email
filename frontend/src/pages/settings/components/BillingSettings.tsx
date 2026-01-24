@@ -14,6 +14,7 @@ import {
   faSync,
   faCrown,
   faArrowRight,
+  faInfoCircle,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
 import {
@@ -261,6 +262,7 @@ export function BillingSettings() {
   const [pendingAccountTier, setPendingAccountTier] =
     useState<AccountTier | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalStep, setConfirmModalStep] = useState<1 | 2>(1);
 
   // Auto-refresh on page focus
   useEffect(() => {
@@ -843,52 +845,125 @@ export function BillingSettings() {
         </Card.Body>
       </BillingCard>
 
-      {/* Confirm Changes Modal */}
+      {/* Confirm Changes Modal - Two-step flow for new customers */}
       <Modal
         show={showConfirmModal}
-        onHide={() => setShowConfirmModal(false)}
+        onHide={() => {
+          setShowConfirmModal(false);
+          setConfirmModalStep(1);
+        }}
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title>Confirm Subscription Changes</Modal.Title>
+          <Modal.Title>
+            {!hasStripeCustomer && confirmModalStep === 1
+              ? 'Set Up Billing'
+              : 'Confirm Subscription Changes'}
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p>You are about to change your subscription:</p>
-          <ul>
-            {pendingStorageTier && (
-              <li>
-                Storage: {formatTier(currentStorageTier)} →{' '}
-                {formatTier(pendingStorageTier)}
-              </li>
-            )}
-            {pendingAccountTier && (
-              <li>
-                Accounts: {formatTier(currentAccountTier)} →{' '}
-                {formatTier(pendingAccountTier)}
-              </li>
-            )}
-          </ul>
-          <p className="text-muted mb-0">
-            You'll be redirected to Stripe to complete the payment.
-          </p>
+          {!hasStripeCustomer && confirmModalStep === 1 ? (
+            /* Step 1: Configure billing info (for new customers) */
+            <>
+              <div className="text-center mb-3">
+                <FontAwesomeIcon
+                  icon={faCreditCard}
+                  size="3x"
+                  className="text-primary mb-3"
+                />
+              </div>
+              <p>
+                To upgrade your subscription, you'll need to set up your billing
+                information first.
+              </p>
+              <p className="text-muted">
+                You'll be securely redirected to Stripe to enter your payment
+                details. Your information is never stored on our servers.
+              </p>
+              <Alert variant="info" className="mb-0">
+                <small>
+                  <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+                  You can cancel anytime from your billing portal.
+                </small>
+              </Alert>
+            </>
+          ) : (
+            /* Step 2: Confirm changes (or single step for existing customers) */
+            <>
+              <p>You are about to change your subscription:</p>
+              <ul>
+                {pendingStorageTier && (
+                  <li>
+                    Storage: {formatTier(currentStorageTier)} →{' '}
+                    {formatTier(pendingStorageTier)}
+                  </li>
+                )}
+                {pendingAccountTier && (
+                  <li>
+                    Accounts: {formatTier(currentAccountTier)} →{' '}
+                    {formatTier(pendingAccountTier)}
+                  </li>
+                )}
+              </ul>
+              <p className="text-muted mb-0">
+                You'll be redirected to Stripe to complete the payment.
+              </p>
+            </>
+          )}
         </Modal.Body>
         <Modal.Footer>
-          <Button
-            variant="secondary"
-            onClick={() => setShowConfirmModal(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={handleConfirmChanges}
-            disabled={creatingCheckout}
-          >
-            {creatingCheckout ? (
-              <Spinner animation="border" size="sm" className="me-1" />
-            ) : null}
-            Continue to Payment
-          </Button>
+          {!hasStripeCustomer && confirmModalStep === 1 ? (
+            /* Step 1 footer */
+            <>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setConfirmModalStep(1);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => setConfirmModalStep(2)}
+              >
+                Continue
+                <FontAwesomeIcon icon={faArrowRight} className="ms-2" />
+              </Button>
+            </>
+          ) : (
+            /* Step 2 footer (or single step for existing customers) */
+            <>
+              {!hasStripeCustomer && (
+                <Button
+                  variant="outline-secondary"
+                  onClick={() => setConfirmModalStep(1)}
+                >
+                  Back
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setConfirmModalStep(1);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleConfirmChanges}
+                disabled={creatingCheckout}
+              >
+                {creatingCheckout ? (
+                  <Spinner animation="border" size="sm" className="me-1" />
+                ) : null}
+                Continue to Payment
+              </Button>
+            </>
+          )}
         </Modal.Footer>
       </Modal>
     </BillingContainer>

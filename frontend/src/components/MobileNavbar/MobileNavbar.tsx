@@ -93,7 +93,11 @@ const navItems: {
   },
 ];
 
-export function MobileNavbar({ user, unreadCount, onLogout }: MobileNavbarProps) {
+export function MobileNavbar({
+  user,
+  unreadCount,
+  onLogout,
+}: MobileNavbarProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -115,7 +119,7 @@ export function MobileNavbar({ user, unreadCount, onLogout }: MobileNavbarProps)
     <MobileNavbarContainer>
       <MobileLogo>
         <FontAwesomeIcon icon={faEnvelope} />
-        StacksMail
+        SuperMail
       </MobileLogo>
 
       <MobileNavActions>
@@ -190,11 +194,15 @@ export function MobileNavbar({ user, unreadCount, onLogout }: MobileNavbarProps)
               <FontAwesomeIcon icon={faFilter} />
               Mail Rules
             </MobileNavItem>
-            <MobileNavItem onClick={() => handleNavigate('/settings/appearance')}>
+            <MobileNavItem
+              onClick={() => handleNavigate('/settings/appearance')}
+            >
               <FontAwesomeIcon icon={faPalette} />
               Appearance
             </MobileNavItem>
-            <MobileNavItem onClick={() => handleNavigate('/settings/notifications')}>
+            <MobileNavItem
+              onClick={() => handleNavigate('/settings/notifications')}
+            >
               <FontAwesomeIcon icon={faBell} />
               Notifications
             </MobileNavItem>
@@ -209,7 +217,10 @@ export function MobileNavbar({ user, unreadCount, onLogout }: MobileNavbarProps)
 
             <MobileNavDivider />
 
-            <MobileNavItem onClick={onLogout} style={{ color: 'var(--bs-danger)' }}>
+            <MobileNavItem
+              onClick={onLogout}
+              style={{ color: 'var(--bs-danger)' }}
+            >
               <FontAwesomeIcon icon={faSignOutAlt} />
               Sign Out
             </MobileNavItem>

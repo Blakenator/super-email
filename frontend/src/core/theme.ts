@@ -1,4 +1,4 @@
-// StacksMail Theme Configuration
+// SuperMail Theme Configuration
 
 export type ThemePreference = 'LIGHT' | 'DARK' | 'AUTO';
 

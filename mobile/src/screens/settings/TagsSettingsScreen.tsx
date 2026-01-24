@@ -11,6 +11,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
@@ -39,6 +40,7 @@ interface TagsSettingsScreenProps {
 
 export function TagsSettingsScreen({ onEditTag, onAddTag }: TagsSettingsScreenProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [tags, setTags] = useState<Tag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -78,7 +80,7 @@ export function TagsSettingsScreen({ onEditTag, onAddTag }: TagsSettingsScreenPr
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={sharedStyles.screenScrollContent}
+      contentContainerStyle={[sharedStyles.screenScrollContent, { paddingBottom: Math.max(SPACING.xl, insets.bottom + SPACING.md) }]}
     >
       <View style={[sharedStyles.sectionHeader]}>
         <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>

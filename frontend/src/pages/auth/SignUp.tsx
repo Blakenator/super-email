@@ -60,7 +60,7 @@ export function SignUp() {
           <Card.Body className="p-5">
             <Logo>
               <FontAwesomeIcon icon={faEnvelope} className="me-2" />
-              StacksMail
+              SuperMail
             </Logo>
             <Tagline>Create your account</Tagline>
 

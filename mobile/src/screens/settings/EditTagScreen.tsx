@@ -224,7 +224,7 @@ export function EditTagScreen({ onClose }: EditTagScreenProps) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: Math.max(SPACING.xl, insets.bottom + SPACING.md) }} keyboardShouldPersistTaps="handled">
         {/* Preview */}
         <View style={[styles.previewContainer, { backgroundColor: theme.colors.surface }]}>
           <Text style={[styles.previewLabel, { color: theme.colors.textMuted }]}>Preview</Text>

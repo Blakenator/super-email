@@ -1,6 +1,9 @@
 /**
  * Push Notification Service
  * Handles registration, receiving, and displaying notifications
+ * 
+ * Note: Remote push notifications require Firebase to be properly initialized.
+ * If Firebase initialization fails, local notifications will still work.
  */
 
 import * as Notifications from 'expo-notifications';
@@ -9,6 +12,9 @@ import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { secureSet, secureGet, STORAGE_KEYS } from './secureStorage';
 import { config } from '../config/env';
+
+// Track if push notifications are available
+let pushNotificationsAvailable = true;
 
 // Configure notification handler
 Notifications.setNotificationHandler({
@@ -27,13 +33,57 @@ export interface PushNotificationToken {
 }
 
 /**
+ * Setup notification channels for Android
+ * This should be called early in the app lifecycle
+ */
+export async function setupNotificationChannels(): Promise<void> {
+  if (Platform.OS === 'android') {
+    try {
+      await Notifications.setNotificationChannelAsync('emails', {
+        name: 'New Emails',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#667eea',
+      });
+      
+      await Notifications.setNotificationChannelAsync('sync', {
+        name: 'Sync Status',
+        importance: Notifications.AndroidImportance.LOW,
+        vibrationPattern: [0],
+      });
+      
+      // Default channel for general notifications
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'General',
+        importance: Notifications.AndroidImportance.DEFAULT,
+      });
+    } catch (error) {
+      console.warn('Failed to setup notification channels:', error);
+    }
+  }
+}
+
+/**
+ * Check if push notifications are available
+ */
+export function arePushNotificationsAvailable(): boolean {
+  return pushNotificationsAvailable;
+}
+
+/**
  * Register for push notifications and get the token
+ * Returns null if push notifications are not available (e.g., Firebase not initialized)
+ * Local notifications will still work even if this returns null
  */
 export async function registerForPushNotifications(): Promise<PushNotificationToken | null> {
   if (!Device.isDevice) {
-    console.warn('Push notifications only work on physical devices');
+    console.log('Push notifications only work on physical devices');
+    pushNotificationsAvailable = false;
     return null;
   }
+
+  // Setup channels first (required on Android 13+ before getting token)
+  await setupNotificationChannels();
 
   // Check and request permissions
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
@@ -45,14 +95,21 @@ export async function registerForPushNotifications(): Promise<PushNotificationTo
   }
   
   if (finalStatus !== 'granted') {
-    console.warn('Push notification permission not granted');
+    console.log('Push notification permission not granted');
+    pushNotificationsAvailable = false;
+    return null;
+  }
+
+  // Get the push token
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+  
+  if (!projectId) {
+    console.warn('No EAS project ID found - push notifications disabled');
+    pushNotificationsAvailable = false;
     return null;
   }
 
   try {
-    // Get the push token
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-    
     const tokenData = await Notifications.getExpoPushTokenAsync({
       projectId,
     });
@@ -62,26 +119,23 @@ export async function registerForPushNotifications(): Promise<PushNotificationTo
     // Save token locally
     await secureSet(STORAGE_KEYS.PUSH_TOKEN, token);
     
-    // Configure Android channel
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('emails', {
-        name: 'New Emails',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#667eea',
-        sound: 'notification-sound.wav',
-      });
-      
-      await Notifications.setNotificationChannelAsync('sync', {
-        name: 'Sync Status',
-        importance: Notifications.AndroidImportance.LOW,
-        vibrationPattern: [0],
-      });
-    }
-    
+    console.log('Push notification token obtained successfully');
+    pushNotificationsAvailable = true;
     return { token, type: 'expo' };
-  } catch (error) {
-    console.error('Error getting push token:', error);
+  } catch (error: any) {
+    // Check if this is a Firebase initialization error
+    const errorMessage = error?.message || String(error);
+    
+    if (errorMessage.includes('FirebaseApp') || errorMessage.includes('Firebase')) {
+      console.warn(
+        'Firebase not initialized - remote push notifications disabled. ' +
+        'Local notifications will still work. ' +
+        'To enable push notifications, ensure google-services.json is properly configured.'
+      );
+    } else {
+      console.warn('Failed to get push token:', errorMessage);
+    }
+    pushNotificationsAvailable = false;
     return null;
   }
 }
