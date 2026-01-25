@@ -639,6 +639,8 @@ export type GetEmailsInput = {
   folder?: InputMaybe<EmailFolder>;
   /** Advanced filter: sender contains */
   fromContains?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by attachment status (true = only emails with attachments, false = only emails without attachments, null = all) */
+  hasAttachments?: InputMaybe<Scalars['Boolean']['input']>;
   /** If true, search across all folders; if false, defaults to INBOX */
   includeAllFolders?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by read status (null = all) */
@@ -806,6 +808,8 @@ export type Mutation = {
    * Optionally includes original attachments.
    */
   forwardEmail: Email;
+  /** Get all registered push tokens for the current user. */
+  getPushTokens: Array<PushToken>;
   /**
    * Bulk delete old emails for inbox zero.
    * Permanently deletes emails older than the specified date.
@@ -817,6 +821,11 @@ export type Mutation = {
    * Returns true if successful.
    */
   refreshStorageUsage: Scalars['Boolean']['output'];
+  /**
+   * Register a push notification token for receiving mobile/web push notifications.
+   * Creates or updates an existing token for the device.
+   */
+  registerPushToken: PushTokenResult;
   /**
    * Remove tags from multiple emails (bulk operation).
    * Returns the updated emails.
@@ -858,6 +867,11 @@ export type Mutation = {
    * Returns success/failure with an error message if applicable.
    */
   testSmtpConnection: TestConnectionResult;
+  /**
+   * Unregister a push notification token.
+   * Used when logging out or disabling notifications.
+   */
+  unregisterPushToken: Scalars['Boolean']['output'];
   /**
    * Unsubscribe from a sender's mailing list.
    * Uses List-Unsubscribe header if available.
@@ -1002,6 +1016,12 @@ export type MutationNukeOldEmailsArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationRegisterPushTokenArgs = {
+  input: RegisterPushTokenInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationRemoveTagsFromEmailsArgs = {
   input: RemoveTagsFromEmailsInput;
 };
@@ -1040,6 +1060,12 @@ export type MutationTestEmailAccountConnectionArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationTestSmtpConnectionArgs = {
   input: TestSmtpConnectionInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationUnregisterPushTokenArgs = {
+  token: Scalars['String']['input'];
 };
 
 
@@ -1102,6 +1128,48 @@ export enum NotificationDetailLevel {
 export type NukeOldEmailsInput = {
   /** Delete emails older than this date */
   olderThan?: InputMaybe<Scalars['Date']['input']>;
+};
+
+/** Platform type for push notification tokens. */
+export enum PushPlatform {
+  /** Android device (FCM) */
+  Android = 'ANDROID',
+  /** iOS device (APNS) */
+  Ios = 'IOS',
+  /** Web browser (Web Push API) */
+  Web = 'WEB'
+}
+
+/** A registered push notification token for a device. */
+export type PushToken = BaseEntityProps & {
+  __typename?: 'PushToken';
+  /** Timestamp when the token was registered */
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** Optional device name for identification */
+  deviceName?: Maybe<Scalars['String']['output']>;
+  /** Unique identifier for this push token */
+  id: Scalars['String']['output'];
+  /** Whether this token is currently active */
+  isActive: Scalars['Boolean']['output'];
+  /** Last time this token was used to send a notification */
+  lastUsedAt?: Maybe<Scalars['Date']['output']>;
+  /** Platform type (IOS, ANDROID, WEB) */
+  platform: PushPlatform;
+  /** The push notification token string */
+  token: Scalars['String']['output'];
+  /** Timestamp when the token was last updated */
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+};
+
+/** Result of push token registration. */
+export type PushTokenResult = {
+  __typename?: 'PushTokenResult';
+  /** Human-readable message about the result */
+  message: Scalars['String']['output'];
+  /** The registered push token (if successful) */
+  pushToken?: Maybe<PushToken>;
+  /** Whether the operation was successful */
+  success: Scalars['Boolean']['output'];
 };
 
 /**
@@ -1357,6 +1425,16 @@ export type QueryPreviewMailRuleArgs = {
  */
 export type QuerySearchContactsArgs = {
   query: Scalars['String']['input'];
+};
+
+/** Input for registering a push notification token. */
+export type RegisterPushTokenInput = {
+  /** Optional device name for identification */
+  deviceName?: InputMaybe<Scalars['String']['input']>;
+  /** Platform type (IOS, ANDROID, WEB) */
+  platform: PushPlatform;
+  /** The push notification token from the device */
+  token: Scalars['String']['input'];
 };
 
 /** Input for removing multiple tags from multiple emails (bulk operation). */
@@ -1912,6 +1990,7 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
     | ( Email )
     | ( EmailAccount )
     | ( MailRule )
+    | ( PushToken )
     | ( SmtpProfile )
     | ( Tag )
     | ( User )
@@ -1961,7 +2040,11 @@ export type ResolversTypes = ResolversObject<{
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   NotificationDetailLevel: NotificationDetailLevel;
   NukeOldEmailsInput: NukeOldEmailsInput;
+  PushPlatform: PushPlatform;
+  PushToken: ResolverTypeWrapper<PushToken>;
+  PushTokenResult: ResolverTypeWrapper<PushTokenResult>;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  RegisterPushTokenInput: RegisterPushTokenInput;
   RemoveTagsFromEmailsInput: RemoveTagsFromEmailsInput;
   RuleActions: ResolverTypeWrapper<RuleActions>;
   RuleActionsInput: RuleActionsInput;
@@ -2026,7 +2109,10 @@ export type ResolversParentTypes = ResolversObject<{
   MailboxUpdate: MailboxUpdate;
   Mutation: Record<PropertyKey, never>;
   NukeOldEmailsInput: NukeOldEmailsInput;
+  PushToken: PushToken;
+  PushTokenResult: PushTokenResult;
   Query: Record<PropertyKey, never>;
+  RegisterPushTokenInput: RegisterPushTokenInput;
   RemoveTagsFromEmailsInput: RemoveTagsFromEmailsInput;
   RuleActions: RuleActions;
   RuleActionsInput: RuleActionsInput;
@@ -2085,7 +2171,7 @@ export type AuthenticationMethodResolvers<ContextType = MyContext, ParentType ex
 }>;
 
 export type BaseEntityPropsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BaseEntityProps'] = ResolversParentTypes['BaseEntityProps']> = ResolversObject<{
-  __resolveType: TypeResolveFn<'Attachment' | 'AuthenticationMethod' | 'BillingSubscription' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
+  __resolveType: TypeResolveFn<'Attachment' | 'AuthenticationMethod' | 'BillingSubscription' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'PushToken' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
 }>;
 
 export type BillingInfoResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BillingInfo'] = ResolversParentTypes['BillingInfo']> = ResolversObject<{
@@ -2270,8 +2356,10 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   deleteSmtpProfile?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSmtpProfileArgs, 'id'>>;
   deleteTag?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteTagArgs, 'id'>>;
   forwardEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationForwardEmailArgs, 'input'>>;
+  getPushTokens?: Resolver<Array<ResolversTypes['PushToken']>, ParentType, ContextType>;
   nukeOldEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationNukeOldEmailsArgs, 'input'>>;
   refreshStorageUsage?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  registerPushToken?: Resolver<ResolversTypes['PushTokenResult'], ParentType, ContextType, RequireFields<MutationRegisterPushTokenArgs, 'input'>>;
   removeTagsFromEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationRemoveTagsFromEmailsArgs, 'input'>>;
   runMailRule?: Resolver<ResolversTypes['RunRuleResult'], ParentType, ContextType, RequireFields<MutationRunMailRuleArgs, 'id'>>;
   saveDraft?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSaveDraftArgs, 'input'>>;
@@ -2280,6 +2368,7 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   syncEmailAccount?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationSyncEmailAccountArgs, 'input'>>;
   testEmailAccountConnection?: Resolver<ResolversTypes['TestConnectionResult'], ParentType, ContextType, RequireFields<MutationTestEmailAccountConnectionArgs, 'input'>>;
   testSmtpConnection?: Resolver<ResolversTypes['TestConnectionResult'], ParentType, ContextType, RequireFields<MutationTestSmtpConnectionArgs, 'input'>>;
+  unregisterPushToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnregisterPushTokenArgs, 'token'>>;
   unsubscribe?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'input'>>;
   updateContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationUpdateContactArgs, 'input'>>;
   updateEmailAccount?: Resolver<ResolversTypes['EmailAccount'], ParentType, ContextType, RequireFields<MutationUpdateEmailAccountArgs, 'input'>>;
@@ -2288,6 +2377,24 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   updateTag?: Resolver<ResolversTypes['Tag'], ParentType, ContextType, RequireFields<MutationUpdateTagArgs, 'input'>>;
   updateThemePreference?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateThemePreferenceArgs, 'themePreference'>>;
   updateUserPreferences?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateUserPreferencesArgs, 'input'>>;
+}>;
+
+export type PushTokenResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['PushToken'] = ResolversParentTypes['PushToken']> = ResolversObject<{
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  deviceName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isActive?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  lastUsedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  platform?: Resolver<ResolversTypes['PushPlatform'], ParentType, ContextType>;
+  token?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type PushTokenResultResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['PushTokenResult'] = ResolversParentTypes['PushTokenResult']> = ResolversObject<{
+  message?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  pushToken?: Resolver<Maybe<ResolversTypes['PushToken']>, ParentType, ContextType>;
+  success?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
 }>;
 
 export type QueryResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Query'] = ResolversParentTypes['Query']> = ResolversObject<{
@@ -2434,6 +2541,8 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   MailRule?: MailRuleResolvers<ContextType>;
   MailboxUpdate?: MailboxUpdateResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
+  PushToken?: PushTokenResolvers<ContextType>;
+  PushTokenResult?: PushTokenResultResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
   RuleActions?: RuleActionsResolvers<ContextType>;
   RuleConditions?: RuleConditionsResolvers<ContextType>;

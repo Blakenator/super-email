@@ -253,5 +253,8 @@ data/
 .backend-image-tag
 coverage/
 
+# Firebase service account keys (contain secrets)
+*firebase-adminsdk*.json
+
 .idea
 Pulumi.*.yaml

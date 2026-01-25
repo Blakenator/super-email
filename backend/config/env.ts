@@ -104,6 +104,14 @@ export const config = {
       enterprise: process.env.STRIPE_PRICE_ACCOUNTS_ENTERPRISE || '',
     },
   },
+
+  // Firebase Configuration (for web push notifications)
+  firebase: {
+    // Firebase Admin SDK service account JSON (stringified)
+    serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '',
+    // Or path to the service account JSON file (easier for local dev)
+    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
+  },
 } as const;
 
 /**
@@ -145,6 +153,8 @@ export const envVarDefinitions = {
     STRIPE_PRICE_ACCOUNTS_BASIC: 'Stripe Price ID for Basic accounts tier (2 accounts)',
     STRIPE_PRICE_ACCOUNTS_PRO: 'Stripe Price ID for Pro accounts tier (5 accounts)',
     STRIPE_PRICE_ACCOUNTS_ENTERPRISE: 'Stripe Price ID for Enterprise accounts tier (unlimited)',
+    FIREBASE_SERVICE_ACCOUNT_JSON: 'Firebase Admin SDK service account JSON (stringified) for web push notifications',
+    FIREBASE_SERVICE_ACCOUNT_PATH: 'Path to Firebase service account JSON file (alternative to JSON string)',
   },
 } as const;
 

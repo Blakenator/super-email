@@ -1502,6 +1502,10 @@ input GetEmailsInput {
   Filter by applied tag IDs (emails must have ALL specified tags)
   """
   tagIds: [String!]
+  """
+  Filter by attachment status (true = only emails with attachments, false = only emails without attachments, null = all)
+  """
+  hasAttachments: Boolean
 }
 
 """
@@ -2455,6 +2459,128 @@ type Mutation {
   Returns true if successful.
   """
   refreshStorageUsage: Boolean!
+
+  # Push Notifications
+  """
+  Register a push notification token for receiving mobile/web push notifications.
+  Creates or updates an existing token for the device.
+  """
+  registerPushToken(
+    """
+    Push token registration details
+    """
+    input: RegisterPushTokenInput!
+  ): PushTokenResult!
+
+  """
+  Unregister a push notification token.
+  Used when logging out or disabling notifications.
+  """
+  unregisterPushToken(
+    """
+    The push token to unregister
+    """
+    token: String!
+  ): Boolean!
+
+  """
+  Get all registered push tokens for the current user.
+  """
+  getPushTokens: [PushToken!]!
+}
+
+# ============ Push Notifications ============
+
+"""
+Platform type for push notification tokens.
+"""
+enum PushPlatform {
+  """
+  iOS device (APNS)
+  """
+  IOS
+  """
+  Android device (FCM)
+  """
+  ANDROID
+  """
+  Web browser (Web Push API)
+  """
+  WEB
+}
+
+"""
+A registered push notification token for a device.
+"""
+type PushToken implements BaseEntityProps {
+  """
+  Unique identifier for this push token
+  """
+  id: String!
+  """
+  Timestamp when the token was registered
+  """
+  createdAt: Date
+  """
+  Timestamp when the token was last updated
+  """
+  updatedAt: Date
+  """
+  The push notification token string
+  """
+  token: String!
+  """
+  Platform type (IOS, ANDROID, WEB)
+  """
+  platform: PushPlatform!
+  """
+  Optional device name for identification
+  """
+  deviceName: String
+  """
+  Whether this token is currently active
+  """
+  isActive: Boolean!
+  """
+  Last time this token was used to send a notification
+  """
+  lastUsedAt: Date
+}
+
+"""
+Input for registering a push notification token.
+"""
+input RegisterPushTokenInput {
+  """
+  The push notification token from the device
+  """
+  token: String!
+  """
+  Platform type (IOS, ANDROID, WEB)
+  """
+  platform: PushPlatform!
+  """
+  Optional device name for identification
+  """
+  deviceName: String
+}
+
+"""
+Result of push token registration.
+"""
+type PushTokenResult {
+  """
+  Whether the operation was successful
+  """
+  success: Boolean!
+  """
+  Human-readable message about the result
+  """
+  message: String!
+  """
+  The registered push token (if successful)
+  """
+  pushToken: PushToken
 }
 
 """

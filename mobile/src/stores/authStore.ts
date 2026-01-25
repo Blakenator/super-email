@@ -92,6 +92,7 @@ interface AuthState {
   refreshProfile: () => Promise<void>;
   setBiometric: (enabled: boolean) => Promise<void>;
   setThemePreference: (theme: ThemePreference) => Promise<void>;
+  setInboxGroupByDate: (enabled: boolean) => Promise<void>;
   setOffline: (offline: boolean) => void;
   clearBiometricPrompt: () => void;
 }
@@ -162,11 +163,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         registerForPushNotifications()
           .then(async (pushToken) => {
             if (pushToken) {
-              await registerPushTokenWithBackend(pushToken.token, session.access_token);
-              console.log('[AuthStore] Push token registered');
+              console.log('[AuthStore] Obtained push token, registering with backend...');
+              const success = await registerPushTokenWithBackend(pushToken.token, session.access_token);
+              if (success) {
+                console.log('[AuthStore] Push token registered successfully');
+              } else {
+                console.warn('[AuthStore] Push token registration returned false');
+              }
+            } else {
+              console.log('[AuthStore] No push token obtained (push notifications may be disabled)');
             }
           })
-          .catch((e) => console.log('[AuthStore] Push registration failed:', e));
+          .catch((e) => console.error('[AuthStore] Push registration failed:', e));
       } else if (hasRememberedSession && biometricEnabled && biometricAvailable) {
         // User was remembered and biometric is enabled - prompt for biometric login
         console.log('[AuthStore] User remembered with biometric enabled, will prompt...');
@@ -395,6 +403,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await secureSetObject(STORAGE_KEYS.USER_DATA, updatedUser);
     } catch (error) {
       console.error('Error updating theme preference:', error);
+      // Revert on error
+      set({ user });
+    }
+  },
+
+  setInboxGroupByDate: async (enabled: boolean) => {
+    const { user, token } = get();
+
+    if (!user || !token) return;
+
+    // Optimistic update
+    set({ user: { ...user, inboxGroupByDate: enabled } });
+
+    try {
+      await apolloClient.mutate({
+        mutation: UPDATE_USER_PREFERENCES_MUTATION,
+        variables: {
+          input: { inboxGroupByDate: enabled },
+        },
+        context: {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        },
+      });
+
+      // Update cached user
+      const updatedUser = { ...user, inboxGroupByDate: enabled };
+      await secureSetObject(STORAGE_KEYS.USER_DATA, updatedUser);
+    } catch (error) {
+      console.error('Error updating inbox group by date preference:', error);
       // Revert on error
       set({ user });
     }

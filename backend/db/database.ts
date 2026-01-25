@@ -14,6 +14,7 @@ import { Email } from './models/email.model.js';
 import { Attachment } from './models/attachment.model.js';
 import { Subscription } from './models/subscription.model.js';
 import { UserUsage } from './models/user-usage.model.js';
+import { PushToken } from './models/push-token.model.js';
 
 // Validate environment in production
 const envValidation = validateEnv();
@@ -46,6 +47,7 @@ export const sequelize = new Sequelize({
     Attachment,
     Subscription,
     UserUsage,
+    PushToken,
   ],
   logging: false,
   // Enable SSL for production (required by AWS RDS)

@@ -4,6 +4,7 @@ import { EmailAccount, Email, EmailFolder } from '../db/models/index.js';
 import { logger } from './logger.js';
 import { applyRulesToEmail } from './rule-matcher.js';
 import { getImapCredentials } from './secrets.js';
+import { sendNewEmailNotification } from './push-notifications.js';
 
 // Connection timeout - 4.5 minutes (server will close, client should reconnect)
 const CONNECTION_TIMEOUT_MS = 4.5 * 60 * 1000;
@@ -240,15 +241,35 @@ async function startIdleForAccount(
               logger.error('IMAP-IDLE', `[${account.email}] Error applying rules: ${ruleError.message}`);
             }
             
-            savedEmails.push(newEmail);
+            // Reload the email to check if it's still in INBOX after rules
+            const reloadedEmail = await Email.findByPk(newEmail.id);
+            if (reloadedEmail && reloadedEmail.folder === EmailFolder.INBOX) {
+              savedEmails.push(reloadedEmail);
+            } else {
+              logger.info('IMAP-IDLE', `[${account.email}] Email moved by rules, not in inbox: ${subject}`);
+            }
           } catch (parseError: any) {
             logger.error('IMAP-IDLE', `[${account.email}] Error parsing message: ${parseError.message}`);
           }
         }
         
-        logger.info('IMAP-IDLE', `[${account.email}] Saved ${savedEmails.length} new email(s)`);
+        logger.info('IMAP-IDLE', `[${account.email}] Saved ${savedEmails.length} new email(s) to inbox`);
 
         if (savedEmails.length > 0) {
+          // Send push notification for new inbox emails
+          try {
+            const latestEmail = savedEmails[0];
+            await sendNewEmailNotification(
+              userId,
+              savedEmails.length,
+              account.email,
+              latestEmail.subject ?? undefined,
+              latestEmail.fromName ?? latestEmail.fromAddress ?? undefined,
+            );
+          } catch (pushError: any) {
+            logger.error('IMAP-IDLE', `[${account.email}] Failed to send push notification: ${pushError.message}`);
+          }
+
           onUpdate({
             type: 'NEW_EMAILS',
             emailAccountId: account.id,

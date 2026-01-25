@@ -36,6 +36,9 @@ import { runMailRule } from './mail-rule/runMailRule.js';
 import { createCheckoutSession } from './billing/createCheckoutSession.js';
 import { createBillingPortalSession } from './billing/createBillingPortalSession.js';
 import { refreshStorageUsage } from './billing/refreshStorageUsage.js';
+import { registerPushToken } from './push-token/registerPushToken.js';
+import { unregisterPushToken } from './push-token/unregisterPushToken.js';
+import { getPushTokens } from './push-token/getPushTokens.js';
 
 export const MutationResolvers: AllMutations = {
   deleteAuthenticationMethod,
@@ -75,4 +78,7 @@ export const MutationResolvers: AllMutations = {
   createCheckoutSession,
   createBillingPortalSession,
   refreshStorageUsage,
+  registerPushToken,
+  unregisterPushToken,
+  getPushTokens,
 };

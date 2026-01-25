@@ -1,5 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Card, Button, Alert, Badge, ListGroup, Form } from 'react-bootstrap';
+import {
+  Card,
+  Button,
+  Alert,
+  Badge,
+  ListGroup,
+  Form,
+  Spinner,
+} from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faBell,
@@ -10,8 +18,16 @@ import {
   faDesktop,
   faInfoCircle,
   faEnvelope,
+  faTrash,
+  faGlobe,
 } from '@fortawesome/free-solid-svg-icons';
+import {
+  faApple as fabApple,
+  faAndroid as fabAndroid,
+} from '@fortawesome/free-brands-svg-icons';
 import toast from 'react-hot-toast';
+import { gql } from '@apollo/client';
+import { useMutation } from '@apollo/client/react';
 import {
   getNotificationDetailLevel,
   setNotificationDetailLevel,
@@ -23,6 +39,52 @@ import {
   StatusLabel,
   StatusValue,
 } from './NotificationSettings.wrappers';
+import {
+  isFirebaseConfigured,
+  getFCMToken,
+  onForegroundMessage,
+  initializeFirebase,
+} from '../../../services/firebase';
+
+// GraphQL queries and mutations for push tokens
+const GET_PUSH_TOKENS = gql`
+  mutation GetPushTokens {
+    getPushTokens {
+      id
+      token
+      platform
+      deviceName
+      isActive
+      lastUsedAt
+      createdAt
+    }
+  }
+`;
+
+const REGISTER_PUSH_TOKEN = gql`
+  mutation RegisterPushToken($input: RegisterPushTokenInput!) {
+    registerPushToken(input: $input) {
+      success
+      message
+    }
+  }
+`;
+
+const UNREGISTER_PUSH_TOKEN = gql`
+  mutation UnregisterPushToken($token: String!) {
+    unregisterPushToken(token: $token)
+  }
+`;
+
+interface PushToken {
+  id: string;
+  token: string;
+  platform: 'IOS' | 'ANDROID' | 'WEB';
+  deviceName: string | null;
+  isActive: boolean;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
 
 type BrowserType = 'chrome' | 'firefox' | 'safari' | 'edge' | 'other';
 
@@ -89,6 +151,160 @@ export function NotificationSettings() {
   const [registeringMailto, setRegisteringMailto] = useState(false);
   const [notificationDetailLevel, setDetailLevel] =
     useState<NotificationDetailLevel>(getNotificationDetailLevel());
+
+  // Push tokens state
+  const [pushTokens, setPushTokens] = useState<PushToken[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(true);
+  const [removingToken, setRemovingToken] = useState<string | null>(null);
+
+  // GraphQL mutations
+  const [getPushTokensMutation] = useMutation(GET_PUSH_TOKENS);
+  const [registerPushTokenMutation] = useMutation(REGISTER_PUSH_TOKEN);
+  const [unregisterPushTokenMutation] = useMutation(UNREGISTER_PUSH_TOKEN);
+
+  // Fetch push tokens
+  const fetchPushTokens = async () => {
+    setLoadingTokens(true);
+    try {
+      const { data } = await getPushTokensMutation();
+      setPushTokens(data?.getPushTokens ?? []);
+    } catch (error) {
+      console.error('Failed to fetch push tokens:', error);
+    } finally {
+      setLoadingTokens(false);
+    }
+  };
+
+  // Remove a push token
+  const handleRemoveToken = async (token: string) => {
+    setRemovingToken(token);
+    try {
+      await unregisterPushTokenMutation({ variables: { token } });
+      setPushTokens((prev) => prev.filter((t) => t.token !== token));
+      toast.success('Device removed successfully');
+    } catch (error) {
+      console.error('Failed to remove push token:', error);
+      toast.error('Failed to remove device');
+    } finally {
+      setRemovingToken(null);
+    }
+  };
+
+  // Register browser for push notifications using Firebase Cloud Messaging
+  const registerWebPushToken = async () => {
+    try {
+      let tokenToUse: string | null = null;
+
+      // Try to get FCM token if Firebase is configured
+      if (isFirebaseConfigured()) {
+        // Initialize Firebase and send config to service worker
+        initializeFirebase();
+        await sendFirebaseConfigToServiceWorker();
+
+        tokenToUse = await getFCMToken();
+        if (tokenToUse) {
+          // Store the FCM token
+          localStorage.setItem('web-push-token', tokenToUse);
+          console.log('Got FCM token for web push');
+        }
+      }
+
+      // Fallback to simple token if FCM is not available
+      if (!tokenToUse) {
+        const storedToken = localStorage.getItem('web-push-token');
+        if (storedToken && !storedToken.startsWith('web-')) {
+          // Already have an FCM token stored
+          tokenToUse = storedToken;
+        } else {
+          // Generate a fallback token (won't work for background notifications)
+          tokenToUse = `web-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+          localStorage.setItem('web-push-token', tokenToUse);
+          console.warn('Using fallback web token - background notifications will not work');
+        }
+      }
+
+      // Get browser and device name
+      const browserName = browser.charAt(0).toUpperCase() + browser.slice(1);
+      const deviceName = `${browserName} on ${navigator.platform || 'Unknown'}`;
+
+      await registerPushTokenMutation({
+        variables: {
+          input: {
+            token: tokenToUse,
+            platform: 'WEB',
+            deviceName,
+          },
+        },
+      });
+
+      // Refresh the tokens list
+      await fetchPushTokens();
+    } catch (error) {
+      console.error('Failed to register web push token:', error);
+    }
+  };
+
+  // Send Firebase config to service worker
+  const sendFirebaseConfigToServiceWorker = async () => {
+    if (!('serviceWorker' in navigator)) return;
+
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      if (registration.active) {
+        registration.active.postMessage({
+          type: 'FIREBASE_CONFIG',
+          config: {
+            apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+            authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+            projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+            storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+            messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+            appId: import.meta.env.VITE_FIREBASE_APP_ID,
+          },
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send Firebase config to service worker:', error);
+    }
+  };
+
+  // Load push tokens on mount and register if notifications already granted
+  useEffect(() => {
+    fetchPushTokens();
+
+    // Initialize Firebase if configured
+    if (isFirebaseConfigured()) {
+      initializeFirebase();
+      sendFirebaseConfigToServiceWorker();
+
+      // Set up foreground message handler
+      const unsubscribe = onForegroundMessage((payload) => {
+        // Show notification manually for foreground messages
+        if (payload.notification) {
+          new Notification(payload.notification.title || 'New Email', {
+            body: payload.notification.body,
+            icon: '/icon-192x192.svg',
+          });
+        }
+      });
+
+      // Cleanup on unmount
+      return () => {
+        if (unsubscribe) {
+          unsubscribe();
+        }
+      };
+    }
+
+    // If notifications are already granted, ensure browser is registered
+    if ('Notification' in window && Notification.permission === 'granted') {
+      const existingToken = localStorage.getItem('web-push-token');
+      if (!existingToken || existingToken.startsWith('web-')) {
+        // Register with FCM token if possible
+        registerWebPushToken();
+      }
+    }
+  }, []);
 
   // Browser and platform detection
   const browser = useMemo(() => detectBrowser(), []);
@@ -213,6 +429,8 @@ export function NotificationSettings() {
           body: 'You will now receive notifications for new emails.',
           icon: '/icon-192x192.svg',
         });
+        // Register this browser as a push device
+        await registerWebPushToken();
       } else if (permission === 'denied') {
         toast.error(
           'Notifications blocked. Please enable them in your browser settings.',
@@ -558,6 +776,99 @@ export function NotificationSettings() {
             When enabled, you'll receive browser notifications for new emails
             even when the app is running in the background. The app polls for
             new emails every minute.
+          </p>
+        </Card.Body>
+      </Card>
+
+      {/* Connected Devices Section */}
+      <Card className="mt-3">
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <span>
+            <FontAwesomeIcon icon={faMobileAlt} className="me-2" />
+            Connected Devices
+          </span>
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            onClick={fetchPushTokens}
+            disabled={loadingTokens}
+          >
+            {loadingTokens ? (
+              <Spinner animation="border" size="sm" />
+            ) : (
+              'Refresh'
+            )}
+          </Button>
+        </Card.Header>
+        <Card.Body>
+          {loadingTokens ? (
+            <div className="text-center py-3">
+              <Spinner animation="border" size="sm" className="me-2" />
+              Loading devices...
+            </div>
+          ) : pushTokens.length === 0 ? (
+            <p className="text-muted mb-0">
+              No mobile devices connected. Install the SuperMail mobile app to
+              receive push notifications on your phone.
+            </p>
+          ) : (
+            <ListGroup variant="flush">
+              {pushTokens.map((token) => (
+                <ListGroup.Item
+                  key={token.id}
+                  className="d-flex justify-content-between align-items-center"
+                >
+                  <div>
+                    <FontAwesomeIcon
+                      icon={
+                        token.platform === 'IOS'
+                          ? fabApple
+                          : token.platform === 'ANDROID'
+                            ? fabAndroid
+                            : faGlobe
+                      }
+                      className="me-2"
+                    />
+                    <strong>
+                      {token.deviceName ||
+                        (token.platform === 'IOS'
+                          ? 'iPhone/iPad'
+                          : token.platform === 'ANDROID'
+                            ? 'Android Device'
+                            : 'Web Browser')}
+                    </strong>
+                    <br />
+                    <small className="text-muted">
+                      Added {new Date(token.createdAt).toLocaleDateString()}
+                      {token.lastUsedAt && (
+                        <>
+                          {' '}
+                          • Last used{' '}
+                          {new Date(token.lastUsedAt).toLocaleDateString()}
+                        </>
+                      )}
+                    </small>
+                  </div>
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    onClick={() => handleRemoveToken(token.token)}
+                    disabled={removingToken === token.token}
+                  >
+                    {removingToken === token.token ? (
+                      <Spinner animation="border" size="sm" />
+                    ) : (
+                      <FontAwesomeIcon icon={faTrash} />
+                    )}
+                  </Button>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          )}
+          <p className="text-muted small mt-3 mb-0">
+            These are devices that can receive push notifications when new
+            emails arrive. Remove devices you no longer use to stop sending
+            notifications to them.
           </p>
         </Card.Body>
       </Card>

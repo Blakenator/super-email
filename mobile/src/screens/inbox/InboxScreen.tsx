@@ -3,7 +3,7 @@
  * Main email list view with folder tabs, account switcher, search/filtering, and pagination
  */
 
-import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -23,11 +23,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { useEmailStore, EmailFolder, Email, EmailAccount } from '../../stores/emailStore';
+import { useAuthStore } from '../../stores/authStore';
 import { EmailListItem } from '../../components/email';
 import { Icon } from '../../components/ui';
 
 type FilterMode = 'all' | 'unread' | 'starred';
-type SortMode = 'date-desc' | 'date-asc' | 'sender' | 'subject';
 type GroupMode = 'none' | 'date';
 
 interface FolderConfig {
@@ -53,6 +53,7 @@ interface InboxScreenProps {
 export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: InboxScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const { user, setInboxGroupByDate } = useAuthStore();
   
   const {
     emails,
@@ -70,6 +71,7 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
     setAccountId,
     setSearchQuery,
     setPage,
+    setFilters,
     fetchEmails,
     syncAllAccounts,
     markAsStarred,
@@ -86,23 +88,37 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
   const [showSearch, setShowSearch] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<FilterMode>('all');
-  const [sortMode, setSortMode] = useState<SortMode>('date-desc');
-  const [groupMode, setGroupMode] = useState<GroupMode>('none');
+  const [groupMode, setGroupMode] = useState<GroupMode>(user?.inboxGroupByDate ? 'date' : 'none');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [hasAttachments, setHasAttachments] = useState(false);
+
+  // Refs for scroll-to-top on page change
+  const flatListRef = useRef<FlatList<Email>>(null);
+  const sectionListRef = useRef<SectionList<Email>>(null);
+
+  // Scroll to top when page changes (only if there are items)
+  useEffect(() => {
+    if (emails.length === 0) return;
+    
+    if (groupMode === 'date' && sectionListRef.current) {
+      try {
+        sectionListRef.current.scrollToLocation({ sectionIndex: 0, itemIndex: 0, animated: true });
+      } catch {
+        // Ignore scroll errors when list is empty or not ready
+      }
+    } else if (flatListRef.current) {
+      flatListRef.current.scrollToOffset({ offset: 0, animated: true });
+    }
+  }, [page, groupMode, emails.length]);
   
   // Calculate pagination
   const totalPages = Math.ceil(totalCount / pageSize);
   const hasNextPage = page < totalPages;
   const hasPrevPage = page > 1;
   
-  // Filter emails locally based on filter mode
-  const filteredEmails = emails.filter(email => {
-    if (filterMode === 'unread') return !email.isRead;
-    if (filterMode === 'starred') return email.isStarred;
-    return true;
-  });
+  // Emails are already filtered by the backend
+  const filteredEmails = emails;
 
   // Group emails by date for SectionList
   const groupedEmails = useMemo(() => {
@@ -170,8 +186,11 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
   
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    await syncAllAccounts();
-    setIsRefreshing(false);
+    try {
+      await syncAllAccounts();
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [syncAllAccounts]);
   
   const handleStarPress = useCallback((email: Email) => {
@@ -242,12 +261,43 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
   );
 
   const renderSectionHeader = ({ section }: { section: { title: string } }) => (
-    <View style={[styles.sectionHeader, { backgroundColor: theme.colors.backgroundSecondary }]}>
+    <View style={[styles.sectionHeader, { backgroundColor: theme.colors.background }]}>
       <Text style={[styles.sectionHeaderText, { color: theme.colors.textMuted }]}>
         {section.title}
       </Text>
     </View>
   );
+
+  // Render email with card wrapper when grouping is enabled
+  const renderEmailGrouped = ({ item, index, section }: { item: Email; index: number; section: { title: string; data: Email[] } }) => {
+    const isFirst = index === 0;
+    const isLast = index === section.data.length - 1;
+    
+    return (
+      <View style={[
+        styles.emailCardWrapper,
+        { backgroundColor: theme.colors.surface },
+        isFirst && styles.emailCardFirst,
+        isLast && styles.emailCardLast,
+        !isFirst && !isLast && styles.emailCardMiddle,
+      ]}>
+        <EmailListItem
+          email={item}
+          onPress={() => handleEmailPress(item)}
+          onStarPress={() => handleStarPress(item)}
+          onSelectPress={() => toggleSelection(item.id)}
+          isSelected={selectedIds.has(item.id)}
+          showCheckbox={selectedIds.size > 0}
+          onArchive={() => handleArchive(item.id)}
+          onDelete={() => handleDelete(item.id)}
+          onMarkRead={() => handleMarkRead(item.id, item.isRead)}
+        />
+        {!isLast && (
+          <View style={[styles.emailDivider, { backgroundColor: theme.colors.border }]} />
+        )}
+      </View>
+    );
+  };
   
   const renderEmptyState = () => (
     <View style={sharedStyles.emptyContainer}>
@@ -268,7 +318,7 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
       <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
         {totalCount} email{totalCount !== 1 ? 's' : ''}
       </Text>
-      {isSyncing && (
+      {isSyncing && !isRefreshing && (
         <View style={styles.syncIndicator}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
           <Text style={[styles.syncText, { color: theme.colors.textMuted }]}>
@@ -290,7 +340,7 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
         style={styles.modalOverlay}
         onPress={() => setShowAccountPicker(false)}
       >
-        <View style={[styles.accountPickerModal, { backgroundColor: theme.colors.surface }]}>
+        <View style={[styles.accountPickerModal, { backgroundColor: theme.colors.surface, paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
           <View style={[styles.pickerHeader, { borderBottomColor: theme.colors.border }]}>
             <Text style={[styles.pickerTitle, { color: theme.colors.text }]}>
               Select Account
@@ -437,9 +487,10 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
       {/* Email List - Use SectionList when grouping is enabled */}
       {groupMode === 'date' && groupedEmails ? (
         <SectionList
+          ref={sectionListRef}
           sections={groupedEmails}
           keyExtractor={(item) => item.id}
-          renderItem={renderEmail}
+          renderItem={renderEmailGrouped}
           renderSectionHeader={renderSectionHeader}
           ListHeaderComponent={renderHeader}
           ListEmptyComponent={!isLoading ? renderEmptyState : null}
@@ -482,6 +533,7 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
         />
       ) : (
         <FlatList
+          ref={flatListRef}
           data={filteredEmails}
           keyExtractor={(item) => item.id}
           renderItem={renderEmail}
@@ -556,7 +608,7 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
 
       {/* Compose FAB */}
       <TouchableOpacity
-        style={[sharedStyles.fab, { backgroundColor: theme.colors.primary, bottom: insets.bottom + SPACING.md }]}
+        style={[sharedStyles.fab, { backgroundColor: theme.colors.primary, bottom: Math.max(insets.bottom, SPACING.md) + SPACING.md }]}
         onPress={onComposePress}
         activeOpacity={0.8}
       >
@@ -564,7 +616,7 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
       </TouchableOpacity>
       
       {/* Inline Loading Indicator (for tab changes, not full-screen) */}
-      {isLoading && filteredEmails.length > 0 && (
+      {isLoading && filteredEmails.length > 0 && !isRefreshing && (
         <View style={[styles.inlineLoading, { backgroundColor: theme.colors.primary + '15', top: insets.top + 100 }]}>
           <ActivityIndicator size="small" color={theme.colors.primary} />
           <Text style={[styles.inlineLoadingText, { color: theme.colors.primary }]}>
@@ -574,7 +626,7 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
       )}
       
       {/* Full Loading (only when no emails at all) */}
-      {isLoading && filteredEmails.length === 0 && (
+      {isLoading && filteredEmails.length === 0 && !isRefreshing && (
         <View style={[styles.loadingOverlay, { backgroundColor: theme.colors.background + 'E6' }]}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={[styles.loadingText, { color: theme.colors.text }]}>
@@ -604,7 +656,6 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
             <TouchableOpacity
               onPress={() => {
                 setFilterMode('all');
-                setSortMode('date-desc');
                 setGroupMode('none');
                 setHasAttachments(false);
               }}
@@ -678,44 +729,6 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
               </TouchableOpacity>
             </View>
 
-            {/* Sort Section */}
-            <Text style={[styles.filterSectionTitle, { color: theme.colors.textMuted }]}>
-              SORT BY
-            </Text>
-            <View style={[styles.filterSection, { backgroundColor: theme.colors.surface }]}>
-              {([
-                { key: 'date-desc', label: 'Newest First', icon: 'clock' },
-                { key: 'date-asc', label: 'Oldest First', icon: 'clock' },
-                { key: 'sender', label: 'Sender', icon: 'user' },
-                { key: 'subject', label: 'Subject', icon: 'file-text' },
-              ] as { key: SortMode; label: string; icon: React.ComponentProps<typeof Icon>['name'] }[]).map((option) => (
-                <TouchableOpacity
-                  key={option.key}
-                  style={[
-                    styles.filterOption,
-                    { borderBottomColor: theme.colors.border },
-                    sortMode === option.key && { backgroundColor: theme.colors.primary + '10' },
-                  ]}
-                  onPress={() => setSortMode(option.key)}
-                >
-                  <Icon
-                    name={option.icon}
-                    size="md"
-                    color={sortMode === option.key ? theme.colors.primary : theme.colors.text}
-                  />
-                  <Text style={[
-                    styles.filterOptionText,
-                    { color: sortMode === option.key ? theme.colors.primary : theme.colors.text }
-                  ]}>
-                    {option.label}
-                  </Text>
-                  {sortMode === option.key && (
-                    <Icon name="check" size="md" color={theme.colors.primary} />
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-
             {/* Group Section */}
             <Text style={[styles.filterSectionTitle, { color: theme.colors.textMuted }]}>
               GROUP BY
@@ -732,7 +745,10 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
                     { borderBottomColor: theme.colors.border },
                     groupMode === option.key && { backgroundColor: theme.colors.primary + '10' },
                   ]}
-                  onPress={() => setGroupMode(option.key)}
+                  onPress={() => {
+                    setGroupMode(option.key);
+                    setInboxGroupByDate(option.key === 'date');
+                  }}
                 >
                   <Icon
                     name={option.key === 'none' ? 'inbox' : 'folder'}
@@ -756,7 +772,14 @@ export function InboxScreen({ onEmailPress, onComposePress, onNukePress }: Inbox
           <View style={[styles.fullModalFooter, { backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border, paddingBottom: insets.bottom }]}>
             <TouchableOpacity
               style={[styles.applyButton, { backgroundColor: theme.colors.primary }]}
-              onPress={() => setShowFilterMenu(false)}
+              onPress={() => {
+                // Apply backend filters
+                const isReadFilter = filterMode === 'unread' ? false : null;
+                const isStarredFilter = filterMode === 'starred' ? true : null;
+                const hasAttachmentsFilter = hasAttachments ? true : null;
+                setFilters(isReadFilter, isStarredFilter, hasAttachmentsFilter);
+                setShowFilterMenu(false);
+              }}
             >
               <Text style={styles.applyButtonText}>Apply Filters</Text>
             </TouchableOpacity>
@@ -904,13 +927,35 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xs,
   },
   sectionHeaderText: {
     fontSize: FONT_SIZE.xs,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  emailCardWrapper: {
+    marginHorizontal: SPACING.md,
+    overflow: 'hidden',
+  },
+  emailCardFirst: {
+    borderTopLeftRadius: RADIUS.lg,
+    borderTopRightRadius: RADIUS.lg,
+    marginTop: SPACING.xs,
+  },
+  emailCardLast: {
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
+    marginBottom: SPACING.sm,
+  },
+  emailCardMiddle: {
+    borderRadius: 0,
+  },
+  emailDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: SPACING.md,
   },
   syncIndicator: {
     flexDirection: 'row',

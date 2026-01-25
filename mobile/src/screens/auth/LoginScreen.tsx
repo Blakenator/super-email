@@ -1,6 +1,7 @@
 /**
  * Login Screen
  * Supports email/password and biometric authentication
+ * When biometric is available and enabled, it shows as the primary option
  */
 
 import React, { useState, useEffect } from 'react';
@@ -12,11 +13,9 @@ import {
   Platform,
   ScrollView,
   TouchableOpacity,
-  Image,
-  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
+import { useTheme, SPACING, FONT_SIZE } from '../../theme';
 import { useAuthStore } from '../../stores/authStore';
 import { Button, Input, useSafeInsets } from '../../components/ui';
 import { getBiometricTypeName } from '../../services/biometricAuth';
@@ -41,13 +40,16 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPasswordLogin, setShowPasswordLogin] = useState(false);
 
-  // Attempt biometric login on mount
+  const canUseBiometric = biometricAvailable && biometricEnabled;
+
+  // Auto-prompt biometric on mount when available
   useEffect(() => {
-    if (biometricEnabled && biometricAvailable) {
+    if (canUseBiometric && !showPasswordLogin) {
       handleBiometricLogin();
     }
-  }, [biometricEnabled, biometricAvailable]);
+  }, [canUseBiometric]);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -70,12 +72,123 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
     const success = await loginWithBiometric();
 
     if (!success) {
-      // Biometric failed, show regular login
+      // Biometric failed - don't automatically switch, let user retry or switch manually
     }
   };
 
   const biometricName = getBiometricTypeName(biometricType);
 
+  // Biometric-first view
+  if (canUseBiometric && !showPasswordLogin) {
+    return (
+      <LinearGradient
+        colors={[theme.colors.primary, theme.colors.secondary]}
+        style={styles.gradient}
+      >
+        <View style={[styles.biometricContainer, safeAreaPadding]}>
+          <View style={styles.header}>
+            <Text style={styles.logoIcon}>✉️</Text>
+            <Text
+              style={[styles.logoText, { color: theme.colors.textInverse }]}
+            >
+              SuperMail
+            </Text>
+          </View>
+
+          <View
+            style={[styles.biometricCard, { backgroundColor: theme.colors.surface }]}
+          >
+            {error && (
+              <View
+                style={[
+                  styles.errorContainer,
+                  { backgroundColor: theme.colors.error + '20' },
+                ]}
+              >
+                <Text style={[styles.errorText, { color: theme.colors.error }]}>
+                  {error}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.biometricIconContainer}>
+              <Text style={styles.biometricIcon}>
+                {biometricType === 'facial' ? '👤' : '👆'}
+              </Text>
+            </View>
+
+            <Text
+              style={[styles.biometricTitle, { color: theme.colors.text }]}
+            >
+              Welcome back
+            </Text>
+            <Text
+              style={[styles.biometricSubtitle, { color: theme.colors.textMuted }]}
+            >
+              Use {biometricName} to sign in
+            </Text>
+
+            <Button
+              title={`Sign in with ${biometricName}`}
+              onPress={handleBiometricLogin}
+              loading={isLoading}
+              fullWidth
+              style={styles.biometricButton}
+              icon={<Text>{biometricType === 'facial' ? '👤' : '👆'}</Text>}
+            />
+
+            <View style={styles.divider}>
+              <View
+                style={[
+                  styles.dividerLine,
+                  { backgroundColor: theme.colors.border },
+                ]}
+              />
+              <Text
+                style={[
+                  styles.dividerText,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                or
+              </Text>
+              <View
+                style={[
+                  styles.dividerLine,
+                  { backgroundColor: theme.colors.border },
+                ]}
+              />
+            </View>
+
+            <Button
+              title="Sign in with password"
+              onPress={() => setShowPasswordLogin(true)}
+              variant="outline"
+              fullWidth
+              style={styles.switchButton}
+            />
+
+            <View style={styles.footer}>
+              <Text
+                style={[styles.footerText, { color: theme.colors.textMuted }]}
+              >
+                Don't have an account?{' '}
+              </Text>
+              <TouchableOpacity onPress={onNavigateToSignup}>
+                <Text
+                  style={[styles.linkText, { color: theme.colors.primary }]}
+                >
+                  Sign up
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+    );
+  }
+
+  // Traditional email/password view
   return (
     <LinearGradient
       colors={[theme.colors.primary, theme.colors.secondary]}
@@ -178,7 +291,7 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               style={styles.signInButton}
             />
 
-            {biometricAvailable && (
+            {canUseBiometric && (
               <>
                 <View style={styles.divider}>
                   <View
@@ -205,7 +318,10 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
 
                 <Button
                   title={`Sign in with ${biometricName}`}
-                  onPress={handleBiometricLogin}
+                  onPress={() => {
+                    setShowPasswordLogin(false);
+                    handleBiometricLogin();
+                  }}
                   variant="outline"
                   fullWidth
                   icon={<Text>{biometricType === 'facial' ? '👤' : '👆'}</Text>}
@@ -246,6 +362,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  biometricContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
   header: {
     alignItems: 'center',
     marginBottom: 32,
@@ -271,10 +392,42 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  biometricCard: {
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+    alignItems: 'center',
+  },
+  biometricIconContainer: {
+    marginBottom: SPACING.lg,
+  },
+  biometricIcon: {
+    fontSize: 64,
+  },
+  biometricTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: '600',
+    marginBottom: SPACING.xs,
+  },
+  biometricSubtitle: {
+    fontSize: FONT_SIZE.md,
+    marginBottom: SPACING.xl,
+  },
+  biometricButton: {
+    marginBottom: SPACING.md,
+  },
+  switchButton: {
+    marginBottom: SPACING.sm,
+  },
   errorContainer: {
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
+    width: '100%',
   },
   errorText: {
     fontSize: 14,
@@ -304,6 +457,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: 16,
+    width: '100%',
   },
   dividerLine: {
     flex: 1,
