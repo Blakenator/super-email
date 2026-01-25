@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   Alert,
   useWindowDimensions,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -88,11 +90,29 @@ interface EmailDetailScreenProps {
     subject: string;
     htmlBody?: string;
   }) => void;
+  onReplyAll: (replyTo: {
+    emailId: string;
+    toAddresses: string[];
+    ccAddresses?: string[];
+    subject: string;
+    htmlBody?: string;
+  }) => void;
+  onForward: (forward: {
+    emailId: string;
+    subject: string;
+    htmlBody?: string;
+  }) => void;
+  onArchive: (emailId: string) => void;
+  onDelete: (emailId: string) => void;
   onAddContact: (email: string, name?: string) => void;
 }
 
 export function EmailDetailScreen({
   onReply,
+  onReplyAll,
+  onForward,
+  onArchive,
+  onDelete,
   onAddContact,
 }: EmailDetailScreenProps) {
   const theme = useTheme();
@@ -105,6 +125,7 @@ export function EmailDetailScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [webViewHeight, setWebViewHeight] = useState(300);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   useEffect(() => {
     loadEmail();
@@ -148,6 +169,51 @@ export function EmailDetailScreen({
       htmlBody: email.htmlBody ?? undefined,
     });
   }, [email, onReply]);
+
+  const handleReplyAll = useCallback(() => {
+    if (!email) return;
+    onReplyAll({
+      emailId: email.id,
+      toAddresses: [email.fromAddress, ...email.toAddresses],
+      ccAddresses: email.ccAddresses ?? undefined,
+      subject: email.subject,
+      htmlBody: email.htmlBody ?? undefined,
+    });
+  }, [email, onReplyAll]);
+
+  const handleForward = useCallback(() => {
+    if (!email) return;
+    onForward({
+      emailId: email.id,
+      subject: email.subject,
+      htmlBody: email.htmlBody ?? undefined,
+    });
+  }, [email, onForward]);
+
+  const handleArchive = useCallback(() => {
+    if (!email) return;
+    onArchive(email.id);
+  }, [email, onArchive]);
+
+  const handleDelete = useCallback(() => {
+    if (!email) return;
+    Alert.alert(
+      'Delete Email',
+      'Are you sure you want to delete this email?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => onDelete(email.id),
+        },
+      ]
+    );
+  }, [email, onDelete]);
+
+  const handleToggleMenu = useCallback(() => {
+    setShowMoreMenu(!showMoreMenu);
+  }, [showMoreMenu]);
 
   const handleAddSenderToContacts = useCallback(() => {
     if (!email) return;
@@ -443,12 +509,12 @@ export function EmailDetailScreen({
               height: Math.max(webViewHeight, 300),
               width: width - SPACING.md * 2 - 2,
             }}
-            scrollEnabled={true}
-            nestedScrollEnabled={true}
+            scrollEnabled={false}
+            nestedScrollEnabled={false}
             onMessage={handleWebViewMessage}
             originWhitelist={['*']}
             javaScriptEnabled
-            showsVerticalScrollIndicator={true}
+            showsVerticalScrollIndicator={false}
           />
         </View>
       </ScrollView>
@@ -472,27 +538,56 @@ export function EmailDetailScreen({
             Reply
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleReplyAll}>
           <Icon name="reply-all" size="md" color={theme.colors.text} />
           <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
             Reply All
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleForward}>
           <Icon name="forward" size="md" color={theme.colors.text} />
           <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
             Forward
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Icon name="trash-2" size="md" color={theme.colors.error} />
-          <Text
-            style={[styles.actionButtonText, { color: theme.colors.error }]}
-          >
-            Delete
+        <TouchableOpacity style={styles.actionButton} onPress={handleArchive}>
+          <Icon name="archive" size="md" color={theme.colors.text} />
+          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
+            Archive
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.actionButton} onPress={handleToggleMenu}>
+          <Icon name="more-vertical" size="md" color={theme.colors.text} />
+        </TouchableOpacity>
       </View>
+
+      {/* More Menu Modal */}
+      <Modal
+        visible={showMoreMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMoreMenu(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowMoreMenu(false)}
+        >
+          <View style={[styles.moreMenuModal, { backgroundColor: theme.colors.surface }]}>
+            <TouchableOpacity
+              style={[styles.moreMenuItem, { borderBottomColor: theme.colors.border }]}
+              onPress={() => {
+                setShowMoreMenu(false);
+                handleDelete();
+              }}
+            >
+              <Icon name="trash-2" size="md" color={theme.colors.error} />
+              <Text style={[styles.moreMenuItemText, { color: theme.colors.error }]}>
+                Delete Email
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -664,5 +759,26 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: FONT_SIZE.xs,
     marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: SPACING.lg,
+  },
+  moreMenuModal: {
+    marginHorizontal: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    overflow: 'hidden',
+  },
+  moreMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    gap: SPACING.md,
+  },
+  moreMenuItemText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '500',
   },
 });

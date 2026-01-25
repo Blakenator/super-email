@@ -11,3 +11,4 @@ export * from './mail-rule.model.js';
 export * from './attachment.model.js';
 export * from './subscription.model.js';
 export * from './user-usage.model.js';
+export * from './push-token.model.js';

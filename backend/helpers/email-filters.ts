@@ -16,6 +16,7 @@ export interface EmailFilterInput {
   subjectContains?: string;
   bodyContains?: string;
   tagIds?: string[];
+  hasAttachments?: boolean;
 }
 
 /**
@@ -139,6 +140,21 @@ export function buildEmailWhereClause(
         AND email_tags."tagId" IN (${tagIdList})
       ) = ${input.tagIds.length}`),
     );
+  }
+
+  // Attachment filtering - check if email has attachments
+  if (input.hasAttachments !== undefined && input.hasAttachments !== null) {
+    if (input.hasAttachments) {
+      // Only emails with at least one attachment
+      andConditions.push(
+        literal(`EXISTS (SELECT 1 FROM attachments WHERE attachments."emailId" = "Email"."id")`),
+      );
+    } else {
+      // Only emails without attachments
+      andConditions.push(
+        literal(`NOT EXISTS (SELECT 1 FROM attachments WHERE attachments."emailId" = "Email"."id")`),
+      );
+    }
   }
 
   if (andConditions.length > 0) {

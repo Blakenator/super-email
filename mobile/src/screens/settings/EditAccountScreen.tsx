@@ -16,6 +16,7 @@ import {
   Switch,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon, SafeHeader } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
@@ -69,6 +70,7 @@ interface EditAccountScreenProps {
 export function EditAccountScreen({ onClose }: EditAccountScreenProps) {
   const theme = useTheme();
   const route = useRoute();
+  const insets = useSafeAreaInsets();
   const params = route.params as { accountId?: string } | undefined;
   const accountId = params?.accountId;
   const isEditing = !!accountId;
@@ -396,7 +398,7 @@ export function EditAccountScreen({ onClose }: EditAccountScreenProps) {
           </TouchableOpacity>
         )}
 
-        <View style={styles.bottomSpacer} />
+        <View style={{ height: Math.max(insets.bottom, SPACING.xl) }} />
       </ScrollView>
     </View>
   );
@@ -508,8 +510,5 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     fontSize: FONT_SIZE.md,
     fontWeight: '600',
-  },
-  bottomSpacer: {
-    height: SPACING.xl,
   },
 });

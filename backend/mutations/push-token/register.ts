@@ -3,7 +3,7 @@
  * Registers a push notification token for a mobile device
  */
 
-import { PushToken } from '../../db/models/push-token.model.js';
+import { PushToken } from '../../db/models/index.js';
 import { logger } from '../../helpers/logger.js';
 
 // Note: This is a REST endpoint, not a GraphQL mutation

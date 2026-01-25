@@ -10,11 +10,14 @@ import {
   StyleSheet,
   ScrollView,
   Switch,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, sharedStyles, SPACING, FONT_SIZE } from '../../theme';
+import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
+import { scheduleLocalNotification } from '../../services/notifications';
 
 export function NotificationsSettingsScreen() {
   const theme = useTheme();
@@ -32,6 +35,20 @@ export function NotificationsSettingsScreen() {
 
   const toggleSetting = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const handleTestNotification = async () => {
+    try {
+      await scheduleLocalNotification(
+        'Test Notification',
+        'This is a test notification from SuperMail!',
+        { type: 'test' }
+      );
+      Alert.alert('Success', 'Test notification sent!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send test notification. Please check notification permissions.');
+      console.error('Test notification error:', error);
+    }
   };
 
   const renderSwitchRow = (
@@ -131,6 +148,31 @@ export function NotificationsSettingsScreen() {
           'quietHoursEnabled'
         )}
       </View>
+
+      <View style={[sharedStyles.sectionHeader]}>
+        <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>
+          TESTING
+        </Text>
+      </View>
+
+      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
+        <TouchableOpacity
+          style={[
+            styles.testButton,
+            { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border },
+          ]}
+          onPress={handleTestNotification}
+        >
+          <View style={styles.settingIcon}>
+            <Icon name="bell" size="md" color={theme.colors.primary} />
+          </View>
+          <View style={styles.settingContent}>
+            <Text style={[styles.settingTitle, { color: theme.colors.text }]}>Send Test Notification</Text>
+            <Text style={[styles.settingSubtitle, { color: theme.colors.textMuted }]}>Test your notification settings</Text>
+          </View>
+          <Icon name="send" size="sm" color={theme.colors.primary} />
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -159,5 +201,11 @@ const styles = StyleSheet.create({
   settingSubtitle: {
     fontSize: FONT_SIZE.sm,
     marginTop: 2,
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    gap: SPACING.sm,
   },
 });

@@ -16,6 +16,7 @@ import { Readable } from 'stream';
 import { publishMailboxUpdate } from './pubsub.js';
 import { checkBillingLimits } from './billing-checks.js';
 import { recalculateUserUsage } from './usage-calculator.js';
+import { sendNewEmailNotification } from './push-notifications.js';
 
 export interface SyncResult {
   synced: number;
@@ -429,6 +430,27 @@ export async function startAsyncSync(
           ? 'Sync cancelled'
           : `Synced ${result.synced} new email(s)`,
       });
+
+      // Send push notification for new emails (only for update syncs with new emails)
+      if (syncType === 'update' && result.synced > 0 && !result.cancelled) {
+        try {
+          // Get the latest synced email for notification preview
+          const latestEmail = await Email.findOne({
+            where: { emailAccountId: emailAccount.id },
+            order: [['receivedAt', 'DESC']],
+          });
+          
+          await sendNewEmailNotification(
+            emailAccount.userId,
+            result.synced,
+            emailAccount.email,
+            latestEmail?.subject ?? undefined,
+            latestEmail?.fromName ?? latestEmail?.fromAddress ?? undefined,
+          );
+        } catch (pushError) {
+          console.error('[IMAP] Failed to send push notification:', pushError);
+        }
+      }
 
       // Clear status after 10 seconds
       setTimeout(async () => {

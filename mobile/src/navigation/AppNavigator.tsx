@@ -7,7 +7,7 @@ import React from 'react';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
@@ -139,9 +139,9 @@ function MainTabNavigator() {
         tabBarStyle: {
           backgroundColor: theme.colors.surface,
           borderTopColor: theme.colors.border,
-          paddingBottom: insets.bottom > 0 ? insets.bottom - 10 : 8,
+          paddingBottom: Math.max(insets.bottom, 8),
           paddingTop: 8,
-          height: 60 + (insets.bottom > 0 ? insets.bottom - 10 : 0),
+          height: 60 + Math.max(insets.bottom, 0),
         },
         tabBarActiveTintColor: theme.colors.primary,
         tabBarInactiveTintColor: theme.colors.textMuted,
@@ -220,10 +220,27 @@ function NukeScreenWrapper() {
 // Email Detail Screen wrapper
 function EmailDetailScreenWrapper() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { moveToFolder, deleteEmails } = require('../stores/emailStore').useEmailStore();
   
   return (
     <EmailDetailScreen
       onReply={(replyTo) => navigation.navigate('Compose', { replyTo })}
+      onReplyAll={(replyTo) => {
+        // TODO: Implement reply all compose flow
+        Alert.alert('Reply All', 'Reply all is not yet implemented');
+      }}
+      onForward={(forward) => {
+        // TODO: Implement forward compose flow
+        Alert.alert('Forward', 'Forward is not yet implemented');
+      }}
+      onArchive={(emailId) => {
+        moveToFolder([emailId], 'ARCHIVE');
+        navigation.goBack();
+      }}
+      onDelete={(emailId) => {
+        deleteEmails([emailId]);
+        navigation.goBack();
+      }}
       onAddContact={(email, name) => navigation.navigate('AddContact', { email, name })}
     />
   );

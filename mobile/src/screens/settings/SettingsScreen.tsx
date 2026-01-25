@@ -271,7 +271,6 @@ export function SettingsScreen({
           icon="log-out"
           title="Sign Out"
           onPress={handleLogout}
-          destructive
           showBorder={false}
         />
       </View>

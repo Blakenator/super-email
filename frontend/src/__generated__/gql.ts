@@ -50,6 +50,9 @@ type Documents = {
     "\n  query GetTagsForInbox {\n    getTags {\n      id\n      name\n      color\n      emailCount\n    }\n  }\n": typeof types.GetTagsForInboxDocument,
     "\n  mutation AddTagsToEmailsInbox($input: AddTagsToEmailsInput!) {\n    addTagsToEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": typeof types.AddTagsToEmailsInboxDocument,
     "\n  mutation RemoveTagsFromEmailsInbox($input: RemoveTagsFromEmailsInput!) {\n    removeTagsFromEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": typeof types.RemoveTagsFromEmailsInboxDocument,
+    "\n  mutation GetPushTokens {\n    getPushTokens {\n      id\n      token\n      platform\n      deviceName\n      isActive\n      lastUsedAt\n      createdAt\n    }\n  }\n": typeof types.GetPushTokensDocument,
+    "\n  mutation RegisterPushToken($input: RegisterPushTokenInput!) {\n    registerPushToken(input: $input) {\n      success\n      message\n    }\n  }\n": typeof types.RegisterPushTokenDocument,
+    "\n  mutation UnregisterPushToken($token: String!) {\n    unregisterPushToken(token: $token)\n  }\n": typeof types.UnregisterPushTokenDocument,
     "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      isHistoricalSyncing\n      historicalSyncProgress\n      historicalSyncStatus\n      historicalSyncLastAt\n      isUpdateSyncing\n      updateSyncProgress\n      updateSyncStatus\n      updateSyncLastAt\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n      isDefault\n    }\n  }\n": typeof types.GetEmailAccountsDocument,
     "\n  mutation CreateEmailAccount($input: CreateEmailAccountInput!) {\n    createEmailAccount(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": typeof types.CreateEmailAccountDocument,
     "\n  mutation DeleteEmailAccount($id: String!) {\n    deleteEmailAccount(id: $id)\n  }\n": typeof types.DeleteEmailAccountDocument,
@@ -123,6 +126,9 @@ const documents: Documents = {
     "\n  query GetTagsForInbox {\n    getTags {\n      id\n      name\n      color\n      emailCount\n    }\n  }\n": types.GetTagsForInboxDocument,
     "\n  mutation AddTagsToEmailsInbox($input: AddTagsToEmailsInput!) {\n    addTagsToEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": types.AddTagsToEmailsInboxDocument,
     "\n  mutation RemoveTagsFromEmailsInbox($input: RemoveTagsFromEmailsInput!) {\n    removeTagsFromEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": types.RemoveTagsFromEmailsInboxDocument,
+    "\n  mutation GetPushTokens {\n    getPushTokens {\n      id\n      token\n      platform\n      deviceName\n      isActive\n      lastUsedAt\n      createdAt\n    }\n  }\n": types.GetPushTokensDocument,
+    "\n  mutation RegisterPushToken($input: RegisterPushTokenInput!) {\n    registerPushToken(input: $input) {\n      success\n      message\n    }\n  }\n": types.RegisterPushTokenDocument,
+    "\n  mutation UnregisterPushToken($token: String!) {\n    unregisterPushToken(token: $token)\n  }\n": types.UnregisterPushTokenDocument,
     "\n  query GetEmailAccounts {\n    getEmailAccounts {\n      id\n      name\n      email\n      host\n      port\n      accountType\n      useSsl\n      lastSyncedAt\n      isSyncing\n      syncProgress\n      syncStatus\n      isHistoricalSyncing\n      historicalSyncProgress\n      historicalSyncStatus\n      historicalSyncLastAt\n      isUpdateSyncing\n      updateSyncProgress\n      updateSyncStatus\n      updateSyncLastAt\n      defaultSmtpProfileId\n      defaultSmtpProfile {\n        id\n        name\n        email\n      }\n      providerId\n      isDefault\n    }\n  }\n": types.GetEmailAccountsDocument,
     "\n  mutation CreateEmailAccount($input: CreateEmailAccountInput!) {\n    createEmailAccount(input: $input) {\n      id\n      name\n      email\n    }\n  }\n": types.CreateEmailAccountDocument,
     "\n  mutation DeleteEmailAccount($id: String!) {\n    deleteEmailAccount(id: $id)\n  }\n": types.DeleteEmailAccountDocument,
@@ -318,6 +324,18 @@ export function gql(source: "\n  mutation AddTagsToEmailsInbox($input: AddTagsTo
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "\n  mutation RemoveTagsFromEmailsInbox($input: RemoveTagsFromEmailsInput!) {\n    removeTagsFromEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n"): (typeof documents)["\n  mutation RemoveTagsFromEmailsInbox($input: RemoveTagsFromEmailsInput!) {\n    removeTagsFromEmails(input: $input) {\n      id\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation GetPushTokens {\n    getPushTokens {\n      id\n      token\n      platform\n      deviceName\n      isActive\n      lastUsedAt\n      createdAt\n    }\n  }\n"): (typeof documents)["\n  mutation GetPushTokens {\n    getPushTokens {\n      id\n      token\n      platform\n      deviceName\n      isActive\n      lastUsedAt\n      createdAt\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation RegisterPushToken($input: RegisterPushTokenInput!) {\n    registerPushToken(input: $input) {\n      success\n      message\n    }\n  }\n"): (typeof documents)["\n  mutation RegisterPushToken($input: RegisterPushTokenInput!) {\n    registerPushToken(input: $input) {\n      success\n      message\n    }\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  mutation UnregisterPushToken($token: String!) {\n    unregisterPushToken(token: $token)\n  }\n"): (typeof documents)["\n  mutation UnregisterPushToken($token: String!) {\n    unregisterPushToken(token: $token)\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

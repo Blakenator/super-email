@@ -638,6 +638,8 @@ export type GetEmailsInput = {
   folder?: InputMaybe<EmailFolder>;
   /** Advanced filter: sender contains */
   fromContains?: InputMaybe<Scalars['String']['input']>;
+  /** Filter by attachment status (true = only emails with attachments, false = only emails without attachments, null = all) */
+  hasAttachments?: InputMaybe<Scalars['Boolean']['input']>;
   /** If true, search across all folders; if false, defaults to INBOX */
   includeAllFolders?: InputMaybe<Scalars['Boolean']['input']>;
   /** Filter by read status (null = all) */
@@ -805,6 +807,8 @@ export type Mutation = {
    * Optionally includes original attachments.
    */
   forwardEmail: Email;
+  /** Get all registered push tokens for the current user. */
+  getPushTokens: Array<PushToken>;
   /**
    * Bulk delete old emails for inbox zero.
    * Permanently deletes emails older than the specified date.
@@ -816,6 +820,11 @@ export type Mutation = {
    * Returns true if successful.
    */
   refreshStorageUsage: Scalars['Boolean']['output'];
+  /**
+   * Register a push notification token for receiving mobile/web push notifications.
+   * Creates or updates an existing token for the device.
+   */
+  registerPushToken: PushTokenResult;
   /**
    * Remove tags from multiple emails (bulk operation).
    * Returns the updated emails.
@@ -857,6 +866,11 @@ export type Mutation = {
    * Returns success/failure with an error message if applicable.
    */
   testSmtpConnection: TestConnectionResult;
+  /**
+   * Unregister a push notification token.
+   * Used when logging out or disabling notifications.
+   */
+  unregisterPushToken: Scalars['Boolean']['output'];
   /**
    * Unsubscribe from a sender's mailing list.
    * Uses List-Unsubscribe header if available.
@@ -1001,6 +1015,12 @@ export type MutationNukeOldEmailsArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationRegisterPushTokenArgs = {
+  input: RegisterPushTokenInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationRemoveTagsFromEmailsArgs = {
   input: RemoveTagsFromEmailsInput;
 };
@@ -1039,6 +1059,12 @@ export type MutationTestEmailAccountConnectionArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationTestSmtpConnectionArgs = {
   input: TestSmtpConnectionInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationUnregisterPushTokenArgs = {
+  token: Scalars['String']['input'];
 };
 
 
@@ -1101,6 +1127,48 @@ export enum NotificationDetailLevel {
 export type NukeOldEmailsInput = {
   /** Delete emails older than this date */
   olderThan?: InputMaybe<Scalars['Date']['input']>;
+};
+
+/** Platform type for push notification tokens. */
+export enum PushPlatform {
+  /** Android device (FCM) */
+  Android = 'ANDROID',
+  /** iOS device (APNS) */
+  Ios = 'IOS',
+  /** Web browser (Web Push API) */
+  Web = 'WEB'
+}
+
+/** A registered push notification token for a device. */
+export type PushToken = BaseEntityProps & {
+  __typename?: 'PushToken';
+  /** Timestamp when the token was registered */
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** Optional device name for identification */
+  deviceName?: Maybe<Scalars['String']['output']>;
+  /** Unique identifier for this push token */
+  id: Scalars['String']['output'];
+  /** Whether this token is currently active */
+  isActive: Scalars['Boolean']['output'];
+  /** Last time this token was used to send a notification */
+  lastUsedAt?: Maybe<Scalars['Date']['output']>;
+  /** Platform type (IOS, ANDROID, WEB) */
+  platform: PushPlatform;
+  /** The push notification token string */
+  token: Scalars['String']['output'];
+  /** Timestamp when the token was last updated */
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+};
+
+/** Result of push token registration. */
+export type PushTokenResult = {
+  __typename?: 'PushTokenResult';
+  /** Human-readable message about the result */
+  message: Scalars['String']['output'];
+  /** The registered push token (if successful) */
+  pushToken?: Maybe<PushToken>;
+  /** Whether the operation was successful */
+  success: Scalars['Boolean']['output'];
 };
 
 /**
@@ -1356,6 +1424,16 @@ export type QueryPreviewMailRuleArgs = {
  */
 export type QuerySearchContactsArgs = {
   query: Scalars['String']['input'];
+};
+
+/** Input for registering a push notification token. */
+export type RegisterPushTokenInput = {
+  /** Optional device name for identification */
+  deviceName?: InputMaybe<Scalars['String']['input']>;
+  /** Platform type (IOS, ANDROID, WEB) */
+  platform: PushPlatform;
+  /** The push notification token from the device */
+  token: Scalars['String']['input'];
 };
 
 /** Input for removing multiple tags from multiple emails (bulk operation). */
@@ -2063,6 +2141,25 @@ export type RemoveTagsFromEmailsInboxMutationVariables = Exact<{
 
 export type RemoveTagsFromEmailsInboxMutation = { __typename?: 'Mutation', removeTagsFromEmails: Array<{ __typename?: 'Email', id: string, tags: Array<{ __typename?: 'Tag', id: string, name: string, color: string }> }> };
 
+export type GetPushTokensMutationVariables = Exact<{ [key: string]: never; }>;
+
+
+export type GetPushTokensMutation = { __typename?: 'Mutation', getPushTokens: Array<{ __typename?: 'PushToken', id: string, token: string, platform: PushPlatform, deviceName?: string | null, isActive: boolean, lastUsedAt?: string | null, createdAt?: string | null }> };
+
+export type RegisterPushTokenMutationVariables = Exact<{
+  input: RegisterPushTokenInput;
+}>;
+
+
+export type RegisterPushTokenMutation = { __typename?: 'Mutation', registerPushToken: { __typename?: 'PushTokenResult', success: boolean, message: string } };
+
+export type UnregisterPushTokenMutationVariables = Exact<{
+  token: Scalars['String']['input'];
+}>;
+
+
+export type UnregisterPushTokenMutation = { __typename?: 'Mutation', unregisterPushToken: boolean };
+
 export type GetEmailAccountsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
@@ -2328,6 +2425,9 @@ export const NukeOldEmailsDocument = {"kind":"Document","definitions":[{"kind":"
 export const GetTagsForInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetTagsForInbox"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getTags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}},{"kind":"Field","name":{"kind":"Name","value":"emailCount"}}]}}]}}]} as unknown as DocumentNode<GetTagsForInboxQuery, GetTagsForInboxQueryVariables>;
 export const AddTagsToEmailsInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddTagsToEmailsInbox"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AddTagsToEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"addTagsToEmails"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"tags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}}]}}]}}]}}]} as unknown as DocumentNode<AddTagsToEmailsInboxMutation, AddTagsToEmailsInboxMutationVariables>;
 export const RemoveTagsFromEmailsInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RemoveTagsFromEmailsInbox"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RemoveTagsFromEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"removeTagsFromEmails"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"tags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}}]}}]}}]}}]} as unknown as DocumentNode<RemoveTagsFromEmailsInboxMutation, RemoveTagsFromEmailsInboxMutationVariables>;
+export const GetPushTokensDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"GetPushTokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getPushTokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"token"}},{"kind":"Field","name":{"kind":"Name","value":"platform"}},{"kind":"Field","name":{"kind":"Name","value":"deviceName"}},{"kind":"Field","name":{"kind":"Name","value":"isActive"}},{"kind":"Field","name":{"kind":"Name","value":"lastUsedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]} as unknown as DocumentNode<GetPushTokensMutation, GetPushTokensMutationVariables>;
+export const RegisterPushTokenDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RegisterPushToken"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RegisterPushTokenInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"registerPushToken"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<RegisterPushTokenMutation, RegisterPushTokenMutationVariables>;
+export const UnregisterPushTokenDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UnregisterPushToken"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"token"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unregisterPushToken"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"token"},"value":{"kind":"Variable","name":{"kind":"Name","value":"token"}}}]}]}}]} as unknown as DocumentNode<UnregisterPushTokenMutation, UnregisterPushTokenMutationVariables>;
 export const GetEmailAccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"accountType"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"lastSyncedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"syncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"syncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"isHistoricalSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncLastAt"}},{"kind":"Field","name":{"kind":"Name","value":"isUpdateSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncLastAt"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSmtpProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSmtpProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsQuery, GetEmailAccountsQueryVariables>;
 export const CreateEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}}]}}]} as unknown as DocumentNode<CreateEmailAccountMutation, CreateEmailAccountMutationVariables>;
 export const DeleteEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteEmailAccountMutation, DeleteEmailAccountMutationVariables>;

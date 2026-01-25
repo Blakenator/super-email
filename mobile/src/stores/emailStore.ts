@@ -132,6 +132,9 @@ interface EmailState {
   isLoading: boolean;
   isSyncing: boolean;
   searchQuery: string;
+  filterIsRead: boolean | null;
+  filterIsStarred: boolean | null;
+  filterHasAttachments: boolean | null;
   selectedIds: Set<string>;
   lastSyncTime: string | null;
   
@@ -140,6 +143,7 @@ interface EmailState {
   setAccountId: (accountId: string | null) => void;
   setSearchQuery: (query: string) => void;
   setPage: (page: number) => void;
+  setFilters: (isRead: boolean | null, isStarred: boolean | null, hasAttachments?: boolean | null) => void;
   fetchEmails: () => Promise<void>;
   fetchEmailAccounts: () => Promise<void>;
   refreshEmails: () => Promise<void>;
@@ -165,6 +169,9 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   isLoading: false,
   isSyncing: false,
   searchQuery: '',
+  filterIsRead: null,
+  filterIsStarred: null,
+  filterHasAttachments: null,
   selectedIds: new Set(),
   lastSyncTime: null,
   
@@ -187,9 +194,19 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     set({ page });
     get().fetchEmails();
   },
+
+  setFilters: (isRead, isStarred, hasAttachments) => {
+    set({ 
+      filterIsRead: isRead, 
+      filterIsStarred: isStarred, 
+      filterHasAttachments: hasAttachments ?? get().filterHasAttachments,
+      page: 1 
+    });
+    get().fetchEmails();
+  },
   
   fetchEmails: async () => {
-    const { currentFolder, currentAccountId, page, pageSize, searchQuery } = get();
+    const { currentFolder, currentAccountId, page, pageSize, searchQuery, filterIsRead, filterIsStarred, filterHasAttachments } = get();
     
     set({ isLoading: true });
     
@@ -203,6 +220,9 @@ export const useEmailStore = create<EmailState>((set, get) => ({
             limit: pageSize,
             offset: (page - 1) * pageSize,
             searchQuery: searchQuery || undefined,
+            isRead: filterIsRead,
+            isStarred: filterIsStarred,
+            hasAttachments: filterHasAttachments,
           },
         },
         fetchPolicy: 'network-only',
@@ -215,6 +235,9 @@ export const useEmailStore = create<EmailState>((set, get) => ({
             folder: currentFolder,
             emailAccountId: currentAccountId,
             searchQuery: searchQuery || undefined,
+            isRead: filterIsRead,
+            isStarred: filterIsStarred,
+            hasAttachments: filterHasAttachments,
           },
         },
         fetchPolicy: 'network-only',
@@ -226,13 +249,24 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       set({ emails, totalCount });
       
       // Cache emails for offline mode (using AsyncStorage for larger data)
-      await cacheSetObject(CACHE_KEYS.CACHED_EMAILS, {
-        folder: currentFolder,
-        accountId: currentAccountId,
-        emails,
-        totalCount,
-        timestamp: new Date().toISOString(),
-      });
+      // Strip body content to reduce cache size - bodies can be fetched when viewing
+      const emailsForCache = emails.map((email: Email) => ({
+        ...email,
+        textBody: null,
+        htmlBody: null,
+      }));
+      
+      try {
+        await cacheSetObject(CACHE_KEYS.CACHED_EMAILS, {
+          folder: currentFolder,
+          accountId: currentAccountId,
+          emails: emailsForCache,
+          totalCount,
+          timestamp: new Date().toISOString(),
+        });
+      } catch (cacheError) {
+        console.warn('Failed to cache emails:', cacheError);
+      }
     } catch (error) {
       console.error('Error fetching emails:', error);
       
