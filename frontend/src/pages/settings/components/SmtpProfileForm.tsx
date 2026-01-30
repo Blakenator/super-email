@@ -1,13 +1,5 @@
 import { useState, useEffect } from 'react';
-import {
-  Modal,
-  Form,
-  Button,
-  Spinner,
-  Row,
-  Col,
-  Card,
-} from 'react-bootstrap';
+import { Modal, Form, Button, Spinner, Row, Col, Card } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCheckCircle,
@@ -59,7 +51,9 @@ interface SmtpProfileFormProps {
   show: boolean;
   onHide: () => void;
   onSubmit: (data: SmtpProfileFormData) => void;
-  onTest: (data: SmtpProfileFormData) => Promise<{ success: boolean; message: string }>;
+  onTest: (
+    data: SmtpProfileFormData,
+  ) => Promise<{ success: boolean; message: string }>;
   editingProfile?: {
     id: string;
     name: string;
@@ -94,7 +88,8 @@ export function SmtpProfileForm({
   isTesting,
   testResult,
 }: SmtpProfileFormProps) {
-  const [formData, setFormData] = useState<SmtpProfileFormData>(defaultFormData);
+  const [formData, setFormData] =
+    useState<SmtpProfileFormData>(defaultFormData);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -152,8 +147,11 @@ export function SmtpProfileForm({
     onTest(formData);
   };
 
-  const selectedProvider = getProviderById(formData.providerId) || EMAIL_PROVIDERS.find((p) => p.id === 'custom')!;
-  const showInstructions = formData.providerId !== 'custom' && selectedProvider.instructions;
+  const selectedProvider =
+    getProviderById(formData.providerId) ||
+    EMAIL_PROVIDERS.find((p) => p.id === 'custom')!;
+  const showInstructions =
+    formData.providerId !== 'custom' && selectedProvider.instructions;
 
   return (
     <Modal show={show} onHide={onHide} centered size="lg">
@@ -302,7 +300,10 @@ export function SmtpProfileForm({
                 <Form.Select
                   value={formData.useSsl ? 'true' : 'false'}
                   onChange={(e) =>
-                    setFormData({ ...formData, useSsl: e.target.value === 'true' })
+                    setFormData({
+                      ...formData,
+                      useSsl: e.target.value === 'true',
+                    })
                   }
                 >
                   <option value="true">SSL/TLS</option>
@@ -330,7 +331,9 @@ export function SmtpProfileForm({
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>
-                  {editingProfile ? 'Password (leave blank to keep)' : 'Password'}
+                  {editingProfile
+                    ? 'Password (leave blank to keep)'
+                    : 'Password'}
                 </Form.Label>
                 <Form.Control
                   type="password"
@@ -340,6 +343,7 @@ export function SmtpProfileForm({
                     setFormData({ ...formData, password: e.target.value })
                   }
                   required={!editingProfile}
+                  autoComplete="off"
                 />
               </Form.Group>
             </Col>
