@@ -1315,10 +1315,11 @@ async function processBatch(
 
   try {
     // Determine fetch call based on range type
+    // Always pass uid option when useUid is true
     const messages =
       typeof range === 'string'
         ? client.fetch(range, fetchOptions, { uid: useUid })
-        : client.fetch(range, fetchOptions);
+        : client.fetch(range, fetchOptions, { uid: useUid });
 
     for await (const message of messages) {
       try {
