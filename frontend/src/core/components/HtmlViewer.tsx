@@ -228,13 +228,89 @@ export function HtmlViewer({
       FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover'],
     });
 
+    // Parse the sanitized HTML for further processing
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(result, 'text/html');
+
+    // Helper function to check if an image is a tracking pixel
+    const isTrackingPixel = (img: Element): boolean => {
+      const src = img.getAttribute('src') || '';
+      const width = img.getAttribute('width');
+      const height = img.getAttribute('height');
+      const style = img.getAttribute('style') || '';
+      const styleLower = style.toLowerCase();
+
+      // Skip data URIs - they're inline and not tracking
+      if (src.startsWith('data:')) {
+        return false;
+      }
+
+      // Check for explicit small dimensions in attributes (< 5px)
+      const widthNum = width ? parseInt(width, 10) : null;
+      const heightNum = height ? parseInt(height, 10) : null;
+      if (
+        (widthNum !== null && widthNum < 5) ||
+        (heightNum !== null && heightNum < 5)
+      ) {
+        return true;
+      }
+
+      // Check for small dimensions in inline style
+      const widthMatch = styleLower.match(/width\s*:\s*(\d+)\s*px/);
+      const heightMatch = styleLower.match(/height\s*:\s*(\d+)\s*px/);
+      if (widthMatch && parseInt(widthMatch[1], 10) < 5) {
+        return true;
+      }
+      if (heightMatch && parseInt(heightMatch[1], 10) < 5) {
+        return true;
+      }
+
+      // Check for invisible styles
+      if (
+        styleLower.includes('display:none') ||
+        styleLower.includes('display: none') ||
+        styleLower.includes('visibility:hidden') ||
+        styleLower.includes('visibility: hidden') ||
+        styleLower.includes('opacity:0') ||
+        styleLower.includes('opacity: 0')
+      ) {
+        return true;
+      }
+
+      // Check for common tracking pixel URL patterns
+      const srcLower = src.toLowerCase();
+      if (
+        srcLower.includes('/pixel') ||
+        srcLower.includes('/track') ||
+        srcLower.includes('/open') ||
+        srcLower.includes('/beacon') ||
+        srcLower.includes('1x1') ||
+        srcLower.includes('spacer.gif') ||
+        srcLower.includes('blank.gif') ||
+        srcLower.includes('transparent.gif') ||
+        srcLower.includes('/t.gif') ||
+        srcLower.includes('/o.gif')
+      ) {
+        return true;
+      }
+
+      return false;
+    };
+
+    // Always block tracking pixels (regardless of blockExternalImages setting)
+    doc.querySelectorAll('img[src]').forEach((img) => {
+      if (isTrackingPixel(img)) {
+        const src = img.getAttribute('src') || '';
+        img.removeAttribute('src');
+        img.setAttribute('data-tracking-blocked', src);
+        // Remove the image from view entirely
+        img.setAttribute('style', 'display:none !important');
+      }
+    });
+
     // If blocking external images, strip src from img tags and poster/src from video
     if (shouldBlockImages) {
-      // Parse the sanitized HTML and remove external image/video sources
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(result, 'text/html');
-
-      // Block img src (except data: URIs)
+      // Block img src (except data: URIs and already-blocked tracking pixels)
       doc.querySelectorAll('img[src]').forEach((img) => {
         const src = img.getAttribute('src') || '';
         if (!src.startsWith('data:')) {
@@ -275,9 +351,9 @@ export function HtmlViewer({
           el.setAttribute('style', newStyle);
         }
       });
-
-      result = doc.body.innerHTML;
     }
+
+    result = doc.body.innerHTML;
 
     return result;
   }, [html, shouldBlockImages]);

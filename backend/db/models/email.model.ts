@@ -36,15 +36,23 @@ export enum EmailFolder {
   timestamps: true,
   tableName: 'emails',
   indexes: [
-    // Composite index for listing emails by account and folder, sorted by date
+    // Composite index for listing emails by account and folder, sorted by date (inbox normal use)
     { fields: ['emailAccountId', 'folder', 'receivedAt'] },
-    // Index for thread lookups
+    // Composite index for folder + read status filtering (unread filtering in inbox)
+    { fields: ['emailAccountId', 'folder', 'isRead', 'receivedAt'] },
+    // Index for thread lookups with account for better performance
+    { fields: ['threadId', 'emailAccountId'] },
+    // Simple thread index for cross-account thread queries
     { fields: ['threadId'] },
     // Index for duplicate checking during sync
     { fields: ['emailAccountId', 'messageId'] },
     // Index for starred/unread filtering
     { fields: ['emailAccountId', 'isStarred'] },
     { fields: ['emailAccountId', 'isRead'] },
+    // Index for from address lookups (search & contact matching)
+    { fields: ['fromAddress'] },
+    // Index for usage calculations (counting emails per account)
+    { fields: ['emailAccountId', 'createdAt'] },
   ],
 })
 export class Email extends Model {

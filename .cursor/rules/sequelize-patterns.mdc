@@ -1,0 +1,29 @@
+---
+description: Sequelize model patterns to avoid circular dependencies
+globs: backend/db/models/**/*.ts
+alwaysApply: false
+---
+
+# Sequelize Patterns
+
+## Circular Dependencies
+
+Use dual imports to avoid `emitDecoratorMetadata` issues:
+
+```typescript
+// ✅ GOOD - dual imports
+import { Model } from './model.js';                    // For decorators
+import type { Model as ModelType } from './model.js';  // For types
+
+@BelongsTo(() => Model, { onDelete: 'CASCADE' })
+declare relation?: ModelType;  // Use type alias
+
+// ❌ BAD - single import causes circular dependency
+import { Model } from './model.js';
+declare relation?: Model;
+```
+
+## General Guidelines
+
+- Use Sequelize models in `backend/db/models/` for database operations
+- Follow existing patterns for model relationships

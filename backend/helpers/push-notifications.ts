@@ -305,6 +305,30 @@ export async function sendPushNotification(
 }
 
 /**
+ * Strip HTML tags and normalize whitespace for notification snippet
+ */
+function stripHtmlForSnippet(html: string, maxLength: number = 100): string {
+  // Remove HTML tags
+  let text = html.replace(/<[^>]*>/g, ' ');
+  // Decode common HTML entities
+  text = text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&apos;/gi, "'");
+  // Normalize whitespace
+  text = text.replace(/\s+/g, ' ').trim();
+  // Truncate with ellipsis
+  if (text.length > maxLength) {
+    text = text.substring(0, maxLength - 3).trim() + '...';
+  }
+  return text;
+}
+
+/**
  * Send new email notification
  */
 export async function sendNewEmailNotification(
@@ -313,6 +337,8 @@ export async function sendNewEmailNotification(
   emailAccountEmail: string,
   latestSubject?: string,
   latestSender?: string,
+  latestBodyHtml?: string,
+  latestBodyText?: string,
 ): Promise<void> {
   logger.info('push', `New email notification triggered for user ${userId}: ${emailCount} email(s) from ${emailAccountEmail}`);
   logger.debug('push', `Email details: sender="${latestSender}", subject="${latestSubject}"`);
@@ -322,10 +348,32 @@ export async function sendNewEmailNotification(
       ? `New email from ${latestSender || 'Unknown'}`
       : `${emailCount} new emails`;
 
-  const body =
-    emailCount === 1
-      ? latestSubject || 'No subject'
-      : `You have ${emailCount} new emails in ${emailAccountEmail}`;
+  // For single email: show subject + body snippet
+  // For multiple emails: show count message
+  let body: string;
+  if (emailCount === 1) {
+    const subject = latestSubject || 'No subject';
+    // Get body snippet from text or HTML
+    let snippet = '';
+    if (latestBodyText) {
+      // Use plain text, truncate to 100 chars
+      snippet = latestBodyText.replace(/\s+/g, ' ').trim();
+      if (snippet.length > 100) {
+        snippet = snippet.substring(0, 97).trim() + '...';
+      }
+    } else if (latestBodyHtml) {
+      snippet = stripHtmlForSnippet(latestBodyHtml, 100);
+    }
+    
+    // Combine subject and snippet
+    if (snippet) {
+      body = `${subject}\n${snippet}`;
+    } else {
+      body = subject;
+    }
+  } else {
+    body = `You have ${emailCount} new emails in ${emailAccountEmail}`;
+  }
 
   await sendPushNotification(userId, title, body, {
     type: 'new_email',

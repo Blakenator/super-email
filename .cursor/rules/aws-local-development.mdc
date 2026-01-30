@@ -1,0 +1,31 @@
+---
+description: AWS dependencies must have local development alternatives
+alwaysApply: true
+---
+
+# AWS & Local Development
+
+This project must run both locally and in AWS. Any AWS service dependency MUST have a local alternative.
+
+## Required Alternatives
+
+| AWS Service | Local Alternative |
+|-------------|-------------------|
+| S3 | Local filesystem (`data/attachments/`) |
+| Secrets Manager | Local JSON file (`data/secrets.json`) |
+
+## Implementation Pattern
+
+```typescript
+// ✅ GOOD - conditional by environment
+if (config.isProduction) {
+  // Use AWS SDK
+  const s3 = new S3Client({ region: 'us-east-1' });
+} else {
+  // Use local filesystem
+  await fs.writeFile(`data/attachments/${key}`, data);
+}
+```
+
+- Check `config.isProduction` to determine which implementation to use
+- AWS SDK clients should be conditionally initialized (only in production)

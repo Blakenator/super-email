@@ -13,6 +13,8 @@
     "db:setup": "docker-compose -f ../docker-compose.yml up -d",
     "db:start": "docker-compose -f ../docker-compose.yml up -d",
     "db:stop": "docker-compose -f ../docker-compose.yml down",
+    "db:migrate": "tsx db/migrations/run-migrations.ts up",
+    "db:migrate:status": "tsx db/migrations/run-migrations.ts status",
     "stop": "docker-compose -f ../docker-compose.yml down",
     "test": "c8 mocha 'test/**/*.test.ts'",
     "test:unit": "c8 --config .c8rc.unit.json mocha --no-config --node-option=import=tsx --timeout=30000 --exit 'test/**/*.unit.test.ts'",
@@ -55,6 +57,7 @@
     "sequelize": "^6.37.7",
     "sequelize-typescript": "^2.1.6",
     "stripe": "^20.2.0",
+    "umzug": "^3.8.2",
     "uuid": "^13.0.0",
     "ws": "^8.18.0"
   },

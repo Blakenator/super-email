@@ -3,12 +3,13 @@
  * Displays email content with HTML support and actions
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  SectionList,
   TouchableOpacity,
   ActivityIndicator,
   Alert,
@@ -196,13 +197,123 @@ export function EmailDetailScreen({
   const [threadEmails, setThreadEmails] = useState<ThreadEmail[]>([]);
   const [expandedThreadEmails, setExpandedThreadEmails] = useState<Set<string>>(new Set());
   const [threadWebViewHeights, setThreadWebViewHeights] = useState<Record<string, number>>({});
-  const hasThread = threadEmails.length > 1;
+  const [threadActionMenuId, setThreadActionMenuId] = useState<string | null>(null);
+  
+
+  // Ref for scrolling
+  const sectionListRef = useRef<SectionList>(null);
+  const hasScrolledRef = useRef(false);
+
+  // Build sections data for SectionList (thread view) - must be before conditional returns
+  const threadSections = useMemo(() => {
+    return threadEmails
+      .filter((threadEmail) => threadEmail && threadEmail.id)
+      .map((threadEmail) => ({
+        threadEmail,
+        data: [{ id: threadEmail.id }],
+      }));
+  }, [threadEmails]);
+
+  // Find the section index for the current email
+  const currentSectionIndex = useMemo(() => {
+    return threadSections.findIndex(s => s.threadEmail.id === emailId);
+  }, [threadSections, emailId]);
+
+  // Determine if we're in thread view
+  const hasThread = threadSections.length > 1;
 
   useEffect(() => {
     loadEmail();
     // Reset image blocking state when email changes
     setShowImagesForThisEmail(false);
+    // Reset scroll tracking
+    hasScrolledRef.current = false;
   }, [emailId]);
+
+  // Estimated heights for getItemLayout
+  const STICKY_HEADER_HEIGHT = 70;
+  const DEFAULT_ITEM_HEIGHT = 100;
+  const LIST_HEADER_HEIGHT = 150;
+  const RECIPIENTS_HEIGHT = 30;
+  const SEPARATOR_HEIGHT = 0; // No visible separators
+  
+  
+  // getItemLayout for SectionList
+  // SectionList uses flat indexing: each section has 3 entries (separator, header, item)
+  // flatIndex = sectionIndex * 3 + offset (0=separator, 1=header, 2=item)
+  const getItemLayout = useCallback((data: any, index: number) => {
+    const sectionIndex = Math.floor(index / 3);
+    const itemType = index % 3; // 0=separator, 1=header, 2=item
+    
+    // Calculate base offset for this section
+    let offset = LIST_HEADER_HEIGHT;
+    for (let i = 0; i < sectionIndex; i++) {
+      const section = threadSections[i];
+      const bodyHeight = section?.threadEmail?.id 
+        ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
+        : DEFAULT_ITEM_HEIGHT;
+      offset += SEPARATOR_HEIGHT + STICKY_HEADER_HEIGHT + bodyHeight;
+    }
+    
+    // Add offset within section
+    let length = 0;
+    if (itemType === 0) {
+      // Separator
+      length = SEPARATOR_HEIGHT;
+    } else if (itemType === 1) {
+      // Header
+      offset += SEPARATOR_HEIGHT;
+      length = STICKY_HEADER_HEIGHT;
+    } else {
+      // Item
+      offset += SEPARATOR_HEIGHT + STICKY_HEADER_HEIGHT;
+      const section = threadSections[sectionIndex];
+      length = section?.threadEmail?.id 
+        ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
+        : DEFAULT_ITEM_HEIGHT;
+    }
+    
+    return { length, offset, index };
+  }, [threadSections, threadWebViewHeights]);
+
+  // Scroll to current email section when thread loads and heights are measured
+  useEffect(() => {
+    // Count how many heights we have for sections before target
+    let measuredCount = 0;
+    for (let i = 0; i < currentSectionIndex; i++) {
+      const section = threadSections[i];
+      if (section?.threadEmail?.id && threadWebViewHeights[section.threadEmail.id]) {
+        measuredCount++;
+      }
+    }
+    const hasEnoughHeights = measuredCount >= currentSectionIndex;
+    
+    if (
+      currentSectionIndex > 0 && 
+      !hasScrolledRef.current && 
+      threadSections.length > 1 &&
+      hasEnoughHeights
+    ) {
+      hasScrolledRef.current = true;
+      
+      // Small delay to ensure layout is stable
+      setTimeout(() => {
+        if (sectionListRef.current) {
+          try {
+            (sectionListRef.current as any).scrollToLocation({
+              sectionIndex: currentSectionIndex,
+              itemIndex: 0,
+              animated: false,
+              viewPosition: 0,
+            });
+          } catch {
+            // Scroll failed, ignore
+          }
+        }
+      }, 100);
+    }
+  }, [currentSectionIndex, threadSections, threadWebViewHeights]);
+
 
   const loadEmail = async () => {
     try {
@@ -235,8 +346,8 @@ export function EmailDetailScreen({
             
             if (threadData?.getEmailsByThread) {
               setThreadEmails(threadData.getEmailsByThread);
-              // Auto-expand the current email
-              setExpandedThreadEmails(new Set([emailId]));
+              // Auto-expand all thread emails by default
+              setExpandedThreadEmails(new Set(threadData.getEmailsByThread.map((e: ThreadEmail) => e.id)));
             }
           } catch (threadErr) {
             console.error('Error loading thread emails:', threadErr);
@@ -344,12 +455,104 @@ export function EmailDetailScreen({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Helper function to check if an image tag represents a tracking pixel
+  const isTrackingPixelTag = (imgTag: string): boolean => {
+    const srcMatch = imgTag.match(/src=["']([^"']+)["']/i);
+    const widthMatch = imgTag.match(/width=["']?(\d+)["']?/i);
+    const heightMatch = imgTag.match(/height=["']?(\d+)["']?/i);
+    const styleMatch = imgTag.match(/style=["']([^"']+)["']/i);
+    
+    const src = srcMatch ? srcMatch[1] : '';
+    const srcLower = src.toLowerCase();
+    
+    // Skip data URIs
+    if (src.startsWith('data:')) {
+      return false;
+    }
+    
+    // Check for explicit small dimensions (< 5px)
+    if (widthMatch && parseInt(widthMatch[1], 10) < 5) {
+      return true;
+    }
+    if (heightMatch && parseInt(heightMatch[1], 10) < 5) {
+      return true;
+    }
+    
+    // Check inline styles
+    if (styleMatch) {
+      const style = styleMatch[1].toLowerCase();
+      
+      // Check for small dimensions in style
+      const styleWidthMatch = style.match(/width\s*:\s*(\d+)\s*px/);
+      const styleHeightMatch = style.match(/height\s*:\s*(\d+)\s*px/);
+      if (styleWidthMatch && parseInt(styleWidthMatch[1], 10) < 5) {
+        return true;
+      }
+      if (styleHeightMatch && parseInt(styleHeightMatch[1], 10) < 5) {
+        return true;
+      }
+      
+      // Check for invisible styles
+      if (
+        style.includes('display:none') ||
+        style.includes('display: none') ||
+        style.includes('visibility:hidden') ||
+        style.includes('visibility: hidden') ||
+        style.includes('opacity:0') ||
+        style.includes('opacity: 0')
+      ) {
+        return true;
+      }
+    }
+    
+    // Check for common tracking pixel URL patterns
+    if (
+      srcLower.includes('/pixel') ||
+      srcLower.includes('/track') ||
+      srcLower.includes('/open') ||
+      srcLower.includes('/beacon') ||
+      srcLower.includes('1x1') ||
+      srcLower.includes('spacer.gif') ||
+      srcLower.includes('blank.gif') ||
+      srcLower.includes('transparent.gif') ||
+      srcLower.includes('/t.gif') ||
+      srcLower.includes('/o.gif')
+    ) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  // Helper function to block tracking pixels (always applied)
+  const blockTrackingPixels = (htmlContent: string): string => {
+    // Find and block tracking pixel images
+    return htmlContent.replace(
+      /<img[^>]+>/gi,
+      (match) => {
+        if (isTrackingPixelTag(match)) {
+          // Extract src for data attribute and hide the image
+          const srcMatch = match.match(/src=["']([^"']+)["']/i);
+          const src = srcMatch ? srcMatch[1] : '';
+          return `<img data-tracking-blocked="${src}" style="display:none !important" />`;
+        }
+        return match;
+      }
+    );
+  };
+
   // Helper function to block external images in HTML
   const blockExternalImagesInHtml = (htmlContent: string): string => {
-    // Block img src (except data: URIs)
+    // Block img src (except data: URIs and already-hidden tracking pixels)
     let result = htmlContent.replace(
       /<img([^>]*)\ssrc=["'](?!data:)([^"']+)["']([^>]*)>/gi,
-      '<img$1 data-blocked-src="$2" alt="[Image blocked]"$3>'
+      (match, before, src, after) => {
+        // Skip if already blocked as tracking pixel
+        if (match.includes('data-tracking-blocked')) {
+          return match;
+        }
+        return `<img${before} data-blocked-src="${src}" alt="[Image blocked]"${after}>`;
+      }
     );
     
     // Block background-image in inline styles
@@ -389,6 +592,9 @@ export function EmailDetailScreen({
       emailData.htmlBody ||
       `<pre style="white-space: pre-wrap; font-family: inherit;">${emailData.textBody || ''}</pre>`;
 
+    // Always block tracking pixels (invisible/tiny images)
+    content = blockTrackingPixels(content);
+
     // Block external images if setting is enabled
     if (shouldBlockImages) {
       content = blockExternalImagesInHtml(content);
@@ -404,17 +610,61 @@ export function EmailDetailScreen({
     });
 
     // Add height reporting script with message ID for thread emails
+    // Use more accurate height calculation that excludes excess whitespace
     const msgIdStr = messageId || 'main';
     return html.replace(
       '</body>',
       `<script>
-        window.onload = function() {
+        function reportHeight() {
+          // Get the actual content height by finding the bottom of the last element
+          var body = document.body;
+          var html = document.documentElement;
+          
+          // Try multiple methods to get accurate height
+          var contentHeight = Math.max(
+            body.scrollHeight,
+            body.offsetHeight,
+            html.clientHeight,
+            html.scrollHeight,
+            html.offsetHeight
+          );
+          
+          // Also check the bounding rect of body children
+          var children = body.children;
+          var maxBottom = 0;
+          for (var i = 0; i < children.length; i++) {
+            var rect = children[i].getBoundingClientRect();
+            if (rect.bottom > maxBottom) {
+              maxBottom = rect.bottom;
+            }
+          }
+          
+          // Use the smaller of scrollHeight or actual content bottom
+          var finalHeight = maxBottom > 0 ? Math.min(contentHeight, maxBottom + 20) : contentHeight;
+          
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'height',
             id: '${msgIdStr}',
-            height: document.body.scrollHeight
+            height: Math.ceil(finalHeight)
           }));
-        };
+        }
+        
+        // Report height once on load
+        var hasReported = false;
+        function reportOnce() {
+          if (!hasReported) {
+            hasReported = true;
+            // Small delay to let content settle
+            setTimeout(reportHeight, 100);
+          }
+        }
+        
+        window.onload = reportOnce;
+        
+        // Also check if already loaded
+        if (document.readyState === 'complete') {
+          reportOnce();
+        }
       </script></body>`,
     );
   };
@@ -423,14 +673,94 @@ export function EmailDetailScreen({
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'height') {
-        const height = Math.min(data.height + 20, 2000);
+        // Use the reported height
+        const height = Math.max(data.height, 50);
         if (data.id === 'main') {
           setWebViewHeight(height);
         } else if (data.id) {
-          setThreadWebViewHeights(prev => ({ ...prev, [data.id]: height }));
+          setThreadWebViewHeights(prev => {
+            // Only update if not already set or significantly different
+            const currentHeight = prev[data.id];
+            if (currentHeight === undefined || Math.abs(currentHeight - height) > 50) {
+              return { ...prev, [data.id]: height };
+            }
+            return prev;
+          });
         }
       }
     } catch (e) {}
+  };
+
+  // Handle thread email actions
+  const handleThreadReply = useCallback((threadEmail: ThreadEmail) => {
+    onReply({
+      emailId: threadEmail.id,
+      toAddress: threadEmail.fromAddress,
+      subject: threadEmail.subject,
+      htmlBody: threadEmail.htmlBody ?? undefined,
+    });
+  }, [onReply]);
+
+  const handleThreadReplyAll = useCallback((threadEmail: ThreadEmail) => {
+    const currentUserEmail = user?.email?.toLowerCase();
+    const allToRecipients = [threadEmail.fromAddress, ...threadEmail.toAddresses];
+    const allCcRecipients = threadEmail.ccAddresses ?? [];
+    
+    const filteredTo = allToRecipients.filter(
+      addr => addr.toLowerCase() !== currentUserEmail
+    );
+    const filteredCc = allCcRecipients.filter(
+      addr => addr.toLowerCase() !== currentUserEmail
+    );
+    
+    onReplyAll({
+      emailId: threadEmail.id,
+      toAddresses: filteredTo.length > 0 ? filteredTo : [threadEmail.fromAddress],
+      ccAddresses: filteredCc.length > 0 ? filteredCc : undefined,
+      subject: threadEmail.subject,
+      htmlBody: threadEmail.htmlBody ?? undefined,
+    });
+  }, [onReplyAll, user?.email]);
+
+  const handleThreadForward = useCallback((threadEmail: ThreadEmail) => {
+    onForward({
+      emailId: threadEmail.id,
+      subject: threadEmail.subject,
+      htmlBody: threadEmail.htmlBody ?? undefined,
+    });
+  }, [onForward]);
+
+  const handleThreadArchive = useCallback((threadEmail: ThreadEmail) => {
+    onArchive(threadEmail.id);
+  }, [onArchive]);
+
+  const handleThreadDelete = useCallback((threadEmail: ThreadEmail) => {
+    Alert.alert(
+      'Delete Email',
+      'Are you sure you want to delete this email?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => onDelete(threadEmail.id),
+        },
+      ]
+    );
+  }, [onDelete]);
+
+  // Format short date for thread action bar
+  const formatShortDate = (dateString: string) => {
+    const date = DateTime.fromISO(dateString);
+    const now = DateTime.now();
+    
+    if (date.hasSame(now, 'day')) {
+      return date.toFormat('h:mm a');
+    }
+    if (date.hasSame(now, 'year')) {
+      return date.toFormat('MMM d');
+    }
+    return date.toFormat('MM/dd/yy');
   };
 
   if (isLoading) {
@@ -484,290 +814,381 @@ export function EmailDetailScreen({
     );
   }
 
+  // Render the header content (shared between ScrollView and SectionList)
+  const renderHeaderContent = () => (
+    <View style={styles.headerContent}>
+      {/* Subject with Thread Count */}
+      <View style={styles.subjectRow}>
+        <Text style={[styles.subject, { color: theme.colors.text }]}>
+          {email.subject || '(No Subject)'}
+        </Text>
+        {(email.threadCount ?? 1) > 1 && (
+          <View style={[styles.threadCountBadge, { backgroundColor: theme.colors.primary }]}>
+            <Text style={[styles.threadCountText, { color: theme.colors.textInverse }]}>
+              {email.threadCount}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Tags */}
+      {email.tags.length > 0 && (
+        <View style={styles.tagsRow}>
+          {email.tags.map((tag) => (
+            <View
+              key={tag.id}
+              style={[styles.tag, { backgroundColor: tag.color + '20' }]}
+            >
+              <View style={[styles.tagDot, { backgroundColor: tag.color }]} />
+              <Text style={[styles.tagText, { color: tag.color }]}>
+                {tag.name}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Show blocked images button */}
+      {shouldBlockImages && (
+        <TouchableOpacity
+          style={[styles.showImagesButton, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}
+          onPress={() => setShowImagesForThisEmail(true)}
+        >
+          <Icon name="image" size="sm" color={theme.colors.warning} />
+          <Text style={[styles.showImagesButtonText, { color: theme.colors.warning }]}>
+            Show blocked images
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* Thread count header */}
+      {hasThread && (
+        <View style={[styles.threadHeader, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.threadTitle, { color: theme.colors.text }]}>
+            {threadEmails.length} messages in this thread
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <View
       style={[styles.container, { backgroundColor: theme.colors.background }]}
     >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={true}
-      >
-        {/* Subject with Thread Count */}
-        <View style={styles.subjectRow}>
-          <Text style={[styles.subject, { color: theme.colors.text }]}>
-            {email.subject || '(No Subject)'}
-          </Text>
-          {(email.threadCount ?? 1) > 1 && (
-            <View style={[styles.threadCountBadge, { backgroundColor: theme.colors.primary }]}>
-              <Text style={[styles.threadCountText, { color: theme.colors.textInverse }]}>
-                {email.threadCount}
-              </Text>
-            </View>
-          )}
-        </View>
+      {hasThread ? (
+        /* Thread View - Using SectionList for sticky headers */
+        <SectionList
+          ref={sectionListRef as any}
+          sections={threadSections}
+          keyExtractor={(item) => item.id}
+          stickySectionHeadersEnabled={true}
+          style={styles.scrollView}
+          contentContainerStyle={styles.sectionListContent}
+          showsVerticalScrollIndicator={true}
+          // Disable virtualization to ensure all sections are rendered for scroll
+          initialNumToRender={50}
+          maxToRenderPerBatch={50}
+          windowSize={100}
+          getItemLayout={getItemLayout}
+          onScrollToIndexFailed={(info) => {
+            // Retry scroll after sections render
+            setTimeout(() => {
+              try {
+                (sectionListRef.current as any)?.scrollToLocation({
+                  sectionIndex: info.index,
+                  itemIndex: 0,
+                  animated: false,
+                  viewPosition: 0,
+                });
+              } catch (e) {}
+            }, 300);
+          }}
+          renderSectionHeader={({ section }) => {
+            const threadEmail = section.threadEmail;
+            const isExpanded = expandedThreadEmails.has(threadEmail.id);
+            const isCurrentEmail = threadEmail.id === emailId;
 
-        {/* Tags */}
-        {email.tags.length > 0 && (
-          <View style={styles.tagsRow}>
-            {email.tags.map((tag) => (
+            return (
               <View
-                key={tag.id}
-                style={[styles.tag, { backgroundColor: tag.color + '20' }]}
-              >
-                <View style={[styles.tagDot, { backgroundColor: tag.color }]} />
-                <Text style={[styles.tagText, { color: tag.color }]}>
-                  {tag.name}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Sender Info */}
-        <TouchableOpacity
-          style={[styles.senderCard, { backgroundColor: theme.colors.surface }]}
-          onPress={handleAddSenderToContacts}
-        >
-          <View
-            style={[
-              styles.senderAvatar,
-              { backgroundColor: theme.colors.primary },
-            ]}
-          >
-            <Text
-              style={[
-                styles.senderAvatarText,
-                { color: theme.colors.textInverse },
-              ]}
-            >
-              {(email.fromName || email.fromAddress)[0].toUpperCase()}
-            </Text>
-          </View>
-          <View style={styles.senderInfo}>
-            <Text style={[styles.senderName, { color: theme.colors.text }]}>
-              {email.fromName || email.fromAddress.split('@')[0]}
-            </Text>
-            <Text
-              style={[styles.senderEmail, { color: theme.colors.textMuted }]}
-            >
-              {email.fromAddress}
-            </Text>
-            <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>
-              {formatDate(email.receivedAt)}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={handleAddSenderToContacts}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Icon name="user-plus" size="md" color={theme.colors.primary} />
-          </TouchableOpacity>
-        </TouchableOpacity>
-
-        {/* Recipients */}
-        <View
-          style={[
-            styles.recipientsCard,
-            { backgroundColor: theme.colors.surface },
-          ]}
-        >
-          <Text
-            style={[styles.recipientLabel, { color: theme.colors.textMuted }]}
-          >
-            To:
-          </Text>
-          <Text
-            style={[styles.recipientText, { color: theme.colors.text }]}
-            numberOfLines={2}
-          >
-            {email.toAddresses.join(', ')}
-          </Text>
-          {email.ccAddresses && email.ccAddresses.length > 0 && (
-            <>
-              <Text
                 style={[
-                  styles.recipientLabel,
-                  { color: theme.colors.textMuted, marginTop: SPACING.xs },
+                  styles.threadStickyBar,
+                  { 
+                    backgroundColor: theme.colors.surface,
+                    borderBottomColor: theme.colors.border,
+                  },
+                  isCurrentEmail && styles.threadStickyBarCurrent,
+                  isCurrentEmail && { borderLeftColor: theme.colors.primary },
                 ]}
               >
-                Cc:
-              </Text>
-              <Text
-                style={[styles.recipientText, { color: theme.colors.text }]}
-                numberOfLines={2}
-              >
-                {email.ccAddresses.join(', ')}
-              </Text>
-            </>
-          )}
-        </View>
-
-        {/* Attachments */}
-        {email.hasAttachments &&
-          email.attachments &&
-          email.attachments.length > 0 && (
-            <View
-              style={[
-                styles.attachmentsCard,
-                { backgroundColor: theme.colors.surface },
-              ]}
-            >
-              <Text
-                style={[styles.attachmentsTitle, { color: theme.colors.text }]}
-              >
-                <Icon
-                  name="paperclip"
-                  size="sm"
-                  color={theme.colors.textMuted}
-                />{' '}
-                {email.attachmentCount} Attachment
-                {email.attachmentCount !== 1 ? 's' : ''}
-              </Text>
-              {email.attachments.map((attachment) => (
-                <View
-                  key={attachment.id}
-                  style={[
-                    styles.attachmentItem,
-                    { borderColor: theme.colors.border },
-                  ]}
+                <TouchableOpacity
+                  style={styles.threadStickyHeader}
+                  onPress={() => toggleThreadEmail(threadEmail.id)}
                 >
-                  <Icon
-                    name="file-text"
-                    size="md"
-                    color={theme.colors.textMuted}
-                  />
-                  <View style={styles.attachmentInfo}>
-                    <Text
-                      style={[
-                        styles.attachmentName,
-                        { color: theme.colors.text },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {attachment.filename}
+                  <View style={[styles.threadAvatarSmall, { backgroundColor: isCurrentEmail ? theme.colors.primary : theme.colors.secondary }]}>
+                    <Text style={[styles.threadAvatarText, { color: theme.colors.textInverse }]}>
+                      {(threadEmail.fromName || threadEmail.fromAddress)[0].toUpperCase()}
                     </Text>
-                    <Text
-                      style={[
-                        styles.attachmentSize,
-                        { color: theme.colors.textMuted },
-                      ]}
-                    >
-                      {formatFileSize(attachment.size)}
+                  </View>
+                  <View style={styles.threadStickyMeta}>
+                    <View style={styles.threadStickyTop}>
+                      <Text style={[styles.threadSenderName, { color: theme.colors.text }]} numberOfLines={1}>
+                        {threadEmail.fromName || threadEmail.fromAddress.split('@')[0]}
+                      </Text>
+                      <Text style={[styles.threadStickyDate, { color: theme.colors.textMuted }]}>
+                        {formatShortDate(threadEmail.receivedAt)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.threadStickySubject, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                      {threadEmail.subject || '(No Subject)'}
                     </Text>
                   </View>
                   <Icon
-                    name="download"
+                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
                     size="md"
-                    color={theme.colors.primary}
+                    color={theme.colors.textMuted}
                   />
-                </View>
-              ))}
-            </View>
-          )}
-
-        {/* Show blocked images button */}
-        {shouldBlockImages && (
-          <TouchableOpacity
-            style={[styles.showImagesButton, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}
-            onPress={() => setShowImagesForThisEmail(true)}
-          >
-            <Icon name="image" size="sm" color={theme.colors.warning} />
-            <Text style={[styles.showImagesButtonText, { color: theme.colors.warning }]}>
-              Show blocked images
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Thread View or Single Email Body */}
-        {hasThread ? (
-          /* Thread View */
-          <View style={styles.threadContainer}>
-            <View style={[styles.threadHeader, { backgroundColor: theme.colors.surface }]}>
-              <Text style={[styles.threadTitle, { color: theme.colors.text }]}>
-                {threadEmails.length} messages in this thread
-              </Text>
-            </View>
-            {threadEmails.map((threadEmail) => {
-              const isExpanded = expandedThreadEmails.has(threadEmail.id);
-              const isCurrentEmail = threadEmail.id === emailId;
-              const threadEmailHeight = threadWebViewHeights[threadEmail.id] || 300;
-
-              return (
-                <View
-                  key={threadEmail.id}
-                  style={[
-                    styles.threadEmail,
-                    { backgroundColor: theme.colors.surface },
-                    isCurrentEmail && { borderLeftColor: theme.colors.primary, borderLeftWidth: 3 },
-                  ]}
-                >
-                  {/* Thread Email Header */}
-                  <TouchableOpacity
-                    style={styles.threadEmailHeader}
-                    onPress={() => toggleThreadEmail(threadEmail.id)}
-                  >
-                    <View style={[styles.threadAvatarSmall, { backgroundColor: theme.colors.secondary }]}>
-                      <Text style={[styles.threadAvatarText, { color: theme.colors.textInverse }]}>
-                        {(threadEmail.fromName || threadEmail.fromAddress)[0].toUpperCase()}
-                      </Text>
-                    </View>
-                    <View style={styles.threadEmailMeta}>
-                      <View style={styles.threadEmailTop}>
-                        <Text style={[styles.threadSenderName, { color: theme.colors.text }]} numberOfLines={1}>
-                          {threadEmail.fromName || threadEmail.fromAddress.split('@')[0]}
-                        </Text>
-                        {isCurrentEmail && (
-                          <View style={[styles.currentBadge, { backgroundColor: theme.colors.primary }]}>
-                            <Text style={[styles.currentBadgeText, { color: theme.colors.textInverse }]}>Current</Text>
-                          </View>
-                        )}
-                      </View>
-                      {!isExpanded && (
-                        <Text style={[styles.threadPreview, { color: theme.colors.textMuted }]} numberOfLines={1}>
-                          {threadEmail.textBody?.substring(0, 80).replace(/\n/g, ' ') || '(No content)'}
-                        </Text>
-                      )}
-                    </View>
-                    <View style={styles.threadEmailRight}>
-                      <Text style={[styles.threadDate, { color: theme.colors.textMuted }]}>
-                        {formatDate(threadEmail.receivedAt)}
-                      </Text>
-                      <Icon
-                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                        size="sm"
-                        color={theme.colors.textMuted}
-                      />
-                    </View>
-                  </TouchableOpacity>
-
-                  {/* Thread Email Body (when expanded) */}
-                  {isExpanded && (
-                    <View style={styles.threadEmailBody}>
-                      <Text style={[styles.threadRecipients, { color: theme.colors.textMuted }]}>
-                        To: {threadEmail.toAddresses.join(', ')}
-                      </Text>
-                      <WebView
-                        source={{ html: getHtmlContent(threadEmail, threadEmail.id) }}
-                        style={{
-                          height: Math.max(threadEmailHeight, 200),
-                          width: width - SPACING.md * 2 - SPACING.sm * 2,
-                        }}
-                        scrollEnabled={false}
-                        nestedScrollEnabled={false}
-                        onMessage={handleWebViewMessage}
-                        originWhitelist={['*']}
-                        javaScriptEnabled
-                        showsVerticalScrollIndicator={false}
-                      />
+                </TouchableOpacity>
+                
+                <View style={styles.threadActionRow}>
+                  {isCurrentEmail && (
+                    <View style={[styles.currentBadge, { backgroundColor: theme.colors.primary }]}>
+                      <Text style={[styles.currentBadgeText, { color: theme.colors.textInverse }]}>Current</Text>
                     </View>
                   )}
+                  <View style={styles.threadActionSpacer} />
+                  <TouchableOpacity 
+                    style={styles.threadActionBtn} 
+                    onPress={() => handleThreadReply(threadEmail)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="reply" size="md" color={theme.colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.threadActionBtn} 
+                    onPress={() => handleThreadReplyAll(threadEmail)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="reply-all" size="md" color={theme.colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.threadActionBtn} 
+                    onPress={() => handleThreadForward(threadEmail)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="forward" size="md" color={theme.colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.threadActionBtn} 
+                    onPress={() => handleThreadArchive(threadEmail)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="archive" size="md" color={theme.colors.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.threadActionBtn} 
+                    onPress={() => setThreadActionMenuId(threadEmail.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Icon name="more-vertical" size="md" color={theme.colors.text} />
+                  </TouchableOpacity>
                 </View>
-              );
-            })}
+              </View>
+            );
+          }}
+          renderItem={({ section }) => {
+            const threadEmail = section.threadEmail;
+            const isExpanded = expandedThreadEmails.has(threadEmail.id);
+            const threadEmailHeight = threadWebViewHeights[threadEmail.id] || 200;
+
+            return (
+              <View 
+                style={[
+                  styles.threadEmailBody, 
+                  { backgroundColor: theme.colors.background },
+                  !isExpanded && styles.collapsedBody,
+                ]}
+              >
+                {isExpanded && (
+                  <Text style={[styles.threadRecipients, { color: theme.colors.textMuted }]}>
+                    To: {threadEmail.toAddresses.join(', ')}
+                    {threadEmail.ccAddresses && threadEmail.ccAddresses.length > 0 && (
+                      `  •  Cc: ${threadEmail.ccAddresses.join(', ')}`
+                    )}
+                  </Text>
+                )}
+                <WebView
+                  source={{ html: getHtmlContent(threadEmail, threadEmail.id) }}
+                  style={{
+                    height: isExpanded ? threadEmailHeight : 1,
+                    width: width - SPACING.md * 2,
+                    backgroundColor: 'transparent',
+                    opacity: isExpanded ? 1 : 0,
+                  }}
+                  scrollEnabled={false}
+                  nestedScrollEnabled={false}
+                  onMessage={handleWebViewMessage}
+                  originWhitelist={['*']}
+                  javaScriptEnabled
+                  showsVerticalScrollIndicator={false}
+                />
+              </View>
+            );
+          }}
+          ListHeaderComponent={renderHeaderContent}
+        />
+      ) : (
+        /* Single Email View - Using ScrollView */
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
+        >
+          {renderHeaderContent()}
+
+          {/* Sender Info */}
+          <TouchableOpacity
+            style={[styles.senderCard, { backgroundColor: theme.colors.surface }]}
+            onPress={handleAddSenderToContacts}
+          >
+            <View
+              style={[
+                styles.senderAvatar,
+                { backgroundColor: theme.colors.primary },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.senderAvatarText,
+                  { color: theme.colors.textInverse },
+                ]}
+              >
+                {(email.fromName || email.fromAddress)[0].toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.senderInfo}>
+              <Text style={[styles.senderName, { color: theme.colors.text }]}>
+                {email.fromName || email.fromAddress.split('@')[0]}
+              </Text>
+              <Text
+                style={[styles.senderEmail, { color: theme.colors.textMuted }]}
+              >
+                {email.fromAddress}
+              </Text>
+              <Text style={[styles.dateText, { color: theme.colors.textMuted }]}>
+                {formatDate(email.receivedAt)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleAddSenderToContacts}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Icon name="user-plus" size="md" color={theme.colors.primary} />
+            </TouchableOpacity>
+          </TouchableOpacity>
+
+          {/* Recipients */}
+          <View
+            style={[
+              styles.recipientsCard,
+              { backgroundColor: theme.colors.surface },
+            ]}
+          >
+            <Text
+              style={[styles.recipientLabel, { color: theme.colors.textMuted }]}
+            >
+              To:
+            </Text>
+            <Text
+              style={[styles.recipientText, { color: theme.colors.text }]}
+              numberOfLines={2}
+            >
+              {email.toAddresses.join(', ')}
+            </Text>
+            {email.ccAddresses && email.ccAddresses.length > 0 && (
+              <>
+                <Text
+                  style={[
+                    styles.recipientLabel,
+                    { color: theme.colors.textMuted, marginTop: SPACING.xs },
+                  ]}
+                >
+                  Cc:
+                </Text>
+                <Text
+                  style={[styles.recipientText, { color: theme.colors.text }]}
+                  numberOfLines={2}
+                >
+                  {email.ccAddresses.join(', ')}
+                </Text>
+              </>
+            )}
           </View>
-        ) : (
-          /* Single Email Body */
+
+          {/* Attachments */}
+          {email.hasAttachments &&
+            email.attachments &&
+            email.attachments.length > 0 && (
+              <View
+                style={[
+                  styles.attachmentsCard,
+                  { backgroundColor: theme.colors.surface },
+                ]}
+              >
+                <Text
+                  style={[styles.attachmentsTitle, { color: theme.colors.text }]}
+                >
+                  <Icon
+                    name="paperclip"
+                    size="sm"
+                    color={theme.colors.textMuted}
+                  />{' '}
+                  {email.attachmentCount} Attachment
+                  {email.attachmentCount !== 1 ? 's' : ''}
+                </Text>
+                {email.attachments.map((attachment) => (
+                  <View
+                    key={attachment.id}
+                    style={[
+                      styles.attachmentItem,
+                      { borderColor: theme.colors.border },
+                    ]}
+                  >
+                    <Icon
+                      name="file-text"
+                      size="md"
+                      color={theme.colors.textMuted}
+                    />
+                    <View style={styles.attachmentInfo}>
+                      <Text
+                        style={[
+                          styles.attachmentName,
+                          { color: theme.colors.text },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {attachment.filename}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.attachmentSize,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        {formatFileSize(attachment.size)}
+                      </Text>
+                    </View>
+                    <Icon
+                      name="download"
+                      size="md"
+                      color={theme.colors.primary}
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
+
+          {/* Single Email Body */}
           <View
             style={[
               styles.bodyContainer,
@@ -778,7 +1199,7 @@ export function EmailDetailScreen({
               source={{ html: getHtmlContent(email, 'main') }}
               style={{
                 height: Math.max(webViewHeight, 300),
-                width: width - SPACING.md * 2 - 2,
+                width: width - SPACING.md * 2,
               }}
               scrollEnabled={false}
               nestedScrollEnabled={false}
@@ -788,50 +1209,52 @@ export function EmailDetailScreen({
               showsVerticalScrollIndicator={false}
             />
           </View>
-        )}
-      </ScrollView>
+        </ScrollView>
+      )}
 
-      {/* Action Bar */}
-      <View
-        style={[
-          styles.actionBar,
-          {
-            backgroundColor: theme.colors.surface,
-            borderTopColor: theme.colors.border,
-            paddingBottom: Math.max(insets.bottom, SPACING.sm),
-          },
-        ]}
-      >
-        <TouchableOpacity style={styles.actionButton} onPress={handleReply}>
-          <Icon name="reply" size="md" color={theme.colors.primary} />
-          <Text
-            style={[styles.actionButtonText, { color: theme.colors.primary }]}
-          >
-            Reply
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={handleReplyAll}>
-          <Icon name="reply-all" size="md" color={theme.colors.text} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
-            Reply All
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={handleForward}>
-          <Icon name="forward" size="md" color={theme.colors.text} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
-            Forward
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={handleArchive}>
-          <Icon name="archive" size="md" color={theme.colors.text} />
-          <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
-            Archive
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={handleToggleMenu}>
-          <Icon name="more-vertical" size="md" color={theme.colors.text} />
-        </TouchableOpacity>
-      </View>
+      {/* Action Bar - Only show for single email view (not thread view) */}
+      {!hasThread && (
+        <View
+          style={[
+            styles.actionBar,
+            {
+              backgroundColor: theme.colors.surface,
+              borderTopColor: theme.colors.border,
+              paddingBottom: Math.max(insets.bottom, SPACING.sm),
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.actionButton} onPress={handleReply}>
+            <Icon name="reply" size="md" color={theme.colors.primary} />
+            <Text
+              style={[styles.actionButtonText, { color: theme.colors.primary }]}
+            >
+              Reply
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleReplyAll}>
+            <Icon name="reply-all" size="md" color={theme.colors.text} />
+            <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
+              Reply All
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleForward}>
+            <Icon name="forward" size="md" color={theme.colors.text} />
+            <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
+              Forward
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleArchive}>
+            <Icon name="archive" size="md" color={theme.colors.text} />
+            <Text style={[styles.actionButtonText, { color: theme.colors.text }]}>
+              Archive
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionButton} onPress={handleToggleMenu}>
+            <Icon name="more-vertical" size="md" color={theme.colors.text} />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* More Menu Modal - positioned above the action bar */}
       <Modal
@@ -871,6 +1294,48 @@ export function EmailDetailScreen({
           </View>
         </Pressable>
       </Modal>
+
+      {/* Thread Email Action Menu Modal */}
+      <Modal
+        visible={threadActionMenuId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setThreadActionMenuId(null)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setThreadActionMenuId(null)}
+        >
+          <View 
+            style={[
+              styles.moreMenuModal, 
+              { 
+                backgroundColor: theme.colors.surface,
+                position: 'absolute',
+                top: 120, // Position below the sticky header area
+                right: SPACING.md,
+                zIndex: 1000,
+              }
+            ]}
+          >
+            <TouchableOpacity
+              style={[styles.moreMenuItem, { borderBottomColor: theme.colors.border }]}
+              onPress={() => {
+                const emailToDelete = threadEmails.find(e => e.id === threadActionMenuId);
+                setThreadActionMenuId(null);
+                if (emailToDelete) {
+                  handleThreadDelete(emailToDelete);
+                }
+              }}
+            >
+              <Icon name="trash-2" size="md" color={theme.colors.error} />
+              <Text style={[styles.moreMenuItemText, { color: theme.colors.error }]}>
+                Delete Email
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -885,6 +1350,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: SPACING.md,
     paddingBottom: SPACING.xl,
+  },
+  sectionListContent: {
+    paddingBottom: SPACING.xl,
+  },
+  headerContent: {
+    padding: SPACING.md,
+    paddingBottom: SPACING.sm,
   },
   loadingContainer: {
     flex: 1,
@@ -1102,27 +1574,68 @@ const styles = StyleSheet.create({
   },
   // Thread container
   threadContainer: {
-    gap: SPACING.sm,
+    gap: 0,
   },
   threadHeader: {
     padding: SPACING.sm,
     borderRadius: RADIUS.md,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.sm,
   },
   threadTitle: {
     fontSize: FONT_SIZE.sm,
     fontWeight: '600',
   },
-  threadEmail: {
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.xs,
-    overflow: 'hidden',
+  threadEmailContainer: {
+    marginBottom: 0,
   },
-  threadEmailHeader: {
+  // Sticky action bar for each thread email
+  threadStickyBar: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    // Shadow for sticky effect
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  threadStickyBarCurrent: {
+    borderLeftWidth: 3,
+  },
+  threadStickyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: SPACING.sm,
     gap: SPACING.sm,
+    paddingVertical: SPACING.xs,
+  },
+  threadStickyMeta: {
+    flex: 1,
+  },
+  threadStickyTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  threadStickySubject: {
+    fontSize: FONT_SIZE.xs,
+    marginTop: 1,
+  },
+  threadStickyDate: {
+    fontSize: FONT_SIZE.xs,
+  },
+  threadActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: SPACING.xs,
+  },
+  threadActionSpacer: {
+    flex: 1,
+  },
+  threadActionBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.sm,
   },
   threadAvatarSmall: {
     width: 32,
@@ -1135,44 +1648,37 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     fontWeight: '600',
   },
-  threadEmailMeta: {
-    flex: 1,
-  },
-  threadEmailTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-  },
   threadSenderName: {
     fontSize: FONT_SIZE.md,
     fontWeight: '500',
+    flex: 1,
   },
   currentBadge: {
     paddingHorizontal: SPACING.xs,
     paddingVertical: 2,
     borderRadius: RADIUS.sm,
+    marginLeft: 'auto',
   },
   currentBadgeText: {
     fontSize: FONT_SIZE.xs,
     fontWeight: '600',
   },
-  threadPreview: {
-    fontSize: FONT_SIZE.sm,
-    marginTop: 2,
-  },
-  threadEmailRight: {
-    alignItems: 'flex-end',
-    gap: SPACING.xs,
-  },
-  threadDate: {
-    fontSize: FONT_SIZE.xs,
-  },
   threadEmailBody: {
-    padding: SPACING.sm,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING.md,
+  },
+  collapsedBody: {
+    height: 1,
+    overflow: 'hidden',
     paddingTop: 0,
+    paddingBottom: 0,
   },
   threadRecipients: {
     fontSize: FONT_SIZE.xs,
     marginBottom: SPACING.xs,
+    paddingHorizontal: SPACING.md,
+  },
+  threadSeparator: {
+    height: SPACING.md,
   },
 });
