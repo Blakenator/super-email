@@ -62,7 +62,7 @@ export function AccountsSettingsScreen({ onAddAccount, onEditAccount }: Accounts
         </View>
       </View>
       <View style={styles.accountStatus}>
-        {account.isSyncing ? (
+        {(account.isHistoricalSyncing || account.isUpdateSyncing) ? (
           <ActivityIndicator size="small" color={theme.colors.primary} />
         ) : (
           <Icon name="chevron-right" size="md" color={theme.colors.textMuted} />

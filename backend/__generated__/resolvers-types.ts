@@ -529,11 +529,9 @@ export type EmailAccount = BaseEntityProps & {
   isDefault: Scalars['Boolean']['output'];
   /** Whether a historical sync (initial import) is in progress */
   isHistoricalSyncing: Scalars['Boolean']['output'];
-  /** Whether a sync operation is currently in progress (legacy) */
-  isSyncing: Scalars['Boolean']['output'];
   /** Whether an update sync (new emails) is in progress */
   isUpdateSyncing: Scalars['Boolean']['output'];
-  /** Timestamp of the last successful sync (legacy, for backwards compatibility) */
+  /** Timestamp of the last successful sync */
   lastSyncedAt?: Maybe<Scalars['Date']['output']>;
   /** Display name for this account (e.g., "Work Gmail") */
   name: Scalars['String']['output'];
@@ -541,12 +539,6 @@ export type EmailAccount = BaseEntityProps & {
   port: Scalars['Int']['output'];
   /** External provider ID (for OAuth-linked accounts like Google Workspace) */
   providerId?: Maybe<Scalars['String']['output']>;
-  /** When the current sync operation will timeout (legacy) */
-  syncExpiresAt?: Maybe<Scalars['Date']['output']>;
-  /** Progress percentage (0-100) during sync (legacy) */
-  syncProgress?: Maybe<Scalars['Int']['output']>;
-  /** Human-readable status message during sync (legacy) */
-  syncStatus?: Maybe<Scalars['String']['output']>;
   /** Timestamp of the last update sync */
   updateSyncLastAt?: Maybe<Scalars['Date']['output']>;
   /** Progress percentage (0-100) during update sync */
@@ -2284,15 +2276,11 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isHistoricalSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  isSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isUpdateSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   lastSyncedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  syncExpiresAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
-  syncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
-  syncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updateSyncLastAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   updateSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   updateSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;

@@ -149,6 +149,8 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               onChangeText={setPassword}
               placeholder="Create a password"
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
               autoComplete="new-password"
               hint="At least 6 characters"
             />
@@ -159,6 +161,8 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
               onChangeText={setConfirmPassword}
               placeholder="Confirm your password"
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
               autoComplete="new-password"
             />
 

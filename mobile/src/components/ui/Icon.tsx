@@ -10,7 +10,7 @@ import { useTheme } from '../../theme';
 export type IconName = 
   // Navigation & UI
   | 'inbox' | 'send' | 'file-text' | 'archive' | 'trash-2' | 'star'
-  | 'chevron-right' | 'chevron-left' | 'chevron-down' | 'x' | 'check'
+  | 'chevron-right' | 'chevron-left' | 'chevron-down' | 'chevron-up' | 'x' | 'check'
   | 'plus' | 'minus' | 'edit-2' | 'settings' | 'search' | 'filter'
   | 'menu' | 'more-vertical' | 'more-horizontal' | 'refresh-cw'
   // Email
@@ -59,6 +59,7 @@ const ICON_MAP: Record<IconName, { set: 'feather' | 'material' | 'ionicons'; nam
   'chevron-right': { set: 'feather', name: 'chevron-right' },
   'chevron-left': { set: 'feather', name: 'chevron-left' },
   'chevron-down': { set: 'feather', name: 'chevron-down' },
+  'chevron-up': { set: 'feather', name: 'chevron-up' },
   x: { set: 'feather', name: 'x' },
   check: { set: 'feather', name: 'check' },
   plus: { set: 'feather', name: 'plus' },
