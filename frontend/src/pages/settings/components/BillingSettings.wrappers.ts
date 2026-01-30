@@ -343,28 +343,51 @@ export const TierSelectionGrid = styled.div`
   gap: ${({ theme }) => theme.spacing.md};
 `;
 
-export const TierCard = styled.div<{ $selected?: boolean; $current?: boolean }>`
+export const TierCard = styled.div<{ $selected?: boolean; $current?: boolean; $disabled?: boolean }>`
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: ${({ theme }) => theme.spacing.lg};
-  border: 2px solid ${({ theme, $selected, $current }) => {
+  border: 2px solid ${({ theme, $selected, $current, $disabled }) => {
+    if ($disabled) return theme.colors.borderLight;
     if ($selected) return theme.colors.primary;
     if ($current) return theme.colors.success;
     return theme.colors.borderLight;
   }};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-  background: ${({ theme, $selected }) =>
-    $selected ? `${theme.colors.primary}08` : theme.colors.backgroundWhite};
-  cursor: pointer;
+  background: ${({ theme, $selected, $disabled }) => {
+    if ($disabled) return theme.colors.background;
+    return $selected ? `${theme.colors.primary}08` : theme.colors.backgroundWhite;
+  }};
+  cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
+  opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};
   transition: all 0.2s ease;
 
   &:hover {
-    border-color: ${({ theme }) => theme.colors.primary};
-    transform: translateY(-2px);
-    box-shadow: ${({ theme }) => theme.shadows.md};
+    ${({ theme, $disabled }) =>
+      !$disabled &&
+      `
+      border-color: ${theme.colors.primary};
+      transform: translateY(-2px);
+      box-shadow: ${theme.shadows.md};
+    `}
   }
+`;
+
+export const UnavailableBadge = styled.span`
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: ${({ theme }) => theme.colors.textSecondary};
+  color: white;
+  padding: 2px 10px;
+  border-radius: ${({ theme }) => theme.borderRadius.sm};
+  font-size: ${({ theme }) => theme.fontSizes.xs};
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
 `;
 
 export const TierCardHeader = styled.h5`

@@ -102,12 +102,15 @@ export async function createCheckoutSession(
 
   // Build line items based on selected tiers
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+  const missingPriceIds: string[] = [];
 
   // Add storage tier if not free
   if (storageTier !== StorageTier.FREE) {
     const priceId = getPriceIdForStorageTier(storageTier);
     if (priceId) {
       lineItems.push({ price: priceId, quantity: 1 });
+    } else {
+      missingPriceIds.push(`storage ${storageTier}`);
     }
   }
 
@@ -116,12 +119,34 @@ export async function createCheckoutSession(
     const priceId = getPriceIdForAccountTier(accountTier);
     if (priceId) {
       lineItems.push({ price: priceId, quantity: 1 });
+    } else {
+      missingPriceIds.push(`account ${accountTier}`);
     }
   }
 
-  // If no paid items, this shouldn't create a checkout session
+  // If no paid items were added
   if (lineItems.length === 0) {
-    throw new Error('Cannot create checkout session for free tier');
+    // Check if user selected paid tiers but price IDs aren't configured
+    if (missingPriceIds.length > 0) {
+      throw new Error(
+        `The selected plan(s) are not available: ${missingPriceIds.join(', ')}. ` +
+          'Please contact support or try a different plan.',
+      );
+    }
+    // Both tiers are free - can't checkout for free tier
+    throw new Error(
+      'Cannot create checkout session for free tier. ' +
+        'Please select at least one paid plan to upgrade.',
+    );
+  }
+
+  // Warn if some paid tiers couldn't be added (partial selection)
+  if (missingPriceIds.length > 0) {
+    logger.warn(
+      'Stripe',
+      `Missing price IDs for: ${missingPriceIds.join(', ')}. ` +
+        'These tiers will not be included in the checkout.',
+    );
   }
 
   const session = await stripeClient.checkout.sessions.create({

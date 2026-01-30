@@ -56,6 +56,7 @@ import {
   LegendItem,
   LegendDot,
   DowngradeWarning,
+  UnavailableBadge,
 } from './BillingSettings.wrappers';
 
 function formatBytes(bytes: number): string {
@@ -134,7 +135,7 @@ const ACCOUNT_LIMIT_COUNT: Record<string, number> = {
 };
 
 // Default tier info (used when Stripe prices not available)
-const DEFAULT_STORAGE_TIERS = [
+const DEFAULT_STORAGE_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
   { id: StorageTier.Free, name: 'Free', limit: '5 GB', price: '$0' },
   { id: StorageTier.Basic, name: 'Basic', limit: '10 GB', price: '$5/mo' },
   { id: StorageTier.Pro, name: 'Pro', limit: '20 GB', price: '$10/mo' },
@@ -146,7 +147,7 @@ const DEFAULT_STORAGE_TIERS = [
   },
 ];
 
-const DEFAULT_ACCOUNT_TIERS = [
+const DEFAULT_ACCOUNT_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
   { id: AccountTier.Free, name: 'Free', limit: '1 account', price: '$0' },
   { id: AccountTier.Basic, name: 'Basic', limit: '2 accounts', price: '$5/mo' },
   { id: AccountTier.Pro, name: 'Pro', limit: '5 accounts', price: '$10/mo' },
@@ -177,6 +178,7 @@ interface TierInfo {
   name: string;
   limit: string;
   price: string;
+  isConfigured: boolean; // Whether this tier has a Stripe price configured
 }
 
 /**
@@ -197,6 +199,10 @@ function buildStorageTiers(
 
   return DEFAULT_STORAGE_TIERS.map((tier) => {
     const stripePrice = priceMap.get(tier.id.toUpperCase());
+    // Free tier is always available, paid tiers need Stripe price
+    const isFree = tier.id === StorageTier.Free;
+    const isConfigured = isFree || !!stripePrice;
+
     if (stripePrice) {
       return {
         ...tier,
@@ -206,9 +212,10 @@ function buildStorageTiers(
           stripePrice.currency,
           stripePrice.interval,
         ),
+        isConfigured,
       };
     }
-    return tier;
+    return { ...tier, isConfigured };
   });
 }
 
@@ -227,6 +234,10 @@ function buildAccountTiers(
 
   return DEFAULT_ACCOUNT_TIERS.map((tier) => {
     const stripePrice = priceMap.get(tier.id.toUpperCase());
+    // Free tier is always available, paid tiers need Stripe price
+    const isFree = tier.id === AccountTier.Free;
+    const isConfigured = isFree || !!stripePrice;
+
     if (stripePrice) {
       return {
         ...tier,
@@ -238,9 +249,10 @@ function buildAccountTiers(
           stripePrice.currency,
           stripePrice.interval,
         ),
+        isConfigured,
       };
     }
-    return tier;
+    return { ...tier, isConfigured };
   });
 }
 
@@ -560,16 +572,22 @@ export function BillingSettings() {
                   const isCurrent = currentStorageTier === tier.id;
                   const isSelected = effectiveStorageTier === tier.id;
                   const isPending = pendingStorageTier === tier.id;
+                  const isDisabled = !tier.isConfigured;
                   return (
                     <TierCard
                       key={tier.id}
                       $selected={isSelected}
                       $current={isCurrent}
+                      $disabled={isDisabled}
                       onClick={() =>
+                        !isDisabled &&
                         handleStorageTierSelect(tier.id as StorageTier)
                       }
                     >
                       {isCurrent && <CurrentBadge>Current</CurrentBadge>}
+                      {isDisabled && !isCurrent && (
+                        <UnavailableBadge>Coming Soon</UnavailableBadge>
+                      )}
                       <TierCardHeader>{tier.name}</TierCardHeader>
                       <TierCardPrice>{tier.price}</TierCardPrice>
                       <TierCardFeatures>
@@ -627,16 +645,22 @@ export function BillingSettings() {
                   const isCurrent = currentAccountTier === tier.id;
                   const isSelected = effectiveAccountTier === tier.id;
                   const isPending = pendingAccountTier === tier.id;
+                  const isDisabled = !tier.isConfigured;
                   return (
                     <TierCard
                       key={tier.id}
                       $selected={isSelected}
                       $current={isCurrent}
+                      $disabled={isDisabled}
                       onClick={() =>
+                        !isDisabled &&
                         handleAccountTierSelect(tier.id as AccountTier)
                       }
                     >
                       {isCurrent && <CurrentBadge>Current</CurrentBadge>}
+                      {isDisabled && !isCurrent && (
+                        <UnavailableBadge>Coming Soon</UnavailableBadge>
+                      )}
                       <TierCardHeader>{tier.name}</TierCardHeader>
                       <TierCardPrice>{tier.price}</TierCardPrice>
                       <TierCardFeatures>
