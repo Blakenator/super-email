@@ -20,7 +20,9 @@ import { useTheme, darkTheme } from './src/theme';
 import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
+  scheduleLocalNotification,
 } from './src/services/notifications';
+import { useEmailStore } from './src/stores/emailStore';
 
 // Keep splash screen visible while we initialize
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -124,13 +126,58 @@ function MainApp() {
   useEffect(() => {
     // Set up notification listeners
     const notificationSubscription = addNotificationReceivedListener(
-      (notification) => {
+      async (notification) => {
         console.log('Notification received:', notification);
+        
+        const data = notification.request.content.data as { type?: string; emailCount?: number } | undefined;
+        
+        // If this is a new email notification with multiple emails, fetch and show individual notifications
+        if (data?.type === 'new_email' && data?.emailCount && data.emailCount > 1) {
+          console.log(`[App] Received bulk notification for ${data.emailCount} emails, fetching individual emails...`);
+          
+          try {
+            const authStore = useAuthStore.getState();
+            
+            // First, try to refresh token if needed
+            if (authStore.isAuthenticated) {
+              await authStore.refreshTokenIfNeeded();
+            }
+            
+            // Refresh emails to get the latest
+            const emailStore = useEmailStore.getState();
+            await emailStore.refreshEmails();
+            
+            // Get the newest emails (up to the count we received)
+            const newEmails = emailStore.emails.slice(0, Math.min(data.emailCount, 5)); // Limit to 5 individual notifications
+            
+            // Show individual notifications for each new email
+            for (const email of newEmails) {
+              await scheduleLocalNotification(
+                email.fromName || email.fromAddress,
+                email.subject || '(No Subject)',
+                { emailId: email.id, type: 'email_detail' },
+              );
+            }
+            
+            // If there are more than 5, show a summary for the rest
+            if (data.emailCount > 5) {
+              await scheduleLocalNotification(
+                'More emails',
+                `And ${data.emailCount - 5} more new emails`,
+                { type: 'inbox' },
+              );
+            }
+          } catch (error) {
+            console.error('[App] Failed to fetch individual emails:', error);
+            // Fall through to show the original bulk notification
+          }
+        }
       },
     );
 
     const responseSubscription = addNotificationResponseListener((response) => {
       console.log('Notification response:', response);
+      // TODO: Navigate to email detail or inbox based on response.notification.request.content.data
     });
 
     return () => {

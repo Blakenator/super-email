@@ -288,25 +288,9 @@ type EmailAccount implements BaseEntityProps {
   """
   useSsl: Boolean!
   """
-  Timestamp of the last successful sync (legacy, for backwards compatibility)
+  Timestamp of the last successful sync
   """
   lastSyncedAt: Date
-  """
-  Whether a sync operation is currently in progress (legacy)
-  """
-  isSyncing: Boolean!
-  """
-  Progress percentage (0-100) during sync (legacy)
-  """
-  syncProgress: Int
-  """
-  Human-readable status message during sync (legacy)
-  """
-  syncStatus: String
-  """
-  When the current sync operation will timeout (legacy)
-  """
-  syncExpiresAt: Date
   """
   Whether a historical sync (initial import) is in progress
   """

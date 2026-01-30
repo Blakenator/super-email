@@ -256,6 +256,10 @@ async function markSyncCompleted(
   // Clear resume fields for completed historical syncs (not cancelled)
   if (isHistoricalSync && !result.cancelled) {
     updateData.historicalSyncOldestDate = null;
+    updateData.historicalSyncLastUidInbox = null;
+    updateData.historicalSyncLastUidSent = null;
+    updateData.historicalSyncTotalInbox = null;
+    updateData.historicalSyncTotalSent = null;
   }
 
   await emailAccount.update(updateData);
@@ -363,17 +367,6 @@ export async function startAsyncSync(
   // Mark as syncing with our sync ID and initial expiration time
   await markSyncStarted(emailAccount, syncType, syncId);
 
-  // Also update legacy fields for backwards compatibility during transition
-  await emailAccount.update({
-    syncId,
-    syncProgress: 0,
-    syncStatus:
-      syncType === 'historical'
-        ? 'Starting historical sync...'
-        : 'Starting sync...',
-    syncExpiresAt: getSyncExpirationTime(),
-  });
-
   // Notify subscribers that sync is starting
   publishMailboxUpdate(emailAccount.userId, {
     type: 'SYNC_STARTED',
@@ -399,20 +392,6 @@ export async function startAsyncSync(
           `[IMAP] ${syncType} sync ${syncId} was superseded, not updating status`,
         );
         return;
-      }
-
-      // Also update legacy fields for backwards compatibility
-      await emailAccount.reload();
-      if (emailAccount.syncId === syncId) {
-        await emailAccount.update({
-          syncId: null,
-          syncProgress: 100,
-          syncStatus: result.cancelled
-            ? 'Sync cancelled'
-            : `Synced ${result.synced} emails`,
-          lastSyncedAt: new Date(),
-          syncExpiresAt: null,
-        });
       }
 
       console.log(
@@ -465,9 +444,6 @@ export async function startAsyncSync(
             await emailAccount.update({
               [fields.progressField]: null,
               [fields.statusField]: null,
-              // Legacy fields
-              syncProgress: null,
-              syncStatus: null,
             });
           }
         } catch {
@@ -480,17 +456,6 @@ export async function startAsyncSync(
 
       // Update the type-specific sync status
       await markSyncFailed(emailAccount, syncType, syncId, errorMsg);
-
-      // Also update legacy fields for backwards compatibility
-      await emailAccount.reload();
-      if (emailAccount.syncId === syncId) {
-        await emailAccount.update({
-          syncId: null,
-          syncProgress: null,
-          syncStatus: `Sync failed: ${errorMsg}`,
-          syncExpiresAt: null,
-        });
-      }
 
       console.error(
         `[IMAP] ${syncType} sync failed for ${emailAccount.email}:`,
@@ -512,8 +477,6 @@ export async function startAsyncSync(
           if (!currentSyncId) {
             await emailAccount.update({
               [fields.statusField]: null,
-              // Legacy field
-              syncStatus: null,
             });
           }
         } catch {
@@ -527,19 +490,13 @@ export async function startAsyncSync(
 
 /**
  * Check if sync should continue (sync ID still matches)
- * @deprecated Use shouldContinueSyncOfType instead
  */
 async function shouldContinueSync(
   emailAccount: EmailAccount,
   syncId: string,
-  syncType?: SyncType,
+  syncType: SyncType,
 ): Promise<boolean> {
-  if (syncType) {
-    return shouldContinueSyncOfType(emailAccount, syncType, syncId);
-  }
-  // Legacy fallback
-  await emailAccount.reload();
-  return emailAccount.syncId === syncId;
+  return shouldContinueSyncOfType(emailAccount, syncType, syncId);
 }
 
 /**
@@ -549,26 +506,15 @@ async function shouldContinueSync(
 async function updateSyncExpiration(
   emailAccount: EmailAccount,
   syncId: string,
-  syncType?: SyncType,
+  syncType: SyncType,
 ): Promise<void> {
   await emailAccount.reload();
 
-  if (syncType) {
-    const fields = getSyncFields(syncType);
-    if (emailAccount[fields.syncIdField] === syncId) {
-      await emailAccount.update({
-        [fields.expiresAtField]: getSyncExpirationTime(),
-        // Also update legacy field
-        syncExpiresAt: getSyncExpirationTime(),
-      });
-    }
-  } else {
-    // Legacy fallback
-    if (emailAccount.syncId === syncId) {
-      await emailAccount.update({
-        syncExpiresAt: getSyncExpirationTime(),
-      });
-    }
+  const fields = getSyncFields(syncType);
+  if (emailAccount[fields.syncIdField] === syncId) {
+    await emailAccount.update({
+      [fields.expiresAtField]: getSyncExpirationTime(),
+    });
   }
 }
 
@@ -649,34 +595,25 @@ export async function syncEmailsFromImapAccount(
     let totalToProcess = 0;
 
     if (isFullSync) {
-      // Historical sync using timestamp-based pagination (more reliable than sequence numbers)
-      // We fetch messages in date ranges, working from newest to oldest
-      // This approach is stable even if messages are added/deleted during sync
+      // Historical sync using UID-based pagination
+      // We fetch ALL UIDs once, sort them, and process in batches from newest to oldest
+      // This is more reliable than date-based pagination which can skip messages
 
       const isResuming =
         syncType === 'historical' &&
-        emailAccount.historicalSyncOldestDate !== null;
+        emailAccount.historicalSyncLastUidInbox !== null;
 
-      // Track the oldest message date we've processed (for resume point)
-      let oldestDateSynced: Date | null = isResuming
-        ? new Date(emailAccount.historicalSyncOldestDate!)
+      // Get the last processed UID for resume (UIDs below this have been processed)
+      const lastProcessedUid = isResuming
+        ? emailAccount.historicalSyncLastUidInbox!
         : null;
-
-      // For accurate progress, we need to know total remaining messages
-      // On first batch, we get all messages and can count them
-      // Track messages processed (synced + skipped) for progress
-      let messagesProcessedThisSession = 0;
-      let initialRemainingCount = 0;
-      const previousProgress = isResuming
-        ? emailAccount.historicalSyncProgress || 0
-        : 0;
 
       if (isResuming) {
         console.log(
-          `[IMAP] ${emailAccount.email} Resuming historical sync from before ${oldestDateSynced!.toISOString()}`,
+          `[IMAP] ${emailAccount.email} Resuming historical sync from UID ${lastProcessedUid}`,
         );
 
-        const resumeMsg = `Resuming sync (messages before ${oldestDateSynced!.toLocaleDateString()})...`;
+        const resumeMsg = `Resuming sync (UIDs below ${lastProcessedUid})...`;
         await emailAccount.update({
           syncStatus: resumeMsg,
           [fields.statusField]: resumeMsg,
@@ -689,11 +626,63 @@ export async function syncEmailsFromImapAccount(
         });
       }
 
-      totalToProcess = mailbox.exists;
-      let batchNumber = 0;
-      let hasMoreMessages = true;
+      // Fetch ALL UIDs once - this is memory efficient (just numbers)
+      const searchStatusMsg = 'Fetching message list...';
+      await emailAccount.update({
+        syncStatus: searchStatusMsg,
+        [fields.statusField]: searchStatusMsg,
+      });
 
-      while (hasMoreMessages) {
+      const searchResult = await withRetry(
+        () => client.search({ all: true }, { uid: true }),
+        'Search for all messages',
+      );
+      const allMessageUids = searchResult === false ? [] : searchResult;
+
+      if (allMessageUids.length === 0) {
+        console.log(`[IMAP] ${emailAccount.email} No messages to sync`);
+        await client.logout();
+        return result;
+      }
+
+      // Sort UIDs descending (newest first)
+      const sortedUids = [...allMessageUids].sort((a, b) => b - a);
+
+      // Filter out already-processed UIDs if resuming
+      // UIDs that are >= lastProcessedUid have already been processed
+      // (we process from highest to lowest, so higher UIDs are processed first)
+      let uidsToProcess: number[];
+      if (isResuming && lastProcessedUid !== null) {
+        uidsToProcess = sortedUids.filter((uid) => uid < lastProcessedUid);
+        console.log(
+          `[IMAP] ${emailAccount.email} Resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`,
+        );
+      } else {
+        uidsToProcess = sortedUids;
+      }
+
+      totalToProcess = sortedUids.length;
+      const totalRemaining = uidsToProcess.length;
+
+      // Save total for progress calculation
+      if (syncType === 'historical' && !isResuming) {
+        await emailAccount.update({
+          historicalSyncTotalInbox: totalToProcess,
+        });
+      }
+
+      const savedTotal =
+        emailAccount.historicalSyncTotalInbox || totalToProcess;
+
+      console.log(
+        `[IMAP] ${emailAccount.email} INBOX: ${totalRemaining} messages to process`,
+      );
+
+      let batchNumber = 0;
+      let processedInSession = 0;
+
+      // Process UIDs in batches
+      for (let i = 0; i < uidsToProcess.length; i += BATCH_SIZE) {
         // Check if sync was cancelled
         if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
           console.log(`[IMAP] ${syncType} sync ${syncId} cancelled`);
@@ -702,68 +691,15 @@ export async function syncEmailsFromImapAccount(
         }
 
         batchNumber++;
+        const batchUids = uidsToProcess.slice(i, i + BATCH_SIZE);
+        const lowestUidInBatch = Math.min(...batchUids);
 
-        // Build search criteria based on whether we're resuming
-        // If resuming, search for messages BEFORE the oldest date we've synced
-        // Otherwise, search for all messages (we'll process newest first via sorting)
-        let searchCriteria: any;
-        if (oldestDateSynced) {
-          // Get messages older than what we've already synced
-          // Subtract 1 day to ensure overlap and avoid missing edge cases
-          const searchDate = new Date(oldestDateSynced);
-          searchDate.setDate(searchDate.getDate() - 1);
-          searchCriteria = { before: searchDate };
-        } else {
-          // First batch - get all messages
-          searchCriteria = { all: true };
-        }
-
-        // Search for message UIDs matching criteria
-        const searchResult = await withRetry(
-          () => client.search(searchCriteria, { uid: true }),
-          `Search for messages (batch ${batchNumber})`,
+        // Calculate progress based on total messages (including already processed)
+        const totalProcessed = savedTotal - totalRemaining + processedInSession;
+        const progress = Math.min(
+          99,
+          Math.round((totalProcessed / Math.max(1, savedTotal)) * 100),
         );
-        const messageUids = searchResult === false ? [] : searchResult;
-
-        if (messageUids.length === 0) {
-          console.log(
-            `[IMAP] ${emailAccount.email} No more messages to sync (batch ${batchNumber})`,
-          );
-          hasMoreMessages = false;
-          break;
-        }
-
-        // On first batch, record initial count for progress calculation
-        if (batchNumber === 1) {
-          initialRemainingCount = messageUids.length;
-        }
-
-        // Sort UIDs descending (newest first) and take a batch
-        const sortedUids = [...messageUids].sort((a, b) => b - a);
-        const batchUids = sortedUids.slice(0, BATCH_SIZE);
-
-        // Calculate progress:
-        // - For fresh sync: (processed / total) * 100
-        // - For resumed sync: previousProgress + (sessionProcessed / initialRemaining) * (100 - previousProgress)
-        let progress: number;
-        if (isResuming && initialRemainingCount > 0) {
-          // Scale remaining work to fill the gap between previousProgress and 100
-          const remainingProgressRange = 100 - previousProgress;
-          const sessionProgress =
-            (messagesProcessedThisSession / initialRemainingCount) *
-            remainingProgressRange;
-          progress = Math.min(
-            99,
-            Math.round(previousProgress + sessionProgress),
-          );
-        } else {
-          // Fresh sync - use total mailbox count
-          const totalProcessed = result.synced + result.skipped;
-          progress = Math.min(
-            99,
-            Math.round((totalProcessed / Math.max(1, totalToProcess)) * 100),
-          );
-        }
 
         const progressMsg = `Processing batch ${batchNumber} (${result.synced + result.skipped} processed, ${result.synced} new)...`;
         await emailAccount.update({
@@ -783,8 +719,8 @@ export async function syncEmailsFromImapAccount(
           lastExpirationUpdate = now;
         }
 
-        // Process this batch and track the oldest date
-        const batchResult = await processBatchByUidsWithDateTracking(
+        // Process this batch
+        const batchResult = await processBatchByUids(
           client,
           emailAccount.id,
           batchUids,
@@ -795,40 +731,30 @@ export async function syncEmailsFromImapAccount(
         result.synced += batchResult.synced;
         result.skipped += batchResult.skipped;
         result.errors.push(...batchResult.errors);
-        messagesProcessedThisSession +=
-          batchResult.synced + batchResult.skipped;
+        processedInSession += batchResult.synced + batchResult.skipped;
 
-        // Update oldest date if we found older messages
-        if (batchResult.oldestDate) {
-          if (!oldestDateSynced || batchResult.oldestDate < oldestDateSynced) {
-            oldestDateSynced = batchResult.oldestDate;
-
-            // Save resume point after each batch
-            if (syncType === 'historical') {
-              await emailAccount.update({
-                historicalSyncOldestDate: oldestDateSynced,
-              });
-            }
-          }
+        // Save resume point after each batch (lowest UID processed so far)
+        if (syncType === 'historical') {
+          await emailAccount.update({
+            historicalSyncLastUidInbox: lowestUidInBatch,
+          });
         }
 
         console.log(
           `[IMAP] ${emailAccount.email} INBOX batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped (progress: ${progress}%)`,
         );
-
-        // If we got fewer messages than the batch size, we're done
-        if (sortedUids.length <= BATCH_SIZE) {
-          hasMoreMessages = false;
-        }
       }
 
       // Clear resume point if historical sync completed successfully
       if (syncType === 'historical' && !result.cancelled) {
         await emailAccount.update({
+          historicalSyncLastUidInbox: null,
+          historicalSyncTotalInbox: null,
+          // Also clear legacy field
           historicalSyncOldestDate: null,
         });
         console.log(
-          `[IMAP] ${emailAccount.email} Historical sync completed, cleared resume point`,
+          `[IMAP] ${emailAccount.email} INBOX historical sync completed, cleared resume point`,
         );
       }
     } else {
@@ -993,26 +919,80 @@ async function syncSentFolder(
   const isFullSync = syncType === 'historical' || !emailAccount.lastSyncedAt;
 
   if (isFullSync) {
-    // Full sync: process from newest to oldest
-    const totalToProcess = sentMailbox.exists;
+    // Full sync using UID-based pagination (same approach as INBOX)
+    // This is more reliable than sequence numbers and supports resume
+
+    await emailAccount.reload();
+    const isResuming =
+      syncType === 'historical' &&
+      emailAccount.historicalSyncLastUidSent !== null;
+
+    const lastProcessedUid = isResuming
+      ? emailAccount.historicalSyncLastUidSent!
+      : null;
+
+    if (isResuming) {
+      console.log(
+        `[IMAP] ${emailAccount.email} Resuming SENT sync from UID ${lastProcessedUid}`,
+      );
+    }
+
+    // Fetch ALL UIDs once
+    const searchResult = await withRetry(
+      () => client.search({ all: true }, { uid: true }),
+      'Search for all sent messages',
+    );
+    const allSentUids = searchResult === false ? [] : searchResult;
+
+    if (allSentUids.length === 0) {
+      console.log(`[IMAP] ${emailAccount.email} No sent messages to sync`);
+      return;
+    }
+
+    // Sort UIDs descending (newest first)
+    const sortedUids = [...allSentUids].sort((a, b) => b - a);
+
+    // Filter out already-processed UIDs if resuming
+    let uidsToProcess: number[];
+    if (isResuming && lastProcessedUid !== null) {
+      uidsToProcess = sortedUids.filter((uid) => uid < lastProcessedUid);
+      console.log(
+        `[IMAP] ${emailAccount.email} SENT resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`,
+      );
+    } else {
+      uidsToProcess = sortedUids;
+    }
+
+    const totalToProcess = sortedUids.length;
+
+    // Save total for progress calculation
+    if (syncType === 'historical' && !isResuming) {
+      await emailAccount.update({
+        historicalSyncTotalSent: totalToProcess,
+      });
+    }
+
     console.log(
-      `[IMAP] ${emailAccount.email} Full ${syncType} sync of ${totalToProcess} sent messages`,
+      `[IMAP] ${emailAccount.email} SENT: ${uidsToProcess.length} messages to process`,
     );
 
-    for (let start = sentMailbox.exists; start >= 1; start -= BATCH_SIZE) {
+    let batchNumber = 0;
+
+    // Process UIDs in batches
+    for (let i = 0; i < uidsToProcess.length; i += BATCH_SIZE) {
       if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
         result.cancelled = true;
         break;
       }
 
-      const end = Math.max(1, start - BATCH_SIZE + 1);
-      const seqRange = `${end}:${start}`;
+      batchNumber++;
+      const batchUids = uidsToProcess.slice(i, i + BATCH_SIZE);
+      const lowestUidInBatch = Math.min(...batchUids);
 
-      const batchResult = await processBatch(
+      const batchResult = await processBatchByUids(
         client,
         emailAccount.id,
-        seqRange,
-        false,
+        batchUids,
         EmailFolder.SENT,
         emailAccount.userId,
       );
@@ -1021,8 +1001,26 @@ async function syncSentFolder(
       result.skipped += batchResult.skipped;
       result.errors.push(...batchResult.errors);
 
+      // Save resume point after each batch
+      if (syncType === 'historical') {
+        await emailAccount.update({
+          historicalSyncLastUidSent: lowestUidInBatch,
+        });
+      }
+
       console.log(
-        `[IMAP] ${emailAccount.email} SENT batch ${end}-${start}: ${batchResult.synced} new, ${batchResult.skipped} skipped`,
+        `[IMAP] ${emailAccount.email} SENT batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped`,
+      );
+    }
+
+    // Clear resume point if completed successfully
+    if (syncType === 'historical' && !result.cancelled) {
+      await emailAccount.update({
+        historicalSyncLastUidSent: null,
+        historicalSyncTotalSent: null,
+      });
+      console.log(
+        `[IMAP] ${emailAccount.email} SENT historical sync completed, cleared resume point`,
       );
     }
   } else {
@@ -1072,29 +1070,44 @@ async function syncSentFolder(
 }
 
 /**
- * Process attachments from a parsed email and save to storage
+ * Pre-processed attachment metadata (content already uploaded to storage)
+ * This allows us to clear the attachment content from memory immediately after upload
  */
-async function processEmailAttachments(
-  emailId: string,
+interface PreProcessedAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  extension: string | null;
+  size: number;
+  storageKey: string;
+  attachmentType: AttachmentType;
+  contentId: string | null;
+  contentDisposition: string | null;
+  isSafe: boolean;
+}
+
+/**
+ * Upload attachments immediately and return metadata (without content)
+ * This frees memory by streaming attachments directly to storage
+ */
+async function uploadAttachmentsImmediately(
   parsedEmail: ParsedMail,
-): Promise<void> {
+): Promise<PreProcessedAttachment[]> {
   if (!parsedEmail.attachments || parsedEmail.attachments.length === 0) {
-    return;
+    return [];
   }
 
-  // Upload attachments in parallel with concurrency control
-  const CONCURRENCY_LIMIT = 5; // Upload max 5 attachments simultaneously
+  const results: PreProcessedAttachment[] = [];
 
-  const uploadPromises = parsedEmail.attachments.map(async (attachment) => {
+  // Process attachments one at a time to minimize memory usage
+  // Each attachment is uploaded and its content freed before the next
+  for (const attachment of parsedEmail.attachments) {
     try {
-      // Generate a UUID for this attachment (used as storage key)
       const attachmentId = uuidv4();
 
-      // Determine if inline or regular attachment
       const isInline =
         attachment.contentDisposition === 'inline' || !!attachment.cid;
 
-      // Get file extension from filename
       const extension = attachment.filename
         ? attachment.filename.split('.').pop()?.toLowerCase() || null
         : null;
@@ -1102,16 +1115,15 @@ async function processEmailAttachments(
       // Create a readable stream from the attachment content
       const stream = Readable.from(attachment.content);
 
-      // Upload to storage (S3 or local disk) using the attachment UUID
+      // Upload to storage (S3 or local disk) - this streams directly
       const uploadResult = await uploadAttachment({
         attachmentId,
         mimeType: attachment.contentType || 'application/octet-stream',
         stream,
       });
 
-      return {
+      results.push({
         id: attachmentId,
-        emailId,
         filename: attachment.filename || 'untitled',
         mimeType: attachment.contentType || 'application/octet-stream',
         extension,
@@ -1122,41 +1134,69 @@ async function processEmailAttachments(
           : AttachmentType.ATTACHMENT,
         contentId: attachment.cid || null,
         contentDisposition: attachment.contentDisposition || null,
-        isSafe: true, // TODO: Add virus scanning in the future
-      };
+        isSafe: true,
+      });
     } catch (error) {
       console.error(
-        `[IMAP] Failed to process attachment: ${attachment.filename}`,
+        `[IMAP] Failed to upload attachment: ${attachment.filename}`,
         error,
       );
-      return null; // Return null for failed uploads
+      // Continue with other attachments
     }
-  });
-
-  // Process uploads with concurrency control
-  const attachmentsToCreate: Partial<Attachment>[] = [];
-  for (let i = 0; i < uploadPromises.length; i += CONCURRENCY_LIMIT) {
-    const batch = uploadPromises.slice(i, i + CONCURRENCY_LIMIT);
-    const results = await Promise.all(batch);
-    attachmentsToCreate.push(...results.filter((r) => r !== null));
   }
 
-  // Bulk create successfully uploaded attachments
-  if (attachmentsToCreate.length > 0) {
-    await Attachment.bulkCreate(attachmentsToCreate);
-    console.log(
-      `[IMAP] Saved ${attachmentsToCreate.length} attachments for email ${emailId}`,
-    );
+  return results;
+}
+
+/**
+ * Create attachment records in the database from pre-processed metadata
+ */
+async function createAttachmentRecords(
+  emailId: string,
+  attachments: PreProcessedAttachment[],
+): Promise<void> {
+  if (attachments.length === 0) {
+    return;
   }
+
+  const attachmentRecords = attachments.map((att) => ({
+    ...att,
+    emailId,
+  }));
+
+  await Attachment.bulkCreate(attachmentRecords);
+  console.log(
+    `[IMAP] Saved ${attachments.length} attachments for email ${emailId}`,
+  );
+}
+
+/**
+ * Process attachments from a parsed email and save to storage
+ * @deprecated Use uploadAttachmentsImmediately + createAttachmentRecords for better memory management
+ */
+async function processEmailAttachments(
+  emailId: string,
+  parsedEmail: ParsedMail,
+): Promise<void> {
+  const attachments = await uploadAttachmentsImmediately(parsedEmail);
+  await createAttachmentRecords(emailId, attachments);
+}
+
+/**
+ * Email data with pre-processed attachment metadata (memory-efficient)
+ */
+interface EmailWithAttachments {
+  emailData: Record<string, unknown>;
+  attachments: PreProcessedAttachment[];
 }
 
 /**
  * Insert parsed emails into the database, skipping duplicates
+ * This version uses pre-processed attachments to avoid holding attachment content in memory
  */
 async function insertEmailBatch(
   emailAccountId: string,
-  emailsToCreate: Record<string, unknown>[],
-  parsedEmails: ParsedMail[],
+  emailsWithAttachments: EmailWithAttachments[],
   messageIdsInBatch: string[],
   userId?: string,
 ): Promise<{
@@ -1186,20 +1226,14 @@ async function insertEmailBatch(
   });
   const existingIds = new Set(existingEmails.map((e) => e.messageId));
 
-  // Filter out existing emails and their corresponding parsed emails
-  const newEmailsData: {
-    emailData: Record<string, unknown>;
-    parsed: ParsedMail;
-  }[] = [];
-  for (let i = 0; i < emailsToCreate.length; i++) {
-    if (!existingIds.has(emailsToCreate[i].messageId as string)) {
-      newEmailsData.push({
-        emailData: emailsToCreate[i],
-        parsed: parsedEmails[i],
-      });
+  // Filter out existing emails
+  const newEmailsData: EmailWithAttachments[] = [];
+  for (const emailWithAtt of emailsWithAttachments) {
+    if (!existingIds.has(emailWithAtt.emailData.messageId as string)) {
+      newEmailsData.push(emailWithAtt);
     }
   }
-  result.skipped = emailsToCreate.length - newEmailsData.length;
+  result.skipped = emailsWithAttachments.length - newEmailsData.length;
 
   // Bulk insert new emails
   if (newEmailsData.length > 0) {
@@ -1212,15 +1246,16 @@ async function insertEmailBatch(
         result.synced += dbBatch.length;
         result.newEmailIds.push(...createdEmails.map((e) => e.id));
 
-        // Process attachments for newly created emails
+        // Create attachment records for newly created emails
+        // Note: Attachments were already uploaded to storage, we just need to create DB records
         for (let k = 0; k < createdEmails.length; k++) {
           const email = createdEmails[k];
-          const parsed = dbBatch[k].parsed;
+          const attachments = dbBatch[k].attachments;
           try {
-            await processEmailAttachments(email.id, parsed);
+            await createAttachmentRecords(email.id, attachments);
           } catch (err) {
             console.error(
-              `[IMAP] Failed to process attachments for email ${email.id}:`,
+              `[IMAP] Failed to create attachment records for email ${email.id}:`,
               err,
             );
             // Don't fail the whole batch, just log the error
@@ -1254,6 +1289,8 @@ async function insertEmailBatch(
 
 /**
  * Process a batch of messages from IMAP and insert into database
+ * Uses memory-efficient streaming: attachments are uploaded immediately after parsing,
+ * freeing memory before processing the next message
  * @param range - Either a sequence range string (e.g., "1:100") or array of UIDs
  * @param useUid - Whether to use UID mode for fetch (only applies to string ranges)
  */
@@ -1266,8 +1303,7 @@ async function processBatch(
   userId?: string,
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
   const batchResult = { synced: 0, skipped: 0, errors: [] as string[] };
-  const emailsToCreate: Record<string, unknown>[] = [];
-  const parsedEmails: ParsedMail[] = [];
+  const emailsWithAttachments: EmailWithAttachments[] = [];
   const messageIdsInBatch: string[] = [];
 
   const fetchOptions = {
@@ -1298,6 +1334,10 @@ async function processBatch(
         // Parse the message (includes headers and attachments)
         const parsed = await simpleParser(message.source);
 
+        // Upload attachments IMMEDIATELY to free memory
+        // This streams attachments to storage and returns only metadata
+        const attachments = await uploadAttachmentsImmediately(parsed);
+
         // Prepare email data for batch insert
         const emailData = createEmailDataFromParsed(
           emailAccountId,
@@ -1307,8 +1347,11 @@ async function processBatch(
           message,
         );
 
-        emailsToCreate.push(emailData);
-        parsedEmails.push(parsed);
+        // Store only the email data and attachment metadata (not the full parsed email)
+        emailsWithAttachments.push({ emailData, attachments });
+
+        // The parsed email object will be garbage collected after this iteration
+        // since we no longer hold a reference to it
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         batchResult.errors.push(
@@ -1321,8 +1364,7 @@ async function processBatch(
     // Insert emails into database and apply rules
     const insertResult = await insertEmailBatch(
       emailAccountId,
-      emailsToCreate,
-      parsedEmails,
+      emailsWithAttachments,
       messageIdsInBatch,
       userId,
     );
@@ -1354,6 +1396,7 @@ async function processBatchByUids(
 /**
  * Process a batch of messages by UIDs with date tracking for resumable syncs
  * Returns the oldest message date in the batch for pagination
+ * @deprecated Use processBatchByUids with UID-based pagination instead
  */
 async function processBatchByUidsWithDateTracking(
   client: ImapFlow,
@@ -1378,8 +1421,7 @@ async function processBatchByUidsWithDateTracking(
     return batchResult;
   }
 
-  const emailsToCreate: Record<string, unknown>[] = [];
-  const parsedEmails: ParsedMail[] = [];
+  const emailsWithAttachments: EmailWithAttachments[] = [];
   const messageIdsInBatch: string[] = [];
 
   const fetchOptions = {
@@ -1406,6 +1448,9 @@ async function processBatchByUidsWithDateTracking(
         // Parse the message
         const parsed = await simpleParser(message.source);
 
+        // Upload attachments IMMEDIATELY to free memory
+        const attachments = await uploadAttachmentsImmediately(parsed);
+
         // Prepare email data for batch insert
         const emailData = createEmailDataFromParsed(
           emailAccountId,
@@ -1414,6 +1459,7 @@ async function processBatchByUidsWithDateTracking(
           folder,
           message,
         );
+
         // Track oldest date for pagination
         if (
           !batchResult.oldestDate ||
@@ -1423,8 +1469,7 @@ async function processBatchByUidsWithDateTracking(
           batchResult.oldestDate = emailData.receivedAt!;
         }
 
-        emailsToCreate.push(emailData);
-        parsedEmails.push(parsed);
+        emailsWithAttachments.push({ emailData, attachments });
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         batchResult.errors.push(
@@ -1437,8 +1482,7 @@ async function processBatchByUidsWithDateTracking(
     // Insert emails into database and apply rules
     const insertResult = await insertEmailBatch(
       emailAccountId,
-      emailsToCreate,
-      parsedEmails,
+      emailsWithAttachments,
       messageIdsInBatch,
       userId,
     );

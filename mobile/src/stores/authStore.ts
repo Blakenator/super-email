@@ -4,6 +4,7 @@
  */
 
 import { create } from 'zustand';
+import { AppState, AppStateStatus } from 'react-native';
 import {
   secureSet,
   secureGet,
@@ -17,8 +18,10 @@ import {
   signUpWithEmail,
   signOut as supabaseSignOut,
   getSession,
+  refreshSession,
 } from '../services/supabase';
-import { apolloClient, clearApolloCache, authErrorEmitter } from '../services/apollo';
+import { apolloClient, clearApolloCache, authErrorEmitter, stopMailboxSubscription } from '../services/apollo';
+import { useEmailStore } from './emailStore';
 import {
   isBiometricAvailable,
   isBiometricEnabled,
@@ -43,6 +46,7 @@ const FETCH_PROFILE_QUERY = gql`
       notificationDetailLevel
       inboxDensity
       inboxGroupByDate
+      blockExternalImages
     }
   }
 `;
@@ -52,6 +56,7 @@ const UPDATE_USER_PREFERENCES_MUTATION = gql`
     updateUserPreferences(input: $input) {
       id
       themePreference
+      blockExternalImages
     }
   }
 `;
@@ -69,6 +74,7 @@ export interface User {
   notificationDetailLevel: NotificationDetailLevel;
   inboxDensity: boolean;
   inboxGroupByDate: boolean;
+  blockExternalImages: boolean;
 }
 
 interface AuthState {
@@ -90,9 +96,11 @@ interface AuthState {
   signup: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  refreshTokenIfNeeded: () => Promise<boolean>;
   setBiometric: (enabled: boolean) => Promise<void>;
   setThemePreference: (theme: ThemePreference) => Promise<void>;
   setInboxGroupByDate: (enabled: boolean) => Promise<void>;
+  setBlockExternalImages: (enabled: boolean) => Promise<void>;
   setOffline: (offline: boolean) => void;
   clearBiometricPrompt: () => void;
 }
@@ -175,6 +183,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
           })
           .catch((e) => console.error('[AuthStore] Push registration failed:', e));
+        
+        // Start mailbox subscription for real-time updates
+        console.log('[AuthStore] Starting mailbox subscription...');
+        useEmailStore.getState().startSubscription();
       } else if (hasRememberedSession && biometricEnabled && biometricAvailable) {
         // User was remembered and biometric is enabled - prompt for biometric login
         console.log('[AuthStore] User remembered with biometric enabled, will prompt...');
@@ -244,6 +256,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       set({ isAuthenticated: true, isOffline: false, shouldPromptBiometric: false });
+      
+      // Start mailbox subscription for real-time updates
+      useEmailStore.getState().startSubscription();
     } finally {
       set({ isLoading: false });
     }
@@ -270,6 +285,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
         set({ token: session.access_token, isAuthenticated: true, shouldPromptBiometric: false });
         await get().refreshProfile();
+        
+        // Start mailbox subscription for real-time updates
+        useEmailStore.getState().startSubscription();
         return true;
       }
     } catch (error) {
@@ -312,6 +330,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
 
     try {
+      // Stop mailbox subscription
+      useEmailStore.getState().stopSubscription();
+      stopMailboxSubscription();
+      
       await supabaseSignOut();
       await clearSecureStorage();
       await clearApolloCache();
@@ -354,6 +376,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           notificationDetailLevel: data.fetchProfile.notificationDetailLevel || 'FULL',
           inboxDensity: data.fetchProfile.inboxDensity ?? false,
           inboxGroupByDate: data.fetchProfile.inboxGroupByDate ?? false,
+          blockExternalImages: data.fetchProfile.blockExternalImages ?? false,
         };
 
         // Cache user data for offline mode
@@ -370,6 +393,30 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: cachedUser, isOffline: true });
       }
     }
+  },
+
+  refreshTokenIfNeeded: async () => {
+    try {
+      console.log('[AuthStore] Proactively refreshing session...');
+      const session = await refreshSession();
+      
+      if (session?.access_token) {
+        await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+        set({ token: session.access_token, isOffline: false });
+        console.log('[AuthStore] Session refreshed proactively');
+        return true;
+      }
+    } catch (error) {
+      console.log('[AuthStore] Proactive session refresh failed:', error);
+      
+      // If biometric is enabled, we can try that when the actual auth error occurs
+      // For now, just mark as potentially needing re-auth
+      const { biometricEnabled, biometricAvailable } = get();
+      if (biometricEnabled && biometricAvailable) {
+        set({ shouldPromptBiometric: true });
+      }
+    }
+    return false;
   },
 
   setBiometric: async (enabled) => {
@@ -439,6 +486,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  setBlockExternalImages: async (enabled: boolean) => {
+    const { user, token } = get();
+
+    if (!user || !token) return;
+
+    // Optimistic update
+    set({ user: { ...user, blockExternalImages: enabled } });
+
+    try {
+      await apolloClient.mutate({
+        mutation: UPDATE_USER_PREFERENCES_MUTATION,
+        variables: {
+          input: { blockExternalImages: enabled },
+        },
+        context: {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        },
+      });
+
+      // Update cached user
+      const updatedUser = { ...user, blockExternalImages: enabled };
+      await secureSetObject(STORAGE_KEYS.USER_DATA, updatedUser);
+    } catch (error) {
+      console.error('Error updating block external images preference:', error);
+      // Revert on error
+      set({ user });
+    }
+  },
+
   setOffline: (offline) => {
     set({ isOffline: offline });
   },
@@ -448,7 +526,67 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }));
 
-// Listen for auth errors and handle logout
-authErrorEmitter.on('authError', () => {
-  useAuthStore.getState().logout();
+// Listen for auth errors and handle re-authentication
+let isHandlingAuthError = false;
+
+authErrorEmitter.on('authError', async () => {
+  // Prevent multiple simultaneous auth error handlers
+  if (isHandlingAuthError) return;
+  isHandlingAuthError = true;
+
+  const store = useAuthStore.getState();
+  
+  try {
+    console.log('[AuthStore] Auth error detected, attempting session refresh...');
+    
+    // First, try to refresh the session
+    const session = await refreshSession();
+    
+    if (session?.access_token) {
+      console.log('[AuthStore] Session refreshed successfully');
+      await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+      store.setOffline(false);
+      isHandlingAuthError = false;
+      return;
+    }
+  } catch (refreshError) {
+    console.log('[AuthStore] Session refresh failed:', refreshError);
+  }
+
+  // If refresh failed and biometric is available, prompt for re-auth
+  if (store.biometricEnabled && store.biometricAvailable) {
+    console.log('[AuthStore] Prompting for biometric re-authentication...');
+    
+    const success = await store.loginWithBiometric();
+    if (success) {
+      console.log('[AuthStore] Biometric re-authentication successful');
+      isHandlingAuthError = false;
+      return;
+    }
+  }
+
+  // All recovery attempts failed - log out
+  console.log('[AuthStore] All auth recovery attempts failed, logging out...');
+  await store.logout();
+  isHandlingAuthError = false;
+});
+
+// Track last active time for proactive session refresh
+let lastActiveTime = Date.now();
+const SESSION_REFRESH_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+// Listen for app state changes and refresh token when coming back from background
+AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
+  if (nextAppState === 'active') {
+    const store = useAuthStore.getState();
+    const timeSinceActive = Date.now() - lastActiveTime;
+    
+    // Only refresh if we've been inactive for a while and user is authenticated
+    if (timeSinceActive > SESSION_REFRESH_THRESHOLD_MS && store.isAuthenticated) {
+      console.log(`[AuthStore] App returned to foreground after ${Math.round(timeSinceActive / 1000)}s, refreshing token...`);
+      await store.refreshTokenIfNeeded();
+    }
+  } else if (nextAppState === 'background') {
+    lastActiveTime = Date.now();
+  }
 });

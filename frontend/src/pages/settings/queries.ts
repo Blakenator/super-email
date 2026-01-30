@@ -13,9 +13,6 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       accountType
       useSsl
       lastSyncedAt
-      isSyncing
-      syncProgress
-      syncStatus
       isHistoricalSyncing
       historicalSyncProgress
       historicalSyncStatus

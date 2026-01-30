@@ -60,6 +60,7 @@ export function SettingsScreen({
     biometricEnabled,
     setBiometric,
     setThemePreference,
+    setBlockExternalImages,
   } = useAuthStore();
 
   const currentTheme = user?.themePreference || 'AUTO';
@@ -81,6 +82,10 @@ export function SettingsScreen({
 
   const handleThemeChange = async (newTheme: ThemePreference) => {
     await setThemePreference(newTheme);
+  };
+
+  const handleBlockExternalImagesToggle = async (enabled: boolean) => {
+    await setBlockExternalImages(enabled);
   };
 
   return (
@@ -227,6 +232,21 @@ export function SettingsScreen({
             ))}
           </View>
         </View>
+      </View>
+
+      {/* Privacy */}
+      <ListSection title="PRIVACY" />
+      <View
+        style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+      >
+        <ListItemSwitch
+          icon="eye-off"
+          title="Block External Images"
+          subtitle="Prevent loading images in emails for privacy"
+          value={user?.blockExternalImages ?? false}
+          onValueChange={handleBlockExternalImagesToggle}
+          showBorder={false}
+        />
       </View>
 
       {/* Security */}

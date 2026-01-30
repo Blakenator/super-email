@@ -1,13 +1,13 @@
-import { Readable } from 'stream';
+import { Readable, PassThrough } from 'stream';
 import fs from 'fs/promises';
 import path from 'path';
 import { createWriteStream } from 'fs';
 import { pipeline } from 'stream/promises';
 import {
   S3Client,
-  PutObjectCommand,
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
+import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './logger.js';
 import { config } from '../config/env.js';
@@ -69,7 +69,8 @@ export async function uploadAttachment(
 }
 
 /**
- * Upload to S3 in production
+ * Upload to S3 in production using streaming multipart upload
+ * This avoids loading the entire attachment into memory
  */
 async function uploadToS3(
   key: string,
@@ -80,26 +81,34 @@ async function uploadToS3(
     throw new Error('S3 client not initialized');
   }
 
-  // Collect stream data to get size
-  const chunks: Buffer[] = [];
-  stream.on('data', (chunk) => chunks.push(chunk));
+  // Use a PassThrough stream to track size while streaming
+  let size = 0;
+  const passThrough = new PassThrough();
 
-  await new Promise((resolve, reject) => {
-    stream.on('end', resolve);
-    stream.on('error', reject);
+  passThrough.on('data', (chunk: Buffer) => {
+    size += chunk.length;
   });
 
-  const buffer = Buffer.concat(chunks);
-  const size = buffer.length;
+  // Pipe the input stream through the PassThrough
+  stream.pipe(passThrough);
 
-  const command = new PutObjectCommand({
-    Bucket: config.attachments.s3Bucket,
-    Key: key,
-    Body: buffer,
-    ContentType: mimeType,
+  // Use @aws-sdk/lib-storage Upload for streaming multipart uploads
+  // This automatically handles large files without buffering to memory
+  const upload = new Upload({
+    client: s3Client,
+    params: {
+      Bucket: config.attachments.s3Bucket,
+      Key: key,
+      Body: passThrough,
+      ContentType: mimeType,
+    },
+    // Use smaller part size (5MB) for more granular streaming
+    partSize: 5 * 1024 * 1024,
+    // Maximum concurrent uploads
+    queueSize: 4,
   });
 
-  await s3Client.send(command);
+  await upload.done();
   logger.info('AttachmentStorage', 'Uploaded attachment to S3', { key, size });
 
   return { storageKey: key, size };

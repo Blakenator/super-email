@@ -222,18 +222,27 @@ export function EmailListItem({
             </View>
           </View>
           
-          <Text
-            style={[
-              styles.subject,
-              {
-                color: theme.colors.text,
-                fontWeight: email.isRead ? '400' : '500',
-              },
-            ]}
-            numberOfLines={1}
-          >
-            {email.subject || '(No Subject)'}
-          </Text>
+          <View style={styles.subjectRow}>
+            <Text
+              style={[
+                styles.subject,
+                {
+                  color: theme.colors.text,
+                  fontWeight: email.isRead ? '400' : '500',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {email.subject || '(No Subject)'}
+            </Text>
+            {email.threadCount && email.threadCount > 1 && (
+              <View style={[styles.threadBadge, { backgroundColor: theme.colors.textMuted }]}>
+                <Text style={[styles.threadBadgeText, { color: theme.colors.textInverse }]}>
+                  {email.threadCount}
+                </Text>
+              </View>
+            )}
+          </View>
           
           <Text
             style={[styles.preview, { color: theme.colors.textMuted }]}
@@ -340,9 +349,26 @@ const styles = StyleSheet.create({
   date: {
     fontSize: FONT_SIZE.xs,
   },
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+    gap: SPACING.xs,
+  },
   subject: {
     fontSize: FONT_SIZE.md,
-    marginBottom: SPACING.xs,
+    flex: 1,
+  },
+  threadBadge: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 1,
+    borderRadius: RADIUS.sm,
+    minWidth: 18,
+    alignItems: 'center',
+  },
+  threadBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
   },
   preview: {
     fontSize: FONT_SIZE.sm,

@@ -1,6 +1,6 @@
 /**
  * Apollo Client configuration for React Native
- * Includes authentication, caching, and error handling
+ * Includes authentication, caching, error handling, and WebSocket subscriptions
  */
 
 import {
@@ -8,12 +8,17 @@ import {
   InMemoryCache,
   createHttpLink,
   from,
+  split,
+  gql,
 } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
+import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { getMainDefinition } from '@apollo/client/utilities';
+import { createClient } from 'graphql-ws';
 import { config } from '../config/env';
 import { secureGet, STORAGE_KEYS } from './secureStorage';
-import { Alert } from 'react-native';
+import { Alert, AppState } from 'react-native';
 
 // Create HTTP link
 const httpLink = createHttpLink({
@@ -31,6 +36,43 @@ const authLink = setContext(async (_, { headers }) => {
     },
   };
 });
+
+// Create WebSocket client for subscriptions
+let wsClient: ReturnType<typeof createClient> | null = null;
+
+const getWsClient = () => {
+  if (!wsClient) {
+    wsClient = createClient({
+      url: config.api.wsUrl,
+      connectionParams: async () => {
+        const token = await secureGet(STORAGE_KEYS.AUTH_TOKEN);
+        return {
+          authorization: token ? `Bearer ${token}` : '',
+        };
+      },
+      shouldRetry: () => true,
+      retryAttempts: Infinity,
+      on: {
+        connected: () => {
+          console.log('[WS] Connected to subscription server');
+          subscriptionEmitter.emit('connected');
+        },
+        closed: () => {
+          console.log('[WS] Disconnected from subscription server');
+          subscriptionEmitter.emit('disconnected');
+        },
+        error: (error) => {
+          console.error('[WS] Subscription error:', error);
+          subscriptionEmitter.emit('error', error);
+        },
+      },
+    });
+  }
+  return wsClient;
+};
+
+// Create WebSocket link
+const wsLink = new GraphQLWsLink(getWsClient());
 
 // Error handling link
 const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
@@ -147,6 +189,9 @@ export const errorEmitter = new SimpleEventEmitter<{
   statusCode?: number;
 }>();
 
+// Subscription connection emitter
+export const subscriptionEmitter = new SimpleEventEmitter<unknown>();
+
 // Subscribe to error events and show alerts
 errorEmitter.on('error', ({ message }) => {
   Alert.alert('Error', message);
@@ -210,9 +255,22 @@ const cache = new InMemoryCache({
   },
 });
 
+// Split link - use WebSocket for subscriptions, HTTP for queries/mutations
+const splitLink = split(
+  ({ query }) => {
+    const definition = getMainDefinition(query);
+    return (
+      definition.kind === 'OperationDefinition' &&
+      definition.operation === 'subscription'
+    );
+  },
+  wsLink,
+  from([errorLink, authLink, httpLink]),
+);
+
 // Create Apollo Client
 export const apolloClient = new ApolloClient({
-  link: from([errorLink, authLink, httpLink]),
+  link: splitLink,
   cache,
   defaultOptions: {
     watchQuery: {
@@ -233,6 +291,136 @@ export const apolloClient = new ApolloClient({
 export async function clearApolloCache(): Promise<void> {
   await apolloClient.clearStore();
 }
+
+// Reconnect WebSocket (useful after token refresh)
+export function reconnectWebSocket(): void {
+  if (wsClient) {
+    wsClient.dispose();
+    wsClient = null;
+  }
+  // The next subscription will create a new client
+}
+
+// Mailbox subscription query
+const MAILBOX_UPDATES_SUBSCRIPTION = gql`
+  subscription MailboxUpdates {
+    mailboxUpdates {
+      type
+      emailAccountId
+      message
+      emails {
+        id
+        messageId
+        folder
+        fromAddress
+        fromName
+        subject
+        textBody
+        receivedAt
+        isRead
+        isStarred
+        emailAccountId
+        toAddresses
+        ccAddresses
+        bccAddresses
+        threadId
+        threadCount
+        tags {
+          id
+          name
+          color
+        }
+      }
+    }
+  }
+`;
+
+export interface MailboxUpdate {
+  type: 'NEW_EMAILS' | 'EMAIL_UPDATED' | 'EMAIL_DELETED' | 'SYNC_STARTED' | 'SYNC_COMPLETED' | 'CONNECTION_ESTABLISHED' | 'CONNECTION_CLOSED' | 'ERROR';
+  emailAccountId?: string | null;
+  message?: string | null;
+  emails?: Array<{
+    id: string;
+    messageId: string;
+    folder: string;
+    fromAddress: string;
+    fromName?: string | null;
+    subject: string;
+    textBody?: string | null;
+    receivedAt: string;
+    isRead: boolean;
+    isStarred: boolean;
+    emailAccountId: string;
+    toAddresses: string[];
+    ccAddresses?: string[] | null;
+    bccAddresses?: string[] | null;
+    threadId?: string | null;
+    threadCount?: number | null;
+    tags?: Array<{ id: string; name: string; color: string }>;
+  }>;
+}
+
+// Mailbox update emitter for app to subscribe to
+export const mailboxUpdateEmitter = new SimpleEventEmitter<MailboxUpdate>();
+
+let subscriptionHandle: { unsubscribe: () => void } | null = null;
+
+/**
+ * Start mailbox subscription - call this when user is authenticated
+ */
+export function startMailboxSubscription(): void {
+  if (subscriptionHandle) {
+    console.log('[Subscription] Already subscribed, skipping');
+    return;
+  }
+
+  console.log('[Subscription] Starting mailbox subscription...');
+  
+  const observable = apolloClient.subscribe({
+    query: MAILBOX_UPDATES_SUBSCRIPTION,
+  });
+
+  subscriptionHandle = observable.subscribe({
+    next: ({ data }) => {
+      if (data?.mailboxUpdates) {
+        console.log('[Subscription] Received update:', data.mailboxUpdates.type);
+        mailboxUpdateEmitter.emit('update', data.mailboxUpdates);
+      }
+    },
+    error: (err) => {
+      console.error('[Subscription] Error:', err);
+      subscriptionEmitter.emit('error', err);
+    },
+    complete: () => {
+      console.log('[Subscription] Completed');
+      subscriptionHandle = null;
+    },
+  });
+}
+
+/**
+ * Stop mailbox subscription - call this when user logs out
+ */
+export function stopMailboxSubscription(): void {
+  if (subscriptionHandle) {
+    console.log('[Subscription] Stopping mailbox subscription...');
+    subscriptionHandle.unsubscribe();
+    subscriptionHandle = null;
+  }
+}
+
+// Handle app state changes - reconnect when app comes to foreground
+AppState.addEventListener('change', (nextAppState) => {
+  if (nextAppState === 'active' && subscriptionHandle === null) {
+    // Check if we should be subscribed (user is authenticated)
+    secureGet(STORAGE_KEYS.AUTH_TOKEN).then((token) => {
+      if (token) {
+        console.log('[Subscription] App came to foreground, reconnecting...');
+        startMailboxSubscription();
+      }
+    });
+  }
+});
 
 /**
  * Helper to safely execute a GraphQL operation with error handling

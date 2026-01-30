@@ -128,10 +128,14 @@ export interface MockEmailAccountData {
   accountType: 'IMAP' | 'POP3';
   useSsl: boolean;
   lastSyncedAt: Date | null;
-  syncId: string | null;
-  syncProgress: number | null;
-  syncStatus: string | null;
-  syncExpiresAt: Date | null;
+  historicalSyncId: string | null;
+  historicalSyncProgress: number | null;
+  historicalSyncStatus: string | null;
+  historicalSyncExpiresAt: Date | null;
+  updateSyncId: string | null;
+  updateSyncProgress: number | null;
+  updateSyncStatus: string | null;
+  updateSyncExpiresAt: Date | null;
   defaultSmtpProfileId: string | null;
   providerId: string | null;
   isDefault: boolean;
@@ -152,10 +156,14 @@ export function createMockEmailAccount(overrides: Partial<MockEmailAccountData> 
     accountType: 'IMAP',
     useSsl: true,
     lastSyncedAt: null,
-    syncId: null,
-    syncProgress: null,
-    syncStatus: null,
-    syncExpiresAt: null,
+    historicalSyncId: null,
+    historicalSyncProgress: null,
+    historicalSyncStatus: null,
+    historicalSyncExpiresAt: null,
+    updateSyncId: null,
+    updateSyncProgress: null,
+    updateSyncStatus: null,
+    updateSyncExpiresAt: null,
     defaultSmtpProfileId: null,
     providerId: null,
     isDefault: true,
