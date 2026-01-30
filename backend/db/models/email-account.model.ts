@@ -100,6 +100,9 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare historicalSyncStatus: string | null;
 
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare historicalSyncComplete: boolean;
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare historicalSyncExpiresAt: Date | null;
 

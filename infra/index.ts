@@ -215,7 +215,9 @@ const dbPasswordVersion = new aws.secretsmanager.SecretVersion(
 );
 
 const dbPassword = dbPasswordVersion.secretString.apply((pwd) => {
-  if (!pwd) throw new Error('Database password was not generated');
+  if (!pwd) {
+    throw new Error('Database password was not generated');
+  }
   return pwd;
 });
 
@@ -233,7 +235,7 @@ const database = new aws.rds.Instance(`${stackName}-db`, {
   dbSubnetGroupName: dbSubnetGroup.name,
   vpcSecurityGroupIds: [rdsSecurityGroup.id],
   multiAz: false, // Cost optimization: Single AZ (use backups for DR)
-  publiclyAccessible: false,
+  publiclyAccessible: true,
   skipFinalSnapshot: !isProd,
   finalSnapshotIdentifier: isProd ? `${stackName}-final-snapshot` : undefined,
   backupRetentionPeriod: isProd ? 7 : 1, // Cost optimization: Minimal backups for dev
@@ -661,7 +663,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
     networkMode: 'awsvpc',
     requiresCompatibilities: ['FARGATE'],
     cpu: '256',
-    memory: '512',
+    memory: '2048',
     executionRoleArn: taskExecutionRole.arn,
     taskRoleArn: taskRole.arn,
     containerDefinitions: pulumi
@@ -975,7 +977,8 @@ new aws.iam.RolePolicyAttachment(`${stackName}-sync-lambda-basic-policy`, {
 // VPC access policy (if Lambda needs to access VPC resources)
 new aws.iam.RolePolicyAttachment(`${stackName}-sync-lambda-vpc-policy`, {
   role: syncLambdaRole.name,
-  policyArn: 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
+  policyArn:
+    'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
 });
 
 // CloudWatch Log Group for Lambda
@@ -1033,7 +1036,9 @@ const syncLambda = new aws.lambda.Function(
       variables: {
         // Use CloudFront URL to reach the backend via /api/* path
         BACKEND_URL: pulumi.interpolate`https://${frontendDistribution.domainName}`,
-        INTERNAL_API_TOKEN: internalApiTokenVersion.secretString.apply(s => s || ''),
+        INTERNAL_API_TOKEN: internalApiTokenVersion.secretString.apply(
+          (s) => s || '',
+        ),
       },
     },
     tags: { Name: `${stackName}-sync-trigger`, Environment: environment },

@@ -214,7 +214,7 @@ export function Settings() {
   // Use useEffect for polling to avoid initialization error
   useEffect(() => {
     if (isSyncing) {
-      startPolling(2000);
+      startPolling(10000);
     } else {
       stopPolling();
     }

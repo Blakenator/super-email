@@ -1,3 +1,4 @@
+import type { FetchMessageObject } from 'imapflow';
 import { ImapFlow } from 'imapflow';
 import {
   simpleParser,
@@ -33,7 +34,7 @@ const SYNC_EXPIRATION_UPDATE_INTERVAL = 30; // Update expiration every 30 second
 export type SyncType = 'historical' | 'update';
 
 // Larger batch sizes for faster imports
-const BATCH_SIZE = 200; // Messages to fetch from IMAP per batch
+const BATCH_SIZE = 100; // Messages to fetch from IMAP per batch
 const DB_BATCH_SIZE = 50; // Emails to insert in a single DB transaction
 
 // Retry configuration
@@ -232,6 +233,7 @@ async function markSyncCompleted(
 ): Promise<boolean> {
   await emailAccount.reload();
   const fields = getSyncFields(syncType);
+  const isHistoricalSync = syncType === 'historical';
 
   // Check if we're still the active sync
   if (emailAccount[fields.syncIdField] !== syncId) {
@@ -248,10 +250,11 @@ async function markSyncCompleted(
     [fields.expiresAtField]: null,
     // Also update legacy field for backwards compatibility
     lastSyncedAt: new Date(),
+    ...(isHistoricalSync ? { historicalSyncCompleted: true } : {}),
   };
 
   // Clear resume fields for completed historical syncs (not cancelled)
-  if (syncType === 'historical' && !result.cancelled) {
+  if (isHistoricalSync && !result.cancelled) {
     updateData.historicalSyncOldestDate = null;
   }
 
@@ -329,7 +332,8 @@ export async function startAsyncSync(
   // Determine sync type based on whether we've done an initial sync
   // If we've never done a historical sync, we need to do one
   // Otherwise, we do an update sync
-  const needsHistoricalSync = !emailAccount.historicalSyncLastAt;
+  const needsHistoricalSync =
+    !emailAccount.historicalSyncLastAt && !emailAccount.historicalSyncComplete;
   const syncType: SyncType = needsHistoricalSync ? 'historical' : 'update';
   const fields = getSyncFields(syncType);
 
@@ -439,7 +443,7 @@ export async function startAsyncSync(
             where: { emailAccountId: emailAccount.id },
             order: [['receivedAt', 'DESC']],
           });
-          
+
           await sendNewEmailNotification(
             emailAccount.userId,
             result.synced,
@@ -663,7 +667,7 @@ export async function syncEmailsFromImapAccount(
       // Track messages processed (synced + skipped) for progress
       let messagesProcessedThisSession = 0;
       let initialRemainingCount = 0;
-      let previousProgress = isResuming
+      const previousProgress = isResuming
         ? emailAccount.historicalSyncProgress || 0
         : 0;
 
@@ -1294,21 +1298,13 @@ async function processBatch(
         // Parse the message (includes headers and attachments)
         const parsed = await simpleParser(message.source);
 
-        // Use IMAP internalDate (when server received email) as receivedAt
-        const receivedAtRaw =
-          message.internalDate || parsed.date || envelope?.date || new Date();
-        const receivedAt =
-          receivedAtRaw instanceof Date
-            ? receivedAtRaw
-            : new Date(receivedAtRaw);
-
         // Prepare email data for batch insert
         const emailData = createEmailDataFromParsed(
           emailAccountId,
           envelopeMessageId,
           parsed,
-          receivedAt,
           folder,
+          message,
         );
 
         emailsToCreate.push(emailData);
@@ -1378,9 +1374,11 @@ async function processBatchByUidsWithDateTracking(
     oldestDate: null as Date | null,
   };
 
-  if (uids.length === 0) return batchResult;
+  if (uids.length === 0) {
+    return batchResult;
+  }
 
-  const emailsToCreate: Array<Record<string, unknown>> = [];
+  const emailsToCreate: Record<string, unknown>[] = [];
   const parsedEmails: ParsedMail[] = [];
   const messageIdsInBatch: string[] = [];
 
@@ -1408,27 +1406,22 @@ async function processBatchByUidsWithDateTracking(
         // Parse the message
         const parsed = await simpleParser(message.source);
 
-        // Use IMAP internalDate (when server received email) as receivedAt
-        const receivedAtRaw =
-          message.internalDate || parsed.date || envelope?.date || new Date();
-        const receivedAt =
-          receivedAtRaw instanceof Date
-            ? receivedAtRaw
-            : new Date(receivedAtRaw);
-
-        // Track oldest date for pagination
-        if (!batchResult.oldestDate || receivedAt < batchResult.oldestDate) {
-          batchResult.oldestDate = receivedAt;
-        }
-
         // Prepare email data for batch insert
         const emailData = createEmailDataFromParsed(
           emailAccountId,
           envelopeMessageId,
           parsed,
-          receivedAt,
           folder,
+          message,
         );
+        // Track oldest date for pagination
+        if (
+          !batchResult.oldestDate ||
+          (emailData.receivedAt &&
+            emailData.receivedAt < batchResult.oldestDate)
+        ) {
+          batchResult.oldestDate = emailData.receivedAt!;
+        }
 
         emailsToCreate.push(emailData);
         parsedEmails.push(parsed);
@@ -1471,7 +1464,9 @@ function headersToObject(headers: Headers): Record<string, string | string[]> {
     if (typeof value === 'string') {
       result[key] = value;
     } else if (Array.isArray(value)) {
-      result[key] = value.map((v) => (typeof v === 'string' ? v : String(v)));
+      result[key] = value.map((v) =>
+        typeof v === 'string' ? v : JSON.stringify(v),
+      );
     } else if (value && typeof value === 'object') {
       result[key] = JSON.stringify(value);
     }
@@ -1656,9 +1651,9 @@ function createEmailDataFromParsed(
   emailAccountId: string,
   messageId: string,
   parsed: ParsedMail,
-  receivedAt: Date,
   folder: EmailFolder = EmailFolder.INBOX,
-): Record<string, unknown> {
+  message: FetchMessageObject,
+): Partial<Email> {
   const fromAddress = parsed.from?.value?.[0]?.address || 'unknown@unknown.com';
   const fromName = parsed.from?.value?.[0]?.name || null;
 
@@ -1690,6 +1685,12 @@ function createEmailDataFromParsed(
       : [parsed.references]
     : null;
 
+  // Use IMAP internalDate (when server received email) as receivedAt
+  const receivedAtRaw =
+    message.internalDate || parsed.date || message.envelope?.date || new Date();
+  const receivedAt =
+    receivedAtRaw instanceof Date ? receivedAtRaw : new Date(receivedAtRaw);
+
   // Compute threadId:
   // 1. First element in references (the original message that started the thread)
   // 2. Otherwise use inReplyTo (direct reply)
@@ -1709,8 +1710,8 @@ function createEmailDataFromParsed(
     textBody: parsed.text || null,
     htmlBody: parsed.html || null,
     receivedAt,
-    isRead: folder === EmailFolder.SENT, // Sent mail is always read
-    isStarred: false,
+    isRead: folder === EmailFolder.SENT || message.flags?.has('\\Seen'), // Sent mail is always read
+    isStarred: message.flags?.has('\\Flagged'),
     inReplyTo: parsed.inReplyTo || null,
     references: referencesArray,
     threadId,

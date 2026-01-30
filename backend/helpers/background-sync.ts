@@ -11,6 +11,7 @@ import { config } from '../config/env.js';
 import { EmailAccount } from '../db/models/email-account.model.js';
 import { startAsyncSync } from './imap-sync.js';
 import { logger } from './logger.js';
+import { DateTime } from 'luxon';
 
 // Track the interval timer so we can stop it if needed
 let syncIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -23,29 +24,23 @@ async function findStaleEmailAccounts(): Promise<EmailAccount[]> {
   const { staleThresholdMinutes } = config.backgroundSync;
 
   // Calculate the cutoff time - accounts synced before this are stale
-  const cutoffTime = new Date();
-  cutoffTime.setMinutes(cutoffTime.getMinutes() - staleThresholdMinutes);
+  const cutoffTime = DateTime.now().minus({ minutes: staleThresholdMinutes });
 
-  // Find accounts that:
-  // 1. Have never been synced (lastSyncedAt is null), OR
-  // 2. Were last synced before the cutoff time
-  // AND
-  // 3. Don't have an active sync in progress (syncId is null)
-  const staleAccounts = await EmailAccount.findAll({
+  logger.info('BackgroundSync', `Cutoff time: ${cutoffTime.toISO()}`);
+
+  return EmailAccount.findAll({
     where: {
-      syncId: null, // No active sync
+      historicalSyncComplete: true,
       [Op.or]: [
-        { lastSyncedAt: null }, // Never synced
-        { lastSyncedAt: { [Op.lt]: cutoffTime } }, // Synced before cutoff
+        { updateSyncLastAt: null }, // Never synced
+        { updateSyncLastAt: { [Op.lt]: cutoffTime.toJSDate() } }, // Synced before cutoff
       ],
     },
     order: [
       // Prioritize accounts that have never been synced
-      ['lastSyncedAt', 'ASC NULLS FIRST'],
+      ['updateSyncLastAt', 'ASC NULLS FIRST'],
     ],
   });
-
-  return staleAccounts;
 }
 
 /**
@@ -67,7 +62,7 @@ export async function runBackgroundSyncCycle(): Promise<{
     result.checked = staleAccounts.length;
 
     if (staleAccounts.length === 0) {
-      logger.debug('BackgroundSync', 'No stale accounts found');
+      logger.info('BackgroundSync', 'No stale accounts found');
       return result;
     }
 
@@ -88,14 +83,16 @@ export async function runBackgroundSyncCycle(): Promise<{
             `Started sync for ${account.email} (user: ${account.userId})`,
           );
         } else {
-          logger.debug(
+          logger.info(
             'BackgroundSync',
             `Sync already in progress for ${account.email}`,
           );
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        result.errors.push(`Failed to start sync for ${account.email}: ${errorMsg}`);
+        result.errors.push(
+          `Failed to start sync for ${account.email}: ${errorMsg}`,
+        );
         logger.error(
           'BackgroundSync',
           `Failed to start sync for ${account.email}`,

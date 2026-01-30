@@ -637,6 +637,7 @@ export async function createServer(
     try {
       logger.info('Internal API', 'Trigger sync requested via internal API');
       const result = await runBackgroundSyncCycle();
+      logger.info('Internal API', 'Trigger sync completed via internal API');
       res.json({
         success: true,
         ...result,

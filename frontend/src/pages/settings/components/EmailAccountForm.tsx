@@ -1,32 +1,24 @@
-import { useState, useEffect } from 'react';
-import {
-  Modal,
-  Form,
-  Button,
-  Spinner,
-  Row,
-  Col,
-  Card,
-} from 'react-bootstrap';
+import { useEffect, useState } from 'react';
+import { Button, Card, Col, Form, Modal, Row, Spinner } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCheckCircle,
-  faTimesCircle,
+  faInfoCircle,
   faPlug,
   faSave,
-  faInfoCircle,
+  faTimesCircle,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   EMAIL_PROVIDERS,
-  IMAP_PORTS,
   type EmailProviderPreset,
   getProviderById,
+  IMAP_PORTS,
 } from '../../../core/emailProviders';
 import { EmailAccountType } from '../../../__generated__/graphql';
 import {
-  ProviderGrid,
-  ProviderCard,
   InstructionsCard,
+  ProviderCard,
+  ProviderGrid,
   TestResult,
 } from './EmailAccountForm.wrappers';
 
@@ -71,7 +63,9 @@ interface EmailAccountFormProps {
   show: boolean;
   onHide: () => void;
   onSubmit: (data: EmailAccountFormData) => void;
-  onTest: (data: EmailAccountFormData) => Promise<{ success: boolean; message: string }>;
+  onTest: (
+    data: EmailAccountFormData,
+  ) => Promise<{ success: boolean; message: string }>;
   editingAccount?: {
     id: string;
     name: string;
@@ -100,7 +94,8 @@ export function EmailAccountForm({
   isTesting,
   testResult,
 }: EmailAccountFormProps) {
-  const [formData, setFormData] = useState<EmailAccountFormData>(defaultFormData);
+  const [formData, setFormData] =
+    useState<EmailAccountFormData>(defaultFormData);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -145,8 +140,11 @@ export function EmailAccountForm({
     onTest(formData);
   };
 
-  const selectedProvider = getProviderById(formData.providerId) || EMAIL_PROVIDERS.find((p) => p.id === 'custom')!;
-  const showInstructions = formData.providerId !== 'custom' && selectedProvider.instructions;
+  const selectedProvider =
+    getProviderById(formData.providerId) ||
+    EMAIL_PROVIDERS.find((p) => p.id === 'custom')!;
+  const showInstructions =
+    formData.providerId !== 'custom' && selectedProvider.instructions;
 
   return (
     <Modal show={show} onHide={onHide} centered size="lg">
@@ -261,7 +259,8 @@ export function EmailAccountForm({
                 >
                   {IMAP_PORTS.map((port) => (
                     <option key={port} value={port}>
-                      {port} {port === 993 ? '(SSL)' : port === 143 ? '(Plain)' : ''}
+                      {port}{' '}
+                      {port === 993 ? '(SSL)' : port === 143 ? '(Plain)' : ''}
                     </option>
                   ))}
                 </Form.Select>
@@ -273,7 +272,10 @@ export function EmailAccountForm({
                 <Form.Select
                   value={formData.useSsl ? 'true' : 'false'}
                   onChange={(e) =>
-                    setFormData({ ...formData, useSsl: e.target.value === 'true' })
+                    setFormData({
+                      ...formData,
+                      useSsl: e.target.value === 'true',
+                    })
                   }
                 >
                   <option value="true">SSL/TLS</option>
@@ -301,12 +303,15 @@ export function EmailAccountForm({
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>
-                  {editingAccount ? 'Password (leave blank to keep)' : 'Password'}
+                  {editingAccount
+                    ? 'Password (leave blank to keep)'
+                    : 'Password'}
                 </Form.Label>
                 <Form.Control
                   type="password"
                   placeholder="App password or account password"
                   value={formData.password}
+                  autoComplete="off"
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
@@ -321,7 +326,10 @@ export function EmailAccountForm({
             <Form.Select
               value={formData.defaultSmtpProfileId}
               onChange={(e) =>
-                setFormData({ ...formData, defaultSmtpProfileId: e.target.value })
+                setFormData({
+                  ...formData,
+                  defaultSmtpProfileId: e.target.value,
+                })
               }
             >
               <option value="">None</option>
@@ -353,11 +361,15 @@ export function EmailAccountForm({
                 label="Also create an SMTP profile for sending emails from this account"
                 checked={formData.alsoCreateSmtpProfile}
                 onChange={(e) =>
-                  setFormData({ ...formData, alsoCreateSmtpProfile: e.target.checked })
+                  setFormData({
+                    ...formData,
+                    alsoCreateSmtpProfile: e.target.checked,
+                  })
                 }
               />
               <Form.Text className="text-muted">
-                To send emails, you'll need an SMTP profile with the same credentials.
+                To send emails, you'll need an SMTP profile with the same
+                credentials.
               </Form.Text>
             </Form.Group>
           )}
