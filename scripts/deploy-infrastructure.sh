@@ -12,6 +12,9 @@
 #   - STRIPE_SECRET_KEY
 #   - STRIPE_WEBHOOK_SECRET
 #   - STRIPE_PUBLISHABLE_KEY
+# Environment variables optional (for paid subscription tiers):
+#   - Any STRIPE_PRICE_* variables are auto-loaded into Pulumi config
+#   - e.g., STRIPE_PRICE_STORAGE_BASIC -> stripePriceStorageBasic
 # ============================================================================
 
 set -e
@@ -59,7 +62,23 @@ pulumi config set supabaseUrl "$SUPABASE_URL"
 pulumi config set supabaseAnonKey "$SUPABASE_ANON_KEY"
 pulumi config set --secret supabaseServiceRoleKey "$SUPABASE_SERVICE_ROLE_KEY"
 
+# Helper function to convert SCREAMING_SNAKE_CASE to camelCase
+# e.g., STRIPE_PRICE_STORAGE_BASIC -> stripePriceStorageBasic
+to_camel_case() {
+    echo "$1" | awk -F_ '{
+        for (i=1; i<=NF; i++) {
+            if (i==1) {
+                printf tolower($i)
+            } else {
+                printf toupper(substr($i,1,1)) tolower(substr($i,2))
+            }
+        }
+        print ""
+    }'
+}
+
 # Set Stripe configuration (optional - for billing)
+# These are secrets and need to be set individually
 if [ -n "$STRIPE_SECRET_KEY" ]; then
     log_info "Setting Stripe secret key..."
     pulumi config set --secret stripeSecretKey "$STRIPE_SECRET_KEY"
@@ -77,6 +96,26 @@ fi
 if [ -n "$STRIPE_PUBLISHABLE_KEY" ]; then
     log_info "Setting Stripe publishable key..."
     pulumi config set stripePublishableKey "$STRIPE_PUBLISHABLE_KEY"
+fi
+
+# Auto-load all STRIPE_PRICE_* environment variables into Pulumi config
+# This allows adding new price tiers without modifying this script
+PRICE_COUNT=0
+log_info "Loading Stripe price IDs from environment..."
+while IFS='=' read -r name value; do
+    if [ -n "$value" ]; then
+        # Convert env var name to Pulumi config key (camelCase)
+        config_key=$(to_camel_case "$name")
+        pulumi config set "$config_key" "$value"
+        log_info "  Set $config_key"
+        PRICE_COUNT=$((PRICE_COUNT + 1))
+    fi
+done < <(env | grep -E '^STRIPE_PRICE_' | sort)
+
+if [ "$PRICE_COUNT" -eq 0 ]; then
+    log_warn "No Stripe price IDs configured - paid subscription tiers will be unavailable"
+else
+    log_info "Loaded $PRICE_COUNT Stripe price ID(s)"
 fi
 
 # Deploy infrastructure

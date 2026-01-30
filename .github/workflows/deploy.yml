@@ -16,6 +16,12 @@
 #   - STRIPE_SECRET_KEY: Stripe secret API key (sk_test_... or sk_live_...)
 #   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_...)
 #   - STRIPE_PUBLISHABLE_KEY: Stripe publishable key (pk_test_... or pk_live_...)
+#   - STRIPE_PRICE_STORAGE_BASIC: Stripe price ID for Basic storage tier
+#   - STRIPE_PRICE_STORAGE_PRO: Stripe price ID for Pro storage tier
+#   - STRIPE_PRICE_STORAGE_ENTERPRISE: Stripe price ID for Enterprise storage tier
+#   - STRIPE_PRICE_ACCOUNTS_BASIC: Stripe price ID for Basic accounts tier
+#   - STRIPE_PRICE_ACCOUNTS_PRO: Stripe price ID for Pro accounts tier
+#   - STRIPE_PRICE_ACCOUNTS_ENTERPRISE: Stripe price ID for Enterprise accounts tier
 
 name: Deploy to AWS
 
@@ -104,6 +110,12 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_PRICE_STORAGE_BASIC: ${{ secrets.STRIPE_PRICE_STORAGE_BASIC }}
+          STRIPE_PRICE_STORAGE_PRO: ${{ secrets.STRIPE_PRICE_STORAGE_PRO }}
+          STRIPE_PRICE_STORAGE_ENTERPRISE: ${{ secrets.STRIPE_PRICE_STORAGE_ENTERPRISE }}
+          STRIPE_PRICE_ACCOUNTS_BASIC: ${{ secrets.STRIPE_PRICE_ACCOUNTS_BASIC }}
+          STRIPE_PRICE_ACCOUNTS_PRO: ${{ secrets.STRIPE_PRICE_ACCOUNTS_PRO }}
+          STRIPE_PRICE_ACCOUNTS_ENTERPRISE: ${{ secrets.STRIPE_PRICE_ACCOUNTS_ENTERPRISE }}
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
           ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"

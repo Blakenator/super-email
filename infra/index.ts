@@ -585,6 +585,14 @@ const stripeWebhookSecret =
   config.getSecret('stripeWebhookSecret') || pulumi.output('not-configured');
 const stripePublishableKey = config.get('stripePublishableKey') || '';
 
+// Stripe price IDs for subscription tiers (from Pulumi config)
+const stripePriceStorageBasic = config.get('stripePriceStorageBasic') || '';
+const stripePriceStoragePro = config.get('stripePriceStoragePro') || '';
+const stripePriceStorageEnterprise = config.get('stripePriceStorageEnterprise') || '';
+const stripePriceAccountsBasic = config.get('stripePriceAccountsBasic') || '';
+const stripePriceAccountsPro = config.get('stripePriceAccountsPro') || '';
+const stripePriceAccountsEnterprise = config.get('stripePriceAccountsEnterprise') || '';
+
 // Stripe secret key
 const stripeKeySecret = new aws.secretsmanager.Secret(
   `${stackName}-stripe-key`,
@@ -715,6 +723,13 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'SUPABASE_URL', value: supabaseUrl },
                 { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
                 { name: 'STRIPE_PUBLISHABLE_KEY', value: stripePublishableKey },
+                // Stripe price IDs for subscription tiers
+                { name: 'STRIPE_PRICE_STORAGE_BASIC', value: stripePriceStorageBasic },
+                { name: 'STRIPE_PRICE_STORAGE_PRO', value: stripePriceStoragePro },
+                { name: 'STRIPE_PRICE_STORAGE_ENTERPRISE', value: stripePriceStorageEnterprise },
+                { name: 'STRIPE_PRICE_ACCOUNTS_BASIC', value: stripePriceAccountsBasic },
+                { name: 'STRIPE_PRICE_ACCOUNTS_PRO', value: stripePriceAccountsPro },
+                { name: 'STRIPE_PRICE_ACCOUNTS_ENTERPRISE', value: stripePriceAccountsEnterprise },
                 // Disable in-process background sync - Lambda handles this
                 { name: 'BACKGROUND_SYNC_ENABLED', value: 'false' },
               ],
