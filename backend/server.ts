@@ -260,8 +260,6 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
       },
     },
     EmailAccount: {
-      isSyncing: (parent: any) =>
-        !!parent.syncId || !!parent.historicalSyncId || !!parent.updateSyncId,
       isHistoricalSyncing: (parent: any) => !!parent.historicalSyncId,
       isUpdateSyncing: (parent: any) => !!parent.updateSyncId,
     },

@@ -58,9 +58,22 @@ interface ComposeScreenProps {
     subject: string;
     htmlBody?: string;
   };
+  replyAll?: {
+    emailId: string;
+    toAddresses: string[];
+    ccAddresses?: string[];
+    subject: string;
+    htmlBody?: string;
+  };
+  forward?: {
+    emailId: string;
+    subject: string;
+    htmlBody?: string;
+    attachments?: Array<{ id: string; filename: string }>;
+  };
 }
 
-export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
+export function ComposeScreen({ onClose, replyTo, replyAll, forward }: ComposeScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { emailAccounts, fetchEmailAccounts } = useEmailStore();
@@ -69,19 +82,55 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [showFromPicker, setShowFromPicker] = useState(false);
   
-  const [to, setTo] = useState(replyTo?.toAddress || '');
-  const [cc, setCc] = useState('');
+  // Determine compose mode and initial values
+  const isReply = !!replyTo;
+  const isReplyAll = !!replyAll;
+  const isForward = !!forward;
+  
+  // Get initial To addresses
+  const getInitialTo = (): string => {
+    if (replyTo) return replyTo.toAddress;
+    if (replyAll) return replyAll.toAddresses.join(', ');
+    return '';
+  };
+  
+  // Get initial CC addresses (for reply all)
+  const getInitialCc = (): string => {
+    if (replyAll?.ccAddresses) return replyAll.ccAddresses.join(', ');
+    return '';
+  };
+  
+  // Get initial subject
+  const getInitialSubject = (): string => {
+    if (replyTo?.subject) return `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}`;
+    if (replyAll?.subject) return `Re: ${replyAll.subject.replace(/^Re:\s*/i, '')}`;
+    if (forward?.subject) return `Fwd: ${forward.subject.replace(/^Fwd:\s*/i, '')}`;
+    return '';
+  };
+  
+  // Get original HTML body for quoting
+  const getOriginalHtmlBody = (): string | undefined => {
+    return replyTo?.htmlBody || replyAll?.htmlBody || forward?.htmlBody;
+  };
+  
+  const [to, setTo] = useState(getInitialTo());
+  const [cc, setCc] = useState(getInitialCc());
   const [bcc, setBcc] = useState('');
-  const [subject, setSubject] = useState(replyTo?.subject ? `Re: ${replyTo.subject}` : '');
+  const [subject, setSubject] = useState(getInitialSubject());
   const [bodyHtml, setBodyHtml] = useState('');
   const [bodyText, setBodyText] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [showCcBcc, setShowCcBcc] = useState(isReplyAll || !!getInitialCc());
   
-  // Format quoted original email for reply using shared utility
+  // Format quoted original email for reply/forward using shared utility
   const getQuotedOriginalEmail = (): string => {
-    if (!replyTo?.htmlBody) return '';
-    return wrapReplyContent(replyTo.htmlBody, replyTo.toAddress, new Date());
+    const originalHtml = getOriginalHtmlBody();
+    if (!originalHtml) return '';
+    
+    // Get the original sender for the quote header
+    const originalSender = replyTo?.toAddress || replyAll?.toAddresses?.[0] || 'Original sender';
+    
+    return wrapReplyContent(originalHtml, originalSender, new Date());
   };
 
   const handleEditorChange = (html: string, text: string) => {
@@ -132,8 +181,9 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
     setIsSending(true);
 
     try {
-      // Include quoted original email in replies
-      const quotedEmail = replyTo ? getQuotedOriginalEmail() : '';
+      // Include quoted original email in replies and forwards
+      const isQuotedReply = isReply || isReplyAll || isForward;
+      const quotedEmail = isQuotedReply ? getQuotedOriginalEmail() : '';
       const fullHtmlBody = bodyHtml 
         ? `${bodyHtml}${quotedEmail}` 
         : `<p>${bodyText.replace(/\n/g, '<br/>')}</p>${quotedEmail}`;
@@ -178,7 +228,7 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
           <Icon name="x" size="md" color={theme.colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-          {replyTo ? 'Reply' : 'New Email'}
+          {isForward ? 'Forward' : isReplyAll ? 'Reply All' : isReply ? 'Reply' : 'New Email'}
         </Text>
         <TouchableOpacity
           onPress={handleSend}
@@ -260,8 +310,8 @@ export function ComposeScreen({ onClose, replyTo }: ComposeScreenProps) {
             onChange={handleEditorChange}
             placeholder="Compose your email..."
             minHeight={250}
-            autoFocus={!replyTo}
-            initialHtml={replyTo?.htmlBody ? getQuotedOriginalEmail() : undefined}
+            autoFocus={!(isReply || isReplyAll || isForward)}
+            initialHtml={getOriginalHtmlBody() ? getQuotedOriginalEmail() : undefined}
           />
         </View>
 

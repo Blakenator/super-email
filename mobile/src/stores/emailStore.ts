@@ -1,10 +1,10 @@
 /**
  * Email Store
- * Manages email state with offline caching support
+ * Manages email state with offline caching support and real-time subscriptions
  */
 
 import { create } from 'zustand';
-import { apolloClient } from '../services/apollo';
+import { apolloClient, mailboxUpdateEmitter, startMailboxSubscription, stopMailboxSubscription, MailboxUpdate } from '../services/apollo';
 import { gql } from '@apollo/client';
 import { 
   cacheSetObject, 
@@ -36,6 +36,8 @@ const GET_EMAILS_QUERY = gql`
       isDraft
       hasAttachments
       attachmentCount
+      threadId
+      threadCount
       tags {
         id
         name
@@ -60,9 +62,12 @@ const GET_EMAIL_ACCOUNTS_QUERY = gql`
       host
       accountType
       lastSyncedAt
-      isSyncing
-      syncProgress
-      syncStatus
+      isHistoricalSyncing
+      historicalSyncProgress
+      historicalSyncStatus
+      isUpdateSyncing
+      updateSyncProgress
+      updateSyncStatus
       isDefault
     }
   }
@@ -105,6 +110,8 @@ export interface Email {
   isDraft: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
+  threadId?: string | null;
+  threadCount?: number | null;
   tags: Array<{ id: string; name: string; color: string }>;
 }
 
@@ -115,9 +122,12 @@ export interface EmailAccount {
   host: string;
   accountType: string;
   lastSyncedAt?: string | null;
-  isSyncing: boolean;
-  syncProgress?: number | null;
-  syncStatus?: string | null;
+  isHistoricalSyncing: boolean;
+  historicalSyncProgress?: number | null;
+  historicalSyncStatus?: string | null;
+  isUpdateSyncing: boolean;
+  updateSyncProgress?: number | null;
+  updateSyncStatus?: string | null;
   isDefault: boolean;
 }
 
@@ -137,6 +147,8 @@ interface EmailState {
   filterHasAttachments: boolean | null;
   selectedIds: Set<string>;
   lastSyncTime: string | null;
+  isSubscribed: boolean;
+  connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error';
   
   // Actions
   setFolder: (folder: EmailFolder) => void;
@@ -156,6 +168,9 @@ interface EmailState {
   selectAll: () => void;
   clearSelection: () => void;
   loadCachedData: () => Promise<void>;
+  startSubscription: () => void;
+  stopSubscription: () => void;
+  handleMailboxUpdate: (update: MailboxUpdate) => void;
 }
 
 export const useEmailStore = create<EmailState>((set, get) => ({
@@ -174,6 +189,8 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   filterHasAttachments: null,
   selectedIds: new Set(),
   lastSyncTime: null,
+  isSubscribed: false,
+  connectionStatus: 'disconnected',
   
   setFolder: (folder) => {
     set({ currentFolder: folder, page: 1, selectedIds: new Set() });
@@ -432,6 +449,120 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     const lastSyncTime = await secureGet(STORAGE_KEYS.LAST_SYNC_TIME);
     if (lastSyncTime) {
       set({ lastSyncTime });
+    }
+  },
+  
+  startSubscription: () => {
+    const { isSubscribed } = get();
+    if (isSubscribed) return;
+    
+    console.log('[EmailStore] Starting mailbox subscription...');
+    set({ connectionStatus: 'connecting' });
+    
+    // Listen for mailbox updates
+    mailboxUpdateEmitter.on('update', (update) => {
+      get().handleMailboxUpdate(update as MailboxUpdate);
+    });
+    
+    startMailboxSubscription();
+    set({ isSubscribed: true, connectionStatus: 'connected' });
+  },
+  
+  stopSubscription: () => {
+    console.log('[EmailStore] Stopping mailbox subscription...');
+    stopMailboxSubscription();
+    set({ isSubscribed: false, connectionStatus: 'disconnected' });
+  },
+  
+  handleMailboxUpdate: (update: MailboxUpdate) => {
+    const { currentFolder, currentAccountId } = get();
+    
+    console.log('[EmailStore] Handling mailbox update:', update.type, update.message || '');
+    
+    switch (update.type) {
+      case 'NEW_EMAILS':
+        if (update.emails && update.emails.length > 0) {
+          // Filter emails that belong to current view
+          const relevantEmails = update.emails.filter((email) => {
+            const matchesFolder = email.folder === currentFolder;
+            const matchesAccount = !currentAccountId || email.emailAccountId === currentAccountId;
+            return matchesFolder && matchesAccount;
+          });
+          
+          if (relevantEmails.length > 0) {
+            // Add new emails to the top of the list
+            set((state) => ({
+              emails: [
+                ...relevantEmails.map((e) => ({
+                  ...e,
+                  folder: e.folder as EmailFolder,
+                  isDraft: false,
+                  hasAttachments: false,
+                  attachmentCount: 0,
+                  tags: e.tags || [],
+                })),
+                ...state.emails,
+              ],
+              totalCount: state.totalCount + relevantEmails.length,
+            }));
+          }
+        }
+        break;
+        
+      case 'EMAIL_UPDATED':
+        if (update.emails && update.emails.length > 0) {
+          const updatedIds = new Set(update.emails.map((e) => e.id));
+          set((state) => ({
+            emails: state.emails.map((email) => {
+              if (updatedIds.has(email.id)) {
+                const updated = update.emails?.find((e) => e.id === email.id);
+                if (updated) {
+                  return {
+                    ...email,
+                    ...updated,
+                    folder: (updated.folder || email.folder) as EmailFolder,
+                    tags: updated.tags || email.tags,
+                  };
+                }
+              }
+              return email;
+            }),
+          }));
+        }
+        break;
+        
+      case 'EMAIL_DELETED':
+        if (update.emails && update.emails.length > 0) {
+          const deletedIds = new Set(update.emails.map((e) => e.id));
+          set((state) => ({
+            emails: state.emails.filter((email) => !deletedIds.has(email.id)),
+            totalCount: Math.max(0, state.totalCount - deletedIds.size),
+          }));
+        }
+        break;
+        
+      case 'SYNC_STARTED':
+        set({ isSyncing: true });
+        break;
+        
+      case 'SYNC_COMPLETED':
+        set({ isSyncing: false });
+        // Refresh the email list to get any new emails
+        get().fetchEmails();
+        break;
+        
+      case 'CONNECTION_ESTABLISHED':
+        set({ connectionStatus: 'connected' });
+        break;
+        
+      case 'CONNECTION_CLOSED':
+        set({ connectionStatus: 'disconnected' });
+        break;
+        
+      case 'ERROR':
+        console.error('[EmailStore] Subscription error:', update.message);
+        set({ connectionStatus: 'error' });
+        break;
     }
   },
 }));

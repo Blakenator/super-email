@@ -33,12 +33,38 @@ import { ComposeScreen } from '../screens/compose';
 import { EmailDetailScreen } from '../screens/inbox/EmailDetailScreen';
 
 // Type definitions
+export interface ComposeReplyTo {
+  emailId: string;
+  toAddress: string;
+  subject: string;
+  htmlBody?: string;
+}
+
+export interface ComposeReplyAll {
+  emailId: string;
+  toAddresses: string[];
+  ccAddresses?: string[];
+  subject: string;
+  htmlBody?: string;
+}
+
+export interface ComposeForward {
+  emailId: string;
+  subject: string;
+  htmlBody?: string;
+  attachments?: Array<{ id: string; filename: string }>;
+}
+
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
   EmailDetail: { emailId: string };
   ContactDetail: { contactId: string };
-  Compose: { replyTo?: { emailId: string; toAddress: string; subject: string; htmlBody?: string } } | undefined;
+  Compose: { 
+    replyTo?: ComposeReplyTo;
+    replyAll?: ComposeReplyAll;
+    forward?: ComposeForward;
+  } | undefined;
   Nuke: undefined;
   // Settings sub-screens
   AccountSettings: undefined;
@@ -206,6 +232,8 @@ function ComposeScreenWrapper() {
     <ComposeScreen
       onClose={() => navigation.goBack()}
       replyTo={params?.replyTo}
+      replyAll={params?.replyAll}
+      forward={params?.forward}
     />
   );
 }
@@ -225,14 +253,8 @@ function EmailDetailScreenWrapper() {
   return (
     <EmailDetailScreen
       onReply={(replyTo) => navigation.navigate('Compose', { replyTo })}
-      onReplyAll={(replyTo) => {
-        // TODO: Implement reply all compose flow
-        Alert.alert('Reply All', 'Reply all is not yet implemented');
-      }}
-      onForward={(forward) => {
-        // TODO: Implement forward compose flow
-        Alert.alert('Forward', 'Forward is not yet implemented');
-      }}
+      onReplyAll={(replyAll) => navigation.navigate('Compose', { replyAll })}
+      onForward={(forward) => navigation.navigate('Compose', { forward })}
       onArchive={(emailId) => {
         moveToFolder([emailId], 'ARCHIVE');
         navigation.goBack();

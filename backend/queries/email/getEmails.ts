@@ -26,7 +26,8 @@ export const getEmails = makeQuery(
     if ((input.folder === 'INBOX' || !input.folder) && !input.searchQuery) {
       const now = new Date();
       const accountsNeedingSync = userAccounts.filter((account) => {
-        if (account.syncId) return false; // Already syncing
+        // Already syncing (historical or update sync)
+        if (account.historicalSyncId || account.updateSyncId) return false;
         if (!account.lastSyncedAt) return true;
         const timeSinceSync =
           now.getTime() - new Date(account.lastSyncedAt).getTime();

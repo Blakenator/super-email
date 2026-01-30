@@ -85,26 +85,33 @@ describe('getEmailAccounts query', () => {
         .to.deep.equal([['createdAt', 'DESC']]);
     });
 
-    it('should include isSyncing computed field', async () => {
+    it('should include syncing computed fields', async () => {
       const context = createMockContext({ userId: 'user-123' });
-      const accountWithSync = createMockEmailAccount({ 
+      const accountWithHistoricalSync = createMockEmailAccount({ 
         id: 'acc-1', 
-        syncId: 'sync-123' 
+        historicalSyncId: 'sync-123' 
+      });
+      const accountWithUpdateSync = createMockEmailAccount({ 
+        id: 'acc-2', 
+        updateSyncId: 'sync-456'
       });
       const accountWithoutSync = createMockEmailAccount({ 
-        id: 'acc-2', 
-        syncId: null 
+        id: 'acc-3', 
+        historicalSyncId: null,
+        updateSyncId: null
       });
 
-      mockModels.EmailAccount.findAll.resolves([accountWithSync, accountWithoutSync]);
+      mockModels.EmailAccount.findAll.resolves([accountWithHistoricalSync, accountWithUpdateSync, accountWithoutSync]);
 
       const result = await mockModels.EmailAccount.findAll({
         where: { userId: context.userId },
       });
 
-      // isSyncing is computed from syncId
-      expect(!!result[0].syncId).to.be.true;  // isSyncing = true
-      expect(!!result[1].syncId).to.be.false; // isSyncing = false
+      // isHistoricalSyncing is computed from historicalSyncId
+      expect(!!result[0].historicalSyncId).to.be.true;  // isHistoricalSyncing = true
+      expect(!!result[1].updateSyncId).to.be.true;       // isUpdateSyncing = true
+      expect(!!result[2].historicalSyncId).to.be.false;  // isHistoricalSyncing = false
+      expect(!!result[2].updateSyncId).to.be.false;      // isUpdateSyncing = false
     });
   });
 });

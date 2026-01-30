@@ -30,9 +30,12 @@ export interface EmailAccountData {
   host: string;
   port: number;
   accountType: string;
-  isSyncing: boolean;
-  syncProgress?: number | null;
-  syncStatus?: string | null;
+  isHistoricalSyncing: boolean;
+  historicalSyncProgress?: number | null;
+  historicalSyncStatus?: string | null;
+  isUpdateSyncing: boolean;
+  updateSyncProgress?: number | null;
+  updateSyncStatus?: string | null;
   lastSyncedAt?: string | null;
   defaultSmtpProfile?: { name: string } | null;
   isDefault?: boolean;
@@ -51,8 +54,17 @@ export function EmailAccountCard({
   onSync,
   onDelete,
 }: EmailAccountCardProps) {
+  // Derive syncing state from historical or update sync
+  const isSyncing = account.isHistoricalSyncing || account.isUpdateSyncing;
+  const syncProgress = account.isHistoricalSyncing
+    ? account.historicalSyncProgress
+    : account.updateSyncProgress;
+  const syncStatus = account.isHistoricalSyncing
+    ? account.historicalSyncStatus
+    : account.updateSyncStatus;
+
   return (
-    <AccountCardStyled $isSyncing={account.isSyncing}>
+    <AccountCardStyled $isSyncing={isSyncing}>
       <AccountCardHeader>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <AccountCardTitle>{account.name}</AccountCardTitle>
@@ -102,7 +114,7 @@ export function EmailAccountCard({
           )}
         </AccountDetailRow>
       </AccountCardBody>
-      {account.isSyncing && (
+      {isSyncing && (
         <AccountCardFooter>
           <SyncStatusContainer>
             <SyncStatusHeader>
@@ -112,21 +124,21 @@ export function EmailAccountCard({
                 style={{ width: '14px', height: '14px' }}
               />
               <SyncStatusText>
-                {account.syncStatus || 'Syncing...'}
+                {syncStatus || 'Syncing...'}
               </SyncStatusText>
             </SyncStatusHeader>
-            {account.syncProgress !== null &&
-              account.syncProgress !== undefined && (
+            {syncProgress !== null &&
+              syncProgress !== undefined && (
                 <OverlayTrigger
                   placement="top"
                   overlay={
                     <Tooltip id={`sync-progress-${account.id}`}>
-                      {account.syncProgress}% complete
+                      {syncProgress}% complete
                     </Tooltip>
                   }
                 >
                   <SyncProgressBar
-                    now={account.syncProgress}
+                    now={syncProgress}
                     variant="primary"
                     animated
                   />

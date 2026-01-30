@@ -71,24 +71,6 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare lastSyncedAt: Date | null;
 
-  // ===== LEGACY FIELDS (kept for backwards compatibility, will be removed) =====
-  // Unique sync ID to prevent overlapping syncs
-  // If syncId is null, no sync is in progress
-  // If syncId is set, only that sync instance should write progress
-  @Column({ type: DataType.TEXT, allowNull: true })
-  declare syncId: string | null;
-
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare syncProgress: number | null;
-
-  @Column({ type: DataType.TEXT, allowNull: true })
-  declare syncStatus: string | null;
-
-  // Sync expiration time - if current time > this, sync is considered stale
-  // and a new sync can be started. Updated periodically during active syncs.
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare syncExpiresAt: Date | null;
-
   // ===== HISTORICAL SYNC FIELDS (initial sync of old emails) =====
   // Historical sync fetches emails from newest to oldest on first sync
   @Column({ type: DataType.TEXT, allowNull: true })
@@ -114,6 +96,22 @@ export class EmailAccount extends Model {
   // Uses timestamp-based pagination which is more reliable than sequence numbers
   @Column({ type: DataType.DATE, allowNull: true })
   declare historicalSyncOldestDate: Date | null;
+
+  // UID-based resume point for INBOX - stores the last processed UID
+  // More reliable than date-based resume since UIDs are unique and ordered
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare historicalSyncLastUidInbox: number | null;
+
+  // UID-based resume point for SENT folder
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare historicalSyncLastUidSent: number | null;
+
+  // Total UIDs to process for progress calculation during resume
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare historicalSyncTotalInbox: number | null;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare historicalSyncTotalSent: number | null;
 
   // ===== UPDATE SYNC FIELDS (sync of new emails) =====
   // Update sync fetches only new emails since last sync

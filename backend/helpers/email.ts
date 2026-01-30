@@ -126,32 +126,11 @@ function isSyncExpired(expiresAt: Date | null): boolean {
 export async function startAsyncEmailSync(
   emailAccount: EmailAccount,
 ): Promise<boolean> {
-  // Check if already syncing using syncId
-  if (emailAccount.syncId) {
-    // Check if the sync has expired (stuck/stale)
-    if (isSyncExpired(emailAccount.syncExpiresAt)) {
-      console.log(
-        `[Email] Sync for ${emailAccount.email} has expired, clearing stale sync`,
-      );
-      // Clear the stale sync before starting a new one
-      await emailAccount.update({
-        syncId: null,
-        syncProgress: null,
-        syncStatus: null,
-        syncExpiresAt: null,
-      });
-    } else {
-      console.log(`[Email] Account ${emailAccount.email} is already syncing`);
-      return false;
-    }
-  }
-
   if (emailAccount.accountType === EmailAccountType.IMAP) {
+    // startAsyncSync handles sync state management internally
     return await startAsyncSync(emailAccount);
   } else if (emailAccount.accountType === EmailAccountType.POP3) {
-    await emailAccount.update({
-      syncStatus: 'POP3 sync not yet implemented',
-    });
+    console.log(`[Email] POP3 sync not yet implemented for ${emailAccount.email}`);
     return false;
   }
 

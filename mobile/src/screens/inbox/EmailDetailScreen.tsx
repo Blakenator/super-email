@@ -3,7 +3,7 @@
  * Displays email content with HTML support and actions
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,7 @@ import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
 import { DateTime } from 'luxon';
 import { wrapEmailHtml } from '../../../../common/src/emailHtmlStyles';
+import { useAuthStore } from '../../stores/authStore';
 
 const GET_EMAIL_QUERY = gql`
   query GetEmail($input: GetEmailInput!) {
@@ -45,11 +46,42 @@ const GET_EMAIL_QUERY = gql`
       isStarred
       hasAttachments
       attachmentCount
+      threadId
+      threadCount
       tags {
         id
         name
         color
       }
+      attachments {
+        id
+        filename
+        mimeType
+        size
+      }
+    }
+  }
+`;
+
+const GET_EMAILS_BY_THREAD_QUERY = gql`
+  query GetEmailsByThread($threadId: String!) {
+    getEmailsByThread(threadId: $threadId) {
+      id
+      messageId
+      folder
+      fromAddress
+      fromName
+      toAddresses
+      ccAddresses
+      subject
+      textBody
+      htmlBody
+      receivedAt
+      isRead
+      isStarred
+      emailAccountId
+      hasAttachments
+      attachmentCount
       attachments {
         id
         filename
@@ -74,7 +106,34 @@ interface Email {
   isStarred: boolean;
   hasAttachments: boolean;
   attachmentCount: number;
+  threadId?: string | null;
+  threadCount?: number | null;
   tags: Array<{ id: string; name: string; color: string }>;
+  attachments?: Array<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  }>;
+}
+
+interface ThreadEmail {
+  id: string;
+  messageId: string;
+  folder: string;
+  fromAddress: string;
+  fromName?: string | null;
+  toAddresses: string[];
+  ccAddresses?: string[] | null;
+  subject: string;
+  textBody?: string | null;
+  htmlBody?: string | null;
+  receivedAt: string;
+  isRead: boolean;
+  isStarred: boolean;
+  emailAccountId: string;
+  hasAttachments: boolean;
+  attachmentCount: number;
   attachments?: Array<{
     id: string;
     filename: string;
@@ -120,15 +179,29 @@ export function EmailDetailScreen({
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { emailId } = route.params as { emailId: string };
+  const { user } = useAuthStore();
 
   const [email, setEmail] = useState<Email | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [webViewHeight, setWebViewHeight] = useState(300);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  
+  // Image blocking state
+  const [showImagesForThisEmail, setShowImagesForThisEmail] = useState(false);
+  const blockExternalImages = user?.blockExternalImages ?? false;
+  const shouldBlockImages = blockExternalImages && !showImagesForThisEmail;
+  
+  // Thread state
+  const [threadEmails, setThreadEmails] = useState<ThreadEmail[]>([]);
+  const [expandedThreadEmails, setExpandedThreadEmails] = useState<Set<string>>(new Set());
+  const [threadWebViewHeights, setThreadWebViewHeights] = useState<Record<string, number>>({});
+  const hasThread = threadEmails.length > 1;
 
   useEffect(() => {
     loadEmail();
+    // Reset image blocking state when email changes
+    setShowImagesForThisEmail(false);
   }, [emailId]);
 
   const loadEmail = async () => {
@@ -148,7 +221,31 @@ export function EmailDetailScreen({
       }
 
       if (data?.getEmail) {
-        setEmail(data.getEmail);
+        const emailData = data.getEmail;
+        setEmail(emailData);
+        
+        // If email has a thread with multiple messages, fetch thread emails
+        if (emailData.threadId && (emailData.threadCount ?? 1) > 1) {
+          try {
+            const { data: threadData } = await apolloClient.query({
+              query: GET_EMAILS_BY_THREAD_QUERY,
+              variables: { threadId: emailData.threadId },
+              fetchPolicy: 'network-only',
+            });
+            
+            if (threadData?.getEmailsByThread) {
+              setThreadEmails(threadData.getEmailsByThread);
+              // Auto-expand the current email
+              setExpandedThreadEmails(new Set([emailId]));
+            }
+          } catch (threadErr) {
+            console.error('Error loading thread emails:', threadErr);
+            // Continue without thread - not a fatal error
+          }
+        } else {
+          setThreadEmails([]);
+          setExpandedThreadEmails(new Set());
+        }
       } else {
         setError('Email not found');
       }
@@ -172,14 +269,30 @@ export function EmailDetailScreen({
 
   const handleReplyAll = useCallback(() => {
     if (!email) return;
+    
+    // Get current user's email to filter it out
+    const currentUserEmail = user?.email?.toLowerCase();
+    
+    // Reply All: To = original sender, CC = all other recipients (excluding ourselves)
+    const allToRecipients = [email.fromAddress, ...email.toAddresses];
+    const allCcRecipients = email.ccAddresses ?? [];
+    
+    // Filter out the current user's email from all recipients
+    const filteredTo = allToRecipients.filter(
+      addr => addr.toLowerCase() !== currentUserEmail
+    );
+    const filteredCc = allCcRecipients.filter(
+      addr => addr.toLowerCase() !== currentUserEmail
+    );
+    
     onReplyAll({
       emailId: email.id,
-      toAddresses: [email.fromAddress, ...email.toAddresses],
-      ccAddresses: email.ccAddresses ?? undefined,
+      toAddresses: filteredTo.length > 0 ? filteredTo : [email.fromAddress],
+      ccAddresses: filteredCc.length > 0 ? filteredCc : undefined,
       subject: email.subject,
       htmlBody: email.htmlBody ?? undefined,
     });
-  }, [email, onReplyAll]);
+  }, [email, onReplyAll, user?.email]);
 
   const handleForward = useCallback(() => {
     if (!email) return;
@@ -231,14 +344,55 @@ export function EmailDetailScreen({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Helper function to block external images in HTML
+  const blockExternalImagesInHtml = (htmlContent: string): string => {
+    // Block img src (except data: URIs)
+    let result = htmlContent.replace(
+      /<img([^>]*)\ssrc=["'](?!data:)([^"']+)["']([^>]*)>/gi,
+      '<img$1 data-blocked-src="$2" alt="[Image blocked]"$3>'
+    );
+    
+    // Block background-image in inline styles
+    result = result.replace(
+      /background(-image)?\s*:\s*url\((?!["']?data:)([^)]+)\)/gi,
+      ''
+    );
+    
+    // Block video poster and src
+    result = result.replace(
+      /<video([^>]*)\s(src|poster)=["'](?!data:)([^"']+)["']([^>]*)>/gi,
+      '<video$1 data-blocked-$2="$3"$4>'
+    );
+    
+    return result;
+  };
+
+  // Toggle thread email expansion
+  const toggleThreadEmail = useCallback((threadEmailId: string) => {
+    setExpandedThreadEmails(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(threadEmailId)) {
+        newSet.delete(threadEmailId);
+      } else {
+        newSet.add(threadEmailId);
+      }
+      return newSet;
+    });
+  }, []);
+
   // Generate HTML content for WebView using shared styles
-  const getHtmlContent = () => {
-    if (!email) return '';
+  const getHtmlContent = (emailData: Email | ThreadEmail, messageId?: string) => {
+    if (!emailData) return '';
 
     const isDark = theme.colors.background === '#121212';
-    const content =
-      email.htmlBody ||
-      `<pre style="white-space: pre-wrap; font-family: inherit;">${email.textBody || ''}</pre>`;
+    let content =
+      emailData.htmlBody ||
+      `<pre style="white-space: pre-wrap; font-family: inherit;">${emailData.textBody || ''}</pre>`;
+
+    // Block external images if setting is enabled
+    if (shouldBlockImages) {
+      content = blockExternalImagesInHtml(content);
+    }
 
     const html = wrapEmailHtml(content, {
       isDarkMode: isDark,
@@ -249,13 +403,15 @@ export function EmailDetailScreen({
       mutedColor: theme.colors.textMuted,
     });
 
-    // Add height reporting script
+    // Add height reporting script with message ID for thread emails
+    const msgIdStr = messageId || 'main';
     return html.replace(
       '</body>',
       `<script>
         window.onload = function() {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'height',
+            id: '${msgIdStr}',
             height: document.body.scrollHeight
           }));
         };
@@ -267,7 +423,12 @@ export function EmailDetailScreen({
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'height') {
-        setWebViewHeight(Math.min(data.height + 20, 2000));
+        const height = Math.min(data.height + 20, 2000);
+        if (data.id === 'main') {
+          setWebViewHeight(height);
+        } else if (data.id) {
+          setThreadWebViewHeights(prev => ({ ...prev, [data.id]: height }));
+        }
       }
     } catch (e) {}
   };
@@ -332,10 +493,19 @@ export function EmailDetailScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={true}
       >
-        {/* Subject */}
-        <Text style={[styles.subject, { color: theme.colors.text }]}>
-          {email.subject || '(No Subject)'}
-        </Text>
+        {/* Subject with Thread Count */}
+        <View style={styles.subjectRow}>
+          <Text style={[styles.subject, { color: theme.colors.text }]}>
+            {email.subject || '(No Subject)'}
+          </Text>
+          {(email.threadCount ?? 1) > 1 && (
+            <View style={[styles.threadCountBadge, { backgroundColor: theme.colors.primary }]}>
+              <Text style={[styles.threadCountText, { color: theme.colors.textInverse }]}>
+                {email.threadCount}
+              </Text>
+            </View>
+          )}
+        </View>
 
         {/* Tags */}
         {email.tags.length > 0 && (
@@ -496,27 +666,129 @@ export function EmailDetailScreen({
             </View>
           )}
 
-        {/* Email Body */}
-        <View
-          style={[
-            styles.bodyContainer,
-            { backgroundColor: theme.colors.surface, minHeight: 300 },
-          ]}
-        >
-          <WebView
-            source={{ html: getHtmlContent() }}
-            style={{
-              height: Math.max(webViewHeight, 300),
-              width: width - SPACING.md * 2 - 2,
-            }}
-            scrollEnabled={false}
-            nestedScrollEnabled={false}
-            onMessage={handleWebViewMessage}
-            originWhitelist={['*']}
-            javaScriptEnabled
-            showsVerticalScrollIndicator={false}
-          />
-        </View>
+        {/* Show blocked images button */}
+        {shouldBlockImages && (
+          <TouchableOpacity
+            style={[styles.showImagesButton, { backgroundColor: theme.colors.warning + '20', borderColor: theme.colors.warning }]}
+            onPress={() => setShowImagesForThisEmail(true)}
+          >
+            <Icon name="image" size="sm" color={theme.colors.warning} />
+            <Text style={[styles.showImagesButtonText, { color: theme.colors.warning }]}>
+              Show blocked images
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Thread View or Single Email Body */}
+        {hasThread ? (
+          /* Thread View */
+          <View style={styles.threadContainer}>
+            <View style={[styles.threadHeader, { backgroundColor: theme.colors.surface }]}>
+              <Text style={[styles.threadTitle, { color: theme.colors.text }]}>
+                {threadEmails.length} messages in this thread
+              </Text>
+            </View>
+            {threadEmails.map((threadEmail) => {
+              const isExpanded = expandedThreadEmails.has(threadEmail.id);
+              const isCurrentEmail = threadEmail.id === emailId;
+              const threadEmailHeight = threadWebViewHeights[threadEmail.id] || 300;
+
+              return (
+                <View
+                  key={threadEmail.id}
+                  style={[
+                    styles.threadEmail,
+                    { backgroundColor: theme.colors.surface },
+                    isCurrentEmail && { borderLeftColor: theme.colors.primary, borderLeftWidth: 3 },
+                  ]}
+                >
+                  {/* Thread Email Header */}
+                  <TouchableOpacity
+                    style={styles.threadEmailHeader}
+                    onPress={() => toggleThreadEmail(threadEmail.id)}
+                  >
+                    <View style={[styles.threadAvatarSmall, { backgroundColor: theme.colors.secondary }]}>
+                      <Text style={[styles.threadAvatarText, { color: theme.colors.textInverse }]}>
+                        {(threadEmail.fromName || threadEmail.fromAddress)[0].toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.threadEmailMeta}>
+                      <View style={styles.threadEmailTop}>
+                        <Text style={[styles.threadSenderName, { color: theme.colors.text }]} numberOfLines={1}>
+                          {threadEmail.fromName || threadEmail.fromAddress.split('@')[0]}
+                        </Text>
+                        {isCurrentEmail && (
+                          <View style={[styles.currentBadge, { backgroundColor: theme.colors.primary }]}>
+                            <Text style={[styles.currentBadgeText, { color: theme.colors.textInverse }]}>Current</Text>
+                          </View>
+                        )}
+                      </View>
+                      {!isExpanded && (
+                        <Text style={[styles.threadPreview, { color: theme.colors.textMuted }]} numberOfLines={1}>
+                          {threadEmail.textBody?.substring(0, 80).replace(/\n/g, ' ') || '(No content)'}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.threadEmailRight}>
+                      <Text style={[styles.threadDate, { color: theme.colors.textMuted }]}>
+                        {formatDate(threadEmail.receivedAt)}
+                      </Text>
+                      <Icon
+                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                        size="sm"
+                        color={theme.colors.textMuted}
+                      />
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Thread Email Body (when expanded) */}
+                  {isExpanded && (
+                    <View style={styles.threadEmailBody}>
+                      <Text style={[styles.threadRecipients, { color: theme.colors.textMuted }]}>
+                        To: {threadEmail.toAddresses.join(', ')}
+                      </Text>
+                      <WebView
+                        source={{ html: getHtmlContent(threadEmail, threadEmail.id) }}
+                        style={{
+                          height: Math.max(threadEmailHeight, 200),
+                          width: width - SPACING.md * 2 - SPACING.sm * 2,
+                        }}
+                        scrollEnabled={false}
+                        nestedScrollEnabled={false}
+                        onMessage={handleWebViewMessage}
+                        originWhitelist={['*']}
+                        javaScriptEnabled
+                        showsVerticalScrollIndicator={false}
+                      />
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        ) : (
+          /* Single Email Body */
+          <View
+            style={[
+              styles.bodyContainer,
+              { backgroundColor: theme.colors.surface, minHeight: 300 },
+            ]}
+          >
+            <WebView
+              source={{ html: getHtmlContent(email, 'main') }}
+              style={{
+                height: Math.max(webViewHeight, 300),
+                width: width - SPACING.md * 2 - 2,
+              }}
+              scrollEnabled={false}
+              nestedScrollEnabled={false}
+              onMessage={handleWebViewMessage}
+              originWhitelist={['*']}
+              javaScriptEnabled
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        )}
       </ScrollView>
 
       {/* Action Bar */}
@@ -561,7 +833,7 @@ export function EmailDetailScreen({
         </TouchableOpacity>
       </View>
 
-      {/* More Menu Modal */}
+      {/* More Menu Modal - positioned above the action bar */}
       <Modal
         visible={showMoreMenu}
         transparent
@@ -572,7 +844,18 @@ export function EmailDetailScreen({
           style={styles.modalOverlay}
           onPress={() => setShowMoreMenu(false)}
         >
-          <View style={[styles.moreMenuModal, { backgroundColor: theme.colors.surface }]}>
+          <View 
+            style={[
+              styles.moreMenuModal, 
+              { 
+                backgroundColor: theme.colors.surface,
+                // Position above the action bar
+                position: 'absolute',
+                bottom: Math.max(insets.bottom, SPACING.sm) + 60, // Action bar height + padding
+                right: SPACING.md,
+              }
+            ]}
+          >
             <TouchableOpacity
               style={[styles.moreMenuItem, { borderBottomColor: theme.colors.border }]}
               onPress={() => {
@@ -641,7 +924,7 @@ const styles = StyleSheet.create({
   subject: {
     fontSize: FONT_SIZE.xl,
     fontWeight: '600',
-    marginBottom: SPACING.sm,
+    flex: 1,
   },
   tagsRow: {
     flexDirection: 'row',
@@ -763,13 +1046,16 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: SPACING.lg,
   },
   moreMenuModal: {
-    marginHorizontal: SPACING.lg,
     borderRadius: RADIUS.lg,
     overflow: 'hidden',
+    minWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
   moreMenuItem: {
     flexDirection: 'row',
@@ -780,5 +1066,113 @@ const styles = StyleSheet.create({
   moreMenuItemText: {
     fontSize: FONT_SIZE.md,
     fontWeight: '500',
+  },
+  // Subject row with thread count
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+  },
+  threadCountBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  threadCountText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+  },
+  // Show images button
+  showImagesButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginBottom: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  showImagesButtonText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '500',
+  },
+  // Thread container
+  threadContainer: {
+    gap: SPACING.sm,
+  },
+  threadHeader: {
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.xs,
+  },
+  threadTitle: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+  },
+  threadEmail: {
+    borderRadius: RADIUS.lg,
+    marginBottom: SPACING.xs,
+    overflow: 'hidden',
+  },
+  threadEmailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.sm,
+    gap: SPACING.sm,
+  },
+  threadAvatarSmall: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  threadAvatarText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+  },
+  threadEmailMeta: {
+    flex: 1,
+  },
+  threadEmailTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  threadSenderName: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '500',
+  },
+  currentBadge: {
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: RADIUS.sm,
+  },
+  currentBadgeText: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '600',
+  },
+  threadPreview: {
+    fontSize: FONT_SIZE.sm,
+    marginTop: 2,
+  },
+  threadEmailRight: {
+    alignItems: 'flex-end',
+    gap: SPACING.xs,
+  },
+  threadDate: {
+    fontSize: FONT_SIZE.xs,
+  },
+  threadEmailBody: {
+    padding: SPACING.sm,
+    paddingTop: 0,
+  },
+  threadRecipients: {
+    fontSize: FONT_SIZE.xs,
+    marginBottom: SPACING.xs,
   },
 });
