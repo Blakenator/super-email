@@ -265,6 +265,8 @@ async function startIdleForAccount(
               account.email,
               latestEmail.subject ?? undefined,
               latestEmail.fromName ?? latestEmail.fromAddress ?? undefined,
+              latestEmail.htmlBody ?? undefined,
+              latestEmail.textBody ?? undefined,
             );
           } catch (pushError: any) {
             logger.error('IMAP-IDLE', `[${account.email}] Failed to send push notification: ${pushError.message}`);

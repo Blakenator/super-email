@@ -1,0 +1,39 @@
+---
+description: GraphQL schema documentation requirements
+globs: "**/*.graphql"
+alwaysApply: false
+---
+
+# GraphQL Schema Documentation
+
+**All GraphQL schema elements MUST have documentation comments** using triple-quoted strings.
+
+## Required Documentation
+
+- **Types/Input types**: Describe the entity's purpose
+- **Queries/Mutations**: Describe what the operation does
+- **Fields**: Describe meaning and any constraints
+- **Enums**: Describe each value's meaning
+
+## Example
+
+```graphql
+"""
+A tag that can be applied to emails for organization.
+Tags are user-specific and can have custom colors.
+"""
+type Tag {
+  """
+  Unique identifier for this tag
+  """
+  id: String!
+  """
+  Display name shown in the UI
+  """
+  name: String!
+  """
+  Hex color code (e.g., "#ff0000")
+  """
+  color: String!
+}
+```

@@ -1,0 +1,21 @@
+---
+description: Package management conventions using pnpm
+alwaysApply: true
+---
+
+# Package Management
+
+- Always use `pnpm` instead of `yarn`, `npm`, or `npx`
+- Use workspace protocol (`workspace:^`) for internal package dependencies
+- Run commands from the root when possible, using `pnpm run --filter` for workspace-specific commands
+
+```bash
+# ❌ BAD
+npm install lodash
+yarn add lodash
+npx tsc
+
+# ✅ GOOD
+pnpm add lodash
+pnpm run --filter backend build
+```

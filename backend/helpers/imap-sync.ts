@@ -429,6 +429,8 @@ export async function startAsyncSync(
             emailAccount.email,
             latestEmail?.subject ?? undefined,
             latestEmail?.fromName ?? latestEmail?.fromAddress ?? undefined,
+            latestEmail?.htmlBody ?? undefined,
+            latestEmail?.textBody ?? undefined,
           );
         } catch (pushError) {
           console.error('[IMAP] Failed to send push notification:', pushError);
@@ -1311,6 +1313,7 @@ async function processBatch(
     source: true,
     uid: true,
     internalDate: true,
+    flags: true, // Required for reading \Seen flag (isRead status)
   };
 
   try {
@@ -1430,6 +1433,7 @@ async function processBatchByUidsWithDateTracking(
     source: true,
     uid: true,
     internalDate: true,
+    flags: true, // Required for reading \Seen flag (isRead status)
   };
 
   try {

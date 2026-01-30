@@ -41,6 +41,7 @@ import {
 import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
 import { setupBillingDatabase } from './db/setup-billing.js';
+import { runMigrations } from './db/migrations/migrator.js';
 import { API_ROUTES } from '@main/common';
 
 // Default models - imported from db
@@ -577,6 +578,18 @@ export async function createServer(
     await deps.sequelize.sync({ alter: true });
     if (deps.enableLogging) {
       logger.info('Database', 'Database synchronized');
+    }
+    
+    // Run any pending SQL migrations
+    try {
+      await runMigrations(deps.sequelize);
+      if (deps.enableLogging) {
+        logger.info('Database', 'Migrations completed');
+      }
+    } catch (migrationError) {
+      logger.error('Database', 'Migration failed', migrationError);
+      // Don't throw - allow server to continue if migrations fail
+      // Critical migrations should be verified separately
     }
   }
 

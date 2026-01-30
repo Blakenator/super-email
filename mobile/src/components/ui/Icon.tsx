@@ -25,7 +25,7 @@ export type IconName =
   | 'sun' | 'moon' | 'monitor' | 'smartphone'
   // Other
   | 'log-out' | 'external-link' | 'link' | 'copy' | 'download' | 'upload'
-  | 'folder' | 'server' | 'zap' | 'shield' | 'globe' | 'clock' | 'briefcase'
+  | 'folder' | 'server' | 'zap' | 'shield' | 'globe' | 'clock' | 'briefcase' | 'image'
   // Formatting (for rich text editor)
   | 'format-bold' | 'format-italic' | 'format-underline'
   | 'format-list-bulleted' | 'format-list-numbered';
@@ -119,6 +119,7 @@ const ICON_MAP: Record<IconName, { set: 'feather' | 'material' | 'ionicons'; nam
   globe: { set: 'feather', name: 'globe' },
   clock: { set: 'feather', name: 'clock' },
   briefcase: { set: 'feather', name: 'briefcase' },
+  image: { set: 'feather', name: 'image' },
   // Formatting
   'format-bold': { set: 'material', name: 'format-bold' },
   'format-italic': { set: 'material', name: 'format-italic' },

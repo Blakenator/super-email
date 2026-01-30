@@ -1,0 +1,110 @@
+---
+description: React Native development patterns for the mobile app
+globs: mobile/**/*.tsx, mobile/**/*.ts
+alwaysApply: false
+---
+
+# React Native Patterns
+
+## Project Structure
+
+```
+mobile/src/
+├── components/ui/     # Reusable UI components (Button, Icon, Input)
+├── components/email/  # Domain-specific components
+├── screens/           # Screen components by feature (inbox/, settings/, auth/)
+├── navigation/        # AppNavigator and route types
+├── services/          # API clients, notifications, secure storage
+├── stores/            # Zustand state management
+├── theme/             # Colors, spacing, shared styles
+```
+
+## State Management (Zustand)
+
+Use Zustand stores in `stores/` - access directly with hooks:
+
+```typescript
+// ✅ GOOD
+import { useAuthStore } from '../stores/authStore';
+const { user, login } = useAuthStore();
+
+// For non-reactive access (in callbacks)
+const store = useAuthStore.getState();
+```
+
+## Theming
+
+Always use theme values, never hardcoded colors:
+
+```typescript
+const theme = useTheme();
+
+// ✅ GOOD
+style={{ backgroundColor: theme.colors.surface }}
+
+// ❌ BAD
+style={{ backgroundColor: '#1e1e1e' }}
+```
+
+Use shared constants from `theme/styles.ts`:
+
+```typescript
+import { SPACING, RADIUS, FONT_SIZE, ICON_SIZE } from '../theme';
+
+paddingHorizontal: SPACING.md  // 16
+borderRadius: RADIUS.lg        // 12
+fontSize: FONT_SIZE.md         // 14
+```
+
+## Screen Components
+
+Screens receive navigation callbacks as props (injected by wrapper in AppNavigator):
+
+```typescript
+interface SettingsScreenProps {
+  onNavigateToAccounts: () => void;
+  onNavigateToTags: () => void;
+}
+
+export function SettingsScreen({ onNavigateToAccounts }: SettingsScreenProps) {
+  // Use callbacks instead of useNavigation internally
+}
+```
+
+## Safe Area Handling
+
+Use `useSafeAreaInsets` or the `SafeScreen` component:
+
+```typescript
+const insets = useSafeAreaInsets();
+
+<View style={{ paddingTop: insets.top }}>
+  {/* header content */}
+</View>
+```
+
+## StyleSheet Pattern
+
+Define styles at bottom of file using StyleSheet.create():
+
+```typescript
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  // Use shared constants
+  header: {
+    paddingHorizontal: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+});
+```
+
+## UI Components
+
+Prefer existing components in `components/ui/`:
+- `Button` - with variants (primary, secondary, outline, ghost, danger)
+- `Icon` - Feather icons wrapper
+- `Input`, `ListItem`, `ModalScreen`, `SafeScreen`
+
+Export via barrel files (`index.ts`).

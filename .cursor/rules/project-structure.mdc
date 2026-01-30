@@ -1,0 +1,33 @@
+---
+description: Project file structure and environment configuration
+alwaysApply: true
+---
+
+# Project Structure
+
+## Directory Layout
+
+| Path | Purpose |
+|------|---------|
+| `backend/mutations/` | GraphQL mutation resolvers |
+| `backend/queries/` | GraphQL query resolvers |
+| `backend/helpers/` | Shared utility functions |
+| `backend/db/models/` | Sequelize database models |
+| `frontend/src/pages/` | Route components |
+| `frontend/src/components/` | Page-specific components |
+| `frontend/src/core/components/` | Shared/reusable components |
+| `common/schema.graphql` | GraphQL schema (generates types) |
+| `backend/test/helpers/` | Unit tests |
+| `backend/test/integration/` | Integration tests |
+
+## Environment Configuration
+
+- Access all environment variables through `backend/config/env.ts`
+- Never hardcode AWS credentials or secrets
+- Use `config.isProduction` and `config.isDevelopment` flags
+
+## Code Style
+
+- Use TypeScript strict mode
+- Use logger from `backend/helpers/logger.ts` instead of `console.log`
+- Follow existing patterns for GraphQL (use codegen from `common/schema.graphql`)
