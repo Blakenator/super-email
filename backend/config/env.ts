@@ -66,6 +66,9 @@ export const config = {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   },
 
+  // Frontend URL (for Stripe checkout redirects, email links, etc.)
+  frontendUrl: process.env.FRONTEND_URL || (isProduction ? '' : 'http://localhost:5173'),
+
   // Background Sync Configuration
   backgroundSync: {
     // How long before an email account is considered stale and needs re-syncing (in minutes)

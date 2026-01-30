@@ -593,6 +593,7 @@ const stripePriceAccountsBasic = config.get('stripePriceAccountsBasic') || '';
 const stripePriceAccountsPro = config.get('stripePriceAccountsPro') || '';
 const stripePriceAccountsEnterprise = config.get('stripePriceAccountsEnterprise') || '';
 
+
 // Stripe secret key
 const stripeKeySecret = new aws.secretsmanager.Secret(
   `${stackName}-stripe-key`,
@@ -661,120 +662,10 @@ const internalApiTokenVersion = new aws.secretsmanager.SecretVersion(
 );
 
 // =============================================================================
-// ECS Task Definition
-// =============================================================================
-
-const backendTaskDefinition = new aws.ecs.TaskDefinition(
-  `${stackName}-backend-task`,
-  {
-    family: `${stackName}-backend`,
-    networkMode: 'awsvpc',
-    requiresCompatibilities: ['FARGATE'],
-    cpu: '256',
-    memory: '512',
-    executionRoleArn: taskExecutionRole.arn,
-    taskRoleArn: taskRole.arn,
-    containerDefinitions: pulumi
-      .output({
-        repoUrl: backendRepo.repositoryUrl,
-        dbHost: database.address,
-        dbPort: database.port,
-        dbPass: dbPassword,
-        bucketName: attachmentsBucket.bucket,
-        region: currentRegion.name,
-        supabaseSecretArn: supabaseServiceSecretVersion.arn,
-        stripeKeyArn: stripeKeySecretVersion.arn,
-        stripeWebhookArn: stripeWebhookSecretVersion.arn,
-        internalApiTokenArn: internalApiTokenVersion.arn,
-      })
-      .apply(
-        ({
-          repoUrl,
-          dbHost,
-          dbPort,
-          dbPass,
-          bucketName,
-          region,
-          supabaseSecretArn,
-          stripeKeyArn,
-          stripeWebhookArn,
-          internalApiTokenArn,
-        }) =>
-          JSON.stringify([
-            {
-              name: 'backend',
-              image: `${repoUrl}:${imageTag}`,
-              essential: true,
-              portMappings: [{ containerPort: 4000, protocol: 'tcp' }],
-              environment: [
-                { name: 'NODE_ENV', value: 'production' },
-                { name: 'LOG_LEVEL', value: 'info' },
-                { name: 'GIT_COMMIT_SHA', value: gitCommitSha },
-                { name: 'CONTENT_HASH', value: contentHash },
-                { name: 'DB_HOST', value: dbHost },
-                { name: 'DB_PORT', value: String(dbPort) },
-                { name: 'DB_NAME', value: 'emailclient' },
-                { name: 'DB_USER', value: 'emailclient' },
-                { name: 'DB_PASSWORD', value: dbPass },
-                { name: 'PORT', value: '4000' },
-                { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
-                { name: 'AWS_REGION', value: region },
-                { name: 'SECRETS_BASE_PATH', value: 'email-client' },
-                { name: 'SUPABASE_URL', value: supabaseUrl },
-                { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
-                { name: 'STRIPE_PUBLISHABLE_KEY', value: stripePublishableKey },
-                // Stripe price IDs for subscription tiers
-                { name: 'STRIPE_PRICE_STORAGE_BASIC', value: stripePriceStorageBasic },
-                { name: 'STRIPE_PRICE_STORAGE_PRO', value: stripePriceStoragePro },
-                { name: 'STRIPE_PRICE_STORAGE_ENTERPRISE', value: stripePriceStorageEnterprise },
-                { name: 'STRIPE_PRICE_ACCOUNTS_BASIC', value: stripePriceAccountsBasic },
-                { name: 'STRIPE_PRICE_ACCOUNTS_PRO', value: stripePriceAccountsPro },
-                { name: 'STRIPE_PRICE_ACCOUNTS_ENTERPRISE', value: stripePriceAccountsEnterprise },
-                // Disable in-process background sync - Lambda handles this
-                { name: 'BACKGROUND_SYNC_ENABLED', value: 'false' },
-              ],
-              secrets: [
-                {
-                  name: 'SUPABASE_SERVICE_ROLE_KEY',
-                  valueFrom: supabaseSecretArn,
-                },
-                { name: 'STRIPE_SECRET_KEY', valueFrom: stripeKeyArn },
-                { name: 'STRIPE_WEBHOOK_SECRET', valueFrom: stripeWebhookArn },
-                { name: 'INTERNAL_API_TOKEN', valueFrom: internalApiTokenArn },
-              ],
-              logConfiguration: {
-                logDriver: 'awslogs',
-                options: {
-                  'awslogs-group': `/ecs/${stackName}/backend`,
-                  'awslogs-region': region,
-                  'awslogs-stream-prefix': 'ecs',
-                },
-              },
-              healthCheck: {
-                command: [
-                  'CMD-SHELL',
-                  'wget --no-verbose --tries=1 --spider http://localhost:4000/api/health || exit 1',
-                ],
-                interval: 30,
-                timeout: 5,
-                retries: 3,
-                startPeriod: 60,
-              },
-            },
-          ]),
-      ),
-    tags: {
-      Name: `${stackName}-backend-task`,
-      Environment: environment,
-      GitCommitSha: gitCommitSha,
-      ContentHash: contentHash,
-    },
-  },
-);
-
-// =============================================================================
 // Application Load Balancer
 // =============================================================================
+// Note: ALB is created before Task Definition so CloudFront can be created,
+// allowing the Task Definition to reference the CloudFront domain for redirects.
 
 const alb = new aws.lb.LoadBalancer(`${stackName}-alb`, {
   name: `${stackName}-alb`,
@@ -794,7 +685,7 @@ const backendTargetGroup = new aws.lb.TargetGroup(`${stackName}-backend-tg`, {
   targetType: 'ip',
   healthCheck: {
     enabled: true,
-    path: '/api/health', // Fixed: Use correct health endpoint
+    path: '/api/health',
     port: 'traffic-port',
     protocol: 'HTTP',
     healthyThreshold: 2,
@@ -814,61 +705,10 @@ new aws.lb.Listener(`${stackName}-http-listener`, {
 });
 
 // =============================================================================
-// ECS Service - Cost Optimized with Fargate Spot
-// =============================================================================
-
-const backendService = new aws.ecs.Service(
-  `${stackName}-backend-service`,
-  {
-    name: `${stackName}-backend`,
-    cluster: cluster.arn,
-    taskDefinition: backendTaskDefinition.arn,
-    desiredCount: 1, // Cost optimization: Single task
-    // Use capacity provider strategy for Fargate Spot
-    capacityProviderStrategies: [
-      {
-        capacityProvider: 'FARGATE_SPOT',
-        weight: 4,
-        base: 0,
-      },
-      {
-        capacityProvider: 'FARGATE',
-        weight: 1,
-        base: 1, // At least 1 on-demand for reliability
-      },
-    ],
-    networkConfiguration: {
-      // Cost optimization: Use public subnets for dev (no NAT needed)
-      // Use private subnets for prod (with NAT)
-      subnets: isProd ? vpc.privateSubnetIds : vpc.publicSubnetIds,
-      securityGroups: [backendSecurityGroup.id],
-      assignPublicIp: !isProd, // Public IP for dev (no NAT)
-    },
-    loadBalancers: [
-      {
-        targetGroupArn: backendTargetGroup.arn,
-        containerName: 'backend',
-        containerPort: 4000,
-      },
-    ],
-    healthCheckGracePeriodSeconds: 120,
-    enableExecuteCommand: true, // For debugging
-    propagateTags: 'SERVICE',
-    tags: {
-      Name: `${stackName}-backend-service`,
-      Environment: environment,
-      GitCommitSha: gitCommitSha,
-      ContentHash: contentHash,
-    },
-  },
-  {
-    dependsOn: [database, capacityProviders],
-  },
-);
-
-// =============================================================================
 // CloudFront CDN
 // =============================================================================
+// Note: Created before Task Definition so backend can use the CloudFront URL
+// for Stripe checkout redirects.
 
 const frontendDistribution = new aws.cloudfront.Distribution(
   `${stackName}-cdn`,
@@ -961,6 +801,175 @@ const frontendDistribution = new aws.cloudfront.Distribution(
     tags: { Name: `${stackName}-cdn`, Environment: environment },
   },
   { dependsOn: [alb, frontendBucketPolicy] },
+);
+
+// =============================================================================
+// ECS Task Definition
+// =============================================================================
+
+const backendTaskDefinition = new aws.ecs.TaskDefinition(
+  `${stackName}-backend-task`,
+  {
+    family: `${stackName}-backend`,
+    networkMode: 'awsvpc',
+    requiresCompatibilities: ['FARGATE'],
+    cpu: '256',
+    memory: '512',
+    executionRoleArn: taskExecutionRole.arn,
+    taskRoleArn: taskRole.arn,
+    containerDefinitions: pulumi
+      .output({
+        repoUrl: backendRepo.repositoryUrl,
+        dbHost: database.address,
+        dbPort: database.port,
+        dbPass: dbPassword,
+        bucketName: attachmentsBucket.bucket,
+        region: currentRegion.name,
+        supabaseSecretArn: supabaseServiceSecretVersion.arn,
+        stripeKeyArn: stripeKeySecretVersion.arn,
+        stripeWebhookArn: stripeWebhookSecretVersion.arn,
+        internalApiTokenArn: internalApiTokenVersion.arn,
+        cloudfrontDomain: frontendDistribution.domainName,
+      })
+      .apply(
+        ({
+          repoUrl,
+          dbHost,
+          dbPort,
+          dbPass,
+          bucketName,
+          region,
+          supabaseSecretArn,
+          stripeKeyArn,
+          stripeWebhookArn,
+          internalApiTokenArn,
+          cloudfrontDomain,
+        }) =>
+          JSON.stringify([
+            {
+              name: 'backend',
+              image: `${repoUrl}:${imageTag}`,
+              essential: true,
+              portMappings: [{ containerPort: 4000, protocol: 'tcp' }],
+              environment: [
+                { name: 'NODE_ENV', value: 'production' },
+                { name: 'LOG_LEVEL', value: 'info' },
+                { name: 'GIT_COMMIT_SHA', value: gitCommitSha },
+                { name: 'CONTENT_HASH', value: contentHash },
+                { name: 'DB_HOST', value: dbHost },
+                { name: 'DB_PORT', value: String(dbPort) },
+                { name: 'DB_NAME', value: 'emailclient' },
+                { name: 'DB_USER', value: 'emailclient' },
+                { name: 'DB_PASSWORD', value: dbPass },
+                { name: 'PORT', value: '4000' },
+                { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
+                { name: 'AWS_REGION', value: region },
+                { name: 'SECRETS_BASE_PATH', value: 'email-client' },
+                { name: 'SUPABASE_URL', value: supabaseUrl },
+                { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
+                { name: 'STRIPE_PUBLISHABLE_KEY', value: stripePublishableKey },
+                // Frontend URL for Stripe checkout redirects (from CloudFront)
+                { name: 'FRONTEND_URL', value: `https://${cloudfrontDomain}` },
+                // Stripe price IDs for subscription tiers
+                { name: 'STRIPE_PRICE_STORAGE_BASIC', value: stripePriceStorageBasic },
+                { name: 'STRIPE_PRICE_STORAGE_PRO', value: stripePriceStoragePro },
+                { name: 'STRIPE_PRICE_STORAGE_ENTERPRISE', value: stripePriceStorageEnterprise },
+                { name: 'STRIPE_PRICE_ACCOUNTS_BASIC', value: stripePriceAccountsBasic },
+                { name: 'STRIPE_PRICE_ACCOUNTS_PRO', value: stripePriceAccountsPro },
+                { name: 'STRIPE_PRICE_ACCOUNTS_ENTERPRISE', value: stripePriceAccountsEnterprise },
+                // Disable in-process background sync - Lambda handles this
+                { name: 'BACKGROUND_SYNC_ENABLED', value: 'false' },
+              ],
+              secrets: [
+                {
+                  name: 'SUPABASE_SERVICE_ROLE_KEY',
+                  valueFrom: supabaseSecretArn,
+                },
+                { name: 'STRIPE_SECRET_KEY', valueFrom: stripeKeyArn },
+                { name: 'STRIPE_WEBHOOK_SECRET', valueFrom: stripeWebhookArn },
+                { name: 'INTERNAL_API_TOKEN', valueFrom: internalApiTokenArn },
+              ],
+              logConfiguration: {
+                logDriver: 'awslogs',
+                options: {
+                  'awslogs-group': `/ecs/${stackName}/backend`,
+                  'awslogs-region': region,
+                  'awslogs-stream-prefix': 'ecs',
+                },
+              },
+              healthCheck: {
+                command: [
+                  'CMD-SHELL',
+                  'wget --no-verbose --tries=1 --spider http://localhost:4000/api/health || exit 1',
+                ],
+                interval: 30,
+                timeout: 5,
+                retries: 3,
+                startPeriod: 60,
+              },
+            },
+          ]),
+      ),
+    tags: {
+      Name: `${stackName}-backend-task`,
+      Environment: environment,
+      GitCommitSha: gitCommitSha,
+      ContentHash: contentHash,
+    },
+  },
+);
+
+// =============================================================================
+// ECS Service - Cost Optimized with Fargate Spot
+// =============================================================================
+
+const backendService = new aws.ecs.Service(
+  `${stackName}-backend-service`,
+  {
+    name: `${stackName}-backend`,
+    cluster: cluster.arn,
+    taskDefinition: backendTaskDefinition.arn,
+    desiredCount: 1, // Cost optimization: Single task
+    // Use capacity provider strategy for Fargate Spot
+    capacityProviderStrategies: [
+      {
+        capacityProvider: 'FARGATE_SPOT',
+        weight: 4,
+        base: 0,
+      },
+      {
+        capacityProvider: 'FARGATE',
+        weight: 1,
+        base: 1, // At least 1 on-demand for reliability
+      },
+    ],
+    networkConfiguration: {
+      // Cost optimization: Use public subnets for dev (no NAT needed)
+      // Use private subnets for prod (with NAT)
+      subnets: isProd ? vpc.privateSubnetIds : vpc.publicSubnetIds,
+      securityGroups: [backendSecurityGroup.id],
+      assignPublicIp: !isProd, // Public IP for dev (no NAT)
+    },
+    loadBalancers: [
+      {
+        targetGroupArn: backendTargetGroup.arn,
+        containerName: 'backend',
+        containerPort: 4000,
+      },
+    ],
+    healthCheckGracePeriodSeconds: 120,
+    enableExecuteCommand: true, // For debugging
+    propagateTags: 'SERVICE',
+    tags: {
+      Name: `${stackName}-backend-service`,
+      Environment: environment,
+      GitCommitSha: gitCommitSha,
+      ContentHash: contentHash,
+    },
+  },
+  {
+    dependsOn: [database, capacityProviders],
+  },
 );
 
 // =============================================================================

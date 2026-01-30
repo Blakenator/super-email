@@ -71,6 +71,8 @@ pulumi config set email-client-infra:stripePriceAccountsEnterprise price_...
 
 If Stripe is not configured, the billing UI will show "Billing not configured" and all users will have free tier limits.
 
+Note: The frontend URL for Stripe checkout redirects is automatically derived from the CloudFront distribution domain.
+
 ## Deploy
 
 ```bash

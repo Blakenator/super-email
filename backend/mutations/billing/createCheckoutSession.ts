@@ -30,10 +30,11 @@ export const createCheckoutSession = makeMutation(
     const storageTier = args.storageTier.toLowerCase() as StorageTier;
     const accountTier = args.accountTier.toLowerCase() as AccountTier;
 
-    // Determine success/cancel URLs
-    const baseUrl = config.isProduction
-      ? 'https://mail.stacksindustries.com'
-      : 'http://localhost:5173';
+    // Determine success/cancel URLs from config
+    const baseUrl = config.frontendUrl;
+    if (!baseUrl) {
+      throw new Error('FRONTEND_URL environment variable is not configured');
+    }
 
     const successUrl = `${baseUrl}/settings/billing?checkout=success`;
     const cancelUrl = `${baseUrl}/settings/billing?checkout=canceled`;

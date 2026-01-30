@@ -122,11 +122,17 @@ fi
 pulumi up --yes
 
 # Export outputs
-export BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl)
-export FRONTEND_BUCKET=$(pulumi stack output frontendBucketName)
-export FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId)
-export BACKEND_API_URL=$(pulumi stack output backendApiUrl)
-export FRONTEND_URL=$(pulumi stack output frontendUrl)
+BACKEND_REPO_URL=$(pulumi stack output backendRepoUrl)
+FRONTEND_BUCKET=$(pulumi stack output frontendBucketName)
+FRONTEND_DISTRIBUTION_ID=$(pulumi stack output frontendDistributionId)
+BACKEND_API_URL=$(pulumi stack output backendApiUrl)
+FRONTEND_URL=$(pulumi stack output frontendUrl)
+
+export BACKEND_REPO_URL
+export FRONTEND_BUCKET
+export FRONTEND_DISTRIBUTION_ID
+export BACKEND_API_URL
+export FRONTEND_URL
 
 # Output to file for sourcing by other scripts
 cat > "$PROJECT_ROOT/.deploy-outputs" << EOF
@@ -140,5 +146,6 @@ EOF
 log_info "Infrastructure deployed successfully."
 log_info "  Backend Repo: $BACKEND_REPO_URL"
 log_info "  Frontend Bucket: $FRONTEND_BUCKET"
+log_info "  Frontend URL: $FRONTEND_URL"
 
 cd "$PROJECT_ROOT"
