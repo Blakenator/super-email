@@ -36,6 +36,8 @@ else
     log_warn "Create a .env file from .env.template for production deployments."
 fi
 
+pnpm install
+
 echo "=============================================="
 echo "  SuperMail Deploy - Environment: $ENVIRONMENT"
 echo "=============================================="
