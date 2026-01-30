@@ -89,7 +89,9 @@ export const getBillingInfo = makeQuery(
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       },
-      hasStripeCustomer: !!subscription.stripeCustomerId,
+      // Only consider them as having a Stripe subscription if they completed checkout
+      // (have a stripeSubscriptionId, not just a stripeCustomerId from a cancelled checkout)
+      hasStripeCustomer: !!subscription.stripeSubscriptionId,
       usage: storageUsage,
       storageUsagePercent,
       accountUsagePercent,
