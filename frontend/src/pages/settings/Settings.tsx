@@ -208,7 +208,7 @@ export function Settings() {
 
   // Poll when any account is syncing
   const isSyncing = emailAccountsData?.getEmailAccounts?.some(
-    (a) => a.isSyncing,
+    (a) => a.isHistoricalSyncing || a.isUpdateSyncing,
   );
 
   // Use useEffect for polling to avoid initialization error

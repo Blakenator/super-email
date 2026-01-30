@@ -252,6 +252,8 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
               onChangeText={setPassword}
               placeholder="Enter your password"
               secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
               autoComplete="password"
             />
 

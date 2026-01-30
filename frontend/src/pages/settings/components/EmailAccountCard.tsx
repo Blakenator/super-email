@@ -161,9 +161,9 @@ export function EmailAccountCard({
             variant="outline-primary"
             size="sm"
             onClick={() => onSync(account.id)}
-            disabled={account.isSyncing}
+            disabled={isSyncing}
           >
-            {account.isSyncing ? (
+            {isSyncing ? (
               <Spinner animation="border" size="sm" />
             ) : (
               <>
