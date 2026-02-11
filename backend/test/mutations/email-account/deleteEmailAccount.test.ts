@@ -1,150 +1,165 @@
 /**
  * Tests for deleteEmailAccount mutation
+ *
+ * Tests the REAL resolver by importing it via esmock to mock
+ * helper module dependencies while keeping model stubs via sinon.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import esmock from 'esmock';
+import { EmailAccount, Email } from '../../../db/models/index.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockEmailAccount } from '../../utils/mock-models.js';
 
 describe('deleteEmailAccount mutation', () => {
-  let mockModels: any;
-  let mockSecrets: any;
+  let deleteEmailAccount: any;
+  let deleteImapCredentialsStub: sinon.SinonStub;
+  let recalculateUserUsageStub: sinon.SinonStub;
 
-  beforeEach(() => {
-    mockModels = {
-      EmailAccount: {
-        findOne: sinon.stub(),
-        destroy: sinon.stub(),
-      },
-      Email: {
-        destroy: sinon.stub(),
-      },
-    };
+  beforeEach(async () => {
+    deleteImapCredentialsStub = sinon.stub().resolves();
+    recalculateUserUsageStub = sinon.stub().resolves();
 
-    mockSecrets = {
-      deleteImapCredentials: sinon.stub().resolves(),
-    };
+    const mod = await esmock(
+      '../../../mutations/email-account/deleteEmailAccount.js',
+      {
+        '../../../helpers/secrets.js': {
+          deleteImapCredentials: deleteImapCredentialsStub,
+        },
+        '../../../helpers/usage-calculator.js': {
+          recalculateUserUsage: recalculateUserUsageStub,
+        },
+      },
+    );
+    deleteEmailAccount = mod.deleteEmailAccount;
   });
 
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
 
-      expect(() => requireAuth(context)).to.throw('Authentication required');
+    try {
+      await deleteEmailAccount(null, { id: 'acc-1' }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
+  });
+
+  it('should throw when account not found', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    sinon.stub(EmailAccount, 'findOne').resolves(null);
+
+    try {
+      await deleteEmailAccount(null, { id: 'nonexistent' }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Email account not found');
+    }
+  });
+
+  it('should delete account and all associated data in correct order', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const callOrder: string[] = [];
+
+    const mockAccount = {
+      id: 'acc-123',
+      email: 'test@example.com',
+      userId: 'user-123',
+      destroy: sinon.stub().callsFake(async () => { callOrder.push('account.destroy'); }),
+    };
+
+    sinon.stub(EmailAccount, 'findOne').resolves(mockAccount as any);
+    sinon.stub(Email, 'destroy').callsFake(async () => { callOrder.push('Email.destroy'); return 0; });
+    deleteImapCredentialsStub.callsFake(async () => { callOrder.push('deleteCredentials'); });
+    recalculateUserUsageStub.callsFake(async () => { callOrder.push('recalculateUsage'); });
+
+    const result = await deleteEmailAccount(null, { id: 'acc-123' }, context);
+
+    expect(callOrder).to.deep.equal([
+      'Email.destroy',
+      'deleteCredentials',
+      'account.destroy',
+      'recalculateUsage',
+    ]);
+
+    expect(result).to.be.true;
+  });
+
+  it('should find account by id and userId', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = {
+      id: 'acc-123',
+      email: 'test@example.com',
+      userId: 'user-123',
+      destroy: sinon.stub().resolves(),
+    };
+
+    const findOneStub = sinon.stub(EmailAccount, 'findOne').resolves(mockAccount as any);
+    sinon.stub(Email, 'destroy').resolves(0);
+
+    await deleteEmailAccount(null, { id: 'acc-123' }, context);
+
+    expect(findOneStub.firstCall.args[0]).to.deep.include({
+      where: { id: 'acc-123', userId: 'user-123' },
     });
   });
 
-  describe('when user is authenticated', () => {
-    it('should delete email account when found', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAccount = createMockEmailAccount({ 
-        id: 'acc-123', 
-        userId: context.userId 
-      });
-      mockAccount.destroy = sinon.stub().resolves();
+  it('should delete emails by emailAccountId', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = {
+      id: 'acc-123',
+      email: 'test@example.com',
+      userId: 'user-123',
+      destroy: sinon.stub().resolves(),
+    };
 
-      mockModels.EmailAccount.findOne.resolves(mockAccount);
+    sinon.stub(EmailAccount, 'findOne').resolves(mockAccount as any);
+    const emailDestroyStub = sinon.stub(Email, 'destroy').resolves(0);
 
-      // Find account
-      const account = await mockModels.EmailAccount.findOne({
-        where: { id: 'acc-123', userId: context.userId },
-      });
+    await deleteEmailAccount(null, { id: 'acc-123' }, context);
 
-      expect(account).to.exist;
-
-      // Delete account
-      await account.destroy();
-
-      expect(mockAccount.destroy.calledOnce).to.be.true;
+    expect(emailDestroyStub.firstCall.args[0]).to.deep.include({
+      where: { emailAccountId: 'acc-123' },
     });
+  });
 
-    it('should throw error when account not found', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.findOne.resolves(null);
+  it('should delete IMAP credentials for the account', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = {
+      id: 'acc-123',
+      email: 'test@example.com',
+      userId: 'user-123',
+      destroy: sinon.stub().resolves(),
+    };
 
-      const account = await mockModels.EmailAccount.findOne({
-        where: { id: 'nonexistent', userId: context.userId },
-      });
+    sinon.stub(EmailAccount, 'findOne').resolves(mockAccount as any);
+    sinon.stub(Email, 'destroy').resolves(0);
 
-      expect(account).to.be.null;
-      
-      // Resolver would throw error
-      if (!account) {
-        expect(() => {
-          throw new Error('Email account not found');
-        }).to.throw('Email account not found');
-      }
-    });
+    await deleteEmailAccount(null, { id: 'acc-123' }, context);
 
-    it('should not delete account belonging to another user', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      // When querying with wrong userId, account is not found
-      mockModels.EmailAccount.findOne.resolves(null);
+    expect(deleteImapCredentialsStub.calledOnce).to.be.true;
+    expect(deleteImapCredentialsStub.firstCall.args[0]).to.equal('acc-123');
+  });
 
-      const account = await mockModels.EmailAccount.findOne({
-        where: { id: 'other-users-account', userId: context.userId },
-      });
+  it('should recalculate user usage after deletion', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = {
+      id: 'acc-123',
+      email: 'test@example.com',
+      userId: 'user-123',
+      destroy: sinon.stub().resolves(),
+    };
 
-      expect(account).to.be.null;
-    });
+    sinon.stub(EmailAccount, 'findOne').resolves(mockAccount as any);
+    sinon.stub(Email, 'destroy').resolves(0);
 
-    it('should delete associated credentials from secrets store', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAccount = createMockEmailAccount({ 
-        id: 'acc-123', 
-        userId: context.userId 
-      });
-      mockAccount.destroy = sinon.stub().resolves();
+    await deleteEmailAccount(null, { id: 'acc-123' }, context);
 
-      mockModels.EmailAccount.findOne.resolves(mockAccount);
-
-      const account = await mockModels.EmailAccount.findOne({
-        where: { id: 'acc-123', userId: context.userId },
-      });
-
-      // Delete credentials
-      await mockSecrets.deleteImapCredentials(account.id);
-      
-      expect(mockSecrets.deleteImapCredentials.calledOnce).to.be.true;
-      expect(mockSecrets.deleteImapCredentials.firstCall.args[0]).to.equal('acc-123');
-
-      // Then delete account
-      await account.destroy();
-    });
-
-    it('should return true on successful deletion', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAccount = createMockEmailAccount({ 
-        id: 'acc-123', 
-        userId: context.userId 
-      });
-      mockAccount.destroy = sinon.stub().resolves();
-
-      mockModels.EmailAccount.findOne.resolves(mockAccount);
-
-      const account = await mockModels.EmailAccount.findOne({
-        where: { id: 'acc-123', userId: context.userId },
-      });
-
-      await account.destroy();
-
-      // Resolver returns true on success
-      const result = true;
-      expect(result).to.be.true;
-    });
+    expect(recalculateUserUsageStub.calledOnce).to.be.true;
+    expect(recalculateUserUsageStub.firstCall.args[0]).to.equal('user-123');
   });
 });

@@ -1,180 +1,138 @@
 /**
  * Tests for createTag mutation
+ *
+ * Tests the REAL resolver by importing it directly and stubbing
+ * model static methods with sinon.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { Tag } from '../../../db/models/index.js';
+import { createTag } from '../../../mutations/tag/createTag.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockTag } from '../../utils/mock-models.js';
 
 describe('createTag mutation', () => {
-  let mockModels: any;
-
-  beforeEach(() => {
-    mockModels = {
-      Tag: {
-        create: sinon.stub(),
-        findOne: sinon.stub(),
-      },
-    };
-  });
-
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
 
-      expect(() => requireAuth(context)).to.throw('Authentication required');
+    try {
+      await (createTag as any)(null, { input: { name: 'Test' } }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
+  });
+
+  it('should create a tag with the correct arguments', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      name: 'Important',
+      color: '#FF5733',
+      description: 'Important emails',
+    };
+
+    const mockTag = {
+      id: 'tag-1',
+      userId: 'user-123',
+      name: input.name,
+      color: input.color,
+      description: input.description,
+      toJSON() {
+        return { id: this.id, userId: this.userId, name: this.name, color: this.color, description: this.description };
+      },
+    };
+
+    const createStub = sinon.stub(Tag, 'create').resolves(mockTag as any);
+
+    const result = await (createTag as any)(null, { input }, context);
+
+    // Verify Tag.create was called with the correct data
+    expect(createStub.calledOnce).to.be.true;
+    const createArgs = createStub.firstCall.args[0] as any;
+    expect(createArgs.userId).to.equal('user-123');
+    expect(createArgs.name).to.equal('Important');
+    expect(createArgs.color).to.equal('#FF5733');
+    expect(createArgs.description).to.equal('Important emails');
+
+    // Verify the return value includes emailCount: 0
+    expect(result).to.deep.include({
+      id: 'tag-1',
+      name: 'Important',
+      color: '#FF5733',
+      emailCount: 0,
     });
   });
 
-  describe('when user is authenticated', () => {
-    it('should create tag with valid input', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Important',
-        color: '#FF5733',
-        description: 'Important emails',
-      };
-      const newTag = createMockTag({
-        ...input,
-        userId: context.userId,
-      });
+  it('should use default color when not provided', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = { name: 'Work' };
 
-      mockModels.Tag.create.resolves(newTag);
+    const mockTag = {
+      id: 'tag-2',
+      userId: 'user-123',
+      name: 'Work',
+      color: '#6c757d',
+      description: null,
+      toJSON() {
+        return { id: this.id, userId: this.userId, name: this.name, color: this.color, description: this.description };
+      },
+    };
 
-      const result = await mockModels.Tag.create({
-        userId: context.userId,
-        name: input.name,
-        color: input.color,
-        description: input.description,
-      });
+    const createStub = sinon.stub(Tag, 'create').resolves(mockTag as any);
 
-      expect(result).to.exist;
-      expect(result.name).to.equal(input.name);
-      expect(result.color).to.equal(input.color);
-      expect(result.description).to.equal(input.description);
-      expect(mockModels.Tag.create.calledOnce).to.be.true;
-    });
+    await (createTag as any)(null, { input }, context);
 
-    it('should use default color when not provided', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Work',
-      };
-      
-      mockModels.Tag.create.resolves(createMockTag({ 
-        name: input.name, 
-        color: '#6c757d' 
-      }));
+    // Verify default color was applied by the resolver
+    const createArgs = createStub.firstCall.args[0] as any;
+    expect(createArgs.color).to.equal('#6c757d');
+  });
 
-      await mockModels.Tag.create({
-        userId: context.userId,
-        name: input.name,
-        color: '#6c757d', // default color
-        description: null,
-      });
+  it('should set description to null when not provided', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = { name: 'Personal', color: '#28a745' };
 
-      expect(mockModels.Tag.create.firstCall.args[0]).to.have.property('color', '#6c757d');
-    });
+    const mockTag = {
+      id: 'tag-3',
+      userId: 'user-123',
+      name: 'Personal',
+      color: '#28a745',
+      description: null,
+      toJSON() {
+        return { id: this.id, userId: this.userId, name: this.name, color: this.color, description: this.description };
+      },
+    };
 
-    it('should set description to null when not provided', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Personal',
-        color: '#28a745',
-      };
-      
-      mockModels.Tag.create.resolves(createMockTag({ 
-        ...input, 
-        description: null 
-      }));
+    const createStub = sinon.stub(Tag, 'create').resolves(mockTag as any);
 
-      await mockModels.Tag.create({
-        userId: context.userId,
-        name: input.name,
-        color: input.color,
-        description: null,
-      });
+    await (createTag as any)(null, { input }, context);
 
-      expect(mockModels.Tag.create.firstCall.args[0]).to.have.property('description', null);
-    });
+    const createArgs = createStub.firstCall.args[0] as any;
+    expect(createArgs.description).to.be.null;
+  });
 
-    it('should return tag with emailCount of 0 for new tags', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'New Tag',
-        color: '#007bff',
-      };
-      const newTag = createMockTag({
-        ...input,
-        userId: context.userId,
-        emailCount: 0,
-      });
+  it('should always return emailCount of 0 for new tags', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = { name: 'New Tag', color: '#007bff' };
 
-      mockModels.Tag.create.resolves(newTag);
+    const mockTag = {
+      id: 'tag-4',
+      userId: 'user-123',
+      name: 'New Tag',
+      color: '#007bff',
+      description: null,
+      toJSON() {
+        return { id: this.id, userId: this.userId, name: this.name, color: this.color, description: this.description };
+      },
+    };
 
-      const result = await mockModels.Tag.create({
-        userId: context.userId,
-        name: input.name,
-        color: input.color,
-        description: null,
-      });
+    sinon.stub(Tag, 'create').resolves(mockTag as any);
 
-      // Resolver adds emailCount: 0 to the response
-      const response = { ...result.toJSON(), emailCount: 0 };
-      
-      expect(response.emailCount).to.equal(0);
-    });
+    const result = await (createTag as any)(null, { input }, context);
 
-    it('should validate color format', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Test',
-        color: '#ABCDEF', // valid hex color
-      };
-      
-      mockModels.Tag.create.resolves(createMockTag(input));
-
-      await mockModels.Tag.create({
-        userId: context.userId,
-        ...input,
-        description: null,
-      });
-
-      // Color should be stored as-is
-      expect(mockModels.Tag.create.firstCall.args[0].color).to.equal('#ABCDEF');
-    });
-
-    it('should associate tag with correct user', async () => {
-      const context = createMockContext({ userId: 'specific-user-123' });
-      const input = {
-        name: 'My Tag',
-      };
-      
-      mockModels.Tag.create.resolves(createMockTag({ 
-        ...input, 
-        userId: context.userId 
-      }));
-
-      await mockModels.Tag.create({
-        userId: context.userId,
-        name: input.name,
-        color: '#6c757d',
-        description: null,
-      });
-
-      expect(mockModels.Tag.create.firstCall.args[0]).to.have.property('userId', 'specific-user-123');
-    });
+    expect(result.emailCount).to.equal(0);
   });
 });

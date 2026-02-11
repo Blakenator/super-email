@@ -3,7 +3,7 @@ import { EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { storeImapCredentials } from '../../helpers/secrets.js';
 import { getOrCreateSubscription } from '../../helpers/stripe.js';
-import { ACCOUNT_LIMITS } from '../../db/models/subscription.model.js';
+import { ACCOUNT_LIMITS } from '../../db/models/subscription.constants.js';
 import { recalculateUserUsage } from '../../helpers/usage-calculator.js';
 import { logger } from '../../helpers/logger.js';
 

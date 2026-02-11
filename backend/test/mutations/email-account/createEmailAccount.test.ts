@@ -1,213 +1,187 @@
 /**
  * Tests for createEmailAccount mutation
+ *
+ * Tests the REAL resolver by importing it directly and stubbing
+ * model static methods and helper functions with sinon.
+ *
+ * Helper functions (secrets, stripe, usage-calculator) are ESM exports
+ * and cannot be stubbed with sinon directly. For those, we use esmock
+ * to provide mock implementations when loading the resolver module.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import esmock from 'esmock';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockEmailAccount } from '../../utils/mock-models.js';
 
 describe('createEmailAccount mutation', () => {
-  let mockModels: any;
-  let mockSecrets: any;
+  let createEmailAccount: any;
+  let storeImapCredentialsStub: sinon.SinonStub;
+  let getOrCreateSubscriptionStub: sinon.SinonStub;
+  let recalculateUserUsageStub: sinon.SinonStub;
+  let emailAccountMock: Record<string, sinon.SinonStub>;
 
-  beforeEach(() => {
-    mockModels = {
-      EmailAccount: {
-        count: sinon.stub(),
-        update: sinon.stub(),
-        create: sinon.stub(),
+  beforeEach(async () => {
+    storeImapCredentialsStub = sinon.stub().resolves();
+    getOrCreateSubscriptionStub = sinon.stub().resolves({ accountTier: 'free' });
+    recalculateUserUsageStub = sinon.stub().resolves();
+
+    emailAccountMock = {
+      count: sinon.stub().resolves(0),
+      update: sinon.stub().resolves([0]),
+      create: sinon.stub().resolves({ id: 'acc-default', userId: 'user-123' }),
+    };
+
+    const mod = await esmock(
+      '../../../mutations/email-account/createEmailAccount.js',
+      {
+        '../../../db/models/index.js': {
+          EmailAccount: emailAccountMock,
+        },
+        '../../../helpers/secrets.js': {
+          storeImapCredentials: storeImapCredentialsStub,
+        },
+        '../../../helpers/stripe.js': {
+          getOrCreateSubscription: getOrCreateSubscriptionStub,
+        },
+        '../../../helpers/usage-calculator.js': {
+          recalculateUserUsage: recalculateUserUsageStub,
+        },
       },
-    };
-
-    mockSecrets = {
-      storeImapCredentials: sinon.stub().resolves(),
-    };
+    );
+    createEmailAccount = mod.createEmailAccount;
   });
 
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
+  const validInput = {
+    name: 'Test Gmail',
+    email: 'test@gmail.com',
+    host: 'imap.gmail.com',
+    port: 993,
+    username: 'test@gmail.com',
+    password: 'app-password-123',
+    accountType: 'IMAP',
+    useSsl: true,
+  };
 
-      expect(() => requireAuth(context)).to.throw('Authentication required');
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
+
+    try {
+      await createEmailAccount(null, { input: validInput }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
+  });
+
+  it('should create email account with valid input', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = { id: 'acc-1', ...validInput, userId: 'user-123' };
+
+    emailAccountMock.count.resolves(0);
+    emailAccountMock.create.resolves(mockAccount);
+
+    const result = await createEmailAccount(null, { input: validInput }, context);
+
+    expect(emailAccountMock.create.calledOnce).to.be.true;
+    const createArgs = emailAccountMock.create.firstCall.args[0] as any;
+    expect(createArgs.userId).to.equal('user-123');
+    expect(createArgs.name).to.equal('Test Gmail');
+    expect(createArgs.email).to.equal('test@gmail.com');
+    expect(createArgs.accountType).to.equal('IMAP');
+    expect(result).to.equal(mockAccount);
+  });
+
+  it('should set first account as default automatically', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = { id: 'acc-2', userId: 'user-123' };
+
+    emailAccountMock.count.resolves(0);
+    emailAccountMock.create.resolves(mockAccount);
+
+    await createEmailAccount(null, { input: validInput }, context);
+
+    const createArgs = emailAccountMock.create.firstCall.args[0] as any;
+    expect(createArgs.isDefault).to.be.true;
+
+    // Should unset existing defaults
+    expect(emailAccountMock.update.calledOnce).to.be.true;
+  });
+
+  it('should not force default for additional accounts unless specified', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = { id: 'acc-3', userId: 'user-123' };
+
+    emailAccountMock.count.resolves(1);
+    emailAccountMock.create.resolves(mockAccount);
+    getOrCreateSubscriptionStub.resolves({ accountTier: 'pro' }); // Higher tier to allow >1 account
+
+    const input = { ...validInput, isDefault: false };
+    await createEmailAccount(null, { input }, context);
+
+    const createArgs = emailAccountMock.create.firstCall.args[0] as any;
+    expect(createArgs.isDefault).to.be.false;
+    expect(emailAccountMock.update.called).to.be.false;
+  });
+
+  it('should enforce account limits', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+
+    emailAccountMock.count.resolves(3); // Over the FREE limit of 1
+
+    try {
+      await createEmailAccount(null, { input: validInput }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.include('Account limit reached');
+    }
+  });
+
+  it('should store IMAP credentials in secrets', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = { id: 'acc-4', userId: 'user-123' };
+
+    emailAccountMock.count.resolves(0);
+    emailAccountMock.create.resolves(mockAccount);
+
+    await createEmailAccount(null, { input: validInput }, context);
+
+    expect(storeImapCredentialsStub.calledOnce).to.be.true;
+    expect(storeImapCredentialsStub.firstCall.args[0]).to.equal('acc-4');
+    expect(storeImapCredentialsStub.firstCall.args[1]).to.deep.equal({
+      username: 'test@gmail.com',
+      password: 'app-password-123',
     });
   });
 
-  describe('when user is authenticated', () => {
-    const validInput = {
-      name: 'Test Gmail',
-      email: 'test@gmail.com',
-      host: 'imap.gmail.com',
-      port: 993,
-      username: 'test@gmail.com',
-      password: 'app-password-123',
-      accountType: 'IMAP' as const,
-      useSsl: true,
-    };
+  it('should recalculate usage after creation', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = { id: 'acc-5', userId: 'user-123' };
 
-    it('should create email account with valid input', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const newAccount = createMockEmailAccount({
-        ...validInput,
-        userId: context.userId,
-        isDefault: true,
-      });
+    emailAccountMock.count.resolves(0);
+    emailAccountMock.create.resolves(mockAccount);
 
-      mockModels.EmailAccount.count.resolves(0);
-      mockModels.EmailAccount.create.resolves(newAccount);
+    await createEmailAccount(null, { input: validInput }, context);
 
-      // Check if this is first account
-      const existingCount = await mockModels.EmailAccount.count({
-        where: { userId: context.userId },
-      });
-      expect(existingCount).to.equal(0);
+    expect(recalculateUserUsageStub.calledOnce).to.be.true;
+    expect(recalculateUserUsageStub.firstCall.args[0]).to.equal('user-123');
+  });
 
-      // Create account
-      const result = await mockModels.EmailAccount.create({
-        ...validInput,
-        userId: context.userId,
-        isDefault: true,
-      });
+  it('should set defaultSmtpProfileId when provided', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccount = { id: 'acc-6', userId: 'user-123' };
 
-      expect(result).to.exist;
-      expect(result.name).to.equal(validInput.name);
-      expect(result.email).to.equal(validInput.email);
-      expect(mockModels.EmailAccount.create.calledOnce).to.be.true;
-    });
+    emailAccountMock.count.resolves(0);
+    emailAccountMock.create.resolves(mockAccount);
 
-    it('should set first account as default automatically', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.count.resolves(0);
-      mockModels.EmailAccount.create.resolves(createMockEmailAccount({ isDefault: true }));
+    const input = { ...validInput, defaultSmtpProfileId: 'smtp-123' };
+    await createEmailAccount(null, { input }, context);
 
-      const existingCount = await mockModels.EmailAccount.count({
-        where: { userId: context.userId },
-      });
-      const isFirstAccount = existingCount === 0;
-
-      expect(isFirstAccount).to.be.true;
-      
-      // First account should be default
-      const createArgs = {
-        ...validInput,
-        userId: context.userId,
-        isDefault: true,
-      };
-      
-      await mockModels.EmailAccount.create(createArgs);
-      
-      expect(mockModels.EmailAccount.create.firstCall.args[0]).to.have.property('isDefault', true);
-    });
-
-    it('should unset previous default when setting new default', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.count.resolves(1);
-      mockModels.EmailAccount.update.resolves([1]);
-      mockModels.EmailAccount.create.resolves(createMockEmailAccount({ isDefault: true }));
-
-      // Simulate unsetting existing defaults
-      await mockModels.EmailAccount.update(
-        { isDefault: false },
-        { where: { userId: context.userId, isDefault: true } }
-      );
-
-      expect(mockModels.EmailAccount.update.calledOnce).to.be.true;
-      expect(mockModels.EmailAccount.update.firstCall.args[0]).to.deep.equal({ isDefault: false });
-    });
-
-    it('should store credentials in secrets manager', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const newAccount = createMockEmailAccount({
-        id: 'new-account-id',
-        ...validInput,
-        userId: context.userId,
-      });
-
-      mockModels.EmailAccount.count.resolves(0);
-      mockModels.EmailAccount.create.resolves(newAccount);
-
-      await mockModels.EmailAccount.create({
-        ...validInput,
-        userId: context.userId,
-        isDefault: true,
-      });
-
-      // Store credentials
-      await mockSecrets.storeImapCredentials(newAccount.id, {
-        username: validInput.username,
-        password: validInput.password,
-      });
-
-      expect(mockSecrets.storeImapCredentials.calledOnce).to.be.true;
-      expect(mockSecrets.storeImapCredentials.firstCall.args[0]).to.equal('new-account-id');
-      expect(mockSecrets.storeImapCredentials.firstCall.args[1]).to.deep.include({
-        username: validInput.username,
-        password: validInput.password,
-      });
-    });
-
-    it('should handle IMAP account type', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.count.resolves(0);
-      mockModels.EmailAccount.create.resolves(createMockEmailAccount({ accountType: 'IMAP' }));
-
-      await mockModels.EmailAccount.create({
-        ...validInput,
-        accountType: 'IMAP',
-        userId: context.userId,
-        isDefault: true,
-      });
-
-      expect(mockModels.EmailAccount.create.firstCall.args[0]).to.have.property('accountType', 'IMAP');
-    });
-
-    it('should handle POP3 account type', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.count.resolves(0);
-      mockModels.EmailAccount.create.resolves(createMockEmailAccount({ accountType: 'POP3' }));
-
-      await mockModels.EmailAccount.create({
-        ...validInput,
-        accountType: 'POP3',
-        userId: context.userId,
-        isDefault: true,
-      });
-
-      expect(mockModels.EmailAccount.create.firstCall.args[0]).to.have.property('accountType', 'POP3');
-    });
-
-    it('should set defaultSmtpProfileId when provided', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.count.resolves(0);
-      mockModels.EmailAccount.create.resolves(createMockEmailAccount({ 
-        defaultSmtpProfileId: 'smtp-profile-123' 
-      }));
-
-      await mockModels.EmailAccount.create({
-        ...validInput,
-        defaultSmtpProfileId: 'smtp-profile-123',
-        userId: context.userId,
-        isDefault: true,
-      });
-
-      expect(mockModels.EmailAccount.create.firstCall.args[0])
-        .to.have.property('defaultSmtpProfileId', 'smtp-profile-123');
-    });
+    const createArgs = emailAccountMock.create.firstCall.args[0] as any;
+    expect(createArgs.defaultSmtpProfileId).to.equal('smtp-123');
   });
 });

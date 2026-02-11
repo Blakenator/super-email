@@ -1,197 +1,109 @@
 /**
  * Tests for getEmails query
+ *
+ * Tests the REAL resolver by importing it via esmock to mock
+ * the startAsyncEmailSync helper.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import esmock from 'esmock';
+import { Email, EmailAccount } from '../../../db/models/index.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockEmail, createMockEmailAccount } from '../../utils/mock-models.js';
 
 describe('getEmails query', () => {
-  let mockModels: any;
+  let getEmails: any;
 
-  beforeEach(() => {
-    mockModels = {
-      Email: {
-        findAll: sinon.stub(),
+  beforeEach(async () => {
+    const mod = await esmock(
+      '../../../queries/email/getEmails.js',
+      {
+        '../../../helpers/email.js': {
+          startAsyncEmailSync: sinon.stub().resolves(),
+        },
       },
-      EmailAccount: {
-        findAll: sinon.stub(),
-      },
-    };
+    );
+    getEmails = mod.getEmails;
   });
 
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
-
-      expect(() => requireAuth(context)).to.throw('Authentication required');
-    });
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
+    try {
+      await getEmails(null, { input: {} }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
   });
 
-  describe('when user is authenticated', () => {
-    it('should return empty array when user has no email accounts', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.findAll.resolves([]);
+  it('should return empty array when no email accounts exist', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    sinon.stub(EmailAccount, 'findAll').resolves([]);
 
-      const accounts = await mockModels.EmailAccount.findAll({
-        where: { userId: context.userId },
-      });
+    const result = await getEmails(null, { input: {} }, context);
 
-      expect(accounts).to.be.an('array').that.is.empty;
-      
-      // Resolver returns [] when no accounts
-      const result = accounts.length === 0 ? [] : ['emails'];
-      expect(result).to.be.empty;
-    });
+    expect(result).to.deep.equal([]);
+  });
 
-    it('should return emails for user accounts', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAccounts = [
-        createMockEmailAccount({ id: 'acc-1' }),
-        createMockEmailAccount({ id: 'acc-2' }),
-      ];
-      const mockEmails = [
-        createMockEmail({ id: 'email-1', emailAccountId: 'acc-1' }),
-        createMockEmail({ id: 'email-2', emailAccountId: 'acc-2' }),
-      ];
+  it('should return emails for user accounts', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccounts = [{ id: 'acc-1', lastSyncedAt: new Date() }];
+    const mockEmails = [{ id: 'e-1' }, { id: 'e-2' }];
 
-      mockModels.EmailAccount.findAll.resolves(mockAccounts);
-      mockModels.Email.findAll.resolves(mockEmails);
+    sinon.stub(EmailAccount, 'findAll').resolves(mockAccounts as any);
+    sinon.stub(Email, 'findAll').resolves(mockEmails as any);
 
-      const accounts = await mockModels.EmailAccount.findAll({
-        where: { userId: context.userId },
-      });
-      const accountIds = accounts.map((a: any) => a.id);
+    const result = await getEmails(null, { input: { folder: 'INBOX' } }, context);
 
-      const emails = await mockModels.Email.findAll({
-        where: { emailAccountId: accountIds },
-      });
+    expect(result).to.deep.equal(mockEmails);
+  });
 
-      expect(emails).to.have.lengthOf(2);
-    });
+  it('should apply default limit of 50 and offset of 0', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccounts = [{ id: 'acc-1', lastSyncedAt: new Date() }];
 
-    it('should filter by folder', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = { folder: 'INBOX' };
-      
-      mockModels.EmailAccount.findAll.resolves([createMockEmailAccount()]);
-      mockModels.Email.findAll.resolves([createMockEmail({ folder: 'INBOX' })]);
+    sinon.stub(EmailAccount, 'findAll').resolves(mockAccounts as any);
+    const emailFindAllStub = sinon.stub(Email, 'findAll').resolves([]);
 
-      await mockModels.Email.findAll({
-        where: { folder: input.folder },
-      });
+    await getEmails(null, { input: {} }, context);
 
-      expect(mockModels.Email.findAll.firstCall.args[0].where).to.have.property('folder', 'INBOX');
-    });
+    const queryArgs = emailFindAllStub.firstCall.args[0] as any;
+    expect(queryArgs.limit).to.equal(50);
+    expect(queryArgs.offset).to.equal(0);
+  });
 
-    it('should filter by read status', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = { isRead: false };
-      
-      mockModels.EmailAccount.findAll.resolves([createMockEmailAccount()]);
-      mockModels.Email.findAll.resolves([createMockEmail({ isRead: false })]);
+  it('should use provided limit and offset', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccounts = [{ id: 'acc-1', lastSyncedAt: new Date() }];
 
-      await mockModels.Email.findAll({
-        where: { isRead: input.isRead },
-      });
+    sinon.stub(EmailAccount, 'findAll').resolves(mockAccounts as any);
+    const emailFindAllStub = sinon.stub(Email, 'findAll').resolves([]);
 
-      expect(mockModels.Email.findAll.firstCall.args[0].where).to.have.property('isRead', false);
-    });
+    await getEmails(null, { input: { limit: 10, offset: 20 } }, context);
 
-    it('should filter by starred status', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = { isStarred: true };
-      
-      mockModels.EmailAccount.findAll.resolves([createMockEmailAccount()]);
-      mockModels.Email.findAll.resolves([createMockEmail({ isStarred: true })]);
+    const queryArgs = emailFindAllStub.firstCall.args[0] as any;
+    expect(queryArgs.limit).to.equal(10);
+    expect(queryArgs.offset).to.equal(20);
+  });
 
-      await mockModels.Email.findAll({
-        where: { isStarred: input.isStarred },
-      });
+  it('should order by receivedAt DESC, createdAt DESC, id ASC', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccounts = [{ id: 'acc-1', lastSyncedAt: new Date() }];
 
-      expect(mockModels.Email.findAll.firstCall.args[0].where).to.have.property('isStarred', true);
-    });
+    sinon.stub(EmailAccount, 'findAll').resolves(mockAccounts as any);
+    const emailFindAllStub = sinon.stub(Email, 'findAll').resolves([]);
 
-    it('should apply pagination with limit and offset', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = { limit: 10, offset: 20 };
-      
-      mockModels.EmailAccount.findAll.resolves([createMockEmailAccount()]);
-      mockModels.Email.findAll.resolves([]);
+    await getEmails(null, { input: {} }, context);
 
-      await mockModels.Email.findAll({
-        where: {},
-        limit: input.limit,
-        offset: input.offset,
-      });
-
-      expect(mockModels.Email.findAll.firstCall.args[0]).to.have.property('limit', 10);
-      expect(mockModels.Email.findAll.firstCall.args[0]).to.have.property('offset', 20);
-    });
-
-    it('should use default limit of 50 when not specified', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input: { limit?: number; offset?: number } = {};
-      
-      mockModels.EmailAccount.findAll.resolves([createMockEmailAccount()]);
-      mockModels.Email.findAll.resolves([]);
-
-      const limit = input.limit ?? 50;
-      const offset = input.offset ?? 0;
-
-      await mockModels.Email.findAll({
-        where: {},
-        limit,
-        offset,
-      });
-
-      expect(mockModels.Email.findAll.firstCall.args[0]).to.have.property('limit', 50);
-      expect(mockModels.Email.findAll.firstCall.args[0]).to.have.property('offset', 0);
-    });
-
-    it('should order by receivedAt descending', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.findAll.resolves([createMockEmailAccount()]);
-      mockModels.Email.findAll.resolves([]);
-
-      await mockModels.Email.findAll({
-        where: {},
-        order: [['receivedAt', 'DESC'], ['createdAt', 'DESC'], ['id', 'ASC']],
-      });
-
-      expect(mockModels.Email.findAll.firstCall.args[0].order[0])
-        .to.deep.equal(['receivedAt', 'DESC']);
-    });
-
-    it('should filter by specific email account', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = { emailAccountId: 'specific-acc-123' };
-      
-      mockModels.EmailAccount.findAll.resolves([
-        createMockEmailAccount({ id: 'specific-acc-123' }),
-      ]);
-      mockModels.Email.findAll.resolves([]);
-
-      await mockModels.Email.findAll({
-        where: { emailAccountId: input.emailAccountId },
-      });
-
-      expect(mockModels.Email.findAll.firstCall.args[0].where)
-        .to.have.property('emailAccountId', 'specific-acc-123');
-    });
+    const queryArgs = emailFindAllStub.firstCall.args[0] as any;
+    expect(queryArgs.order).to.deep.equal([
+      ['receivedAt', 'DESC'],
+      ['createdAt', 'DESC'],
+      ['id', 'ASC'],
+    ]);
   });
 });

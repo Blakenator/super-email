@@ -1,144 +1,94 @@
 /**
  * Tests for deleteAuthenticationMethod mutation
+ *
+ * Tests the REAL resolver by importing it directly and stubbing
+ * model static methods with sinon.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { AuthenticationMethod } from '../../../db/models/index.js';
+import { deleteAuthenticationMethod } from '../../../mutations/auth/deleteAuthenticationMethod.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockAuthMethod } from '../../utils/mock-models.js';
 
 describe('deleteAuthenticationMethod mutation', () => {
-  let mockModels: any;
-
-  beforeEach(() => {
-    mockModels = {
-      AuthenticationMethod: {
-        findOne: sinon.stub(),
-        count: sinon.stub(),
-      },
-    };
-  });
-
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
 
-      expect(() => requireAuth(context)).to.throw('Authentication required');
-    });
+    try {
+      await (deleteAuthenticationMethod as any)(null, { id: 'auth-1' }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
   });
 
-  describe('when user is authenticated', () => {
-    it('should delete authentication method when found', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAuthMethod = createMockAuthMethod({
-        id: 'auth-123',
-        userId: context.userId,
-      });
-      mockAuthMethod.destroy = sinon.stub().resolves();
+  it('should throw when auth method not found', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    sinon.stub(AuthenticationMethod, 'findOne').resolves(null);
 
-      mockModels.AuthenticationMethod.findOne.resolves(mockAuthMethod);
-      mockModels.AuthenticationMethod.count.resolves(2); // Has multiple auth methods
+    try {
+      await (deleteAuthenticationMethod as any)(null, { id: 'nonexistent' }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication method not found');
+    }
+  });
 
-      // Find auth method
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { id: 'auth-123', userId: context.userId },
-      });
+  it('should throw when trying to delete last auth method', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAuthMethod = { id: 'auth-1', userId: 'user-123', destroy: sinon.stub() };
 
-      expect(authMethod).to.exist;
+    sinon.stub(AuthenticationMethod, 'findOne').resolves(mockAuthMethod as any);
+    sinon.stub(AuthenticationMethod, 'count').resolves(1);
 
-      // Check if user has other auth methods
-      const count = await mockModels.AuthenticationMethod.count({
-        where: { userId: context.userId },
-      });
-      expect(count).to.be.greaterThan(1);
+    try {
+      await (deleteAuthenticationMethod as any)(null, { id: 'auth-1' }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Cannot delete the last authentication method. Add another method first.');
+    }
 
-      // Delete auth method
-      await authMethod.destroy();
+    // Verify destroy was NOT called
+    expect(mockAuthMethod.destroy.called).to.be.false;
+  });
 
-      expect(mockAuthMethod.destroy.calledOnce).to.be.true;
+  it('should delete auth method when user has multiple methods', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAuthMethod = { id: 'auth-1', userId: 'user-123', destroy: sinon.stub().resolves() };
+
+    const findOneStub = sinon.stub(AuthenticationMethod, 'findOne').resolves(mockAuthMethod as any);
+    sinon.stub(AuthenticationMethod, 'count').resolves(2);
+
+    const result = await (deleteAuthenticationMethod as any)(null, { id: 'auth-1' }, context);
+
+    // Verify findOne was called with correct where clause
+    expect(findOneStub.firstCall.args[0]).to.deep.include({
+      where: { id: 'auth-1', userId: 'user-123' },
     });
 
-    it('should throw error when auth method not found', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.AuthenticationMethod.findOne.resolves(null);
+    // Verify destroy was called
+    expect(mockAuthMethod.destroy.calledOnce).to.be.true;
 
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { id: 'nonexistent', userId: context.userId },
-      });
+    // Verify returns true
+    expect(result).to.be.true;
+  });
 
-      expect(authMethod).to.be.null;
-    });
+  it('should count methods for the correct user', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAuthMethod = { id: 'auth-1', userId: 'user-123', destroy: sinon.stub().resolves() };
 
-    it('should not delete last remaining auth method', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAuthMethod = createMockAuthMethod({
-        id: 'auth-123',
-        userId: context.userId,
-      });
+    sinon.stub(AuthenticationMethod, 'findOne').resolves(mockAuthMethod as any);
+    const countStub = sinon.stub(AuthenticationMethod, 'count').resolves(3);
 
-      mockModels.AuthenticationMethod.findOne.resolves(mockAuthMethod);
-      mockModels.AuthenticationMethod.count.resolves(1); // Only one auth method
+    await (deleteAuthenticationMethod as any)(null, { id: 'auth-1' }, context);
 
-      // Check if this is the last auth method
-      const count = await mockModels.AuthenticationMethod.count({
-        where: { userId: context.userId },
-      });
-
-      expect(count).to.equal(1);
-
-      // Should not allow deletion of last auth method
-      if (count <= 1) {
-        expect(() => {
-          throw new Error('Cannot delete the last authentication method');
-        }).to.throw('Cannot delete the last authentication method');
-      }
-    });
-
-    it('should not delete auth method belonging to another user', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      // Query with wrong userId returns null
-      mockModels.AuthenticationMethod.findOne.resolves(null);
-
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { id: 'other-users-auth', userId: context.userId },
-      });
-
-      expect(authMethod).to.be.null;
-    });
-
-    it('should return true on successful deletion', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAuthMethod = createMockAuthMethod({
-        id: 'auth-123',
-        userId: context.userId,
-      });
-      mockAuthMethod.destroy = sinon.stub().resolves();
-
-      mockModels.AuthenticationMethod.findOne.resolves(mockAuthMethod);
-      mockModels.AuthenticationMethod.count.resolves(2);
-
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { id: 'auth-123', userId: context.userId },
-      });
-
-      await authMethod.destroy();
-
-      // Resolver returns true on success
-      const result = true;
-      expect(result).to.be.true;
+    expect(countStub.firstCall.args[0]).to.deep.include({
+      where: { userId: 'user-123' },
     });
   });
 });

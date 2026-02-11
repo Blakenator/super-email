@@ -4,5 +4,5 @@
   "recursive": true,
   "timeout": 10000,
   "exit": true,
-  "node-option": ["import=tsx"]
+  "node-option": ["import=tsx", "import=esmock"]
 }

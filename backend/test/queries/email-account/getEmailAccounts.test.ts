@@ -1,117 +1,70 @@
 /**
  * Tests for getEmailAccounts query
+ *
+ * Tests the REAL resolver by importing it directly and stubbing
+ * model static methods with sinon.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { EmailAccount, SmtpProfile } from '../../../db/models/index.js';
+import { getEmailAccounts } from '../../../queries/email-account/getEmailAccounts.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockEmailAccount } from '../../utils/mock-models.js';
 
 describe('getEmailAccounts query', () => {
-  let mockModels: any;
-
-  beforeEach(() => {
-    mockModels = {
-      EmailAccount: {
-        findAll: sinon.stub(),
-      },
-    };
-  });
-
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
+    try {
+      await (getEmailAccounts as any)(null, {}, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
+  });
 
-      expect(() => requireAuth(context)).to.throw('Authentication required');
+  it('should return email accounts for the user', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockAccounts = [
+      { id: 'acc-1', name: 'Gmail' },
+      { id: 'acc-2', name: 'Work' },
+    ];
+
+    sinon.stub(EmailAccount, 'findAll').resolves(mockAccounts as any);
+
+    const result = await (getEmailAccounts as any)(null, {}, context);
+
+    expect(result).to.deep.equal(mockAccounts);
+  });
+
+  it('should include defaultSmtpProfile and order by createdAt DESC', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const findAllStub = sinon.stub(EmailAccount, 'findAll').resolves([]);
+
+    await (getEmailAccounts as any)(null, {}, context);
+
+    expect(findAllStub.calledOnce).to.be.true;
+    const queryArgs = findAllStub.firstCall.args[0] as any;
+    expect(queryArgs.where).to.deep.include({ userId: 'user-123' });
+    expect(queryArgs.order).to.deep.equal([['createdAt', 'DESC']]);
+    // Should include defaultSmtpProfile association
+    expect(queryArgs.include).to.be.an('array').with.lengthOf(1);
+    expect(queryArgs.include[0]).to.deep.include({
+      model: SmtpProfile,
+      as: 'defaultSmtpProfile',
+      required: false,
     });
   });
 
-  describe('when user is authenticated', () => {
-    it('should return all email accounts for the user', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockAccounts = [
-        createMockEmailAccount({ id: 'acc-1', name: 'Gmail' }),
-        createMockEmailAccount({ id: 'acc-2', name: 'Work Email' }),
-      ];
+  it('should return empty array when no accounts exist', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    sinon.stub(EmailAccount, 'findAll').resolves([]);
 
-      mockModels.EmailAccount.findAll.resolves(mockAccounts);
+    const result = await (getEmailAccounts as any)(null, {}, context);
 
-      const result = await mockModels.EmailAccount.findAll({
-        where: { userId: context.userId },
-        order: [['createdAt', 'DESC']],
-      });
-
-      expect(result).to.have.lengthOf(2);
-      expect(mockModels.EmailAccount.findAll.calledOnce).to.be.true;
-      expect(mockModels.EmailAccount.findAll.firstCall.args[0]).to.deep.include({
-        where: { userId: 'user-123' },
-      });
-    });
-
-    it('should return empty array when no accounts exist', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.findAll.resolves([]);
-
-      const result = await mockModels.EmailAccount.findAll({
-        where: { userId: context.userId },
-      });
-
-      expect(result).to.be.an('array').that.is.empty;
-    });
-
-    it('should order accounts by creation date descending', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.EmailAccount.findAll.resolves([]);
-
-      await mockModels.EmailAccount.findAll({
-        where: { userId: context.userId },
-        order: [['createdAt', 'DESC']],
-      });
-
-      expect(mockModels.EmailAccount.findAll.firstCall.args[0].order)
-        .to.deep.equal([['createdAt', 'DESC']]);
-    });
-
-    it('should include syncing computed fields', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const accountWithHistoricalSync = createMockEmailAccount({ 
-        id: 'acc-1', 
-        historicalSyncId: 'sync-123' 
-      });
-      const accountWithUpdateSync = createMockEmailAccount({ 
-        id: 'acc-2', 
-        updateSyncId: 'sync-456'
-      });
-      const accountWithoutSync = createMockEmailAccount({ 
-        id: 'acc-3', 
-        historicalSyncId: null,
-        updateSyncId: null
-      });
-
-      mockModels.EmailAccount.findAll.resolves([accountWithHistoricalSync, accountWithUpdateSync, accountWithoutSync]);
-
-      const result = await mockModels.EmailAccount.findAll({
-        where: { userId: context.userId },
-      });
-
-      // isHistoricalSyncing is computed from historicalSyncId
-      expect(!!result[0].historicalSyncId).to.be.true;  // isHistoricalSyncing = true
-      expect(!!result[1].updateSyncId).to.be.true;       // isUpdateSyncing = true
-      expect(!!result[2].historicalSyncId).to.be.false;  // isHistoricalSyncing = false
-      expect(!!result[2].updateSyncId).to.be.false;      // isUpdateSyncing = false
-    });
+    expect(result).to.be.an('array').that.is.empty;
   });
 });
