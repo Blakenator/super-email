@@ -13,11 +13,7 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode, AutoLinkNode } from '@lexical/link';
-import {
-  CodeNode,
-  CodeHighlightNode,
-  $isCodeNode,
-} from '@lexical/code';
+import { CodeNode, CodeHighlightNode, $isCodeNode } from '@lexical/code';
 import { TableNode, TableCellNode, TableRowNode } from '@lexical/table';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';

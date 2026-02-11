@@ -1,0 +1,90 @@
+---
+description: Backend logging standards - use structured logger, never swallow errors silently
+globs: backend/**/*.ts
+alwaysApply: false
+---
+
+# Backend Logging Standards
+
+## Always Use the Logger
+
+Import and use the structured logger from `backend/helpers/logger.ts`. Never use `console.log`, `console.error`, or `console.warn` in backend code (exception: CLI scripts in `backend/db/migrations/run-migrations.ts`).
+
+```typescript
+import { logger } from '../../helpers/logger.js'; // adjust path as needed
+
+// Log levels:
+logger.debug('Context', 'Detailed trace info');       // verbose, hidden in production
+logger.info('Context',  'Notable event happened');     // normal operations
+logger.warn('Context',  'Something unexpected');       // recoverable issues
+logger.error('Context', 'Something failed', { error: err.message }); // failures
+```
+
+## Never Swallow Errors Silently
+
+Every `catch` block MUST log before returning, even for expected/ignorable errors.
+
+```typescript
+// ❌ BAD - silent failure, impossible to debug
+} catch {
+  return null;
+}
+
+// ❌ BAD - empty catch
+} catch {
+  // Ignore
+}
+
+// ✅ GOOD - log then return
+} catch (err) {
+  logger.error('Auth', 'Token verification failed', { error: err instanceof Error ? err.message : err });
+  return null;
+}
+
+// ✅ GOOD - expected error, use debug level
+} catch (err) {
+  logger.debug('IMAP', 'Logout failed during cleanup', { error: err instanceof Error ? err.message : err });
+}
+```
+
+## Context String Convention
+
+The first argument is a short context tag identifying the module/function:
+
+| Context | Where |
+|---------|-------|
+| `'IMAP'` | `helpers/imap-sync.ts` |
+| `'Email'` | `helpers/email.ts` |
+| `'Auth'` | `helpers/auth.ts` |
+| `'Secrets'` | `helpers/secrets.ts` |
+| `'Stripe'` | `helpers/stripe.ts`, webhook handler |
+| `'RuleMatcher'` | `helpers/rule-matcher.ts` |
+| `'Migrations'` | `db/migrations/` |
+| Mutation/query name | e.g. `'createEmailAccount'`, `'getEmails'` |
+
+## What to Log
+
+| Scenario | Level | Example |
+|----------|-------|---------|
+| Resource created/deleted | `info` | `logger.info('createEmailAccount', 'Created account X for user Y')` |
+| Sync progress/completion | `info` | `logger.info('IMAP', 'Sync complete: 42 synced')` |
+| Connection test failure | `warn` | `logger.warn('testSmtp', 'SMTP failed', { host, error })` |
+| Expected "not found" | `debug` | `logger.debug('Secrets', 'Credentials not found in AWS')` |
+| Unexpected error in catch | `error` | `logger.error('IMAP', 'Batch insert failed', { error })` |
+| Batch/loop progress | `debug` | `logger.debug('IMAP', 'Batch 3: 50 new, 12 skipped')` |
+
+## Include Diagnostic Data
+
+Always attach enough context to identify the root cause without reproducing the issue:
+
+```typescript
+// ❌ BAD - no context
+logger.error('IMAP', 'Sync failed');
+
+// ✅ GOOD - actionable context
+logger.error('IMAP', `Sync failed for ${account.email}`, {
+  accountId: account.id,
+  syncType,
+  error: err instanceof Error ? err.message : err,
+});
+```

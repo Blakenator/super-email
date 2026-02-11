@@ -327,8 +327,8 @@ export const RUN_MAIL_RULE_MUTATION = gql(`
 // ============ Billing ============
 
 export const GET_BILLING_INFO_QUERY = gql(`
-  query GetBillingInfo {
-    getBillingInfo {
+  query GetBillingInfo($sessionId: String) {
+    getBillingInfo(sessionId: $sessionId) {
       subscription {
         id
         status

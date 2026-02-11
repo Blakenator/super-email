@@ -7,7 +7,7 @@ export const ResponsiveTabsWrapper = styled.div`
     display: flex;
     gap: ${({ theme }) => theme.spacing.lg};
     align-items: flex-start;
-    
+
     .nav-tabs {
       flex-direction: column;
       border-bottom: none;
@@ -27,15 +27,16 @@ export const ResponsiveTabsWrapper = styled.div`
       text-align: left;
       border-radius: ${({ theme }) => theme.borderRadius.md};
       margin-bottom: ${({ theme }) => theme.spacing.xs};
-      padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+      padding: ${({ theme }) => theme.spacing.sm}
+        ${({ theme }) => theme.spacing.md};
       white-space: normal;
       word-wrap: break-word;
-      
+
       &:hover {
         color: ${({ theme }) => theme.colors.primary};
         background: ${({ theme }) => theme.colors.backgroundHover};
       }
-      
+
       &.active {
         color: ${({ theme }) => theme.colors.primary};
         background: ${({ theme }) => theme.colors.primary}15;
@@ -65,12 +66,12 @@ export const ResponsiveTabsWrapper = styled.div`
       padding: ${({ theme }) => theme.spacing.sm};
       border-radius: ${({ theme }) => theme.borderRadius.sm};
       font-size: ${({ theme }) => theme.fontSizes.sm};
-      
+
       &:hover {
         color: ${({ theme }) => theme.colors.primary};
         background: ${({ theme }) => theme.colors.backgroundHover};
       }
-      
+
       &.active {
         color: ${({ theme }) => theme.colors.primary};
         background: ${({ theme }) => theme.colors.primary}15;
@@ -114,7 +115,11 @@ export const Avatar = styled.div`
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: linear-gradient(135deg, ${({ theme }) => theme.colors.primary} 0%, ${({ theme }) => theme.colors.primaryDark} 100%);
+  background: linear-gradient(
+    135deg,
+    ${({ theme }) => theme.colors.primary} 0%,
+    ${({ theme }) => theme.colors.primaryDark} 100%
+  );
   display: flex;
   align-items: center;
   justify-content: center;
@@ -258,7 +263,8 @@ export const AuthMethodIcon = styled.div<{ $provider: string }>`
         return '#fff';
     }
   }};
-  border: ${({ $provider }) => ($provider === 'GOOGLE' ? '1px solid #e0e0e0' : 'none')};
+  border: ${({ $provider }) =>
+    $provider === 'GOOGLE' ? '1px solid #e0e0e0' : 'none'};
 `;
 
 export const AuthMethodInfo = styled.div`

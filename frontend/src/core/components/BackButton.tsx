@@ -36,7 +36,8 @@ export function BackButton({
 }: BackButtonProps) {
   const sizeClass = size === 'lg' ? 'btn-lg' : 'btn-sm';
   const variantClass = `btn-${variant}`;
-  const combinedClassName = `btn ${variantClass} ${sizeClass} ${className || ''}`.trim();
+  const combinedClassName =
+    `btn ${variantClass} ${sizeClass} ${className || ''}`.trim();
   return (
     <StyledButton
       onClick={onClick}

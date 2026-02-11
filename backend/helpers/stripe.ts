@@ -513,6 +513,50 @@ export async function getOrCreateSubscription(
 }
 
 /**
+ * Resolve a checkout session ID into a subscription update.
+ * Used when the user is redirected back from Stripe checkout before the webhook arrives.
+ * Fetches the checkout session, extracts the subscription ID, and updates the local record.
+ */
+export async function resolveCheckoutSession(
+  subscription: Subscription,
+  sessionId: string,
+): Promise<Subscription> {
+  // If subscription already has a Stripe subscription ID, no need to resolve
+  if (subscription.stripeSubscriptionId) {
+    return subscription;
+  }
+
+  if (!isStripeConfigured()) {
+    return subscription;
+  }
+
+  try {
+    const stripeClient = getStripeClient();
+    const session = await stripeClient.checkout.sessions.retrieve(sessionId);
+
+    if (session.subscription) {
+      await subscription.update({
+        stripeSubscriptionId: session.subscription as string,
+        status: SubscriptionStatus.ACTIVE,
+      });
+      await subscription.reload();
+
+      logger.info(
+        'Stripe',
+        `Resolved checkout session ${sessionId} -> subscription ${session.subscription} for user ${subscription.userId}`,
+      );
+    }
+  } catch (error) {
+    logger.warn(
+      'Stripe',
+      `Failed to resolve checkout session ${sessionId}: ${error}`,
+    );
+  }
+
+  return subscription;
+}
+
+/**
  * Sync subscription status from Stripe and update local database
  * Called when loading billing page to ensure local data is in sync
  */
@@ -533,6 +577,14 @@ export async function syncSubscriptionFromStripe(
     const stripeClient = getStripeClient();
     const stripeSubscription = await stripeClient.subscriptions.retrieve(
       subscription.stripeSubscriptionId,
+      { expand: ['items', 'items.data.price'] },
+    );
+
+    logger.info(
+      'Stripe',
+      `Retrieved subscription ${subscription.stripeSubscriptionId}: ` +
+        `status=${stripeSubscription.status}, ` +
+        `items=${stripeSubscription.items?.data?.length ?? 0}`,
     );
 
     // Map Stripe status to our status enum
@@ -542,8 +594,11 @@ export async function syncSubscriptionFromStripe(
     let storageTier = StorageTier.FREE;
     let accountTier = AccountTier.FREE;
 
-    for (const item of stripeSubscription.items.data) {
+    const items = stripeSubscription.items?.data ?? [];
+    for (const item of items) {
       const priceId = item.price.id;
+
+      logger.debug('Stripe', `Subscription item price: ${priceId}`);
 
       const storage = getStorageTierFromPriceId(priceId);
       if (storage) {
@@ -554,6 +609,20 @@ export async function syncSubscriptionFromStripe(
       if (account) {
         accountTier = account;
       }
+    }
+
+    if (items.length > 0 && storageTier === StorageTier.FREE && accountTier === AccountTier.FREE) {
+      logger.warn(
+        'Stripe',
+        `No tier mappings found for subscription ${subscription.stripeSubscriptionId}. ` +
+          `Price IDs from Stripe: [${items.map((i) => i.price.id).join(', ')}]. ` +
+          `Configured storage price IDs: basic=${config.stripe.storagePriceIds.basic || '(empty)'}, ` +
+          `pro=${config.stripe.storagePriceIds.pro || '(empty)'}, ` +
+          `enterprise=${config.stripe.storagePriceIds.enterprise || '(empty)'}. ` +
+          `Configured account price IDs: basic=${config.stripe.accountPriceIds.basic || '(empty)'}, ` +
+          `pro=${config.stripe.accountPriceIds.pro || '(empty)'}, ` +
+          `enterprise=${config.stripe.accountPriceIds.enterprise || '(empty)'}`,
+      );
     }
 
     // Safely extract period end and cancel status
@@ -572,8 +641,6 @@ export async function syncSubscriptionFromStripe(
     }
     
     const cancelAtEnd = stripeSub.cancel_at_period_end ?? false;
-
-    logger.debug('Stripe', `Syncing subscription: periodEnd=${periodEnd}, cancelAtEnd=${cancelAtEnd}, raw=${JSON.stringify({ current_period_end: stripeSub.current_period_end, billing_cycle_anchor: stripeSub.billing_cycle_anchor })}`);
 
     // Build update object, only including period end if it exists
     const updateData: {
@@ -598,13 +665,18 @@ export async function syncSubscriptionFromStripe(
     await subscription.update(updateData);
 
     await subscription.reload();
-    logger.debug(
+    logger.info(
       'Stripe',
-      `Synced subscription for user ${subscription.userId}: status=${status}`,
+      `Synced subscription for user ${subscription.userId}: ` +
+        `status=${status}, storage=${storageTier}, accounts=${accountTier}`,
     );
     return subscription;
   } catch (error: any) {
-    logger.error('Stripe', `Error syncing subscription: ${error.message}`);
+    logger.error(
+      'Stripe',
+      `Error syncing subscription ${subscription.stripeSubscriptionId}: ${error.message}`,
+      error.stack,
+    );
     // Return existing subscription on error
     return subscription;
   }

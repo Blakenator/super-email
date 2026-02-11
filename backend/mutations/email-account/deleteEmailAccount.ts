@@ -3,6 +3,7 @@ import { EmailAccount, Email } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { deleteImapCredentials } from '../../helpers/secrets.js';
 import { recalculateUserUsage } from '../../helpers/usage-calculator.js';
+import { logger } from '../../helpers/logger.js';
 
 export const deleteEmailAccount = makeMutation(
   'deleteEmailAccount',
@@ -28,6 +29,7 @@ export const deleteEmailAccount = makeMutation(
     // Recalculate usage after deleting account
     await recalculateUserUsage(userId);
 
+    logger.info('deleteEmailAccount', `Deleted email account ${emailAccount.email} (${id}) for user ${userId}`);
     return true;
   },
 );

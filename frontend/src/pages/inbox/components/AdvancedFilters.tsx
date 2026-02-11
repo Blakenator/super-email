@@ -60,11 +60,10 @@ export function AdvancedFilters({
     tagIds: filters.tagIds || [],
   }));
 
-  const activeFilterCount =
-    Object.entries(filters).filter(([key, v]) => {
-      if (key === 'tagIds') return ((v as string[]) || []).length > 0;
-      return typeof v === 'string' && v.trim() !== '';
-    }).length;
+  const activeFilterCount = Object.entries(filters).filter(([key, v]) => {
+    if (key === 'tagIds') return ((v as string[]) || []).length > 0;
+    return typeof v === 'string' && v.trim() !== '';
+  }).length;
 
   // Sync localFilters when filters prop changes
   useEffect(() => {
@@ -94,7 +93,10 @@ export function AdvancedFilters({
     [handleApply],
   );
 
-  const updateFilter = (field: keyof EmailFilters, value: string | string[]) => {
+  const updateFilter = (
+    field: keyof EmailFilters,
+    value: string | string[],
+  ) => {
     setLocalFilters((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -193,7 +195,9 @@ export function AdvancedFilters({
                   size="sm"
                   placeholder="e.g. Invoice"
                   value={localFilters.subjectContains}
-                  onChange={(e) => updateFilter('subjectContains', e.target.value)}
+                  onChange={(e) =>
+                    updateFilter('subjectContains', e.target.value)
+                  }
                   onKeyDown={handleKeyDown}
                 />
               </Form.Group>

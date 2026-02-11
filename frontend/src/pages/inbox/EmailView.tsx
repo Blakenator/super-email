@@ -645,17 +645,18 @@ export function EmailView({
                 <FontAwesomeIcon icon={faInfoCircle} />
                 View Headers
               </Dropdown.Item>
-              {hasUnsubscribe && !(targetEmail as FullEmailOptionalProps)?.isUnsubscribed && (
-                <Dropdown.Item
-                  onClick={() => {
-                    setActiveEmailForModal(targetEmail.id);
-                    setShowUnsubscribeModal(true);
-                  }}
-                >
-                  <FontAwesomeIcon icon={faBellSlash} />
-                  Unsubscribe
-                </Dropdown.Item>
-              )}
+              {hasUnsubscribe &&
+                !(targetEmail as FullEmailOptionalProps)?.isUnsubscribed && (
+                  <Dropdown.Item
+                    onClick={() => {
+                      setActiveEmailForModal(targetEmail.id);
+                      setShowUnsubscribeModal(true);
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faBellSlash} />
+                    Unsubscribe
+                  </Dropdown.Item>
+                )}
               <Dropdown.Divider />
               <Dropdown.Item className="text-danger" onClick={onDelete}>
                 <FontAwesomeIcon icon={faTrash} />
@@ -674,7 +675,9 @@ export function EmailView({
         <BackButton onClick={onBack} label="Back" />
         <GlobalHeaderSubject>{email.subject}</GlobalHeaderSubject>
         {hasThread && (
-          <ThreadCount className="badge bg-primary">{threadEmails.length} messages</ThreadCount>
+          <ThreadCount className="badge bg-primary">
+            {threadEmails.length} messages
+          </ThreadCount>
         )}
       </StickyHeader>
 
@@ -939,7 +942,12 @@ export function EmailView({
                         to:
                       </span>
                       <br />
-                      <code>{(modalEmail as FullEmailOptionalProps).unsubscribeEmail}</code>
+                      <code>
+                        {
+                          (modalEmail as FullEmailOptionalProps)
+                            .unsubscribeEmail
+                        }
+                      </code>
                       <br />
                       <small className="text-muted mt-2 d-block">
                         ⚠️ Note: An email will be sent from your configured SMTP
@@ -950,15 +958,20 @@ export function EmailView({
 
                 {(modalEmail as FullEmailOptionalProps)?.unsubscribeEmail &&
                   (modalEmail as FullEmailOptionalProps)?.unsubscribeUrl && (
-                  <Alert variant="secondary" className="small mb-2">
-                    <strong>Alternative: Email-Based Unsubscribe</strong>
-                    <br />
-                    <span className="text-muted">
-                      If the URL doesn't work, you can email:{' '}
-                    </span>
-                    <code>{(modalEmail as FullEmailOptionalProps).unsubscribeEmail}</code>
-                  </Alert>
-                )}
+                    <Alert variant="secondary" className="small mb-2">
+                      <strong>Alternative: Email-Based Unsubscribe</strong>
+                      <br />
+                      <span className="text-muted">
+                        If the URL doesn't work, you can email:{' '}
+                      </span>
+                      <code>
+                        {
+                          (modalEmail as FullEmailOptionalProps)
+                            .unsubscribeEmail
+                        }
+                      </code>
+                    </Alert>
+                  )}
               </>
             );
           })()}
@@ -1033,7 +1046,9 @@ export function EmailView({
             const headers = (modalEmail as FullEmailOptionalProps)?.headers;
             if (!headers || typeof headers !== 'object') {
               return (
-                <p className="text-muted">No headers available for this email.</p>
+                <p className="text-muted">
+                  No headers available for this email.
+                </p>
               );
             }
             const entries: [string, unknown][] = Object.entries(headers);
@@ -1045,7 +1060,10 @@ export function EmailView({
 
                     if (value === null || value === undefined) {
                       displayValue = '';
-                    } else if (typeof value === 'object' && !Array.isArray(value)) {
+                    } else if (
+                      typeof value === 'object' &&
+                      !Array.isArray(value)
+                    ) {
                       displayValue = JSON.stringify(value, null, 2);
                     } else if (Array.isArray(value)) {
                       displayValue = value

@@ -6,6 +6,7 @@ import {
   EmailAccount,
 } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
+import { logger } from '../../helpers/logger.js';
 
 export const createContactFromEmail = makeMutation(
   'createContactFromEmail',
@@ -46,9 +47,11 @@ export const createContactFromEmail = makeMutation(
           isAutoCreated: false,
         });
       }
-      return existing
-        ? Contact.findByPk(existing.id, { include: [ContactEmail] })
-        : null;
+      if (!existing) {
+        logger.warn('createContactFromEmail', `ContactEmail record found but associated contact is missing`, { contactEmailId: existingContactEmail.id, email: email.fromAddress });
+        return null;
+      }
+      return Contact.findByPk(existing.id, { include: [ContactEmail] });
     }
 
     // Also check the legacy email field

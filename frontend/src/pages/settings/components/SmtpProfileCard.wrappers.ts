@@ -3,7 +3,9 @@ import styled from 'styled-components';
 export const SmtpCardStyled = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
   overflow: hidden;
 
   &:hover {

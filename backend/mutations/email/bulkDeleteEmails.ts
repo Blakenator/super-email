@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { Email, EmailAccount, EmailFolder } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { Op } from 'sequelize';
+import { logger } from '../../helpers/logger.js';
 
 export const bulkDeleteEmails = makeMutation(
   'bulkDeleteEmails',
@@ -46,7 +47,7 @@ export const bulkDeleteEmails = makeMutation(
       }
     }
 
-    console.log(`[bulkDeleteEmails] Moved ${movedCount} to trash, permanently deleted ${deletedCount}`);
+    logger.info('bulkDeleteEmails', `Moved ${movedCount} to trash, permanently deleted ${deletedCount} for user ${userId}`);
     return movedCount + deletedCount;
   },
 );

@@ -3,6 +3,7 @@ import { testImapConnection } from '../../helpers/imap-sync.js';
 import { EmailAccountType } from '../../__generated__/resolvers-types.js';
 import { getImapCredentials } from '../../helpers/secrets.js';
 import { EmailAccount } from '../../db/models/email-account.model.js';
+import { logger } from '../../helpers/logger.js';
 
 export const testEmailAccountConnection = makeMutation(
   'testEmailAccountConnection',
@@ -49,6 +50,9 @@ export const testEmailAccountConnection = makeMutation(
         password,
         useSsl,
       );
+      if (!result.success) {
+        logger.warn('testEmailAccountConnection', `IMAP connection failed for ${host}:${port}`, { username, useSsl, error: result.error });
+      }
       return {
         success: result.success,
         message: result.success

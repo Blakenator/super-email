@@ -728,7 +728,7 @@ export async function createServer(
     '/api/webhooks/stripe',
     express.raw({ type: 'application/json' }),
     async (req, res) => {
-      console.log('webhook triggered');
+      logger.info('Stripe', 'Webhook endpoint triggered');
       if (!isStripeConfigured()) {
         return res.status(503).json({ error: 'Stripe is not configured' });
       }

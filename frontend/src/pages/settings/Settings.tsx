@@ -263,13 +263,10 @@ export function Settings() {
     }
   };
 
-  const [syncEmailAccount] = useMutation(
-    SYNC_EMAIL_ACCOUNT_MUTATION,
-    {
-      onCompleted: () => void refetchEmailAccounts(),
-      onError: (err) => setError(err.message),
-    },
-  );
+  const [syncEmailAccount] = useMutation(SYNC_EMAIL_ACCOUNT_MUTATION, {
+    onCompleted: () => void refetchEmailAccounts(),
+    onError: (err) => setError(err.message),
+  });
 
   const [syncAllAccounts, { loading: syncingAll }] = useMutation(
     SYNC_ALL_ACCOUNTS_MUTATION,
@@ -410,8 +407,7 @@ export function Settings() {
       setTestResult(testRes);
       return testRes;
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Unknown error';
+      const message = error instanceof Error ? error.message : 'Unknown error';
       const errorResult = { success: false, message };
       setTestResult(errorResult);
       return errorResult;
@@ -519,8 +515,7 @@ export function Settings() {
       setTestResult(testRes);
       return testRes;
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Unknown error';
+      const message = error instanceof Error ? error.message : 'Unknown error';
       const errorResult = { success: false, message };
       setTestResult(errorResult);
       return errorResult;

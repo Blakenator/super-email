@@ -400,18 +400,18 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   });
 
   // Nuke mutation
-  const [nukeOldEmails, { loading: nuking }] = useMutation<NukeOldEmailsMutation>(
-    NUKE_OLD_EMAILS_MUTATION,
-    {
+  const [nukeOldEmails, { loading: nuking }] =
+    useMutation<NukeOldEmailsMutation>(NUKE_OLD_EMAILS_MUTATION, {
       onCompleted: (data) => {
         toast.success(`Archived ${data.nukeOldEmails} email(s)`);
         setShowNukeModal(false);
         void handleRefresh();
       },
       onError: (err: unknown) =>
-        toast.error(`Failed to archive: ${err instanceof Error ? err.message : 'Unknown error'}`),
-    },
-  );
+        toast.error(
+          `Failed to archive: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        ),
+    });
 
   const getNukeDate = () => {
     if (nukePreset === 'all') {
@@ -882,7 +882,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                 <GroupCardHeader className="card-header">
                   <GroupTitle>
                     {RECENCY_GROUP_LABELS[group.group]}
-                    <GroupCount className="badge bg-primary">{group.emails.length}</GroupCount>
+                    <GroupCount className="badge bg-primary">
+                      {group.emails.length}
+                    </GroupCount>
                   </GroupTitle>
                 </GroupCardHeader>
                 <GroupCardBody className="card-body">
@@ -893,7 +895,8 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                     const accountWithName = account
                       ? {
                           ...account,
-                          name: account.name ?? account.email.split('@')[0] ?? '',
+                          name:
+                            account.name ?? account.email.split('@')[0] ?? '',
                         }
                       : undefined;
                     const ItemComponent =
@@ -963,7 +966,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                   folder !== EmailFolder.Archive ? handleArchive : undefined
                 }
                 onUnarchive={
-                  (email.folder as EmailFolder) === EmailFolder.Archive ? handleUnarchive : undefined
+                  (email.folder as EmailFolder) === EmailFolder.Archive
+                    ? handleUnarchive
+                    : undefined
                 }
               />
             );

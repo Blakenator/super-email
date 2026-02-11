@@ -33,7 +33,9 @@ export const ContactCardStyled = styled.div`
   border: none;
   box-shadow: ${({ theme }) => theme.shadows.sm};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 
   &:hover {
     box-shadow: ${({ theme }) => theme.shadows.md};

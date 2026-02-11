@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { BackendContext } from '../types.js';
 import { AuthenticationMethod } from '../db/models/index.js';
 import { config } from '../config/env.js';
+import { logger } from './logger.js';
 
 // Supabase client configuration
 export const supabase = createClient(
@@ -23,6 +24,7 @@ export async function verifyToken(
     } = await supabase.auth.getUser(token);
 
     if (error || !user) {
+      logger.debug('Auth', 'Token verification failed: no user or error from Supabase', { error: error?.message });
       return null;
     }
 
@@ -41,7 +43,8 @@ export async function verifyToken(
     // The me query or login/signup will create the auth method
     // Return null for userId so requireAuth will fail but we have supabaseUserId for later
     return { userId: '', supabaseUserId };
-  } catch {
+  } catch (err) {
+    logger.error('Auth', 'verifyToken failed unexpectedly', { error: err instanceof Error ? err.message : err });
     return null;
   }
 }
@@ -62,6 +65,7 @@ export async function getUserFromToken(token: string): Promise<{
     } = await supabase.auth.getUser(token);
 
     if (error || !user) {
+      logger.debug('Auth', 'getUserFromToken failed: no user or error from Supabase', { error: error?.message });
       return null;
     }
 
@@ -71,7 +75,8 @@ export async function getUserFromToken(token: string): Promise<{
       firstName: user.user_metadata?.firstName || '',
       lastName: user.user_metadata?.lastName || '',
     };
-  } catch {
+  } catch (err) {
+    logger.error('Auth', 'getUserFromToken failed unexpectedly', { error: err instanceof Error ? err.message : err });
     return null;
   }
 }

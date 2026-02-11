@@ -15,6 +15,7 @@ import { Sequelize, QueryInterface } from 'sequelize';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from '../../helpers/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -62,7 +63,7 @@ export function createMigrator(sequelize: Sequelize): Umzug<MigrationContext> {
                 } catch (err: any) {
                   // Ignore "already exists" errors for CREATE INDEX IF NOT EXISTS
                   if (err.message?.includes('already exists')) {
-                    console.log(`[Migrations] Index already exists, skipping: ${statement.substring(0, 80)}...`);
+                    logger.debug('Migrations', `Index already exists, skipping: ${statement.substring(0, 80)}...`);
                   } else {
                     throw err;
                   }
@@ -73,7 +74,7 @@ export function createMigrator(sequelize: Sequelize): Umzug<MigrationContext> {
           down: async () => {
             // SQL migrations typically don't have down migrations
             // For rollback support, create separate rollback files
-            console.warn(`[Migrations] Rollback not supported for SQL migration: ${name}`);
+            logger.warn('Migrations', `Rollback not supported for SQL migration: ${name}`);
           },
         };
       },
@@ -84,9 +85,9 @@ export function createMigrator(sequelize: Sequelize): Umzug<MigrationContext> {
     },
     storage: new SequelizeStorage({ sequelize }),
     logger: {
-      info: (message) => console.log(`[Migrations] ${message.event}: ${message.name || ''}`),
-      warn: (message) => console.warn(`[Migrations] WARNING: ${JSON.stringify(message)}`),
-      error: (message) => console.error(`[Migrations] ERROR: ${JSON.stringify(message)}`),
+      info: (message) => logger.info('Migrations', `${message.event}: ${message.name || ''}`),
+      warn: (message) => logger.warn('Migrations', `WARNING: ${JSON.stringify(message)}`),
+      error: (message) => logger.error('Migrations', `ERROR: ${JSON.stringify(message)}`),
       debug: () => {}, // Suppress debug logs
     },
   });
@@ -96,7 +97,7 @@ export function createMigrator(sequelize: Sequelize): Umzug<MigrationContext> {
  * Run all pending migrations
  */
 export async function runMigrations(sequelize: Sequelize): Promise<void> {
-  console.log('[Migrations] Checking for pending migrations...');
+  logger.info('Migrations', 'Checking for pending migrations...');
   
   const migrator = createMigrator(sequelize);
   
@@ -104,19 +105,17 @@ export async function runMigrations(sequelize: Sequelize): Promise<void> {
     const pending = await migrator.pending();
     
     if (pending.length === 0) {
-      console.log('[Migrations] No pending migrations');
+      logger.info('Migrations', 'No pending migrations');
       return;
     }
     
-    console.log(`[Migrations] Found ${pending.length} pending migrations:`);
-    pending.forEach(m => console.log(`  - ${m.name}`));
+    logger.info('Migrations', `Found ${pending.length} pending migrations: ${pending.map(m => m.name).join(', ')}`);
     
     const executed = await migrator.up();
     
-    console.log(`[Migrations] Executed ${executed.length} migrations:`);
-    executed.forEach(m => console.log(`  ✓ ${m.name}`));
+    logger.info('Migrations', `Executed ${executed.length} migrations: ${executed.map(m => m.name).join(', ')}`);
   } catch (error) {
-    console.error('[Migrations] Migration failed:', error);
+    logger.error('Migrations', 'Migration failed', { error: error instanceof Error ? error.message : error });
     throw error;
   }
 }

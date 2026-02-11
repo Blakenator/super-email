@@ -3,6 +3,7 @@ import {
   getOrCreateSubscription,
   isStripeConfigured,
   syncSubscriptionFromStripe,
+  resolveCheckoutSession,
   getStripePrices,
 } from '../../helpers/stripe.js';
 import {
@@ -23,11 +24,21 @@ import { requireAuth } from '../../helpers/auth.js';
  */
 export const getBillingInfo = makeQuery(
   'getBillingInfo',
-  async (_parent, _args, context) => {
+  async (_parent, args, context) => {
     const userId = requireAuth(context);
 
     // Get or create subscription
     let subscription = await getOrCreateSubscription(userId);
+
+    // If a checkout session ID was provided (redirect from Stripe checkout),
+    // resolve it first to set stripeSubscriptionId before the webhook arrives
+    if (args.sessionId) {
+      subscription = await resolveCheckoutSession(
+        subscription,
+        args.sessionId,
+      );
+    }
+
     // Sync subscription status from Stripe (if they have a Stripe subscription)
     subscription = await syncSubscriptionFromStripe(subscription);
 

@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { SmtpProfile } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { deleteSmtpCredentials } from '../../helpers/secrets.js';
+import { logger } from '../../helpers/logger.js';
 
 export const deleteSmtpProfile = makeMutation(
   'deleteSmtpProfile',
@@ -21,6 +22,7 @@ export const deleteSmtpProfile = makeMutation(
 
     await smtpProfile.destroy();
 
+    logger.info('deleteSmtpProfile', `Deleted SMTP profile ${smtpProfile.email} (${id}) for user ${userId}`);
     return true;
   },
 );

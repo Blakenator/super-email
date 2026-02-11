@@ -257,7 +257,19 @@ function buildAccountTiers(
 }
 
 export function BillingSettings() {
-  const { data, loading, error, refetch } = useQuery(GET_BILLING_INFO_QUERY);
+  // Extract checkout session ID from URL (set by Stripe redirect)
+  const [checkoutSessionId] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const checkout = urlParams.get('checkout');
+    if (checkout === 'success') {
+      return urlParams.get('session_id') ?? undefined;
+    }
+    return undefined;
+  });
+
+  const { data, loading, error, refetch } = useQuery(GET_BILLING_INFO_QUERY, {
+    variables: { sessionId: checkoutSessionId },
+  });
   const [createPortalSession, { loading: creatingPortal }] = useMutation(
     CREATE_BILLING_PORTAL_SESSION_MUTATION,
   );
@@ -294,12 +306,11 @@ export function BillingSettings() {
       toast.success('Subscription updated successfully!');
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
-      void refetch();
     } else if (checkout === 'canceled') {
       toast('Checkout was canceled', { icon: '⚠️' });
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, [refetch]);
+  }, []);
 
   const handleManageBilling = async () => {
     try {

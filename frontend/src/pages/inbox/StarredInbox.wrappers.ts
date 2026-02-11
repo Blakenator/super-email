@@ -48,7 +48,9 @@ export const Preview = styled.div`
 
 export const StarButton = styled.span<{ $isStarred: boolean }>`
   color: ${(props) =>
-    props.$isStarred ? props.theme.colors.star : props.theme.colors.starInactive};
+    props.$isStarred
+      ? props.theme.colors.star
+      : props.theme.colors.starInactive};
   cursor: pointer;
   margin-right: ${({ theme }) => theme.spacing.sm};
   font-size: 1.2rem;
