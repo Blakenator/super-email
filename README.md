@@ -314,6 +314,79 @@ For production, consider:
 - Multiple ECS tasks for redundancy
 - Reserved capacity for cost savings
 
+## Connecting to the Production Database
+
+You can connect to the RDS database from your local machine for free using **SSM port forwarding through a running ECS task**. This requires no extra infrastructure (no bastion host, no public database access). The tunnel goes through the AWS SSM agent that's already injected into the ECS task.
+
+### Prerequisites
+
+1. **AWS CLI v2** installed and configured with credentials that can access the ECS cluster
+2. **AWS Session Manager Plugin** installed:
+
+   ```bash
+   # macOS
+   brew install --cask session-manager-plugin
+
+   # Verify installation
+   session-manager-plugin --version
+   ```
+
+### Open a Tunnel
+
+```bash
+# Tunnel to dev database (opens localhost:15432 -> RDS:5432)
+pnpm run db:tunnel:dev
+
+# Tunnel to prod database
+pnpm run db:tunnel:prod
+
+# Custom local port
+./scripts/db-tunnel.sh dev 5433
+```
+
+The script will:
+1. Find a running ECS task in the target environment
+2. Look up the RDS endpoint
+3. Open an SSM port-forwarding session through the ECS task to RDS
+
+### Connect
+
+Once the tunnel is running, connect from another terminal:
+
+```bash
+# psql
+psql -h localhost -p 15432 -U emailclient -d emailclient
+```
+
+Or use any GUI tool (DataGrip, pgAdmin, TablePlus, etc.) with:
+
+| Setting  | Value         |
+| -------- | ------------- |
+| Host     | `localhost`   |
+| Port     | `15432`       |
+| User     | `emailclient` |
+| Database | `emailclient` |
+
+### Get the Database Password
+
+The password is stored in AWS Secrets Manager. Retrieve it with:
+
+```bash
+# Get the secret ARN
+SECRET_ARN=$(aws secretsmanager list-secrets \
+  --filters Key=name,Values="email-client-dev-db-password" \
+  --query 'SecretList[0].ARN' --output text)
+
+# Get the password
+aws secretsmanager get-secret-value \
+  --secret-id "$SECRET_ARN" \
+  --query SecretString --output text
+```
+
+### How It Works
+
+This uses [ECS Exec](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs-exec.html) + [SSM Session Manager port forwarding](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html). The ECS service has `enableExecuteCommand: true`, which injects the SSM agent into each task. The `AWS-StartPortForwardingSessionToRemoteHost` SSM document routes traffic from your local machine through the ECS task to the RDS instance inside the VPC. Cost: **$0** (no extra infrastructure needed).
+
 ## Usage
 
 1. **Sign Up**: Create an account with your email and password

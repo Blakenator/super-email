@@ -534,6 +534,31 @@ new aws.iam.RolePolicyAttachment(`${stackName}-task-secrets-policy`, {
   policyArn: secretsPolicy.arn,
 });
 
+// SSM policy for ECS Exec and SSM port forwarding (allows local DB tunnel)
+const ssmPolicy = new aws.iam.Policy(`${stackName}-ssm-policy`, {
+  name: `${stackName}-ssm-policy`,
+  policy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'ssmmessages:CreateControlChannel',
+          'ssmmessages:CreateDataChannel',
+          'ssmmessages:OpenControlChannel',
+          'ssmmessages:OpenDataChannel',
+        ],
+        Resource: '*',
+      },
+    ],
+  }),
+});
+
+new aws.iam.RolePolicyAttachment(`${stackName}-task-ssm-policy`, {
+  role: taskRole.name,
+  policyArn: ssmPolicy.arn,
+});
+
 // =============================================================================
 // CloudWatch Log Group - Cost Optimized
 // =============================================================================

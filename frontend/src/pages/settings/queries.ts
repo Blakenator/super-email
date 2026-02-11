@@ -20,7 +20,7 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       isUpdateSyncing
       updateSyncProgress
       updateSyncStatus
-      updateSyncLastAt
+      lastSyncEmailReceivedAt
       defaultSmtpProfileId
       defaultSmtpProfile {
         id

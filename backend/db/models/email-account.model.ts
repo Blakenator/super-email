@@ -128,7 +128,7 @@ export class EmailAccount extends Model {
   declare updateSyncExpiresAt: Date | null;
 
   @Column({ type: DataType.DATE, allowNull: true })
-  declare updateSyncLastAt: Date | null;
+  declare lastSyncEmailReceivedAt: Date | null;
 
   @ForeignKey(() => SmtpProfile)
   @Column({ type: DataType.UUID, allowNull: true })
