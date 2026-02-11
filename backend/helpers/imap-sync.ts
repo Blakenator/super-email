@@ -134,7 +134,7 @@ function getSyncFields(syncType: SyncType) {
     progressField: 'updateSyncProgress' as const,
     statusField: 'updateSyncStatus' as const,
     expiresAtField: 'updateSyncExpiresAt' as const,
-    lastAtField: 'updateSyncLastAt' as const,
+    lastAtField: 'lastSyncEmailReceivedAt' as const,
   };
 }
 
@@ -240,15 +240,31 @@ async function markSyncCompleted(
     return false;
   }
 
+  // For update syncs, anchor the sync date to the most recent email's receivedAt
+  // rather than the current wall-clock time. This ensures the next incremental sync
+  // picks up from where we actually have data, avoiding gaps if a sync partially
+  // fails or misses messages. lastSyncedAt stays as wall-clock time for staleness checks.
+  let syncAnchorDate: Date = new Date();
+  if (!isHistoricalSync) {
+    const latestEmail = await Email.findOne({
+      where: { emailAccountId: emailAccount.id },
+      order: [['receivedAt', 'DESC']],
+      attributes: ['receivedAt'],
+    });
+    if (latestEmail?.receivedAt) {
+      syncAnchorDate = new Date(latestEmail.receivedAt);
+    }
+  }
+
   const updateData: Record<string, unknown> = {
     [fields.syncIdField]: null,
     [fields.progressField]: 100,
     [fields.statusField]: result.cancelled
       ? 'Sync cancelled'
       : `Synced ${result.synced} emails`,
-    [fields.lastAtField]: new Date(),
+    [fields.lastAtField]: isHistoricalSync ? new Date() : syncAnchorDate,
     [fields.expiresAtField]: null,
-    // Also update legacy field for backwards compatibility
+    // Wall-clock time for staleness/auto-sync checks
     lastSyncedAt: new Date(),
     ...(isHistoricalSync ? { historicalSyncComplete: true } : {}),
   };
@@ -763,7 +779,7 @@ export async function syncEmailsFromImapAccount(
       // Incremental sync: search for messages since last sync
       // Use the update-sync-specific lastAt, or fall back to legacy lastSyncedAt
       const lastSyncTime =
-        emailAccount.updateSyncLastAt || emailAccount.lastSyncedAt;
+        emailAccount.lastSyncEmailReceivedAt || emailAccount.lastSyncedAt;
       const sinceDate = new Date(lastSyncTime!);
       const searchResult = await withRetry(
         () => client.search({ since: sinceDate }, { uid: true }),
@@ -1028,7 +1044,7 @@ async function syncSentFolder(
   } else {
     // Incremental sync
     const lastSyncTime =
-      emailAccount.updateSyncLastAt || emailAccount.lastSyncedAt;
+      emailAccount.lastSyncEmailReceivedAt || emailAccount.lastSyncedAt;
     const sinceDate = new Date(lastSyncTime!);
     const searchResult = await withRetry(
       () => client.search({ since: sinceDate }, { uid: true }),

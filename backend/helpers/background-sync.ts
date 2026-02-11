@@ -28,17 +28,20 @@ async function findStaleEmailAccounts(): Promise<EmailAccount[]> {
 
   logger.info('BackgroundSync', `Cutoff time: ${cutoffTime.toISO()}`);
 
+  // Use lastSyncedAt (wall-clock time of last sync) for staleness checks.
+  // lastSyncEmailReceivedAt is anchored to the most recent email's receivedAt
+  // and should not be used for determining when a sync last ran.
   return EmailAccount.findAll({
     where: {
       historicalSyncComplete: true,
       [Op.or]: [
-        { updateSyncLastAt: null }, // Never synced
-        { updateSyncLastAt: { [Op.lt]: cutoffTime.toJSDate() } }, // Synced before cutoff
+        { lastSyncedAt: null }, // Never synced
+        { lastSyncedAt: { [Op.lt]: cutoffTime.toJSDate() } }, // Synced before cutoff
       ],
     },
     order: [
       // Prioritize accounts that have never been synced
-      ['updateSyncLastAt', 'ASC NULLS FIRST'],
+      ['lastSyncedAt', 'ASC NULLS FIRST'],
     ],
   });
 }

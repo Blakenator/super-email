@@ -531,6 +531,8 @@ export type EmailAccount = BaseEntityProps & {
   isHistoricalSyncing: Scalars['Boolean']['output'];
   /** Whether an update sync (new emails) is in progress */
   isUpdateSyncing: Scalars['Boolean']['output'];
+  /** Received date of the most recent synced email (anchor for incremental sync) */
+  lastSyncEmailReceivedAt?: Maybe<Scalars['Date']['output']>;
   /** Timestamp of the last successful sync */
   lastSyncedAt?: Maybe<Scalars['Date']['output']>;
   /** Display name for this account (e.g., "Work Gmail") */
@@ -539,8 +541,6 @@ export type EmailAccount = BaseEntityProps & {
   port: Scalars['Int']['output'];
   /** External provider ID (for OAuth-linked accounts like Google Workspace) */
   providerId?: Maybe<Scalars['String']['output']>;
-  /** Timestamp of the last update sync */
-  updateSyncLastAt?: Maybe<Scalars['Date']['output']>;
   /** Progress percentage (0-100) during update sync */
   updateSyncProgress?: Maybe<Scalars['Int']['output']>;
   /** Human-readable status message during update sync */
@@ -2277,11 +2277,11 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isHistoricalSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isUpdateSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  lastSyncEmailReceivedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   lastSyncedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  updateSyncLastAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   updateSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
   updateSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
