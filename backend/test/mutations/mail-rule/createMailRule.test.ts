@@ -1,229 +1,149 @@
 /**
  * Tests for createMailRule mutation
+ *
+ * Tests the REAL resolver by importing it directly and stubbing
+ * model static methods with sinon.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { MailRule, EmailAccount } from '../../../db/models/index.js';
+import { createMailRule } from '../../../mutations/mail-rule/createMailRule.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockMailRule } from '../../utils/mock-models.js';
 
 describe('createMailRule mutation', () => {
-  let mockModels: any;
-
-  beforeEach(() => {
-    mockModels = {
-      MailRule: {
-        create: sinon.stub(),
-        count: sinon.stub(),
-      },
-    };
-  });
-
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
 
-      expect(() => requireAuth(context)).to.throw('Authentication required');
-    });
+    try {
+      await (createMailRule as any)(null, { input: { name: 'Test' } }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
   });
 
-  describe('when user is authenticated', () => {
-    it('should create mail rule with valid input', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Newsletter Filter',
-        description: 'Archive newsletters automatically',
-        conditions: {
-          fromContains: 'newsletter@',
-        },
-        actions: {
-          archive: true,
-          markRead: true,
-        },
-        isEnabled: true,
-        priority: 0,
-        stopProcessing: false,
-      };
-      
-      const newRule = createMockMailRule({
-        ...input,
-        userId: context.userId,
-      });
+  it('should create mail rule with valid input', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      name: 'Newsletter Filter',
+      description: 'Archive newsletters',
+      conditions: { fromContains: 'newsletter@' },
+      actions: { archive: true, markRead: true },
+      isEnabled: true,
+      priority: 5,
+      stopProcessing: false,
+    };
 
-      mockModels.MailRule.create.resolves(newRule);
+    const mockRule = { id: 'rule-1', ...input, userId: 'user-123' };
+    const mockRuleWithAccount = { ...mockRule, EmailAccount: null };
 
-      const result = await mockModels.MailRule.create({
-        userId: context.userId,
-        ...input,
-      });
+    const createStub = sinon.stub(MailRule, 'create').resolves(mockRule as any);
+    sinon.stub(MailRule, 'findByPk').resolves(mockRuleWithAccount as any);
 
-      expect(result).to.exist;
-      expect(result.name).to.equal(input.name);
-      expect(result.conditions.fromContains).to.equal('newsletter@');
-      expect(result.actions.archive).to.be.true;
-      expect(mockModels.MailRule.create.calledOnce).to.be.true;
-    });
+    const result = await (createMailRule as any)(null, { input }, context);
 
-    it('should handle all condition types', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Complex Rule',
-        conditions: {
-          fromContains: 'sender@',
-          toContains: 'recipient@',
-          ccContains: 'cc@',
-          bccContains: 'bcc@',
-          subjectContains: 'Important',
-          bodyContains: 'urgent',
-        },
-        actions: { markRead: true },
-      };
-      
-      mockModels.MailRule.create.resolves(createMockMailRule(input));
+    expect(createStub.calledOnce).to.be.true;
+    const createArgs = createStub.firstCall.args[0] as any;
+    expect(createArgs.userId).to.equal('user-123');
+    expect(createArgs.name).to.equal('Newsletter Filter');
+    expect(createArgs.conditions).to.deep.equal({ fromContains: 'newsletter@' });
+    expect(createArgs.actions).to.deep.equal({ archive: true, markRead: true });
+    expect(createArgs.isEnabled).to.equal(true);
+    expect(createArgs.priority).to.equal(5);
+    expect(createArgs.stopProcessing).to.equal(false);
 
-      await mockModels.MailRule.create({
-        userId: context.userId,
-        ...input,
-      });
+    expect(result).to.equal(mockRuleWithAccount);
+  });
 
-      const createdConditions = mockModels.MailRule.create.firstCall.args[0].conditions;
-      expect(createdConditions).to.have.property('fromContains', 'sender@');
-      expect(createdConditions).to.have.property('toContains', 'recipient@');
-      expect(createdConditions).to.have.property('subjectContains', 'Important');
-      expect(createdConditions).to.have.property('bodyContains', 'urgent');
-    });
+  it('should validate emailAccountId belongs to user', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      name: 'Account Rule',
+      emailAccountId: 'acc-123',
+      conditions: { fromContains: 'test@' },
+      actions: { star: true },
+    };
 
-    it('should handle all action types', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'All Actions Rule',
-        conditions: { fromContains: 'test@' },
-        actions: {
-          archive: true,
-          star: true,
-          delete: false,
-          markRead: true,
-          addTagIds: ['tag-1', 'tag-2'],
-          forwardTo: 'forward@example.com',
-        },
-      };
-      
-      mockModels.MailRule.create.resolves(createMockMailRule(input));
+    // Account not found for this user
+    sinon.stub(EmailAccount, 'findOne').resolves(null);
 
-      await mockModels.MailRule.create({
-        userId: context.userId,
-        ...input,
-      });
+    try {
+      await (createMailRule as any)(null, { input }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Email account not found');
+    }
+  });
 
-      const createdActions = mockModels.MailRule.create.firstCall.args[0].actions;
-      expect(createdActions).to.have.property('archive', true);
-      expect(createdActions).to.have.property('star', true);
-      expect(createdActions).to.have.property('markRead', true);
-      expect(createdActions).to.have.property('addTagIds').that.deep.equals(['tag-1', 'tag-2']);
-      expect(createdActions).to.have.property('forwardTo', 'forward@example.com');
-    });
+  it('should allow creation when emailAccountId belongs to user', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      name: 'Account Rule',
+      emailAccountId: 'acc-123',
+      conditions: { fromContains: 'test@' },
+      actions: { star: true },
+    };
 
-    it('should set default values for optional fields', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Minimal Rule',
-        conditions: { fromContains: 'spam@' },
-        actions: { delete: true },
-      };
-      
-      mockModels.MailRule.create.resolves(createMockMailRule({
-        ...input,
-        isEnabled: true,
-        priority: 0,
-        stopProcessing: false,
-      }));
+    const mockAccount = { id: 'acc-123', userId: 'user-123' };
+    sinon.stub(EmailAccount, 'findOne').resolves(mockAccount as any);
 
-      await mockModels.MailRule.create({
-        userId: context.userId,
-        ...input,
-        isEnabled: true, // default
-        priority: 0, // default
-        stopProcessing: false, // default
-      });
+    const mockRule = { id: 'rule-2', ...input, userId: 'user-123' };
+    const createStub = sinon.stub(MailRule, 'create').resolves(mockRule as any);
+    sinon.stub(MailRule, 'findByPk').resolves(mockRule as any);
 
-      const createArgs = mockModels.MailRule.create.firstCall.args[0];
-      expect(createArgs).to.have.property('isEnabled', true);
-      expect(createArgs).to.have.property('priority', 0);
-      expect(createArgs).to.have.property('stopProcessing', false);
-    });
+    await (createMailRule as any)(null, { input }, context);
 
-    it('should allow restricting rule to specific email account', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Account Specific Rule',
-        emailAccountId: 'acc-specific-123',
-        conditions: { fromContains: 'work@' },
-        actions: { star: true },
-      };
-      
-      mockModels.MailRule.create.resolves(createMockMailRule({
-        ...input,
-        userId: context.userId,
-      }));
+    expect(createStub.calledOnce).to.be.true;
+    expect(createStub.firstCall.args[0]).to.have.property('emailAccountId', 'acc-123');
+  });
 
-      await mockModels.MailRule.create({
-        userId: context.userId,
-        ...input,
-      });
+  it('should set default values for optional fields', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      name: 'Minimal Rule',
+      conditions: { fromContains: 'spam@' },
+      actions: { delete: true },
+    };
 
-      expect(mockModels.MailRule.create.firstCall.args[0])
-        .to.have.property('emailAccountId', 'acc-specific-123');
-    });
+    const mockRule = { id: 'rule-3' };
 
-    it('should handle stopProcessing flag', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'Exclusive Rule',
-        conditions: { fromContains: 'vip@' },
-        actions: { star: true },
-        stopProcessing: true,
-      };
-      
-      mockModels.MailRule.create.resolves(createMockMailRule(input));
+    const createStub = sinon.stub(MailRule, 'create').resolves(mockRule as any);
+    sinon.stub(MailRule, 'findByPk').resolves(mockRule as any);
 
-      await mockModels.MailRule.create({
-        userId: context.userId,
-        ...input,
-      });
+    await (createMailRule as any)(null, { input }, context);
 
-      expect(mockModels.MailRule.create.firstCall.args[0])
-        .to.have.property('stopProcessing', true);
-    });
+    const createArgs = createStub.firstCall.args[0] as any;
+    expect(createArgs.isEnabled).to.equal(true); // default: !== false
+    expect(createArgs.priority).to.equal(0); // default: ?? 0
+    expect(createArgs.stopProcessing).to.equal(false); // default: ?? false
+    expect(createArgs.emailAccountId).to.be.null; // default: || null
+    expect(createArgs.description).to.be.null; // default: || null
+  });
 
-    it('should set custom priority', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        name: 'High Priority Rule',
-        conditions: { fromContains: 'urgent@' },
-        actions: { star: true },
-        priority: -10, // Higher priority (lower number)
-      };
-      
-      mockModels.MailRule.create.resolves(createMockMailRule(input));
+  it('should return result from findByPk with EmailAccount include', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      name: 'Test',
+      conditions: { fromContains: 'test@' },
+      actions: { star: true },
+    };
 
-      await mockModels.MailRule.create({
-        userId: context.userId,
-        ...input,
-      });
+    const mockRule = { id: 'rule-4' };
+    const mockRuleWithIncludes = { id: 'rule-4', EmailAccount: null };
 
-      expect(mockModels.MailRule.create.firstCall.args[0])
-        .to.have.property('priority', -10);
-    });
+    sinon.stub(MailRule, 'create').resolves(mockRule as any);
+    const findByPkStub = sinon.stub(MailRule, 'findByPk').resolves(mockRuleWithIncludes as any);
+
+    const result = await (createMailRule as any)(null, { input }, context);
+
+    expect(findByPkStub.calledOnce).to.be.true;
+    expect(findByPkStub.firstCall.args[0]).to.equal('rule-4');
+    expect(findByPkStub.firstCall.args[1]).to.deep.include({ include: [EmailAccount] });
+    expect(result).to.equal(mockRuleWithIncludes);
   });
 });

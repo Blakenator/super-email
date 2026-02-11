@@ -1,177 +1,104 @@
 /**
  * Tests for fetchProfile query
+ *
+ * Tests the REAL resolver by importing it via esmock to mock
+ * the getUserFromToken helper (which requires Supabase).
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import esmock from 'esmock';
+import { User, AuthenticationMethod } from '../../../db/models/index.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockUser, createMockAuthMethod } from '../../utils/mock-models.js';
 
 describe('fetchProfile query', () => {
-  let mockUser: any;
-  let mockAuthMethod: any;
-  let mockModels: any;
-  let mockAuthHelpers: any;
-  let fetchProfileResolver: any;
+  let fetchProfile: any;
+  let getUserFromTokenStub: sinon.SinonStub;
 
   beforeEach(async () => {
-    mockUser = createMockUser();
-    mockAuthMethod = createMockAuthMethod({ userId: mockUser.id });
+    getUserFromTokenStub = sinon.stub();
 
-    // Create mock models
-    mockModels = {
-      User: {
-        findByPk: sinon.stub(),
-        findOne: sinon.stub(),
-        create: sinon.stub(),
+    const mod = await esmock(
+      '../../../queries/auth/fetchProfile.js',
+      {
+        '../../../helpers/auth.js': {
+          getUserFromToken: getUserFromTokenStub,
+        },
       },
-      AuthenticationMethod: {
-        findOne: sinon.stub(),
-        create: sinon.stub(),
-      },
-    };
-
-    // Create mock auth helpers
-    mockAuthHelpers = {
-      getUserFromToken: sinon.stub(),
-    };
-
-    // Dynamic import with mocking not possible in pure ESM, so we test the logic directly
-    // For unit tests, we'll verify the resolver behavior through direct model interactions
+    );
+    fetchProfile = mod.fetchProfile;
   });
 
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should return null when no token provided', async () => {
-      const context = createUnauthenticatedContext();
-      
-      // Simulate the resolver logic - returns null when no token
-      const result = context.token ? 'user' : null;
-      
-      expect(result).to.be.null;
-    });
+  it('should return null when no token provided', async () => {
+    const context = createUnauthenticatedContext();
+
+    const result = await fetchProfile(null, {}, context);
+
+    expect(result).to.be.null;
+    expect(getUserFromTokenStub.called).to.be.false;
   });
 
-  describe('when user is authenticated', () => {
-    it('should return existing user when auth method exists', async () => {
-      const context = createMockContext({ userId: mockUser.id });
-      
-      mockModels.AuthenticationMethod.findOne.resolves(mockAuthMethod);
-      mockModels.User.findByPk.resolves(mockUser);
-      
-      // Simulate finding auth method
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { providerUserId: 'supabase-user-123' },
-      });
-      
-      expect(authMethod).to.exist;
-      expect(mockModels.AuthenticationMethod.findOne.calledOnce).to.be.true;
-      
-      // Get user from auth method
-      const user = await mockModels.User.findByPk(authMethod.userId);
-      
-      expect(user).to.exist;
-      expect(user.id).to.equal(mockUser.id);
-      expect(user.email).to.equal(mockUser.email);
-    });
+  it('should return null when getUserFromToken returns null', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    getUserFromTokenStub.resolves(null);
 
-    it('should create user and auth method for new Supabase user', async () => {
-      mockModels.AuthenticationMethod.findOne.resolves(null);
-      mockModels.User.findOne.resolves(null);
-      mockModels.User.create.resolves(mockUser);
-      mockModels.AuthenticationMethod.create.resolves(mockAuthMethod);
+    const result = await fetchProfile(null, {}, context);
 
-      // Simulate no existing auth method
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { providerUserId: 'new-supabase-user' },
-      });
-      
-      expect(authMethod).to.be.null;
+    expect(result).to.be.null;
+  });
 
-      // Check if user with email exists
-      const existingUser = await mockModels.User.findOne({
-        where: { email: 'new@example.com' },
-      });
-      
-      expect(existingUser).to.be.null;
+  it('should return existing user when auth method found', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockUser = { id: 'user-123', email: 'test@example.com' };
+    const mockAuthMethod = { userId: 'user-123', update: sinon.stub().resolves() };
 
-      // Create new user
-      const newUser = await mockModels.User.create({
-        email: 'new@example.com',
-        firstName: 'New',
-        lastName: 'User',
-      });
-      
-      expect(newUser).to.exist;
-      expect(mockModels.User.create.calledOnce).to.be.true;
+    getUserFromTokenStub.resolves({ id: 'supabase-123', email: 'test@example.com' });
+    sinon.stub(AuthenticationMethod, 'findOne').resolves(mockAuthMethod as any);
+    sinon.stub(User, 'findByPk').resolves(mockUser as any);
 
-      // Create auth method
-      const newAuthMethod = await mockModels.AuthenticationMethod.create({
-        userId: newUser.id,
-        provider: 'EMAIL_PASSWORD',
-        providerUserId: 'new-supabase-user',
-        email: 'new@example.com',
-        displayName: 'new@example.com (Email/Password)',
-        lastUsedAt: new Date(),
-      });
-      
-      expect(newAuthMethod).to.exist;
-      expect(mockModels.AuthenticationMethod.create.calledOnce).to.be.true;
-    });
+    const result = await fetchProfile(null, {}, context);
 
-    it('should link auth method to existing user with same email', async () => {
-      mockModels.AuthenticationMethod.findOne.resolves(null);
-      mockModels.User.findOne.resolves(mockUser);
-      mockModels.AuthenticationMethod.create.resolves(mockAuthMethod);
+    expect(result).to.equal(mockUser);
+    expect(mockAuthMethod.update.calledOnce).to.be.true; // lastUsedAt updated
+  });
 
-      // No auth method for this Supabase ID
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { providerUserId: 'new-supabase-user' },
-      });
-      
-      expect(authMethod).to.be.null;
+  it('should create new user and auth method for new Supabase user', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockUser = { id: 'new-user', email: 'new@example.com' };
 
-      // But user with email exists
-      const existingUser = await mockModels.User.findOne({
-        where: { email: mockUser.email },
-      });
-      
-      expect(existingUser).to.exist;
-      expect(existingUser.id).to.equal(mockUser.id);
+    getUserFromTokenStub.resolves({ id: 'new-supabase', email: 'new@example.com', firstName: 'New', lastName: 'User' });
+    sinon.stub(AuthenticationMethod, 'findOne').resolves(null); // No auth method
+    sinon.stub(User, 'findOne').resolves(null); // No existing user
+    sinon.stub(User, 'create').resolves(mockUser as any);
+    sinon.stub(AuthenticationMethod, 'create').resolves({} as any);
 
-      // Create auth method linking to existing user
-      const newAuthMethod = await mockModels.AuthenticationMethod.create({
-        userId: existingUser.id,
-        provider: 'EMAIL_PASSWORD',
-        providerUserId: 'new-supabase-user',
-        email: existingUser.email,
-        displayName: `${existingUser.email} (Email/Password)`,
-        lastUsedAt: new Date(),
-      });
-      
-      expect(newAuthMethod).to.exist;
-      expect(newAuthMethod.userId).to.equal(existingUser.id);
-    });
+    const result = await fetchProfile(null, {}, context);
 
-    it('should update lastUsedAt when auth method is found', async () => {
-      mockAuthMethod.update = sinon.stub().resolves(mockAuthMethod);
-      mockModels.AuthenticationMethod.findOne.resolves(mockAuthMethod);
-      mockModels.User.findByPk.resolves(mockUser);
+    expect(result).to.equal(mockUser);
+    expect((User.create as sinon.SinonStub).calledOnce).to.be.true;
+    expect((AuthenticationMethod.create as sinon.SinonStub).calledOnce).to.be.true;
+  });
 
-      const authMethod = await mockModels.AuthenticationMethod.findOne({
-        where: { providerUserId: 'supabase-user-123' },
-      });
-      
-      expect(authMethod).to.exist;
+  it('should link auth method to existing user with same email', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockUser = { id: 'existing-user', email: 'existing@example.com' };
 
-      // Update last used timestamp
-      await authMethod.update({ lastUsedAt: new Date() });
-      
-      expect(mockAuthMethod.update.calledOnce).to.be.true;
-      expect(mockAuthMethod.update.firstCall.args[0]).to.have.property('lastUsedAt');
+    getUserFromTokenStub.resolves({ id: 'new-supabase', email: 'existing@example.com' });
+    sinon.stub(AuthenticationMethod, 'findOne').resolves(null);
+    sinon.stub(User, 'findOne').resolves(mockUser as any); // User with same email exists
+    const authCreateStub = sinon.stub(AuthenticationMethod, 'create').resolves({} as any);
+
+    const result = await fetchProfile(null, {}, context);
+
+    expect(result).to.equal(mockUser);
+    expect(authCreateStub.calledOnce).to.be.true;
+    expect(authCreateStub.firstCall.args[0]).to.deep.include({
+      userId: 'existing-user',
+      providerUserId: 'new-supabase',
     });
   });
 });

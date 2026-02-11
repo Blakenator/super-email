@@ -1,6 +1,6 @@
 /**
  * Auth Integration Tests
- * 
+ *
  * Tests the Auth-related GraphQL queries and mutations against the actual server.
  */
 
@@ -35,7 +35,7 @@ describe('Auth Integration Tests', function () {
 
       expect(result.body.kind).to.equal('single');
       const data = (result.body as any).singleResult.data;
-      
+
       // fetchProfile should return the user or null depending on implementation
       // If the user exists, it should have the correct ID
       if (data.fetchProfile) {
@@ -74,11 +74,10 @@ describe('Auth Integration Tests', function () {
 
       expect(result.body.kind).to.equal('single');
       const singleResult = (result.body as any).singleResult;
-      
-      // Should either return an array or an error
-      if (!singleResult.errors) {
-        expect(singleResult.data.getAuthenticationMethods).to.be.an('array');
-      }
+
+      // Should return an array without errors
+      expect(singleResult.errors).to.be.undefined;
+      expect(singleResult.data.getAuthenticationMethods).to.be.an('array');
     });
 
     it('should require authentication', async () => {
@@ -103,22 +102,23 @@ describe('Auth Integration Tests', function () {
         mutation UpdateUserPreferences($input: UpdateUserPreferencesInput!) {
           updateUserPreferences(input: $input) {
             id
-            preferences
+            themePreference
+            navbarCollapsed
           }
         }
       `, {
         input: {
-          theme: 'dark',
+          themePreference: 'DARK',
+          navbarCollapsed: true,
         },
       });
 
       expect(result.body.kind).to.equal('single');
       const singleResult = (result.body as any).singleResult;
-      
-      // Should either succeed or fail gracefully
-      if (!singleResult.errors) {
-        expect(singleResult.data.updateUserPreferences).to.have.property('id');
-      }
+
+      expect(singleResult.errors).to.be.undefined;
+      expect(singleResult.data.updateUserPreferences).to.have.property('id');
+      expect(singleResult.data.updateUserPreferences.themePreference).to.equal('DARK');
     });
 
     it('should require authentication', async () => {
@@ -129,7 +129,7 @@ describe('Auth Integration Tests', function () {
           }
         }
       `, {
-        input: { theme: 'light' },
+        input: { themePreference: 'LIGHT' },
       });
 
       expect(result.body.kind).to.equal('single');
@@ -141,31 +141,30 @@ describe('Auth Integration Tests', function () {
   describe('Mutation: updateThemePreference', () => {
     it('should update theme preference', async () => {
       const result = await executeAuthenticatedOperation(`
-        mutation UpdateThemePreference($theme: String!) {
-          updateThemePreference(theme: $theme) {
+        mutation UpdateThemePreference($themePreference: ThemePreference!) {
+          updateThemePreference(themePreference: $themePreference) {
             id
-            preferences
+            themePreference
           }
         }
-      `, { theme: 'dark' });
+      `, { themePreference: 'DARK' });
 
       expect(result.body.kind).to.equal('single');
       const singleResult = (result.body as any).singleResult;
-      
-      // Should either succeed or fail gracefully
-      if (!singleResult.errors) {
-        expect(singleResult.data.updateThemePreference).to.have.property('id');
-      }
+
+      expect(singleResult.errors).to.be.undefined;
+      expect(singleResult.data.updateThemePreference).to.have.property('id');
+      expect(singleResult.data.updateThemePreference.themePreference).to.equal('DARK');
     });
 
     it('should require authentication', async () => {
       const result = await executeUnauthenticatedOperation(`
-        mutation UpdateThemePreference($theme: String!) {
-          updateThemePreference(theme: $theme) {
+        mutation UpdateThemePreference($themePreference: ThemePreference!) {
+          updateThemePreference(themePreference: $themePreference) {
             id
           }
         }
-      `, { theme: 'light' });
+      `, { themePreference: 'LIGHT' });
 
       expect(result.body.kind).to.equal('single');
       const errors = (result.body as any).singleResult.errors;

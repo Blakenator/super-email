@@ -1,134 +1,76 @@
 /**
  * Tests for getTags query
+ *
+ * Tests the REAL resolver by importing it directly and stubbing
+ * model static methods with sinon.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { Tag } from '../../../db/models/index.js';
+import { getTags } from '../../../queries/tag/getTags.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockTag } from '../../utils/mock-models.js';
 
 describe('getTags query', () => {
-  let mockModels: any;
-
-  beforeEach(() => {
-    mockModels = {
-      Tag: {
-        findAll: sinon.stub(),
-      },
-    };
-  });
-
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
-
-      expect(() => requireAuth(context)).to.throw('Authentication required');
-    });
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
+    try {
+      await (getTags as any)(null, {}, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
   });
 
-  describe('when user is authenticated', () => {
-    it('should return all tags for the user', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockTags = [
-        createMockTag({ id: 'tag-1', name: 'Important', emailCount: 5 }),
-        createMockTag({ id: 'tag-2', name: 'Work', emailCount: 10 }),
-        createMockTag({ id: 'tag-3', name: 'Personal', emailCount: 3 }),
-      ];
+  it('should return tags with parsed emailCount', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockTags = [
+      { toJSON: () => ({ id: 'tag-1', name: 'Important' }), getDataValue: sinon.stub().returns('5') },
+      { toJSON: () => ({ id: 'tag-2', name: 'Work' }), getDataValue: sinon.stub().returns('10') },
+    ];
 
-      mockModels.Tag.findAll.resolves(mockTags);
+    sinon.stub(Tag, 'findAll').resolves(mockTags as any);
 
-      const result = await mockModels.Tag.findAll({
-        where: { userId: context.userId },
-        order: [['name', 'ASC']],
-      });
+    const result = await (getTags as any)(null, {}, context);
 
-      expect(result).to.have.lengthOf(3);
-      expect(mockModels.Tag.findAll.calledOnce).to.be.true;
-    });
+    expect(result).to.have.lengthOf(2);
+    expect(result[0]).to.deep.include({ id: 'tag-1', name: 'Important', emailCount: 5 });
+    expect(result[1]).to.deep.include({ id: 'tag-2', name: 'Work', emailCount: 10 });
+  });
 
-    it('should return empty array when no tags exist', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.Tag.findAll.resolves([]);
+  it('should default emailCount to 0 when not set', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockTag = { toJSON: () => ({ id: 'tag-1', name: 'Empty' }), getDataValue: sinon.stub().returns(undefined) };
 
-      const result = await mockModels.Tag.findAll({
-        where: { userId: context.userId },
-      });
+    sinon.stub(Tag, 'findAll').resolves([mockTag] as any);
 
-      expect(result).to.be.an('array').that.is.empty;
-    });
+    const result = await (getTags as any)(null, {}, context);
 
-    it('should order tags by name ascending', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.Tag.findAll.resolves([]);
+    expect(result[0].emailCount).to.equal(0);
+  });
 
-      await mockModels.Tag.findAll({
-        where: { userId: context.userId },
-        order: [['name', 'ASC']],
-      });
+  it('should return empty array when no tags exist', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    sinon.stub(Tag, 'findAll').resolves([]);
 
-      expect(mockModels.Tag.findAll.firstCall.args[0].order)
-        .to.deep.equal([['name', 'ASC']]);
-    });
+    const result = await (getTags as any)(null, {}, context);
 
-    it('should include emailCount for each tag', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockTag = createMockTag({ emailCount: 15 });
-      
-      mockModels.Tag.findAll.resolves([mockTag]);
+    expect(result).to.be.an('array').that.is.empty;
+  });
 
-      const result = await mockModels.Tag.findAll({
-        where: { userId: context.userId },
-      });
+  it('should query tags with correct where and order', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const findAllStub = sinon.stub(Tag, 'findAll').resolves([]);
 
-      expect(result[0].emailCount).to.equal(15);
-    });
+    await (getTags as any)(null, {}, context);
 
-    it('should parse emailCount from string to integer', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockTag = createMockTag();
-      // Simulate SQL literal returning string
-      mockTag.getDataValue = sinon.stub().withArgs('emailCount').returns('42');
-      
-      mockModels.Tag.findAll.resolves([mockTag]);
-
-      const result = await mockModels.Tag.findAll({
-        where: { userId: context.userId },
-      });
-
-      // Simulate parsing logic
-      const emailCount = parseInt(result[0].getDataValue('emailCount') || '0', 10);
-      
-      expect(emailCount).to.equal(42);
-      expect(typeof emailCount).to.equal('number');
-    });
-
-    it('should default emailCount to 0 when not set', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const mockTag = createMockTag({ emailCount: undefined });
-      mockTag.getDataValue = sinon.stub().withArgs('emailCount').returns(undefined);
-      
-      mockModels.Tag.findAll.resolves([mockTag]);
-
-      const result = await mockModels.Tag.findAll({
-        where: { userId: context.userId },
-      });
-
-      const emailCount = parseInt(result[0].getDataValue('emailCount') || '0', 10);
-      
-      expect(emailCount).to.equal(0);
-    });
+    expect(findAllStub.calledOnce).to.be.true;
+    const queryArgs = findAllStub.firstCall.args[0] as any;
+    expect(queryArgs.where).to.deep.include({ userId: 'user-123' });
+    expect(queryArgs.order).to.deep.equal([['name', 'ASC']]);
   });
 });

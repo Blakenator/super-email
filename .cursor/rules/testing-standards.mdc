@@ -1,0 +1,116 @@
+# Testing Standards
+
+## Core Principle: Test Real Code, Not Mocks
+
+Every test must execute the **actual function/resolver** under test. Never create a local mock object and test its behavior directly — that only tests the mock, not the implementation.
+
+```typescript
+// ❌ BAD — tests the mock, not the resolver
+const mockTag = { create: sinon.stub().resolves({ id: '1' }) };
+const result = await mockTag.create({ name: 'Test' });
+expect(result.id).to.equal('1'); // Only proves the stub works
+
+// ✅ GOOD — imports and calls the real resolver
+import { createTag } from '../../../mutations/tag/createTag.js';
+sinon.stub(Tag, 'create').resolves({ id: '1', name: 'Test' });
+const result = await createTag(null, { input: { name: 'Test' } }, context);
+expect(result.id).to.equal('1'); // Proves the resolver logic works
+```
+
+## Mocking Strategy
+
+### Sequelize Model Static Methods → `sinon.stub()`
+
+Sequelize model classes are ES classes whose static methods are configurable properties, so sinon can stub them directly:
+
+```typescript
+import { Tag } from '../../../db/models/index.js';
+sinon.stub(Tag, 'create').resolves(mockTag);
+sinon.stub(Tag, 'findAll').resolves([]);
+// Always restore in afterEach:
+afterEach(() => sinon.restore());
+```
+
+### ESM Helper Function Exports → `esmock`
+
+Named function exports from ES modules (e.g. `storeImapCredentials`, `getUserFromToken`) **cannot** be stubbed with sinon because ESM namespace properties are read-only. Use `esmock` instead:
+
+```typescript
+import esmock from 'esmock';
+
+let resolver: any;
+let helperStub: sinon.SinonStub;
+
+beforeEach(async () => {
+  helperStub = sinon.stub().resolves();
+  const mod = await esmock(
+    '../../../mutations/some/resolver.js',  // module under test
+    {
+      '../../../helpers/some-helper.js': {  // paths relative to module under test
+        helperFunction: helperStub,
+      },
+    },
+  );
+  resolver = mod.resolverName;
+});
+```
+
+### Pure Constants/Enums → Standalone Files
+
+Keep constants and enums (e.g. `ACCOUNT_LIMITS`, `AccountTier`) in standalone files without Sequelize/model imports. This avoids pulling in the entire model dependency chain during tests:
+
+```
+// ✅ GOOD — pure constants file
+backend/db/models/subscription.constants.ts  (enums + limit maps)
+backend/db/models/subscription.model.ts      (re-exports constants + Sequelize model)
+```
+
+Resolvers should import constants from the `.constants.ts` file directly when possible.
+
+## Test File Organization
+
+| Test category | Location | Naming |
+|---|---|---|
+| Helper/utility unit tests | `backend/test/helpers/` | `*.unit.test.ts` |
+| Mutation resolver tests | `backend/test/mutations/<domain>/` | `<mutationName>.test.ts` |
+| Query resolver tests | `backend/test/queries/<domain>/` | `<queryName>.test.ts` |
+| Integration tests | `backend/test/integration/` | `*.integration.test.ts` |
+
+## Test Structure Checklist
+
+Every resolver test file should include:
+
+1. **Authentication test** — verify it throws `'Authentication required'` for unauthenticated contexts
+2. **Happy-path test** — verify correct result with valid input
+3. **Input validation tests** — verify error cases (missing fields, invalid values, limits)
+4. **Side-effect verification** — confirm helpers are called with correct arguments (e.g. `storeImapCredentials`, `recalculateUserUsage`)
+5. **Query shape tests** — verify `where`, `include`, `order`, `limit` passed to models
+
+## Mock Data Guidelines
+
+- Use realistic enum values that match the actual codebase (e.g. `'free'` not `'FREE'` for `AccountTier`)
+- Use the `createMockContext` / `createUnauthenticatedContext` helpers from `test/utils/`
+- Always call `sinon.restore()` in `afterEach`
+
+## Running Tests
+
+```bash
+# All unit tests (helpers + mutations + queries)
+pnpm run --filter backend test
+
+# Unit tests only (helper utilities)
+pnpm run --filter backend test:unit
+
+# Integration tests (requires running database)
+pnpm run --filter backend test:integration
+```
+
+## Anti-Patterns to Avoid
+
+| Anti-pattern | Why it's wrong | Fix |
+|---|---|---|
+| Testing mock return values directly | Proves nothing about real code | Import and call the real function |
+| Re-implementing logic in the test | Couples test to implementation details | Test inputs → outputs via real function |
+| Hardcoding enum values that don't match source | Tests pass but don't reflect reality | Import enums or use exact string values |
+| Forgetting `sinon.restore()` | Stubs leak between tests | Always restore in `afterEach` |
+| Using `sinon.stub()` on ESM function exports | Throws `TypeError: ES Modules cannot be stubbed` | Use `esmock` for ESM function mocking |

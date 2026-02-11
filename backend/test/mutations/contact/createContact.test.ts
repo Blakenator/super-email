@@ -1,206 +1,164 @@
 /**
  * Tests for createContact mutation
+ *
+ * Tests the REAL resolver by importing it directly and stubbing
+ * model static methods with sinon.
  */
 
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { Contact, ContactEmail } from '../../../db/models/index.js';
+import { createContact } from '../../../mutations/contact/createContact.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
-import { createMockContact, createMockContactEmail } from '../../utils/mock-models.js';
 
 describe('createContact mutation', () => {
-  let mockModels: any;
-
-  beforeEach(() => {
-    mockModels = {
-      Contact: {
-        create: sinon.stub(),
-        findByPk: sinon.stub(),
-      },
-      ContactEmail: {
-        create: sinon.stub(),
-      },
-    };
-  });
-
   afterEach(() => {
     sinon.restore();
   });
 
-  describe('when user is not authenticated', () => {
-    it('should throw error when not authenticated', () => {
-      const context = createUnauthenticatedContext();
-      
-      const requireAuth = (ctx: any) => {
-        if (!ctx.userId) {
-          throw new Error('Authentication required');
-        }
-        return ctx.userId;
-      };
+  it('should throw when not authenticated', async () => {
+    const context = createUnauthenticatedContext();
 
-      expect(() => requireAuth(context)).to.throw('Authentication required');
-    });
+    try {
+      await (createContact as any)(null, { input: { emails: [] } }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.equal('Authentication required');
+    }
   });
 
-  describe('when user is authenticated', () => {
-    it('should create contact with valid input', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        emails: [{ email: 'contact@example.com', isPrimary: true }],
-        name: 'John Doe',
-        firstName: 'John',
-        lastName: 'Doe',
-        company: 'Example Corp',
-        phone: '+1-555-1234',
-        notes: 'Test contact',
-      };
-      
-      const newContact = createMockContact({
-        ...input,
-        userId: context.userId,
-        email: 'contact@example.com',
-      });
+  it('should create contact with the primary email derived from input', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      name: 'John Doe',
+      firstName: 'John',
+      lastName: 'Doe',
+      company: 'Example Corp',
+      phone: '+1-555-1234',
+      notes: 'Test contact',
+      emails: [
+        { email: 'john@example.com', isPrimary: true, label: 'Work' },
+      ],
+    };
 
-      mockModels.Contact.create.resolves(newContact);
-      mockModels.ContactEmail.create.resolves(createMockContactEmail());
-      mockModels.Contact.findByPk.resolves(newContact);
+    const mockContact = { id: 'contact-1', userId: 'user-123', name: 'John Doe' };
+    const mockContactWithEmails = { ...mockContact, ContactEmails: [{ email: 'john@example.com' }] };
 
-      // Create contact
-      const result = await mockModels.Contact.create({
-        userId: context.userId,
-        email: 'contact@example.com',
-        name: input.name,
-        firstName: input.firstName,
-        lastName: input.lastName,
-        company: input.company,
-        phone: input.phone,
-        notes: input.notes,
-        isAutoCreated: false,
-      });
+    const contactCreateStub = sinon.stub(Contact, 'create').resolves(mockContact as any);
+    const contactEmailCreateStub = sinon.stub(ContactEmail, 'create').resolves({} as any);
+    sinon.stub(Contact, 'findByPk').resolves(mockContactWithEmails as any);
 
-      expect(result).to.exist;
-      expect(result.name).to.equal(input.name);
-      expect(result.email).to.equal('contact@example.com');
-      expect(mockModels.Contact.create.calledOnce).to.be.true;
-    });
+    await (createContact as any)(null, { input }, context);
 
-    it('should set first email as primary if none specified', async () => {
-      const input = {
-        emails: [
-          { email: 'first@example.com', isPrimary: false },
-          { email: 'second@example.com', isPrimary: false },
-        ],
-      };
-      
-      // Simulate the logic
-      const emails: Array<{ email: string; isPrimary: boolean }> = [...input.emails];
-      const hasPrimary = emails.some((e) => e.isPrimary);
-      if (!hasPrimary && emails.length > 0) {
-        emails[0] = { ...emails[0], isPrimary: true };
-      }
-      
-      expect(emails[0]).to.have.property('isPrimary', true);
-    });
+    // Verify Contact.create was called with derived primary email
+    expect(contactCreateStub.calledOnce).to.be.true;
+    const createArgs = contactCreateStub.firstCall.args[0] as any;
+    expect(createArgs.userId).to.equal('user-123');
+    expect(createArgs.email).to.equal('john@example.com');
+    expect(createArgs.name).to.equal('John Doe');
+    expect(createArgs.isAutoCreated).to.equal(false);
 
-    it('should create ContactEmail records for each email', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        emails: [
-          { email: 'work@example.com', isPrimary: true, label: 'Work' },
-          { email: 'personal@example.com', isPrimary: false, label: 'Personal' },
-        ],
-      };
-      
-      const newContact = createMockContact({ id: 'contact-123' });
-      mockModels.Contact.create.resolves(newContact);
-      mockModels.ContactEmail.create.resolves(createMockContactEmail());
+    // Verify ContactEmail.create was called for each email
+    expect(contactEmailCreateStub.calledOnce).to.be.true;
+    const ceArgs = contactEmailCreateStub.firstCall.args[0] as any;
+    expect(ceArgs.contactId).to.equal('contact-1');
+    expect(ceArgs.email).to.equal('john@example.com');
+    expect(ceArgs.isPrimary).to.equal(true);
+  });
 
-      await mockModels.Contact.create({
-        userId: context.userId,
-        email: 'work@example.com',
-        isAutoCreated: false,
-      });
+  it('should set first email as primary if none specified', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      emails: [
+        { email: 'first@example.com', isPrimary: false },
+        { email: 'second@example.com', isPrimary: false },
+      ],
+    };
 
-      // Create ContactEmail for each email
-      for (const emailInput of input.emails) {
-        await mockModels.ContactEmail.create({
-          contactId: newContact.id,
-          email: emailInput.email,
-          isPrimary: emailInput.isPrimary || false,
-          label: emailInput.label || null,
-        });
-      }
+    const mockContact = { id: 'contact-2', userId: 'user-123' };
 
-      expect(mockModels.ContactEmail.create.calledTwice).to.be.true;
-    });
+    const contactCreateStub = sinon.stub(Contact, 'create').resolves(mockContact as any);
+    sinon.stub(ContactEmail, 'create').resolves({} as any);
+    sinon.stub(Contact, 'findByPk').resolves(mockContact as any);
 
-    it('should set isAutoCreated to false for manually created contacts', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      
-      mockModels.Contact.create.resolves(createMockContact({ isAutoCreated: false }));
+    await (createContact as any)(null, { input }, context);
 
-      await mockModels.Contact.create({
-        userId: context.userId,
-        email: 'test@example.com',
-        isAutoCreated: false,
-      });
+    // Resolver should derive primaryEmail from emails[0] after setting isPrimary
+    const createArgs = contactCreateStub.firstCall.args[0] as any;
+    expect(createArgs.email).to.equal('first@example.com');
+  });
 
-      expect(mockModels.Contact.create.firstCall.args[0]).to.have.property('isAutoCreated', false);
-    });
+  it('should create ContactEmail records for each email', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      emails: [
+        { email: 'work@example.com', isPrimary: true, label: 'Work' },
+        { email: 'personal@example.com', isPrimary: false, label: 'Personal' },
+      ],
+    };
 
-    it('should reload contact with emails after creation', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const newContact = createMockContact({ id: 'contact-123' });
-      
-      mockModels.Contact.create.resolves(newContact);
-      mockModels.Contact.findByPk.resolves({
-        ...newContact,
-        emails: [createMockContactEmail()],
-      });
+    const mockContact = { id: 'contact-3', userId: 'user-123' };
 
-      await mockModels.Contact.create({
-        userId: context.userId,
-        email: 'test@example.com',
-        isAutoCreated: false,
-      });
+    sinon.stub(Contact, 'create').resolves(mockContact as any);
+    const contactEmailCreateStub = sinon.stub(ContactEmail, 'create').resolves({} as any);
+    sinon.stub(Contact, 'findByPk').resolves(mockContact as any);
 
-      // Reload with emails
-      const reloaded = await mockModels.Contact.findByPk(newContact.id, {
-        include: ['ContactEmail'],
-      });
+    await (createContact as any)(null, { input }, context);
 
-      expect(reloaded.emails).to.exist;
-      expect(mockModels.Contact.findByPk.calledOnce).to.be.true;
-    });
+    expect(contactEmailCreateStub.callCount).to.equal(2);
 
-    it('should handle contact with only required fields', async () => {
-      const context = createMockContext({ userId: 'user-123' });
-      const input = {
-        emails: [{ email: 'minimal@example.com' }],
-      };
-      
-      mockModels.Contact.create.resolves(createMockContact({
-        email: 'minimal@example.com',
-        name: null,
-        firstName: null,
-        lastName: null,
-        company: null,
-        phone: null,
-        notes: null,
-      }));
+    const firstCall = contactEmailCreateStub.firstCall.args[0] as any;
+    expect(firstCall.email).to.equal('work@example.com');
+    expect(firstCall.isPrimary).to.equal(true);
+    expect(firstCall.label).to.equal('Work');
 
-      await mockModels.Contact.create({
-        userId: context.userId,
-        email: input.emails[0].email,
-        name: undefined,
-        firstName: undefined,
-        lastName: undefined,
-        company: undefined,
-        phone: undefined,
-        notes: undefined,
-        isAutoCreated: false,
-      });
+    const secondCall = contactEmailCreateStub.secondCall.args[0] as any;
+    expect(secondCall.email).to.equal('personal@example.com');
+    expect(secondCall.isPrimary).to.equal(false);
+    expect(secondCall.label).to.equal('Personal');
+  });
 
-      expect(mockModels.Contact.create.calledOnce).to.be.true;
-    });
+  it('should reload contact with emails after creation', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      emails: [{ email: 'test@example.com', isPrimary: true }],
+    };
+
+    const mockContact = { id: 'contact-4', userId: 'user-123' };
+    const mockReloaded = { ...mockContact, ContactEmails: [{ email: 'test@example.com' }] };
+
+    sinon.stub(Contact, 'create').resolves(mockContact as any);
+    sinon.stub(ContactEmail, 'create').resolves({} as any);
+    const findByPkStub = sinon.stub(Contact, 'findByPk').resolves(mockReloaded as any);
+
+    const result = await (createContact as any)(null, { input }, context);
+
+    // Verify findByPk was called with the contact ID and includes
+    expect(findByPkStub.calledOnce).to.be.true;
+    expect(findByPkStub.firstCall.args[0]).to.equal('contact-4');
+    expect(findByPkStub.firstCall.args[1]).to.deep.include({ include: [ContactEmail] });
+
+    // Verify the final result is the reloaded contact
+    expect(result).to.equal(mockReloaded);
+  });
+
+  it('should handle contact with no emails', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = { name: 'No Emails', emails: [] };
+
+    const mockContact = { id: 'contact-5', userId: 'user-123' };
+
+    const contactCreateStub = sinon.stub(Contact, 'create').resolves(mockContact as any);
+    const contactEmailCreateStub = sinon.stub(ContactEmail, 'create').resolves({} as any);
+    sinon.stub(Contact, 'findByPk').resolves(mockContact as any);
+
+    await (createContact as any)(null, { input }, context);
+
+    // No email should be set
+    const createArgs = contactCreateStub.firstCall.args[0] as any;
+    expect(createArgs.email).to.be.null;
+
+    // No ContactEmail records should be created
+    expect(contactEmailCreateStub.callCount).to.equal(0);
   });
 });
