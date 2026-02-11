@@ -115,6 +115,38 @@ export async function runBackgroundSyncCycle(): Promise<{
 }
 
 /**
+ * Repair accounts where historicalSyncComplete was never set due to a typo
+ * (historicalSyncCompleted vs historicalSyncComplete). Accounts that have
+ * historicalSyncLastAt set have completed their historical sync but were
+ * never marked as complete, so background sync couldn't find them.
+ */
+async function repairHistoricalSyncFlags(): Promise<void> {
+  try {
+    const [affectedCount] = await EmailAccount.update(
+      { historicalSyncComplete: true },
+      {
+        where: {
+          historicalSyncComplete: false,
+          historicalSyncLastAt: { [Op.ne]: null },
+        },
+      },
+    );
+    if (affectedCount > 0) {
+      logger.info(
+        'BackgroundSync',
+        `Repaired historicalSyncComplete flag for ${affectedCount} account(s)`,
+      );
+    }
+  } catch (err) {
+    logger.error(
+      'BackgroundSync',
+      'Failed to repair historicalSyncComplete flags',
+      err,
+    );
+  }
+}
+
+/**
  * Start the background sync scheduler
  * Runs immediately once, then at the configured interval
  */
@@ -137,7 +169,10 @@ export function startBackgroundSync(): void {
   );
 
   // Run once immediately after a short delay to allow server to fully start
-  setTimeout(() => {
+  setTimeout(async () => {
+    // Repair accounts affected by the historicalSyncCompleted typo
+    await repairHistoricalSyncFlags();
+
     logger.info('BackgroundSync', 'Running initial sync cycle');
     runBackgroundSyncCycle().catch((err) => {
       logger.error('BackgroundSync', 'Initial sync cycle failed', err);

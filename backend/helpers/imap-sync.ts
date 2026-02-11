@@ -250,7 +250,7 @@ async function markSyncCompleted(
     [fields.expiresAtField]: null,
     // Also update legacy field for backwards compatibility
     lastSyncedAt: new Date(),
-    ...(isHistoricalSync ? { historicalSyncCompleted: true } : {}),
+    ...(isHistoricalSync ? { historicalSyncComplete: true } : {}),
   };
 
   // Clear resume fields for completed historical syncs (not cancelled)
