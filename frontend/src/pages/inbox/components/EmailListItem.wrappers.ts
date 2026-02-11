@@ -1,6 +1,9 @@
 import styled from 'styled-components';
 
-export const EmailItemWrapper = styled.div<{ $isUnread: boolean; $isSelected: boolean }>`
+export const EmailItemWrapper = styled.div<{
+  $isUnread: boolean;
+  $isSelected: boolean;
+}>`
   cursor: pointer;
   display: flex;
   align-items: flex-start;
@@ -168,7 +171,10 @@ export const TagBadge = styled.span<{ $color: string }>`
 `;
 
 // Dense list item styled components
-export const DenseRow = styled.div<{ $isUnread: boolean; $isSelected: boolean }>`
+export const DenseRow = styled.div<{
+  $isUnread: boolean;
+  $isSelected: boolean;
+}>`
   display: flex;
   align-items: center;
   cursor: pointer;

@@ -10,10 +10,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { Popover, OverlayTrigger, Button } from 'react-bootstrap';
 import { gql } from '../../__generated__/gql';
-import {
-  ContactFormModal,
-  type ContactFormData,
-} from './ContactFormModal';
+import { ContactFormModal, type ContactFormData } from './ContactFormModal';
 import {
   EmailLink,
   EmailChip,

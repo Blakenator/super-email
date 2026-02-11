@@ -5,6 +5,7 @@ import { storeImapCredentials } from '../../helpers/secrets.js';
 import { getOrCreateSubscription } from '../../helpers/stripe.js';
 import { ACCOUNT_LIMITS } from '../../db/models/subscription.model.js';
 import { recalculateUserUsage } from '../../helpers/usage-calculator.js';
+import { logger } from '../../helpers/logger.js';
 
 export const createEmailAccount = makeMutation(
   'createEmailAccount',
@@ -59,6 +60,7 @@ export const createEmailAccount = makeMutation(
     // Recalculate usage after adding account
     await recalculateUserUsage(userId);
 
+    logger.info('createEmailAccount', `Created email account ${emailAccount.email} (${emailAccount.id}) for user ${userId}`);
     return emailAccount;
   },
 );

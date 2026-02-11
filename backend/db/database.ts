@@ -1,5 +1,6 @@
 import { Sequelize } from 'sequelize-typescript';
 import { config, validateEnv } from '../config/env.js';
+import { logger } from '../helpers/logger.js';
 import { User } from './models/user.model.js';
 import { AuthenticationMethod } from './models/authentication-method.model.js';
 import { EmailAccount } from './models/email-account.model.js';
@@ -19,8 +20,8 @@ import { PushToken } from './models/push-token.model.js';
 // Validate environment in production
 const envValidation = validateEnv();
 if (!envValidation.valid) {
-  console.error('Environment validation failed:');
-  envValidation.errors.forEach((err) => console.error(`  - ${err}`));
+  logger.error('Database', 'Environment validation failed', { errors: envValidation.errors });
+  envValidation.errors.forEach((err) => logger.error('Database', `  - ${err}`));
   if (config.isProduction) {
     process.exit(1);
   }

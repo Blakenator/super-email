@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { Email, EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { Op } from 'sequelize';
+import { logger } from '../../helpers/logger.js';
 
 export const bulkUpdateEmails = makeMutation(
   'bulkUpdateEmails',
@@ -58,7 +59,7 @@ export const bulkUpdateEmails = makeMutation(
       },
     });
 
-    console.log(`[bulkUpdateEmails] Updated ${updatedEmails.length} emails`);
+    logger.info('bulkUpdateEmails', `Updated ${updatedEmails.length} emails for user ${userId}`);
     return updatedEmails;
   },
 );

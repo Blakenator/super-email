@@ -3,6 +3,7 @@ import { Email, EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { startAsyncEmailSync } from '../../helpers/email.js';
 import { buildEmailWhereClause } from '../../helpers/email-filters.js';
+import { logger } from '../../helpers/logger.js';
 
 const TWO_MINUTES_MS = 2 * 60 * 1000;
 
@@ -38,10 +39,7 @@ export const getEmails = makeQuery(
       if (accountsNeedingSync.length > 0) {
         accountsNeedingSync.forEach((account) => {
           startAsyncEmailSync(account).catch((err) => {
-            console.error(
-              `[getEmails] Auto-sync failed for ${account.email}:`,
-              err,
-            );
+            logger.error('getEmails', `Auto-sync failed for ${account.email}`, { error: err instanceof Error ? err.message : err });
           });
         });
       }

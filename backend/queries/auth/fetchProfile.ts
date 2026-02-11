@@ -5,6 +5,7 @@ import {
   AuthProvider,
 } from '../../db/models/index.js';
 import { getUserFromToken } from '../../helpers/auth.js';
+import { logger } from '../../helpers/logger.js';
 
 /**
  * Fetches the current user's profile.
@@ -21,6 +22,7 @@ export const fetchProfile = makeQuery(
     // Get Supabase user info from token
     const supabaseUser = await getUserFromToken(context.token);
     if (!supabaseUser) {
+      logger.warn('fetchProfile', 'getUserFromToken returned null - token may be invalid or expired');
       return null;
     }
 

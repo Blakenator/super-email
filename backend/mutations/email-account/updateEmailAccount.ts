@@ -5,6 +5,7 @@ import {
   storeImapCredentials,
   getImapCredentials,
 } from '../../helpers/secrets.js';
+import { logger } from '../../helpers/logger.js';
 
 export const updateEmailAccount = makeMutation(
   'updateEmailAccount',
@@ -55,6 +56,7 @@ export const updateEmailAccount = makeMutation(
       });
     }
 
+    logger.info('updateEmailAccount', `Updated email account ${emailAccount.email} (${input.id}) for user ${userId}`);
     return emailAccount;
   },
 );

@@ -14,6 +14,7 @@ import { EmailFolder } from '../../db/models/email.model.js';
 import { uploadAttachment } from '../../helpers/attachment-storage.js';
 import { Readable } from 'stream';
 import { AttachmentType } from '../../db/models/attachment.model.js';
+import { logger } from '../../helpers/logger.js';
 
 export const sendEmail = makeMutation(
   'sendEmail',
@@ -167,10 +168,7 @@ export const sendEmail = makeMutation(
               isSafe: true,
             };
           } catch (error) {
-            console.error(
-              `Failed to upload attachment: ${emailAttachment.filename}`,
-              error,
-            );
+            logger.error('sendEmail', `Failed to upload attachment: ${emailAttachment.filename}`, { error: error instanceof Error ? error.message : error });
             return null; // Return null for failed uploads
           }
         },

@@ -11,6 +11,7 @@ import {
 } from './imap-sync.js';
 import { getSmtpCredentials } from './secrets.js';
 import { config } from '../config/env.js';
+import { logger } from './logger.js';
 
 export interface EmailAttachment {
   filename: string;
@@ -79,7 +80,7 @@ export async function testSmtpConnection(
     await transporter.verify();
     return { success: true, message: 'SMTP connection successful' };
   } catch (error: any) {
-    console.error('SMTP connection test failed:', error.message);
+    logger.error('Email', 'SMTP connection test failed', { host: smtpProfile.host, port: smtpProfile.port, error: error.message });
     return {
       success: false,
       message: `SMTP connection failed: ${error.message}`,
@@ -130,7 +131,7 @@ export async function startAsyncEmailSync(
     // startAsyncSync handles sync state management internally
     return await startAsyncSync(emailAccount);
   } else if (emailAccount.accountType === EmailAccountType.POP3) {
-    console.log(`[Email] POP3 sync not yet implemented for ${emailAccount.email}`);
+    logger.warn('Email', `POP3 sync not yet implemented for ${emailAccount.email}`);
     return false;
   }
 

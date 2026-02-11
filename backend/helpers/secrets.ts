@@ -66,6 +66,7 @@ async function readLocalSecrets(): Promise<Record<string, EmailCredentials>> {
     return JSON.parse(data);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
+      logger.debug('Secrets', 'Local secrets file not found (first run), returning empty');
       return {};
     }
     throw error;
@@ -222,6 +223,7 @@ async function getCredentialsAWS(
     return null;
   } catch (error: any) {
     if (error instanceof ResourceNotFoundException || error.name === 'ResourceNotFoundException') {
+      logger.debug('Secrets', `${type} credentials not found in AWS for ${id}`);
       return null;
     }
     throw error;
@@ -245,7 +247,7 @@ async function deleteCredentialsAWS(
     logger.info('Secrets', `Deleted ${type} credentials for ${id}`);
   } catch (error: any) {
     if (error instanceof ResourceNotFoundException || error.name === 'ResourceNotFoundException') {
-      // Already deleted, ignore
+      logger.debug('Secrets', `${type} credentials already deleted in AWS for ${id}`);
       return;
     }
     throw error;
@@ -323,6 +325,7 @@ export async function migrateCredentialsToSecureStore(): Promise<{
         result.imapMigrated++;
       }
     } catch (error: any) {
+      logger.error('Secrets', `Failed to migrate IMAP credentials for account ${account.id}`, { error: error.message });
       result.errors.push(`IMAP ${account.id}: ${error.message}`);
     }
   }
@@ -340,6 +343,7 @@ export async function migrateCredentialsToSecureStore(): Promise<{
         result.smtpMigrated++;
       }
     } catch (error: any) {
+      logger.error('Secrets', `Failed to migrate SMTP credentials for profile ${profile.id}`, { error: error.message });
       result.errors.push(`SMTP ${profile.id}: ${error.message}`);
     }
   }

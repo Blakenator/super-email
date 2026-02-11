@@ -112,12 +112,12 @@ export function MailRulesManager() {
   const rules = data?.getMailRules ?? [];
   const tags = tagsData?.getTags ?? [];
 
-  const [previewRule, { loading: previewing, data: previewData, error: previewError }] = useLazyQuery(
-    PREVIEW_MAIL_RULE_QUERY,
-    {
-      fetchPolicy: 'network-only', // Always fetch fresh data
-    },
-  );
+  const [
+    previewRule,
+    { loading: previewing, data: previewData, error: previewError },
+  ] = useLazyQuery(PREVIEW_MAIL_RULE_QUERY, {
+    fetchPolicy: 'network-only', // Always fetch fresh data
+  });
 
   // Handle preview query result with useEffect
   useEffect(() => {
@@ -179,7 +179,7 @@ export function MailRulesManager() {
     setShowModal(true);
   };
 
-  const handleOpenEditModal = (rule: typeof rules[0]) => {
+  const handleOpenEditModal = (rule: (typeof rules)[0]) => {
     setEditingRule(rule.id);
     setFormData({
       name: rule.name,
@@ -226,7 +226,7 @@ export function MailRulesManager() {
     }
   };
 
-  const handleToggleEnabled = (rule: typeof rules[0]) => {
+  const handleToggleEnabled = (rule: (typeof rules)[0]) => {
     void updateRule({
       variables: {
         input: {
@@ -517,7 +517,10 @@ export function MailRulesManager() {
                     onChange={(value) =>
                       setFormData({
                         ...formData,
-                        conditions: { ...formData.conditions, fromContains: value },
+                        conditions: {
+                          ...formData.conditions,
+                          fromContains: value,
+                        },
                       })
                     }
                     placeholder="Filter by sender..."
@@ -532,7 +535,10 @@ export function MailRulesManager() {
                     onChange={(value) =>
                       setFormData({
                         ...formData,
-                        conditions: { ...formData.conditions, toContains: value },
+                        conditions: {
+                          ...formData.conditions,
+                          toContains: value,
+                        },
                       })
                     }
                     placeholder="Filter by recipient..."
@@ -654,7 +660,9 @@ export function MailRulesManager() {
                     selectedTagIds={formData.actions.addTagIds}
                     onToggleTag={(tagId) => {
                       const tagIds = formData.actions.addTagIds.includes(tagId)
-                        ? formData.actions.addTagIds.filter((id) => id !== tagId)
+                        ? formData.actions.addTagIds.filter(
+                            (id) => id !== tagId,
+                          )
                         : [...formData.actions.addTagIds, tagId];
                       setFormData({
                         ...formData,

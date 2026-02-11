@@ -9,6 +9,7 @@ import {
 import { Op, literal } from 'sequelize';
 import type { WhereOptions } from 'sequelize';
 import { sendEmail } from './email.js';
+import { logger } from './logger.js';
 
 const BATCH_SIZE = 100;
 
@@ -211,9 +212,11 @@ export async function applyRuleActions(
           text: forwardText,
           html: email.htmlBody || undefined,
         });
+      } else {
+        logger.warn('RuleMatcher', `Cannot forward email ${email.id}: no default SMTP profile found for user ${userId}`);
       }
     } catch (err) {
-      console.error('[RuleMatcher] Failed to forward email:', err);
+      logger.error('RuleMatcher', `Failed to forward email ${email.id}`, { forwardTo: actions.forwardTo, error: err instanceof Error ? err.message : err });
     }
   }
 }
@@ -249,7 +252,7 @@ export async function applyRuleToMatchingEmails(
 
     // Safety limit to prevent infinite loops
     if (processedCount > 10000) {
-      console.warn('[RuleMatcher] Safety limit reached, stopping at 10000 emails');
+      logger.warn('RuleMatcher', `Safety limit reached for rule ${rule.id}, stopping at 10000 emails`);
       break;
     }
   }

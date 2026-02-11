@@ -47,7 +47,9 @@ export function SmtpProfileCard({
           )}
         </SmtpCardTitle>
         <SmtpCardSubtitle>
-          {profile.alias ? `${profile.alias} <${profile.email}>` : profile.email}
+          {profile.alias
+            ? `${profile.alias} <${profile.email}>`
+            : profile.email}
         </SmtpCardSubtitle>
       </SmtpCardHeader>
       <SmtpCardBody className="card-body">

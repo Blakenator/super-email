@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { startAsyncEmailSync } from '../../helpers/email.js';
+import { logger } from '../../helpers/logger.js';
 
 export const syncEmailAccount = makeMutation(
   'syncEmailAccount',
@@ -18,15 +19,11 @@ export const syncEmailAccount = makeMutation(
 
     // Check if already syncing (historical or update sync)
     if (emailAccount.historicalSyncId || emailAccount.updateSyncId) {
-      console.log(
-        `[syncEmailAccount] Account ${emailAccount.email} is already syncing`,
-      );
+      logger.debug('syncEmailAccount', `Account ${emailAccount.email} is already syncing, skipping`);
       return true; // Already syncing, return success
     }
 
-    console.log(
-      `[syncEmailAccount] Starting async sync for: ${emailAccount.email}`,
-    );
+    logger.info('syncEmailAccount', `Starting async sync for: ${emailAccount.email}`);
 
     // Start async sync - returns immediately
     await startAsyncEmailSync(emailAccount);

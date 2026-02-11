@@ -18,6 +18,7 @@ import { publishMailboxUpdate } from './pubsub.js';
 import { checkBillingLimits } from './billing-checks.js';
 import { recalculateUserUsage } from './usage-calculator.js';
 import { sendNewEmailNotification } from './push-notifications.js';
+import { logger } from './logger.js';
 
 export interface SyncResult {
   synced: number;
@@ -84,9 +85,7 @@ async function withRetry<T>(
       lastError = error instanceof Error ? error : new Error(String(error));
 
       if (isRetryableError(error) && attempt < maxRetries) {
-        console.log(
-          `[IMAP] ${operationName} failed (attempt ${attempt}/${maxRetries}): ${lastError.message}. Retrying in ${RETRY_DELAY_MS}ms...`,
-        );
+        logger.warn('IMAP', `${operationName} failed (attempt ${attempt}/${maxRetries}): ${lastError.message}. Retrying in ${RETRY_DELAY_MS}ms...`);
         await sleep(RETRY_DELAY_MS * attempt); // Exponential backoff
       } else {
         throw lastError;
@@ -337,9 +336,7 @@ export async function startAsyncSync(
   // Check billing limits before syncing
   const billingCheck = await checkBillingLimits(emailAccount.userId);
   if (!billingCheck.canSync) {
-    console.log(
-      `[IMAP] Sync blocked for ${emailAccount.email}: ${billingCheck.reason}`,
-    );
+    logger.warn('IMAP', `Sync blocked for ${emailAccount.email}: ${billingCheck.reason}`);
     // Notify subscribers about the billing issue
     publishMailboxUpdate(emailAccount.userId, {
       type: 'ERROR',
@@ -364,15 +361,11 @@ export async function startAsyncSync(
   if (existingSyncId) {
     // Check if the sync has expired (stuck/stale)
     if (isSyncExpired(existingExpiresAt)) {
-      console.log(
-        `[IMAP] ${syncType} sync for ${emailAccount.email} has expired (syncId: ${existingSyncId}), starting new sync`,
-      );
+      logger.info('IMAP', `${syncType} sync for ${emailAccount.email} has expired (syncId: ${existingSyncId}), starting new sync`);
       // Clear the stale sync
       await clearExpiredSync(emailAccount, syncType);
     } else {
-      console.log(
-        `[IMAP] ${syncType} sync already in progress for ${emailAccount.email} (syncId: ${existingSyncId}), skipping`,
-      );
+      logger.debug('IMAP', `${syncType} sync already in progress for ${emailAccount.email} (syncId: ${existingSyncId}), skipping`);
       return false;
     }
   }
@@ -404,21 +397,17 @@ export async function startAsyncSync(
         result,
       );
       if (!updated) {
-        console.log(
-          `[IMAP] ${syncType} sync ${syncId} was superseded, not updating status`,
-        );
+        logger.info('IMAP', `${syncType} sync ${syncId} was superseded, not updating status`);
         return;
       }
 
-      console.log(
-        `[IMAP] ${syncType} sync complete for ${emailAccount.email}: ${result.synced} synced`,
-      );
+      logger.info('IMAP', `${syncType} sync complete for ${emailAccount.email}: ${result.synced} synced`);
 
       // Recalculate usage after sync
       try {
         await recalculateUserUsage(emailAccount.userId);
       } catch (usageError) {
-        console.error('[IMAP] Failed to recalculate usage:', usageError);
+        logger.error('IMAP', 'Failed to recalculate usage after sync', { error: usageError instanceof Error ? usageError.message : usageError });
       }
 
       // Notify subscribers that sync is complete
@@ -449,7 +438,7 @@ export async function startAsyncSync(
             latestEmail?.textBody ?? undefined,
           );
         } catch (pushError) {
-          console.error('[IMAP] Failed to send push notification:', pushError);
+          logger.error('IMAP', 'Failed to send push notification after sync', { error: pushError instanceof Error ? pushError.message : pushError });
         }
       }
 
@@ -464,8 +453,8 @@ export async function startAsyncSync(
               [fields.statusField]: null,
             });
           }
-        } catch {
-          // Ignore errors during cleanup
+        } catch (cleanupErr) {
+          logger.debug('IMAP', 'Error during post-sync cleanup (10s timeout)', { error: cleanupErr instanceof Error ? cleanupErr.message : cleanupErr });
         }
       }, 10000);
     })
@@ -475,10 +464,7 @@ export async function startAsyncSync(
       // Update the type-specific sync status
       await markSyncFailed(emailAccount, syncType, syncId, errorMsg);
 
-      console.error(
-        `[IMAP] ${syncType} sync failed for ${emailAccount.email}:`,
-        err,
-      );
+      logger.error('IMAP', `${syncType} sync failed for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
 
       // Notify subscribers that sync failed
       publishMailboxUpdate(emailAccount.userId, {
@@ -497,8 +483,8 @@ export async function startAsyncSync(
               [fields.statusField]: null,
             });
           }
-        } catch {
-          // Ignore errors during cleanup
+        } catch (cleanupErr) {
+          logger.debug('IMAP', 'Error during post-failure cleanup (30s timeout)', { error: cleanupErr instanceof Error ? cleanupErr.message : cleanupErr });
         }
       }, 30000);
     });
@@ -580,7 +566,7 @@ export async function syncEmailsFromImapAccount(
     await updateSyncExpiration(emailAccount, syncId, syncType);
 
     await withRetry(() => client.connect(), `Connect to ${emailAccount.host}`);
-    console.log(`[IMAP] Connected to ${emailAccount.host}`);
+    logger.info('IMAP', `Connected to ${emailAccount.host}`);
 
     await emailAccount.update({
       syncStatus: 'Opening mailbox...',
@@ -592,7 +578,7 @@ export async function syncEmailsFromImapAccount(
       () => client.mailboxOpen('INBOX'),
       'Open INBOX mailbox',
     );
-    console.log(`[IMAP] Mailbox opened: ${mailbox.exists} messages total`);
+    logger.info('IMAP', `Mailbox opened: ${mailbox.exists} messages total`);
 
     if (mailbox.exists === 0) {
       await client.logout();
@@ -627,9 +613,7 @@ export async function syncEmailsFromImapAccount(
         : null;
 
       if (isResuming) {
-        console.log(
-          `[IMAP] ${emailAccount.email} Resuming historical sync from UID ${lastProcessedUid}`,
-        );
+        logger.info('IMAP', `${emailAccount.email} Resuming historical sync from UID ${lastProcessedUid}`);
 
         const resumeMsg = `Resuming sync (UIDs below ${lastProcessedUid})...`;
         await emailAccount.update({
@@ -658,7 +642,7 @@ export async function syncEmailsFromImapAccount(
       const allMessageUids = searchResult === false ? [] : searchResult;
 
       if (allMessageUids.length === 0) {
-        console.log(`[IMAP] ${emailAccount.email} No messages to sync`);
+        logger.info('IMAP', `${emailAccount.email} No messages to sync`);
         await client.logout();
         return result;
       }
@@ -672,9 +656,7 @@ export async function syncEmailsFromImapAccount(
       let uidsToProcess: number[];
       if (isResuming && lastProcessedUid !== null) {
         uidsToProcess = sortedUids.filter((uid) => uid < lastProcessedUid);
-        console.log(
-          `[IMAP] ${emailAccount.email} Resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`,
-        );
+        logger.info('IMAP', `${emailAccount.email} Resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`);
       } else {
         uidsToProcess = sortedUids;
       }
@@ -692,9 +674,7 @@ export async function syncEmailsFromImapAccount(
       const savedTotal =
         emailAccount.historicalSyncTotalInbox || totalToProcess;
 
-      console.log(
-        `[IMAP] ${emailAccount.email} INBOX: ${totalRemaining} messages to process`,
-      );
+      logger.info('IMAP', `${emailAccount.email} INBOX: ${totalRemaining} messages to process`);
 
       let batchNumber = 0;
       let processedInSession = 0;
@@ -703,7 +683,7 @@ export async function syncEmailsFromImapAccount(
       for (let i = 0; i < uidsToProcess.length; i += BATCH_SIZE) {
         // Check if sync was cancelled
         if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
-          console.log(`[IMAP] ${syncType} sync ${syncId} cancelled`);
+          logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
           result.cancelled = true;
           break;
         }
@@ -758,9 +738,7 @@ export async function syncEmailsFromImapAccount(
           });
         }
 
-        console.log(
-          `[IMAP] ${emailAccount.email} INBOX batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped (progress: ${progress}%)`,
-        );
+        logger.debug('IMAP', `${emailAccount.email} INBOX batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped (progress: ${progress}%)`);
       }
 
       // Clear resume point if historical sync completed successfully
@@ -771,9 +749,7 @@ export async function syncEmailsFromImapAccount(
           // Also clear legacy field
           historicalSyncOldestDate: null,
         });
-        console.log(
-          `[IMAP] ${emailAccount.email} INBOX historical sync completed, cleared resume point`,
-        );
+        logger.info('IMAP', `${emailAccount.email} INBOX historical sync completed, cleared resume point`);
       }
     } else {
       // Incremental sync: search for messages since last sync
@@ -787,9 +763,7 @@ export async function syncEmailsFromImapAccount(
       );
       const messageUids = searchResult === false ? [] : searchResult;
 
-      console.log(
-        `[IMAP] Incremental ${syncType} sync: found ${messageUids.length} messages since ${sinceDate.toISOString()}`,
-      );
+      logger.info('IMAP', `Incremental ${syncType} sync: found ${messageUids.length} messages since ${sinceDate.toISOString()}`);
 
       if (messageUids.length === 0) {
         await client.logout();
@@ -802,7 +776,7 @@ export async function syncEmailsFromImapAccount(
       for (let i = 0; i < messageUids.length; i += BATCH_SIZE) {
         // Check if sync was cancelled
         if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
-          console.log(`[IMAP] ${syncType} sync ${syncId} cancelled`);
+          logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
           result.cancelled = true;
           break;
         }
@@ -840,32 +814,26 @@ export async function syncEmailsFromImapAccount(
         result.skipped += batchResult.skipped;
         result.errors.push(...batchResult.errors);
 
-        console.log(
-          `[IMAP] ${emailAccount.email} INBOX batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResult.synced} new, ${batchResult.skipped} skipped`,
-        );
+        logger.debug('IMAP', `${emailAccount.email} INBOX batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
       }
     }
 
-    console.log(
-      `[IMAP] ${emailAccount.email} INBOX sync complete: ${result.synced} synced, ${result.skipped} skipped`,
-    );
+    logger.info('IMAP', `${emailAccount.email} INBOX sync complete: ${result.synced} synced, ${result.skipped} skipped`);
 
     // Now sync Sent mail folder
     await syncSentFolder(client, emailAccount, syncId, syncType, result);
 
     await client.logout();
-    console.log(
-      `[IMAP] Sync complete for ${emailAccount.email}: ${result.synced} emails synced, ${result.skipped} skipped`,
-    );
+    logger.info('IMAP', `Sync complete for ${emailAccount.email}: ${result.synced} emails synced, ${result.skipped} skipped`);
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     result.errors.push(`IMAP connection error: ${errorMsg}`);
-    console.error(`[IMAP] Sync error for ${emailAccount.email}:`, err);
+    logger.error('IMAP', `Sync error for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
 
     try {
       await client.logout();
-    } catch {
-      // Ignore logout errors
+    } catch (logoutErr) {
+      logger.debug('IMAP', `Logout failed after sync error for ${emailAccount.email}`, { error: logoutErr instanceof Error ? logoutErr.message : logoutErr });
     }
   }
 
@@ -903,9 +871,7 @@ async function syncSentFolder(
         `Open Sent folder: ${folderName}`,
       );
       sentFolderName = folderName;
-      console.log(
-        `[IMAP] ${emailAccount.email} Opened Sent folder: ${folderName} (${sentMailbox.exists} messages)`,
-      );
+      logger.info('IMAP', `${emailAccount.email} Opened Sent folder: ${folderName} (${sentMailbox.exists} messages)`);
       break;
     } catch {
       // Folder doesn't exist, try next
@@ -914,14 +880,12 @@ async function syncSentFolder(
   }
 
   if (!sentMailbox) {
-    console.log(
-      `[IMAP] ${emailAccount.email} No Sent folder found, skipping sent mail sync`,
-    );
+    logger.info('IMAP', `${emailAccount.email} No Sent folder found, skipping sent mail sync`);
     return;
   }
 
   if (sentMailbox.exists === 0) {
-    console.log(`[IMAP] ${emailAccount.email} Sent folder is empty`);
+    logger.info('IMAP', `${emailAccount.email} Sent folder is empty`);
     return;
   }
 
@@ -950,9 +914,7 @@ async function syncSentFolder(
       : null;
 
     if (isResuming) {
-      console.log(
-        `[IMAP] ${emailAccount.email} Resuming SENT sync from UID ${lastProcessedUid}`,
-      );
+      logger.info('IMAP', `${emailAccount.email} Resuming SENT sync from UID ${lastProcessedUid}`);
     }
 
     // Fetch ALL UIDs once
@@ -963,7 +925,7 @@ async function syncSentFolder(
     const allSentUids = searchResult === false ? [] : searchResult;
 
     if (allSentUids.length === 0) {
-      console.log(`[IMAP] ${emailAccount.email} No sent messages to sync`);
+      logger.info('IMAP', `${emailAccount.email} No sent messages to sync`);
       return;
     }
 
@@ -974,9 +936,7 @@ async function syncSentFolder(
     let uidsToProcess: number[];
     if (isResuming && lastProcessedUid !== null) {
       uidsToProcess = sortedUids.filter((uid) => uid < lastProcessedUid);
-      console.log(
-        `[IMAP] ${emailAccount.email} SENT resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`,
-      );
+      logger.info('IMAP', `${emailAccount.email} SENT resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`);
     } else {
       uidsToProcess = sortedUids;
     }
@@ -990,9 +950,7 @@ async function syncSentFolder(
       });
     }
 
-    console.log(
-      `[IMAP] ${emailAccount.email} SENT: ${uidsToProcess.length} messages to process`,
-    );
+    logger.info('IMAP', `${emailAccount.email} SENT: ${uidsToProcess.length} messages to process`);
 
     let batchNumber = 0;
 
@@ -1026,9 +984,7 @@ async function syncSentFolder(
         });
       }
 
-      console.log(
-        `[IMAP] ${emailAccount.email} SENT batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped`,
-      );
+      logger.debug('IMAP', `${emailAccount.email} SENT batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
     }
 
     // Clear resume point if completed successfully
@@ -1037,9 +993,7 @@ async function syncSentFolder(
         historicalSyncLastUidSent: null,
         historicalSyncTotalSent: null,
       });
-      console.log(
-        `[IMAP] ${emailAccount.email} SENT historical sync completed, cleared resume point`,
-      );
+      logger.info('IMAP', `${emailAccount.email} SENT historical sync completed, cleared resume point`);
     }
   } else {
     // Incremental sync
@@ -1052,9 +1006,7 @@ async function syncSentFolder(
     );
     const messageUids = searchResult === false ? [] : searchResult;
 
-    console.log(
-      `[IMAP] ${emailAccount.email} Incremental ${syncType} Sent sync: ${messageUids.length} messages since ${sinceDate.toISOString()}`,
-    );
+    logger.info('IMAP', `${emailAccount.email} Incremental ${syncType} Sent sync: ${messageUids.length} messages since ${sinceDate.toISOString()}`);
 
     if (messageUids.length > 0) {
       for (let i = 0; i < messageUids.length; i += BATCH_SIZE) {
@@ -1077,14 +1029,12 @@ async function syncSentFolder(
         result.skipped += batchResult.skipped;
         result.errors.push(...batchResult.errors);
 
-        console.log(
-          `[IMAP] ${emailAccount.email} SENT batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResult.synced} new, ${batchResult.skipped} skipped`,
-        );
+        logger.debug('IMAP', `${emailAccount.email} SENT batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
       }
     }
   }
 
-  console.log(`[IMAP] ${emailAccount.email} Sent folder sync complete`);
+  logger.info('IMAP', `${emailAccount.email} Sent folder sync complete`);
 }
 
 /**
@@ -1155,10 +1105,7 @@ async function uploadAttachmentsImmediately(
         isSafe: true,
       });
     } catch (error) {
-      console.error(
-        `[IMAP] Failed to upload attachment: ${attachment.filename}`,
-        error,
-      );
+      logger.error('IMAP', `Failed to upload attachment: ${attachment.filename}`, { error: error instanceof Error ? error.message : error });
       // Continue with other attachments
     }
   }
@@ -1183,9 +1130,7 @@ async function createAttachmentRecords(
   }));
 
   await Attachment.bulkCreate(attachmentRecords);
-  console.log(
-    `[IMAP] Saved ${attachments.length} attachments for email ${emailId}`,
-  );
+  logger.debug('IMAP', `Saved ${attachments.length} attachments for email ${emailId}`);
 }
 
 /**
@@ -1272,17 +1217,14 @@ async function insertEmailBatch(
           try {
             await createAttachmentRecords(email.id, attachments);
           } catch (err) {
-            console.error(
-              `[IMAP] Failed to create attachment records for email ${email.id}:`,
-              err,
-            );
+            logger.error('IMAP', `Failed to create attachment records for email ${email.id}`, { error: err instanceof Error ? err.message : err });
             // Don't fail the whole batch, just log the error
           }
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
         result.errors.push(`Failed to insert batch: ${errorMsg}`);
-        console.error('[IMAP] Batch insert failed:', err);
+        logger.error('IMAP', 'Batch insert failed', { error: err instanceof Error ? err.message : err });
       }
     }
   }
@@ -1298,7 +1240,7 @@ async function insertEmailBatch(
         await applyRulesToEmail(email, userId);
       }
     } catch (err) {
-      console.error('[IMAP] Error applying rules to new emails:', err);
+      logger.error('IMAP', 'Error applying rules to new emails', { error: err instanceof Error ? err.message : err });
     }
   }
 
@@ -1343,7 +1285,7 @@ async function processBatch(
     for await (const message of messages) {
       try {
         if (!message.source) {
-          console.warn(`[IMAP] No source data for message UID ${message.uid}`);
+          logger.warn('IMAP', `No source data for message UID ${message.uid}`);
           continue;
         }
 
@@ -1377,7 +1319,7 @@ async function processBatch(
         batchResult.errors.push(
           `Failed to process message UID ${message.uid}: ${errorMsg}`,
         );
-        console.error(`[IMAP] Error processing message:`, err);
+        logger.error('IMAP', `Error processing message UID ${message.uid}`, { error: errorMsg });
       }
     }
 
@@ -1394,7 +1336,7 @@ async function processBatch(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     batchResult.errors.push(`Failed to fetch messages: ${errorMsg}`);
-    console.error('[IMAP] Fetch failed:', err);
+    logger.error('IMAP', 'Fetch failed in processBatch', { error: errorMsg });
   }
 
   return batchResult;
@@ -1458,7 +1400,7 @@ async function processBatchByUidsWithDateTracking(
     for await (const message of messages) {
       try {
         if (!message.source) {
-          console.warn(`[IMAP] No source data for message UID ${message.uid}`);
+          logger.warn('IMAP', `No source data for message UID ${message.uid} (date tracking batch)`);
           continue;
         }
 
@@ -1496,7 +1438,7 @@ async function processBatchByUidsWithDateTracking(
         batchResult.errors.push(
           `Failed to process message UID ${message.uid}: ${errorMsg}`,
         );
-        console.error(`[IMAP] Error processing message:`, err);
+        logger.error('IMAP', `Error processing message UID ${message.uid} (date tracking batch)`, { error: errorMsg });
       }
     }
 
@@ -1513,7 +1455,7 @@ async function processBatchByUidsWithDateTracking(
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     batchResult.errors.push(`Failed to fetch messages: ${errorMsg}`);
-    console.error('[IMAP] Fetch failed:', err);
+    logger.error('IMAP', 'Fetch failed in processBatchByUidsWithDateTracking', { error: errorMsg });
   }
 
   return batchResult;
@@ -1817,8 +1759,8 @@ export async function testImapConnection(
     const errorMsg = err instanceof Error ? err.message : 'Unknown error';
     try {
       await client.logout();
-    } catch {
-      // Ignore logout errors
+    } catch (logoutErr) {
+      logger.debug('IMAP', `Logout failed after connection test to ${host}`, { error: logoutErr instanceof Error ? logoutErr.message : logoutErr });
     }
     return { success: false, error: errorMsg };
   }
@@ -1876,11 +1818,11 @@ export async function listImapMailboxes(
 
     return mailboxes.map((mb) => mb.path);
   } catch (err) {
-    console.error('Failed to list mailboxes:', err);
+    logger.error('IMAP', `Failed to list mailboxes for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
     try {
       await client.logout();
-    } catch {
-      // Ignore
+    } catch (logoutErr) {
+      logger.debug('IMAP', `Logout failed after listing mailboxes for ${emailAccount.email}`, { error: logoutErr instanceof Error ? logoutErr.message : logoutErr });
     }
     throw err;
   }

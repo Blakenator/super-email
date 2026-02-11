@@ -2022,8 +2022,16 @@ type Query {
   """
   Get the current user's billing information including subscription and usage.
   Creates a free tier subscription if one doesn't exist.
+  Optionally pass a Stripe checkout session ID to resolve the subscription
+  before syncing (used after redirect from checkout).
   """
-  getBillingInfo: BillingInfo!
+  getBillingInfo(
+    """
+    Optional Stripe checkout session ID from redirect URL.
+    Used to resolve the subscription before webhooks arrive.
+    """
+    sessionId: String
+  ): BillingInfo!
 
   """
   Get only the current user's storage usage (cached from materialized view).

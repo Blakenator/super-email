@@ -36,7 +36,7 @@ export const createCheckoutSession = makeMutation(
       throw new Error('FRONTEND_URL environment variable is not configured');
     }
 
-    const successUrl = `${baseUrl}/settings/billing?checkout=success`;
+    const successUrl = `${baseUrl}/settings/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${baseUrl}/settings/billing?checkout=canceled`;
 
     const checkoutUrl = await stripeCreateCheckoutSession(

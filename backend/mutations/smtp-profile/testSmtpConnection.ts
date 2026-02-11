@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { testSmtpConnection as testSmtpConnectionHelper } from '../../helpers/email.js';
 import { SmtpProfile } from '../../db/models/smtp-profile.model.js';
 import { getSmtpCredentials } from '../../helpers/secrets.js';
+import { logger } from '../../helpers/logger.js';
 
 export const testSmtpConnection = makeMutation(
   'testSmtpConnection',
@@ -52,6 +53,9 @@ export const testSmtpConnection = makeMutation(
     } as SmtpProfile;
 
     const result = await testSmtpConnectionHelper(tempProfile);
+    if (!result.success) {
+      logger.warn('testSmtpConnection', `SMTP connection failed for ${host}:${port}`, { username, useSsl, error: result.message });
+    }
     return result;
   },
 );

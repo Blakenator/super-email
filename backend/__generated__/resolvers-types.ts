@@ -1194,6 +1194,8 @@ export type Query = {
   /**
    * Get the current user's billing information including subscription and usage.
    * Creates a free tier subscription if one doesn't exist.
+   * Optionally pass a Stripe checkout session ID to resolve the subscription
+   * before syncing (used after redirect from checkout).
    */
   getBillingInfo: BillingInfo;
   /**
@@ -1309,6 +1311,15 @@ export type QueryGetAttachmentArgs = {
  */
 export type QueryGetAttachmentDownloadUrlArgs = {
   id: Scalars['String']['input'];
+};
+
+
+/**
+ * GraphQL queries for fetching data. All queries require authentication
+ * unless otherwise noted.
+ */
+export type QueryGetBillingInfoArgs = {
+  sessionId?: InputMaybe<Scalars['String']['input']>;
 };
 
 
@@ -2390,7 +2401,7 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getAttachment?: Resolver<Maybe<ResolversTypes['Attachment']>, ParentType, ContextType, RequireFields<QueryGetAttachmentArgs, 'id'>>;
   getAttachmentDownloadUrl?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<QueryGetAttachmentDownloadUrlArgs, 'id'>>;
   getAuthenticationMethods?: Resolver<Array<ResolversTypes['AuthenticationMethod']>, ParentType, ContextType>;
-  getBillingInfo?: Resolver<ResolversTypes['BillingInfo'], ParentType, ContextType>;
+  getBillingInfo?: Resolver<ResolversTypes['BillingInfo'], ParentType, ContextType, Partial<QueryGetBillingInfoArgs>>;
   getContact?: Resolver<Maybe<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QueryGetContactArgs, 'id'>>;
   getContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType>;
   getEmail?: Resolver<Maybe<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<QueryGetEmailArgs, 'input'>>;

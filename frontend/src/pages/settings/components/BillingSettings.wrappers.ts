@@ -42,7 +42,9 @@ export const UsageValue = styled.span`
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
-export const StyledProgressBar = styled(ProgressBar)<{ $variant?: 'success' | 'warning' | 'danger' }>`
+export const StyledProgressBar = styled(ProgressBar)<{
+  $variant?: 'success' | 'warning' | 'danger';
+}>`
   height: 12px;
   border-radius: ${({ theme }) => theme.borderRadius.md};
   background: ${({ theme }) => theme.colors.background};
@@ -72,21 +74,21 @@ export const SegmentedProgressContainer = styled.div`
   display: flex;
 `;
 
-export const ProgressSegment = styled.div<{ 
-  $width: number; 
+export const ProgressSegment = styled.div<{
+  $width: number;
   $color: 'email' | 'attachment';
 }>`
   height: 100%;
   width: ${({ $width }) => $width}%;
-  background: ${({ theme, $color }) => 
+  background: ${({ theme, $color }) =>
     $color === 'email' ? theme.colors.info : theme.colors.primary};
   transition: width 0.3s ease;
-  
+
   &:first-child {
     border-top-left-radius: ${({ theme }) => theme.borderRadius.md};
     border-bottom-left-radius: ${({ theme }) => theme.borderRadius.md};
   }
-  
+
   &:last-child {
     border-top-right-radius: ${({ theme }) => theme.borderRadius.md};
     border-bottom-right-radius: ${({ theme }) => theme.borderRadius.md};
@@ -111,7 +113,7 @@ export const LegendDot = styled.span<{ $color: 'email' | 'attachment' }>`
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: ${({ theme, $color }) => 
+  background: ${({ theme, $color }) =>
     $color === 'email' ? theme.colors.info : theme.colors.primary};
 `;
 
@@ -133,7 +135,7 @@ export const DowngradeWarning = styled.div`
     flex-shrink: 0;
     margin-top: 2px;
   }
-  
+
   strong {
     display: block;
     margin-bottom: ${({ theme }) => theme.spacing.xs};
@@ -257,13 +259,17 @@ export const PlanGrid = styled.div`
   margin-top: ${({ theme }) => theme.spacing.md};
 `;
 
-export const PlanCard = styled.div<{ $selected?: boolean; $recommended?: boolean }>`
+export const PlanCard = styled.div<{
+  $selected?: boolean;
+  $recommended?: boolean;
+}>`
   position: relative;
   display: flex;
   flex-direction: column;
   padding: ${({ theme }) => theme.spacing.lg};
-  border: 2px solid ${({ theme, $selected }) =>
-    $selected ? theme.colors.primary : theme.colors.borderLight};
+  border: 2px solid
+    ${({ theme, $selected }) =>
+      $selected ? theme.colors.primary : theme.colors.borderLight};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   background: ${({ theme, $selected }) =>
     $selected ? `${theme.colors.primary}08` : theme.colors.backgroundWhite};
@@ -343,22 +349,29 @@ export const TierSelectionGrid = styled.div`
   gap: ${({ theme }) => theme.spacing.md};
 `;
 
-export const TierCard = styled.div<{ $selected?: boolean; $current?: boolean; $disabled?: boolean }>`
+export const TierCard = styled.div<{
+  $selected?: boolean;
+  $current?: boolean;
+  $disabled?: boolean;
+}>`
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: ${({ theme }) => theme.spacing.lg};
-  border: 2px solid ${({ theme, $selected, $current, $disabled }) => {
-    if ($disabled) return theme.colors.borderLight;
-    if ($selected) return theme.colors.primary;
-    if ($current) return theme.colors.success;
-    return theme.colors.borderLight;
-  }};
+  border: 2px solid
+    ${({ theme, $selected, $current, $disabled }) => {
+      if ($disabled) return theme.colors.borderLight;
+      if ($selected) return theme.colors.primary;
+      if ($current) return theme.colors.success;
+      return theme.colors.borderLight;
+    }};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   background: ${({ theme, $selected, $disabled }) => {
     if ($disabled) return theme.colors.background;
-    return $selected ? `${theme.colors.primary}08` : theme.colors.backgroundWhite;
+    return $selected
+      ? `${theme.colors.primary}08`
+      : theme.colors.backgroundWhite;
   }};
   cursor: ${({ $disabled }) => ($disabled ? 'not-allowed' : 'pointer')};
   opacity: ${({ $disabled }) => ($disabled ? 0.6 : 1)};

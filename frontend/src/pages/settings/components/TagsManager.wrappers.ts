@@ -46,7 +46,10 @@ export const ColorPicker = styled.div`
   gap: ${({ theme }) => theme.spacing.xs};
 `;
 
-export const ColorOption = styled.button<{ $color: string; $selected: boolean }>`
+export const ColorOption = styled.button<{
+  $color: string;
+  $selected: boolean;
+}>`
   width: 32px;
   height: 32px;
   border-radius: 50%;

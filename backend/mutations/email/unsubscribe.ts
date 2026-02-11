@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { Email, EmailAccount, SmtpProfile } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { sendEmail } from '../../helpers/email.js';
+import { logger } from '../../helpers/logger.js';
 
 export const unsubscribe = makeMutation(
   'unsubscribe',
@@ -32,9 +33,7 @@ export const unsubscribe = makeMutation(
     // Try HTTP unsubscribe first (RFC 8058 one-click unsubscribe)
     if (email.unsubscribeUrl) {
       try {
-        console.log(
-          `[Unsubscribe] Sending POST request to: ${email.unsubscribeUrl}`,
-        );
+        logger.info('Unsubscribe', `Sending POST request to: ${email.unsubscribeUrl}`);
 
         const response = await fetch(email.unsubscribeUrl, {
           method: 'POST',
@@ -48,15 +47,11 @@ export const unsubscribe = makeMutation(
         });
 
         if (response.ok || response.status === 200 || response.status === 202) {
-          console.log(
-            `[Unsubscribe] HTTP unsubscribe successful for: ${email.unsubscribeUrl}`,
-          );
+          logger.info('Unsubscribe', `HTTP unsubscribe successful for: ${email.unsubscribeUrl}`);
           unsubscribeSuccess = true;
         } else {
           // Some unsubscribe endpoints return 3xx redirects, try GET as fallback
-          console.log(
-            `[Unsubscribe] POST returned ${response.status}, trying GET`,
-          );
+          logger.info('Unsubscribe', `POST returned ${response.status}, trying GET for: ${email.unsubscribeUrl}`);
           const getResponse = await fetch(email.unsubscribeUrl, {
             method: 'GET',
             headers: {
@@ -65,7 +60,7 @@ export const unsubscribe = makeMutation(
           });
 
           if (getResponse.ok) {
-            console.log(`[Unsubscribe] GET unsubscribe successful`);
+            logger.info('Unsubscribe', `GET unsubscribe successful for: ${email.unsubscribeUrl}`);
             unsubscribeSuccess = true;
           } else {
             unsubscribeError = `HTTP unsubscribe failed with status ${getResponse.status}`;
@@ -73,7 +68,7 @@ export const unsubscribe = makeMutation(
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`[Unsubscribe] HTTP request failed:`, err);
+        logger.error('Unsubscribe', `HTTP request failed for ${email.unsubscribeUrl}`, { error: errorMsg });
         unsubscribeError = `Failed to contact unsubscribe URL: ${errorMsg}`;
       }
     }
@@ -81,9 +76,7 @@ export const unsubscribe = makeMutation(
     // If HTTP didn't work and we have an email address, try mailto unsubscribe
     if (!unsubscribeSuccess && email.unsubscribeEmail) {
       try {
-        console.log(
-          `[Unsubscribe] Sending unsubscribe email to: ${email.unsubscribeEmail}`,
-        );
+        logger.info('Unsubscribe', `Sending unsubscribe email to: ${email.unsubscribeEmail}`);
 
         // Find a default SMTP profile for the user
         const smtpProfile = await SmtpProfile.findOne({
@@ -98,7 +91,7 @@ export const unsubscribe = makeMutation(
             text: 'Please unsubscribe this email address from your mailing list.',
           });
 
-          console.log(`[Unsubscribe] Unsubscribe email sent successfully`);
+          logger.info('Unsubscribe', `Unsubscribe email sent successfully to: ${email.unsubscribeEmail}`);
           unsubscribeSuccess = true;
         } else {
           unsubscribeError =
@@ -106,7 +99,7 @@ export const unsubscribe = makeMutation(
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`[Unsubscribe] Failed to send unsubscribe email:`, err);
+        logger.error('Unsubscribe', `Failed to send unsubscribe email to ${email.unsubscribeEmail}`, { error: errorMsg });
         unsubscribeError = `Failed to send unsubscribe email: ${errorMsg}`;
       }
     }
@@ -118,9 +111,7 @@ export const unsubscribe = makeMutation(
     });
 
     if (!unsubscribeSuccess && unsubscribeError) {
-      console.warn(
-        `[Unsubscribe] Marked as unsubscribed but actual unsubscribe may have failed: ${unsubscribeError}`,
-      );
+      logger.warn('Unsubscribe', `Marked email ${input.emailId} as unsubscribed but actual unsubscribe may have failed: ${unsubscribeError}`);
     }
 
     return email;

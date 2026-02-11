@@ -34,7 +34,10 @@ import {
 } from './EmailListItem.wrappers';
 
 // Folder config for badges
-const FOLDER_BADGE_CONFIG: Record<string, { icon: IconDefinition; label: string; variant: string }> = {
+const FOLDER_BADGE_CONFIG: Record<
+  string,
+  { icon: IconDefinition; label: string; variant: string }
+> = {
   INBOX: { icon: faInbox, label: 'Inbox', variant: 'primary' },
   SENT: { icon: faPaperPlane, label: 'Sent', variant: 'success' },
   DRAFTS: { icon: faFileAlt, label: 'Drafts', variant: 'warning' },
@@ -191,11 +194,7 @@ export function EmailListItemDense({
             onSelect(!isSelected);
           }}
         >
-          <Form.Check
-            type="checkbox"
-            checked={isSelected}
-            readOnly
-          />
+          <Form.Check type="checkbox" checked={isSelected} readOnly />
         </SelectionCell>
         {showFolderBadge && folderConfig && (
           <FolderBadge className={`badge bg-${folderConfig.variant}`}>
@@ -221,13 +220,17 @@ export function EmailListItemDense({
           {email.threadCount && email.threadCount > 1 && (
             <ThreadBadge className="badge">{email.threadCount}</ThreadBadge>
           )}
-          {showTags && email.tags && email.tags.slice(0, 2).map((tag) => (
-            <TagBadge key={tag.id} $color={tag.color} className="badge">
-              {tag.name}
-            </TagBadge>
-          ))}
+          {showTags &&
+            email.tags &&
+            email.tags.slice(0, 2).map((tag) => (
+              <TagBadge key={tag.id} $color={tag.color} className="badge">
+                {tag.name}
+              </TagBadge>
+            ))}
           {showTags && email.tags && email.tags.length > 2 && (
-            <TagBadge $color="#6c757d" className="badge">+{email.tags.length - 2}</TagBadge>
+            <TagBadge $color="#6c757d" className="badge">
+              +{email.tags.length - 2}
+            </TagBadge>
           )}
         </SubjectCell>
         <PreviewCell>
@@ -241,7 +244,9 @@ export function EmailListItemDense({
             onClick={handleReadToggle}
             title={email.isRead ? 'Mark as unread' : 'Mark as read'}
           >
-            <FontAwesomeIcon icon={email.isRead ? faEnvelope : faEnvelopeOpen} />
+            <FontAwesomeIcon
+              icon={email.isRead ? faEnvelope : faEnvelopeOpen}
+            />
           </ActionButton>
           <ActionButton
             className="btn btn-outline-primary btn-sm"

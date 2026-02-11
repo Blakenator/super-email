@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { SmtpProfile } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { storeSmtpCredentials } from '../../helpers/secrets.js';
+import { logger } from '../../helpers/logger.js';
 
 export const createSmtpProfile = makeMutation(
   'createSmtpProfile',
@@ -34,6 +35,7 @@ export const createSmtpProfile = makeMutation(
       password: input.password,
     });
 
+    logger.info('createSmtpProfile', `Created SMTP profile ${smtpProfile.email} (${smtpProfile.id}) for user ${userId}`);
     return smtpProfile;
   },
 );
