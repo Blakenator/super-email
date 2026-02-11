@@ -22,7 +22,6 @@ import {
   faFilter,
   faCalendarAlt,
   faList,
-  faGavel,
   faRotateRight,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
@@ -40,8 +39,11 @@ import {
   type EmailFilters,
 } from '../inbox/components';
 import { InboxPagination } from '../inbox/components/InboxPagination';
-import { groupEmailsByRecency } from '../inbox/utils/recencyGrouping';
-import { EmailFolder } from '../../__generated__/graphql';
+import { groupEmailsByRecency, RecencyGroup } from '../inbox/utils/recencyGrouping';
+import {
+  EmailFolder,
+  type GetEmailsForTriageQuery,
+} from '../../__generated__/graphql';
 import {
   GET_TOP_EMAIL_SOURCES_QUERY,
   GET_EMAILS_FOR_TRIAGE_QUERY,
@@ -99,6 +101,8 @@ import {
 } from './Triage.wrappers';
 
 type TriageStep = 'selection' | 'summary' | 'source' | 'success';
+
+type TriageEmail = GetEmailsForTriageQuery['getEmails'][number];
 
 interface EmailSource {
   fromAddress: string;
@@ -162,7 +166,9 @@ export function Triage() {
   // Create a mutable copy before sorting (GraphQL returns frozen arrays)
   const sources: EmailSource[] = [
     ...(sourcesData?.getTopEmailSources ?? []),
-  ].sort((a, b) => b.count - a.count); // Sort descending by count
+  ]
+    .map((s) => ({ ...s, fromName: s.fromName ?? null }))
+    .sort((a, b) => b.count - a.count); // Sort descending by count
   const currentSource = sources[currentSourceIndex];
   const totalSourceEmails = sources.reduce((sum, s) => sum + s.count, 0);
 
@@ -200,7 +206,7 @@ export function Triage() {
       ...(filters.bodyContains && { bodyContains: filters.bodyContains }),
       ...(filters.tagIds.length > 0 && { tagIds: filters.tagIds }),
     }),
-    [currentSource, currentPage, filters],
+    [currentSource, currentPage, filters, pageSize],
   );
 
   // Fetch emails for current source
@@ -238,7 +244,10 @@ export function Triage() {
     },
   );
 
-  const emails = emailsData?.getEmails ?? [];
+  const emails = useMemo(
+    () => emailsData?.getEmails ?? [],
+    [emailsData?.getEmails],
+  );
   const emailCount = countData?.getEmailCount ?? 0;
   const totalPages = Math.ceil(emailCount / pageSize);
 
@@ -267,7 +276,7 @@ export function Triage() {
     ) {
       setGroupByDate(user.inboxGroupByDate);
     }
-  }, [user?.inboxGroupByDate]);
+  }, [user?.inboxGroupByDate, groupByDate]);
 
   useEffect(() => {
     if (
@@ -276,7 +285,7 @@ export function Triage() {
     ) {
       setUseDenseList(user.inboxDensity);
     }
-  }, [user?.inboxDensity]);
+  }, [user?.inboxDensity, useDenseList]);
 
   // Reset selection when source/page/filters change
   useEffect(() => {
@@ -317,10 +326,10 @@ export function Triage() {
         );
         setProcessedCount((prev) => prev + ids.length);
         setSelectedIds(new Set());
-        refetchEmails();
-        refetchCount();
-        refetchSources();
-      } catch (err) {
+        void refetchEmails();
+        void refetchCount();
+        void refetchSources();
+      } catch {
         toast.error('Failed to update emails');
       }
     },
@@ -338,7 +347,8 @@ export function Triage() {
 
     try {
       const allEmails = await refetchEmails();
-      const allIds = allEmails.data?.getEmails?.map((e: any) => e.id) ?? [];
+      const allIds =
+        allEmails.data?.getEmails?.map((e: TriageEmail) => e.id) ?? [];
 
       if (allIds.length > 0) {
         await bulkUpdateEmails({
@@ -348,10 +358,10 @@ export function Triage() {
         setProcessedCount((prev) => prev + allIds.length);
       }
 
-      refetchEmails();
-      refetchCount();
-      refetchSources();
-    } catch (err) {
+      void refetchEmails();
+      void refetchCount();
+      void refetchSources();
+    } catch {
       toast.error('Failed to mark all as read');
     }
   }, [
@@ -361,6 +371,40 @@ export function Triage() {
     refetchCount,
     refetchSources,
   ]);
+
+  const handleNextSource = useCallback(() => {
+    setCompletedSources((prev) => new Set(prev).add(currentSourceIndex));
+
+    if (currentSourceIndex < sources.length - 1) {
+      setCurrentSourceIndex(currentSourceIndex + 1);
+      setSelectedIds(new Set());
+      setCurrentPage(1);
+      setFilters(emptyFilters);
+    } else {
+      setStep('success');
+      void confetti({
+        particleCount: 150,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+      setTimeout(() => {
+        void confetti({
+          particleCount: 100,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0 },
+        });
+      }, 200);
+      setTimeout(() => {
+        void confetti({
+          particleCount: 100,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1 },
+        });
+      }, 400);
+    }
+  }, [currentSourceIndex, sources.length]);
 
   const handleBulkArchive = useCallback(async () => {
     const ids = Array.from(selectedIds);
@@ -373,10 +417,10 @@ export function Triage() {
       toast.success(`Archived ${ids.length} emails`);
       setProcessedCount((prev) => prev + ids.length);
       setSelectedIds(new Set());
-      refetchEmails();
-      refetchCount();
-      refetchSources();
-    } catch (err) {
+      void refetchEmails();
+      void refetchCount();
+      void refetchSources();
+    } catch {
       toast.error('Failed to archive emails');
     }
   }, [
@@ -392,7 +436,8 @@ export function Triage() {
 
     try {
       const allEmails = await refetchEmails();
-      const allIds = allEmails.data?.getEmails?.map((e: any) => e.id) ?? [];
+      const allIds =
+        allEmails.data?.getEmails?.map((e: TriageEmail) => e.id) ?? [];
 
       if (allIds.length > 0) {
         await bulkUpdateEmails({
@@ -405,10 +450,10 @@ export function Triage() {
       }
 
       handleNextSource();
-    } catch (err) {
+    } catch {
       toast.error('Failed to archive all emails');
     }
-  }, [emailCount, bulkUpdateEmails, refetchEmails, currentSource]);
+  }, [emailCount, bulkUpdateEmails, refetchEmails, currentSource, handleNextSource]);
 
   const handleBulkDelete = useCallback(async () => {
     const ids = Array.from(selectedIds);
@@ -419,10 +464,10 @@ export function Triage() {
       toast.success(`Deleted ${ids.length} emails`);
       setProcessedCount((prev) => prev + ids.length);
       setSelectedIds(new Set());
-      refetchEmails();
-      refetchCount();
-      refetchSources();
-    } catch (err) {
+      void refetchEmails();
+      void refetchCount();
+      void refetchSources();
+    } catch {
       toast.error('Failed to delete emails');
     }
   }, [
@@ -438,7 +483,8 @@ export function Triage() {
 
     try {
       const allEmails = await refetchEmails();
-      const allIds = allEmails.data?.getEmails?.map((e: any) => e.id) ?? [];
+      const allIds =
+        allEmails.data?.getEmails?.map((e: TriageEmail) => e.id) ?? [];
 
       if (allIds.length > 0) {
         await bulkDeleteEmails({ variables: { ids: allIds } });
@@ -449,10 +495,10 @@ export function Triage() {
       }
 
       handleNextSource();
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete all emails');
     }
-  }, [emailCount, bulkDeleteEmails, refetchEmails, currentSource]);
+  }, [emailCount, bulkDeleteEmails, refetchEmails, currentSource, handleNextSource]);
 
   const handleSourceLimitSelect = useCallback((limit: number) => {
     setSourceLimit(limit);
@@ -465,40 +511,6 @@ export function Triage() {
       setCurrentSourceIndex(0);
     }
   }, [sources]);
-
-  const handleNextSource = useCallback(() => {
-    setCompletedSources((prev) => new Set(prev).add(currentSourceIndex));
-
-    if (currentSourceIndex < sources.length - 1) {
-      setCurrentSourceIndex(currentSourceIndex + 1);
-      setSelectedIds(new Set());
-      setCurrentPage(1);
-      setFilters(emptyFilters);
-    } else {
-      setStep('success');
-      confetti({
-        particleCount: 150,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
-      setTimeout(() => {
-        confetti({
-          particleCount: 100,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0 },
-        });
-      }, 200);
-      setTimeout(() => {
-        confetti({
-          particleCount: 100,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1 },
-        });
-      }, 400);
-    }
-  }, [currentSourceIndex, sources.length]);
 
   const handlePrevSource = useCallback(() => {
     if (currentSourceIndex > 0) {
@@ -1024,19 +1036,19 @@ export function Triage() {
             {groupedEmails.map((group) => (
               <div key={group.group} className="mb-4">
                 <h6 className="text-muted mb-2 ps-2">
-                  {group.group === 'TODAY'
+                  {group.group === RecencyGroup.TODAY
                     ? 'Today'
-                    : group.group === 'YESTERDAY'
+                    : group.group === RecencyGroup.YESTERDAY
                       ? 'Yesterday'
-                      : group.group === 'LAST_7_DAYS'
+                      : group.group === RecencyGroup.LAST_7_DAYS
                         ? 'Last 7 Days'
-                        : group.group === 'LAST_MONTH'
+                        : group.group === RecencyGroup.LAST_MONTH
                           ? 'Last Month'
-                          : group.group === 'LAST_3_MONTHS'
+                          : group.group === RecencyGroup.LAST_3_MONTHS
                             ? 'Last 3 Months'
-                            : group.group === 'LAST_6_MONTHS'
+                            : group.group === RecencyGroup.LAST_6_MONTHS
                               ? 'Last 6 Months'
-                              : group.group === 'LAST_YEAR'
+                              : group.group === RecencyGroup.LAST_YEAR
                                 ? 'Last Year'
                                 : 'Older'}
                 </h6>
@@ -1055,6 +1067,7 @@ export function Triage() {
                       onReply={() => {}}
                       onDelete={() => {}}
                       onArchive={() => {}}
+                      showAccount={false}
                       showTags
                     />
                   ))}
@@ -1077,6 +1090,7 @@ export function Triage() {
                   onReply={() => {}}
                   onDelete={() => {}}
                   onArchive={() => {}}
+                  showAccount={false}
                   showTags
                 />
               ))}

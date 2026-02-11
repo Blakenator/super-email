@@ -15,6 +15,7 @@ import { ApolloProvider } from '@apollo/client/react';
 import { setContext } from '@apollo/client/link/context';
 import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
+import { Kind, OperationTypeNode } from 'graphql';
 import { createClient } from 'graphql-ws';
 import { BrowserRouter } from 'react-router';
 import { ThemeProvider } from 'styled-components';
@@ -64,12 +65,13 @@ const wsLink = new GraphQLWsLink(
   }),
 );
 
-const authLink = setContext(async (_, { headers }) => {
+const authLink = setContext(async (_, prevContext) => {
+  const headers = (prevContext.headers ?? {}) as Record<string, string>;
   // Get the current session from Supabase
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  const token: string | undefined = session?.access_token;
 
   return {
     headers: {
@@ -80,9 +82,10 @@ const authLink = setContext(async (_, { headers }) => {
 });
 
 // Error handling link for offline support
-const errorLink = onError(({ networkError, operation, forward }) => {
-  if (networkError) {
-    // Update offline status when we detect network errors
+const errorLink = onError(({ error, operation, forward }) => {
+  // In Apollo Client v4, all errors come through the single `error` field.
+  // Non-GraphQL errors indicate network issues.
+  if (error && !('errors' in error)) {
     useEmailStore.getState().setOnline(false);
     console.log('[Apollo] Network error detected, switching to offline mode');
   }
@@ -94,8 +97,8 @@ const splitLink = split(
   ({ query }) => {
     const definition = getMainDefinition(query);
     return (
-      definition.kind === 'OperationDefinition' &&
-      definition.operation === 'subscription'
+      definition.kind === Kind.OPERATION_DEFINITION &&
+      definition.operation === OperationTypeNode.SUBSCRIPTION
     );
   },
   wsLink,

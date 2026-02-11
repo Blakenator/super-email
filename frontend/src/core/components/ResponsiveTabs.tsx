@@ -1,6 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react';
 import styled from 'styled-components';
-import { Tabs, Tab, Nav, Dropdown } from 'react-bootstrap';
+import { Tabs, Tab, Dropdown } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
@@ -69,13 +69,14 @@ const VerticalNavWrapper = styled.div`
   flex-shrink: 0;
 `;
 
-const VerticalNav = styled(Nav)`
+const VerticalNav = styled.nav`
+  display: flex;
   flex-direction: column;
   border-right: 1px solid ${({ theme }) => theme.colors.border};
   padding-right: ${({ theme }) => theme.spacing.md};
 `;
 
-const VerticalNavLink = styled(Nav.Link)<{ $active?: boolean }>`
+const VerticalNavLink = styled.a<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.spacing.sm};
@@ -102,7 +103,7 @@ const DropdownWrapper = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.md};
 `;
 
-const DropdownToggleButton = styled(Dropdown.Toggle)`
+const DropdownToggleButton = styled.button`
   width: 100%;
   display: flex;
   align-items: center;
@@ -124,14 +125,14 @@ const DropdownToggleButton = styled(Dropdown.Toggle)`
   }
 `;
 
-const DropdownMenu = styled(Dropdown.Menu)`
+const DropdownMenu = styled.div`
   width: 100%;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius.md};
   box-shadow: ${({ theme }) => theme.shadows.md};
 `;
 
-const DropdownItem = styled(Dropdown.Item)<{ $active?: boolean }>`
+const DropdownItem = styled.a<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.spacing.sm};
@@ -184,7 +185,7 @@ export function ResponsiveTabs({
       <TabsContainer className={className}>
         <DropdownWrapper>
           <Dropdown>
-            <DropdownToggleButton variant="outline-secondary">
+            <DropdownToggleButton>
               <span>
                 {activeTab?.icon && (
                   <TabIcon>

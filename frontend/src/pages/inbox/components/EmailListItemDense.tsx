@@ -3,6 +3,7 @@ import { Button, Modal, Form } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { DateTime } from 'luxon';
 import { getEmailPreviewText } from '../../../utils/emailPreview';
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
   faStar as faStarSolid,
   faReply,
@@ -33,7 +34,7 @@ import {
 } from './EmailListItem.wrappers';
 
 // Folder config for badges
-const FOLDER_BADGE_CONFIG: Record<string, { icon: any; label: string; variant: string }> = {
+const FOLDER_BADGE_CONFIG: Record<string, { icon: IconDefinition; label: string; variant: string }> = {
   INBOX: { icon: faInbox, label: 'Inbox', variant: 'primary' },
   SENT: { icon: faPaperPlane, label: 'Sent', variant: 'success' },
   DRAFTS: { icon: faFileAlt, label: 'Drafts', variant: 'warning' },
@@ -197,7 +198,7 @@ export function EmailListItemDense({
           />
         </SelectionCell>
         {showFolderBadge && folderConfig && (
-          <FolderBadge bg={folderConfig.variant}>
+          <FolderBadge className={`badge bg-${folderConfig.variant}`}>
             <FontAwesomeIcon icon={folderConfig.icon} />
             {folderConfig.label}
           </FolderBadge>
@@ -210,7 +211,7 @@ export function EmailListItemDense({
         <SenderCell>
           {email.fromName || email.fromAddress}
           {showAccount && account && (
-            <AccountBadge bg="light" text="dark">
+            <AccountBadge className="badge bg-light text-dark">
               {account.name.slice(0, 10)}
             </AccountBadge>
           )}
@@ -218,15 +219,15 @@ export function EmailListItemDense({
         <SubjectCell>
           {email.subject}
           {email.threadCount && email.threadCount > 1 && (
-            <ThreadBadge>{email.threadCount}</ThreadBadge>
+            <ThreadBadge className="badge">{email.threadCount}</ThreadBadge>
           )}
           {showTags && email.tags && email.tags.slice(0, 2).map((tag) => (
-            <TagBadge key={tag.id} $color={tag.color}>
+            <TagBadge key={tag.id} $color={tag.color} className="badge">
               {tag.name}
             </TagBadge>
           ))}
           {showTags && email.tags && email.tags.length > 2 && (
-            <TagBadge $color="#6c757d">+{email.tags.length - 2}</TagBadge>
+            <TagBadge $color="#6c757d" className="badge">+{email.tags.length - 2}</TagBadge>
           )}
         </SubjectCell>
         <PreviewCell>
@@ -236,16 +237,14 @@ export function EmailListItemDense({
 
         <QuickActions className="quick-actions">
           <ActionButton
-            variant="outline-secondary"
-            size="sm"
+            className="btn btn-outline-secondary btn-sm"
             onClick={handleReadToggle}
             title={email.isRead ? 'Mark as unread' : 'Mark as read'}
           >
             <FontAwesomeIcon icon={email.isRead ? faEnvelope : faEnvelopeOpen} />
           </ActionButton>
           <ActionButton
-            variant="outline-primary"
-            size="sm"
+            className="btn btn-outline-primary btn-sm"
             onClick={handleReplyClick}
             title="Reply"
           >
@@ -253,8 +252,7 @@ export function EmailListItemDense({
           </ActionButton>
           {onArchive && (
             <ActionButton
-              variant="outline-secondary"
-              size="sm"
+              className="btn btn-outline-secondary btn-sm"
               onClick={handleArchiveClick}
               title="Archive"
             >
@@ -263,8 +261,7 @@ export function EmailListItemDense({
           )}
           {onUnarchive && (
             <ActionButton
-              variant="outline-info"
-              size="sm"
+              className="btn btn-outline-info btn-sm"
               onClick={handleUnarchiveClick}
               title="Move to Inbox"
             >
@@ -272,8 +269,7 @@ export function EmailListItemDense({
             </ActionButton>
           )}
           <ActionButton
-            variant="outline-danger"
-            size="sm"
+            className="btn btn-outline-danger btn-sm"
             onClick={handleDeleteClick}
             title="Delete"
           >

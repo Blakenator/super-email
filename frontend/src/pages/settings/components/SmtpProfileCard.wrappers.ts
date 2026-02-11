@@ -1,7 +1,6 @@
 import styled from 'styled-components';
-import { Card } from 'react-bootstrap';
 
-export const SmtpCardStyled = styled(Card)`
+export const SmtpCardStyled = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   transition: box-shadow 0.2s ease, transform 0.2s ease;
@@ -13,7 +12,7 @@ export const SmtpCardStyled = styled(Card)`
   }
 `;
 
-export const SmtpCardHeader = styled(Card.Header)<{ $isDefault?: boolean }>`
+export const SmtpCardHeader = styled.div<{ $isDefault?: boolean }>`
   background: ${({ $isDefault }) =>
     $isDefault
       ? 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)'
@@ -37,7 +36,7 @@ export const SmtpCardSubtitle = styled.div`
   opacity: 0.9;
 `;
 
-export const SmtpCardBody = styled(Card.Body)`
+export const SmtpCardBody = styled.div`
   padding: ${({ theme }) => theme.spacing.md};
 `;
 
@@ -58,7 +57,7 @@ export const SmtpDetailLabel = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.sm};
 `;
 
-export const SmtpCardFooter = styled(Card.Footer)`
+export const SmtpCardFooter = styled.div`
   background: ${({ theme }) => theme.colors.background};
   border-top: 1px solid ${({ theme }) => theme.colors.border};
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};

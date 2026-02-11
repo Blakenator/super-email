@@ -161,7 +161,7 @@ export function useInboxEmails({
     [folder, emailAccountId, searchQuery, advancedFilters],
   );
 
-  const { data, loading, refetch, error } = useQuery(GET_EMAILS_QUERY, {
+  const { data, loading, refetch } = useQuery(GET_EMAILS_QUERY, {
     variables: { input: queryInput },
     // Use cache-only when offline to avoid network requests
     fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
@@ -229,7 +229,7 @@ export function useInboxEmails({
     if (serverTotalCount > 0 || isOnline) return null;
     // Count cached emails matching the current folder/account
     return Object.values(cachedEmails).filter((email) => {
-      if (email.folder !== folder) return false;
+      if ((email.folder as EmailFolder) !== folder) return false;
       if (emailAccountId && email.emailAccountId !== emailAccountId)
         return false;
       return true;
@@ -251,7 +251,7 @@ export function useInboxEmails({
       // Only refetch if we're on page 1 or viewing inbox
       // (new emails typically appear at the top)
       if (folder === EmailFolder.Inbox || currentPage === 1) {
-        refetch();
+        void refetch();
       }
     }
   }, [lastUpdate, folder, currentPage, refetch]);
@@ -323,7 +323,7 @@ export function useInboxEmails({
       fetchPolicy: 'no-cache', // Always make a network request
       onCompleted: () => {
         toast.success('Sync started');
-        refetch();
+        void refetch();
       },
     },
   );
@@ -493,8 +493,8 @@ export function useInboxEmails({
     const allCached = Object.values(cachedEmails);
     return allCached
       .filter((email) => {
-        // Filter by folder
-        if (email.folder !== folder) return false;
+        // Filter by folder (cache stores enum string values)
+        if ((email.folder as EmailFolder) !== folder) return false;
         // Filter by account if specified
         if (emailAccountId && email.emailAccountId !== emailAccountId)
           return false;
@@ -585,7 +585,7 @@ function showNewEmailNotification(count: number) {
       tag: 'new-email',
     });
   } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then((permission) => {
+    void Notification.requestPermission().then((permission) => {
       if (permission === 'granted') {
         new Notification('New Email', {
           body:

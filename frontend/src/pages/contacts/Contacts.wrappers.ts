@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Card } from 'react-bootstrap';
 
 export const PageHeader = styled.div`
   display: flex;
@@ -30,7 +29,7 @@ export const ContactsGrid = styled.div`
   gap: ${({ theme }) => theme.spacing.lg};
 `;
 
-export const ContactCardStyled = styled(Card)`
+export const ContactCardStyled = styled.div`
   border: none;
   box-shadow: ${({ theme }) => theme.shadows.sm};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
@@ -42,7 +41,7 @@ export const ContactCardStyled = styled(Card)`
   }
 `;
 
-export const ContactCardHeader = styled(Card.Header)`
+export const ContactCardHeader = styled.div`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.spacing.md};
@@ -86,7 +85,7 @@ export const ContactCompany = styled.div`
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
-export const ContactCardBody = styled(Card.Body)`
+export const ContactCardBody = styled.div`
   padding: ${({ theme }) => theme.spacing.md};
 `;
 
@@ -119,7 +118,7 @@ export const ContactMeta = styled.div`
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
-export const ContactCardFooter = styled(Card.Footer)`
+export const ContactCardFooter = styled.div`
   display: flex;
   gap: ${({ theme }) => theme.spacing.sm};
   background: ${({ theme }) => theme.colors.background};

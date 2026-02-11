@@ -4,7 +4,13 @@
  */
 
 import React from 'react';
-import { View, ScrollView, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import {
+  View,
+  ScrollView,
+  StyleSheet,
+  ViewStyle,
+  StyleProp,
+} from 'react-native';
 import { useSafeAreaInsets, EdgeInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme';
 
@@ -27,9 +33,11 @@ interface SafeScreenProps {
 /**
  * Hook to get safe area insets with edge-based padding styles
  */
-export function useSafeInsets(edges: ('top' | 'bottom' | 'left' | 'right')[] = ['top']) {
+export function useSafeInsets(
+  edges: ('top' | 'bottom' | 'left' | 'right')[] = ['top'],
+) {
   const insets = useSafeAreaInsets();
-  
+
   const getPadding = (): ViewStyle => {
     const padding: ViewStyle = {};
     if (edges.includes('top')) padding.paddingTop = insets.top;
@@ -38,7 +46,7 @@ export function useSafeInsets(edges: ('top' | 'bottom' | 'left' | 'right')[] = [
     if (edges.includes('right')) padding.paddingRight = insets.right;
     return padding;
   };
-  
+
   return {
     insets,
     padding: getPadding(),
@@ -64,12 +72,16 @@ export function SafeScreen({
   const theme = useTheme();
   const { padding } = useSafeInsets(edges);
   const bgColor = backgroundColor ?? theme.colors.background;
-  
+
   if (scroll) {
     return (
       <ScrollView
         style={[styles.container, { backgroundColor: bgColor }, style]}
-        contentContainerStyle={[styles.scrollContent, padding, contentContainerStyle]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          padding,
+          contentContainerStyle,
+        ]}
         keyboardShouldPersistTaps="handled"
         refreshControl={refreshControl}
       >
@@ -77,9 +89,11 @@ export function SafeScreen({
       </ScrollView>
     );
   }
-  
+
   return (
-    <View style={[styles.container, { backgroundColor: bgColor }, padding, style]}>
+    <View
+      style={[styles.container, { backgroundColor: bgColor }, padding, style]}
+    >
       {children}
     </View>
   );
@@ -96,7 +110,7 @@ interface SafeHeaderProps {
 export function SafeHeader({ children, style }: SafeHeaderProps) {
   const theme = useTheme();
   const { top } = useSafeInsets(['top']);
-  
+
   return (
     <View
       style={[

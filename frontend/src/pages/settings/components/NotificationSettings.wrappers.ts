@@ -1,11 +1,10 @@
 import styled from 'styled-components';
-import { Card, ListGroup } from 'react-bootstrap';
 
-export const StatusCard = styled(Card)`
+export const StatusCard = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.md};
 `;
 
-export const StatusItem = styled(ListGroup.Item)`
+export const StatusItem = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;

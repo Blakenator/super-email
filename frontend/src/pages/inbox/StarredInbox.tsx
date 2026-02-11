@@ -147,6 +147,7 @@ export function StarredInbox() {
               <EmailItem
                 key={email.id}
                 $isUnread={!email.isRead}
+                className="list-group-item"
                 onClick={() => handleEmailClick(email.id, email.isRead)}
               >
                 <EmailMeta>

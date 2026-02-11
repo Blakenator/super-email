@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Button } from 'react-bootstrap';
 
 export const IframeContainer = styled.div`
   width: 100%;
@@ -9,12 +8,16 @@ export const IframeContainer = styled.div`
   position: relative;
 `;
 
-export const ThemeToggleButton = styled(Button)`
+export const ThemeToggleButton = styled.button.attrs({ type: 'button' })`
   opacity: 0.7;
   transition: opacity 0.2s ease;
 
   &:hover {
     opacity: 1;
+  }
+
+  &:focus {
+    outline: none;
   }
 `;
 
@@ -43,14 +46,21 @@ export const ToolbarSpacer = styled.div`
   flex: 1;
 `;
 
-export const ShowImagesButton = styled(Button)`
+export const ShowImagesButton = styled.button.attrs({ type: 'button' })`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.spacing.xs};
   font-size: 12px;
-  
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  cursor: pointer;
+
   svg {
     font-size: 14px;
+  }
+
+  &:focus {
+    outline: none;
   }
 `;
 

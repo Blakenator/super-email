@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { ListGroup } from 'react-bootstrap';
 
 export const SearchInput = styled.div`
   position: relative;
@@ -18,7 +17,7 @@ export const SearchInput = styled.div`
   }
 `;
 
-export const ContactListItem = styled(ListGroup.Item)<{ $selected?: boolean }>`
+export const ContactListItem = styled.div<{ $selected?: boolean }>`
   cursor: pointer;
   display: flex;
   align-items: center;

@@ -111,7 +111,7 @@ export function CreateRuleModal({
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      createRule({
+      void createRule({
         variables: {
           input: {
             name: formData.name,

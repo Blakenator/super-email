@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { ButtonGroup } from 'react-bootstrap';
 
 export const AttachmentContainer = styled.div`
   margin-top: ${({ theme }) => theme.spacing.md};
@@ -21,7 +20,7 @@ export const AttachmentTitle = styled.h3`
   color: ${({ theme }) => theme.colors.textPrimary};
 `;
 
-export const ViewToggle = styled(ButtonGroup)`
+export const ViewToggle = styled.div.attrs({ className: 'btn-group', role: 'group' })`
   .btn {
     padding: 0.375rem 0.5rem;
   }

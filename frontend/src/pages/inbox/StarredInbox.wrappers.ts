@@ -1,7 +1,6 @@
 import styled from 'styled-components';
-import { ListGroup } from 'react-bootstrap';
 
-export const EmailItem = styled(ListGroup.Item)<{ $isUnread: boolean }>`
+export const EmailItem = styled.div<{ $isUnread: boolean }>`
   cursor: pointer;
   padding: ${({ theme }) => theme.spacing.md} ${({ theme }) => theme.spacing.lg};
   border-left: none;

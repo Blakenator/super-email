@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Badge, Button } from 'react-bootstrap';
 
 export const EmailItemWrapper = styled.div<{ $isUnread: boolean; $isSelected: boolean }>`
   cursor: pointer;
@@ -100,18 +99,18 @@ export const StarButton = styled.span<{ $isStarred: boolean }>`
   }
 `;
 
-export const AccountBadge = styled(Badge)`
+export const AccountBadge = styled.span`
   font-size: 0.7rem;
   margin-left: ${({ theme }) => theme.spacing.sm};
 `;
 
-export const ThreadBadge = styled(Badge)`
+export const ThreadBadge = styled.span`
   font-size: 0.65rem;
   margin-left: ${({ theme }) => theme.spacing.xs};
   background-color: ${({ theme }) => theme.colors.textSecondary} !important;
 `;
 
-export const AttachmentBadge = styled(Badge)`
+export const AttachmentBadge = styled.span`
   font-size: 0.65rem;
   margin-left: ${({ theme }) => theme.spacing.xs};
   background-color: ${({ theme }) => theme.colors.textSecondary} !important;
@@ -135,12 +134,18 @@ export const QuickActions = styled.div`
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;
 
-export const ActionButton = styled(Button)`
+export const ActionButton = styled.button.attrs({ type: 'button' })`
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  &:focus {
+    outline: none;
+  }
 `;
 
-export const FolderBadge = styled(Badge)`
+export const FolderBadge = styled.span`
   font-size: 0.65rem;
   padding: 0.25em 0.5em;
   display: flex;
@@ -156,7 +161,7 @@ export const TagsRow = styled.div`
   margin-top: 4px;
 `;
 
-export const TagBadge = styled(Badge)<{ $color: string }>`
+export const TagBadge = styled.span<{ $color: string }>`
   font-size: 0.65rem;
   padding: 0.2em 0.5em;
   background-color: ${({ $color }) => $color} !important;
@@ -263,12 +268,12 @@ export const DateCell = styled.span`
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
-export const DenseAccountBadge = styled(Badge)`
+export const DenseAccountBadge = styled.span`
   font-size: 0.65rem;
   margin-left: ${({ theme }) => theme.spacing.xs};
 `;
 
-export const DenseThreadBadge = styled(Badge)`
+export const DenseThreadBadge = styled.span`
   font-size: 0.55rem;
   margin-left: ${({ theme }) => theme.spacing.xs};
   background-color: ${({ theme }) => theme.colors.textSecondary} !important;
@@ -290,12 +295,18 @@ export const DenseQuickActions = styled.div`
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;
 
-export const DenseActionButton = styled(Button)`
+export const DenseActionButton = styled.button.attrs({ type: 'button' })`
   padding: 0.15rem 0.35rem;
   font-size: 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  &:focus {
+    outline: none;
+  }
 `;
 
-export const DenseFolderBadge = styled(Badge)`
+export const DenseFolderBadge = styled.span`
   font-size: 0.6rem;
   padding: 0.2em 0.4em;
   display: flex;
@@ -304,7 +315,7 @@ export const DenseFolderBadge = styled(Badge)`
   flex-shrink: 0;
 `;
 
-export const DenseTagBadge = styled(Badge)<{ $color: string }>`
+export const DenseTagBadge = styled.span<{ $color: string }>`
   font-size: 0.55rem;
   padding: 0.15em 0.4em;
   background-color: ${({ $color }) => $color} !important;

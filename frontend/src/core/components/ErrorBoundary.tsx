@@ -57,7 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <ErrorWrapper>
           <Container>
-            <ErrorCard className="mx-auto">
+            <ErrorCard className="card mx-auto">
               <Card.Body className="p-5 text-center">
                 <ErrorIcon>
                   <FontAwesomeIcon icon={faDizzy} />

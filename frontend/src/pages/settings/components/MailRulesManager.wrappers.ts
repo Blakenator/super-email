@@ -1,7 +1,6 @@
 import styled from 'styled-components';
-import { ListGroup, Badge } from 'react-bootstrap';
 
-export const RuleListItem = styled(ListGroup.Item)`
+export const RuleListItem = styled.div`
   padding: ${({ theme }) => theme.spacing.md};
 `;
 
@@ -30,11 +29,11 @@ export const RuleDetails = styled.div`
   margin-top: ${({ theme }) => theme.spacing.xs};
 `;
 
-export const RuleCondition = styled(Badge)`
+export const RuleCondition = styled.span`
   font-weight: normal;
 `;
 
-export const RuleAction = styled(Badge)`
+export const RuleAction = styled.span`
   font-weight: normal;
 `;
 

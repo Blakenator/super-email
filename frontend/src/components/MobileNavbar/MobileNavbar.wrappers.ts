@@ -1,7 +1,6 @@
 import styled from 'styled-components';
-import { Navbar, Dropdown } from 'react-bootstrap';
 
-export const MobileNavbarContainer = styled(Navbar)`
+export const MobileNavbarContainer = styled.nav`
   display: none;
   background: ${({ theme }) => theme.colors.backgroundWhite};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
@@ -31,7 +30,7 @@ export const MobileNavActions = styled.div`
   margin-left: auto;
 `;
 
-export const MobileNavDropdown = styled(Dropdown)`
+export const MobileNavDropdownWrapper = styled.div`
   .dropdown-toggle {
     background: transparent;
     border: none;
@@ -46,18 +45,37 @@ export const MobileNavDropdown = styled(Dropdown)`
       display: none;
     }
   }
+
+  .dropdown-menu {
+    min-width: 200px;
+    border: 1px solid ${({ theme }) => theme.colors.border};
+    box-shadow: ${({ theme }) => theme.shadows.lg};
+    border-radius: ${({ theme }) => theme.borderRadius.md};
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: ${({ theme }) => theme.spacing.sm};
+    padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
+
+    &:hover {
+      background: ${({ theme }) => theme.colors.backgroundHover};
+    }
+
+    svg {
+      width: 16px;
+    }
+
+    .badge {
+      margin-left: auto;
+    }
+  }
 `;
 
-export const MobileNavMenu = styled(Dropdown.Menu)`
-  min-width: 200px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  box-shadow: ${({ theme }) => theme.shadows.lg};
-  border-radius: ${({ theme }) => theme.borderRadius.md};
-  max-height: 70vh;
-  overflow-y: auto;
-`;
-
-export const MobileNavItem = styled(Dropdown.Item)<{ $active?: boolean }>`
+export const MobileNavItem = styled.div.attrs({ className: 'dropdown-item', role: 'button' })<{ $active?: boolean }>`
   display: flex;
   align-items: center;
   gap: ${({ theme }) => theme.spacing.sm};
@@ -67,6 +85,8 @@ export const MobileNavItem = styled(Dropdown.Item)<{ $active?: boolean }>`
   background: ${({ $active, theme }) =>
     $active ? `${theme.colors.primary}15` : 'transparent'};
   font-weight: ${({ $active }) => ($active ? '600' : '400')};
+  cursor: pointer;
+  text-decoration: none;
 
   &:hover {
     background: ${({ theme }) => theme.colors.backgroundHover};
@@ -81,7 +101,7 @@ export const MobileNavItem = styled(Dropdown.Item)<{ $active?: boolean }>`
   }
 `;
 
-export const MobileNavDivider = styled(Dropdown.Divider)`
+export const MobileNavDivider = styled.hr`
   margin: ${({ theme }) => theme.spacing.xs} 0;
 `;
 

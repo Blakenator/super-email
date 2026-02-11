@@ -7,28 +7,84 @@ import React from 'react';
 import { Feather, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme';
 
-export type IconName = 
+export type IconName =
   // Navigation & UI
-  | 'inbox' | 'send' | 'file-text' | 'archive' | 'trash-2' | 'star'
-  | 'chevron-right' | 'chevron-left' | 'chevron-down' | 'chevron-up' | 'x' | 'check'
-  | 'plus' | 'minus' | 'edit-2' | 'settings' | 'search' | 'filter'
-  | 'menu' | 'more-vertical' | 'more-horizontal' | 'refresh-cw'
+  | 'inbox'
+  | 'send'
+  | 'file-text'
+  | 'archive'
+  | 'trash-2'
+  | 'star'
+  | 'chevron-right'
+  | 'chevron-left'
+  | 'chevron-down'
+  | 'chevron-up'
+  | 'x'
+  | 'check'
+  | 'plus'
+  | 'minus'
+  | 'edit-2'
+  | 'settings'
+  | 'search'
+  | 'filter'
+  | 'menu'
+  | 'more-vertical'
+  | 'more-horizontal'
+  | 'refresh-cw'
   // Email
-  | 'mail' | 'mail-open' | 'paperclip' | 'reply' | 'reply-all' | 'forward'
-  | 'tag' | 'bookmark' | 'flag' | 'bell' | 'bell-off'
-  // User & Contacts  
-  | 'user' | 'users' | 'user-plus' | 'user-check'
+  | 'mail'
+  | 'mail-open'
+  | 'paperclip'
+  | 'reply'
+  | 'reply-all'
+  | 'forward'
+  | 'tag'
+  | 'bookmark'
+  | 'flag'
+  | 'bell'
+  | 'bell-off'
+  // User & Contacts
+  | 'user'
+  | 'users'
+  | 'user-plus'
+  | 'user-check'
   // Auth & Security
-  | 'lock' | 'unlock' | 'eye' | 'eye-off' | 'fingerprint' | 'face-id'
+  | 'lock'
+  | 'unlock'
+  | 'eye'
+  | 'eye-off'
+  | 'fingerprint'
+  | 'face-id'
   // Status & Actions
-  | 'check-circle' | 'alert-circle' | 'info' | 'help-circle'
-  | 'sun' | 'moon' | 'monitor' | 'smartphone'
+  | 'check-circle'
+  | 'alert-circle'
+  | 'info'
+  | 'help-circle'
+  | 'sun'
+  | 'moon'
+  | 'monitor'
+  | 'smartphone'
   // Other
-  | 'log-out' | 'external-link' | 'link' | 'copy' | 'download' | 'upload'
-  | 'folder' | 'server' | 'zap' | 'shield' | 'globe' | 'clock' | 'briefcase' | 'image'
+  | 'log-out'
+  | 'external-link'
+  | 'link'
+  | 'copy'
+  | 'download'
+  | 'upload'
+  | 'folder'
+  | 'server'
+  | 'zap'
+  | 'shield'
+  | 'globe'
+  | 'clock'
+  | 'briefcase'
+  | 'image'
   // Formatting (for rich text editor)
-  | 'format-bold' | 'format-italic' | 'format-underline'
-  | 'format-list-bulleted' | 'format-list-numbered';
+  | 'format-bold'
+  | 'format-italic'
+  | 'format-underline'
+  | 'format-list-bulleted'
+  | 'format-list-numbered';
 
 type IconSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number;
 
@@ -48,7 +104,10 @@ const SIZE_MAP: Record<string, number> = {
 };
 
 // Map icon names to the appropriate icon set
-const ICON_MAP: Record<IconName, { set: 'feather' | 'material' | 'ionicons'; name: string }> = {
+const ICON_MAP: Record<
+  IconName,
+  { set: 'feather' | 'material' | 'ionicons'; name: string }
+> = {
   // Navigation & UI
   inbox: { set: 'feather', name: 'inbox' },
   send: { set: 'feather', name: 'send' },
@@ -130,30 +189,57 @@ const ICON_MAP: Record<IconName, { set: 'feather' | 'material' | 'ionicons'; nam
 
 export function Icon({ name, size = 'md', color, focused }: IconProps) {
   const theme = useTheme();
-  
+
   const resolvedSize = typeof size === 'number' ? size : SIZE_MAP[size];
-  const resolvedColor = color ?? (focused ? theme.colors.primary : theme.colors.text);
-  
+  const resolvedColor =
+    color ?? (focused ? theme.colors.primary : theme.colors.text);
+
   const iconConfig = ICON_MAP[name];
-  
+
   if (!iconConfig) {
     console.warn(`Icon "${name}" not found in icon map`);
     return null;
   }
-  
+
   switch (iconConfig.set) {
     case 'feather':
-      return <Feather name={iconConfig.name as any} size={resolvedSize} color={resolvedColor} />;
+      return (
+        <Feather
+          name={iconConfig.name as any}
+          size={resolvedSize}
+          color={resolvedColor}
+        />
+      );
     case 'material':
-      return <MaterialCommunityIcons name={iconConfig.name as any} size={resolvedSize} color={resolvedColor} />;
+      return (
+        <MaterialCommunityIcons
+          name={iconConfig.name as any}
+          size={resolvedSize}
+          color={resolvedColor}
+        />
+      );
     case 'ionicons':
-      return <Ionicons name={iconConfig.name as any} size={resolvedSize} color={resolvedColor} />;
+      return (
+        <Ionicons
+          name={iconConfig.name as any}
+          size={resolvedSize}
+          color={resolvedColor}
+        />
+      );
     default:
       return null;
   }
 }
 
 // Tab bar icon component helper
-export function TabIcon({ name, focused, color }: { name: IconName; focused: boolean; color: string }) {
+export function TabIcon({
+  name,
+  focused,
+  color,
+}: {
+  name: IconName;
+  focused: boolean;
+  color: string;
+}) {
   return <Icon name={name} size="lg" color={color} focused={focused} />;
 }

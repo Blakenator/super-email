@@ -10,11 +10,9 @@ import {
 import { ThemeProvider as StyledThemeProvider } from 'styled-components';
 import { useMutation } from '@apollo/client/react';
 import { gql } from '../__generated__/gql';
-import {
-  getTheme,
-  type Theme,
-  type ThemePreference,
-} from '../core/theme';
+import { getTheme, type ThemePreference } from '../core/theme';
+import { ThemePreference as GqlThemePreference } from '../__generated__/graphql';
+import type { DefaultTheme } from 'styled-components';
 
 const UPDATE_THEME_PREFERENCE_MUTATION = gql(`
   mutation UpdateThemePreference($themePreference: ThemePreference!) {
@@ -26,7 +24,7 @@ const UPDATE_THEME_PREFERENCE_MUTATION = gql(`
 `);
 
 interface ThemeContextValue {
-  theme: Theme;
+  theme: DefaultTheme;
   themePreference: ThemePreference;
   setThemePreference: (preference: ThemePreference) => void;
   isDarkMode: boolean;
@@ -88,8 +86,13 @@ export function ThemeContextProvider({
       localStorage.setItem('themePreference', preference);
 
       // Update in database if user is authenticated
+      const gqlPrefMap: Record<ThemePreference, GqlThemePreference> = {
+        LIGHT: GqlThemePreference.Light,
+        DARK: GqlThemePreference.Dark,
+        AUTO: GqlThemePreference.Auto,
+      };
       updateThemeMutation({
-        variables: { themePreference: preference },
+        variables: { themePreference: gqlPrefMap[preference] },
       }).catch(() => {
         // Ignore errors for unauthenticated users
       });

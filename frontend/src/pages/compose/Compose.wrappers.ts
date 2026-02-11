@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Card } from 'react-bootstrap';
 
 export const Title = styled.h2`
   font-size: ${({ theme }) => theme.fontSizes.lg};
@@ -19,7 +18,7 @@ export const ContentArea = styled.div`
   padding-bottom: ${({ theme }) => theme.spacing.xxl};
 `;
 
-export const ComposeCard = styled(Card)`
+export const ComposeCard = styled.div`
   border: none;
   box-shadow: ${({ theme }) => theme.shadows.md};
   border-radius: ${({ theme }) => theme.borderRadius.lg};

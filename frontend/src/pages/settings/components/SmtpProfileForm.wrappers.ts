@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Card } from 'react-bootstrap';
 
 export const ProviderGrid = styled.div`
   display: grid;
@@ -41,7 +40,7 @@ export const ProviderCard = styled.div<{ $selected?: boolean }>`
   }
 `;
 
-export const InstructionsCard = styled(Card)`
+export const InstructionsCard = styled.div`
   background: ${({ theme }) => `${theme.colors.info}10`};
   border: 1px solid ${({ theme }) => `${theme.colors.info}30`};
   margin-bottom: 1rem;

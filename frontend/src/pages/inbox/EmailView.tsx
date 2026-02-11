@@ -28,7 +28,6 @@ import {
   faInbox,
   faTag,
   faTimes,
-  faPlus,
   faStar,
   faEllipsisV,
 } from '@fortawesome/free-solid-svg-icons';
@@ -43,13 +42,14 @@ import {
 import toast from 'react-hot-toast';
 import { useEmailStore } from '../../stores/emailStore';
 import { AttachmentList, AttachmentPreview } from '../../components';
-import type { Attachment } from '../../__generated__/graphql';
+import type {
+  Attachment,
+  GetAttachmentDownloadUrlQuery,
+} from '../../__generated__/graphql';
 import { supabase, useAuth } from '../../contexts/AuthContext';
 import { getEmailPreviewText } from '../../utils/emailPreview';
 import {
   Wrapper,
-  Toolbar,
-  ToolbarSpacer,
   EmailContent,
   Subject,
   MetaRow,
@@ -74,7 +74,6 @@ import {
   TagRemoveBtn,
   EmailActions,
   ActionButton,
-  ActionButtonDanger,
   MoreActionsDropdown,
   GlobalHeaderSubject,
   ThreadCount,
@@ -87,6 +86,30 @@ interface EmailViewProps {
   onArchive?: () => void;
   onUnarchive?: () => void;
 }
+
+/** Props that only exist on full email (GET_EMAIL_QUERY), not on thread emails from GET_EMAILS_BY_THREAD_QUERY */
+type FullEmailOptionalProps = {
+  unsubscribeUrl?: string | null;
+  unsubscribeEmail?: string | null;
+  headers?: Record<string, unknown> | null;
+  isUnsubscribed?: boolean;
+  references?: string[] | null;
+};
+
+/** Common shape for email used in actions (reply, forward, etc.) - works for both full and thread emails */
+type EmailForActions = {
+  id: string;
+  fromAddress: string;
+  fromName?: string | null;
+  subject: string;
+  messageId: string;
+  textBody?: string | null;
+  htmlBody?: string | null;
+  receivedAt: string;
+  emailAccountId: string;
+  toAddresses: string[];
+  ccAddresses?: string[] | null;
+} & Partial<FullEmailOptionalProps>;
 
 export function EmailView({
   emailId,
@@ -151,7 +174,15 @@ export function EmailView({
         }),
       });
 
-      const result = await response.json();
+      const result = (await response.json()) as unknown;
+      function isAttachmentDownloadResponse(
+        val: unknown,
+      ): val is { data?: GetAttachmentDownloadUrlQuery } {
+        return typeof val === 'object' && val !== null;
+      }
+      if (!isAttachmentDownloadResponse(result)) {
+        throw new Error('Invalid response');
+      }
       const downloadUrl = result.data?.getAttachmentDownloadUrl;
 
       console.log('[EmailView] Got download URL:', downloadUrl);
@@ -237,16 +268,15 @@ export function EmailView({
         }
       : null);
 
-  const {
-    data: threadData,
-    loading: threadLoading,
-    refetch: refetchThread,
-  } = useQuery(GET_EMAILS_BY_THREAD_QUERY, {
-    variables: { threadId: email?.threadId || '' },
-    skip: !email?.threadId || (email?.threadCount ?? 1) <= 1,
-    fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
-    notifyOnNetworkStatusChange: true,
-  });
+  const { data: threadData, refetch: refetchThread } = useQuery(
+    GET_EMAILS_BY_THREAD_QUERY,
+    {
+      variables: { threadId: email?.threadId || '' },
+      skip: !email?.threadId || (email?.threadCount ?? 1) <= 1,
+      fetchPolicy: isOnline ? 'cache-and-network' : 'cache-only',
+      notifyOnNetworkStatusChange: true,
+    },
+  );
 
   const threadEmails = threadData?.getEmailsByThread ?? [];
   const hasThread = threadEmails.length > 1;
@@ -286,7 +316,7 @@ export function EmailView({
 
       // Refetch thread to get any new emails
       if (email?.threadId && hasThread) {
-        refetchThread().then((result) => {
+        void refetchThread().then((result) => {
           // Identify which emails are new
           const newIds = new Set<string>();
           const updatedEmails = result.data?.getEmailsByThread ?? [];
@@ -310,7 +340,7 @@ export function EmailView({
       }
 
       // Also refetch the main email
-      refetch();
+      void refetch();
     }
   }, [lastUpdate, email?.threadId, hasThread, refetchThread, refetch]);
 
@@ -320,7 +350,7 @@ export function EmailView({
       onCompleted: () => {
         toast.success('Successfully unsubscribed!');
         setShowUnsubscribeModal(false);
-        refetch();
+        void refetch();
       },
       onError: (err) => {
         toast.error(`Failed to unsubscribe: ${err.message}`);
@@ -353,7 +383,7 @@ export function EmailView({
   });
 
   const handleAddTag = (tagId: string) => {
-    addTagsToEmails({
+    void addTagsToEmails({
       variables: {
         input: {
           emailIds: [emailId],
@@ -364,7 +394,7 @@ export function EmailView({
   };
 
   const handleRemoveTag = (tagId: string) => {
-    removeTagsFromEmails({
+    void removeTagsFromEmails({
       variables: {
         input: {
           emailIds: [emailId],
@@ -408,7 +438,7 @@ export function EmailView({
   };
 
   const handleReply = useCallback(
-    (targetEmail: typeof email) => {
+    (targetEmail: EmailForActions | null) => {
       if (targetEmail) {
         // Build thread emails array for full conversation context
         const threadEmailsForReply = hasThread
@@ -421,7 +451,7 @@ export function EmailView({
             }))
           : undefined;
 
-        navigate('/compose', {
+        void navigate('/compose', {
           state: {
             replyTo: {
               to: targetEmail.fromAddress,
@@ -444,9 +474,9 @@ export function EmailView({
   );
 
   const handleForward = useCallback(
-    (targetEmail: typeof email) => {
+    (targetEmail: EmailForActions | null) => {
       if (targetEmail) {
-        navigate('/compose', {
+        void navigate('/compose', {
           state: {
             forward: {
               originalEmailId: targetEmail.id,
@@ -471,7 +501,7 @@ export function EmailView({
 
   const handleUnsubscribe = useCallback(
     (targetEmailId: string) => {
-      unsubscribe({ variables: { input: { emailId: targetEmailId } } });
+      void unsubscribe({ variables: { input: { emailId: targetEmailId } } });
     },
     [unsubscribe],
   );
@@ -495,8 +525,6 @@ export function EmailView({
       return next;
     });
   }, []);
-
-  const hasUnsubscribeOption = email?.unsubscribeUrl || email?.unsubscribeEmail;
 
   // Show loading spinner only when:
   // Only show full page loading spinner if we have absolutely no data
@@ -531,14 +559,12 @@ export function EmailView({
   }
 
   // Helper to render action buttons for an email
-  const renderEmailActions = (
-    targetEmail: typeof email,
-    showFullActions = false,
-  ) => {
+  const renderEmailActions = (targetEmail: EmailForActions | null) => {
     if (!targetEmail) return null;
 
     const hasUnsubscribe =
-      targetEmail.unsubscribeUrl || targetEmail.unsubscribeEmail;
+      (targetEmail as FullEmailOptionalProps)?.unsubscribeUrl ||
+      (targetEmail as FullEmailOptionalProps)?.unsubscribeEmail;
 
     return (
       <EmailActions onClick={(e) => e.stopPropagation()}>
@@ -619,7 +645,7 @@ export function EmailView({
                 <FontAwesomeIcon icon={faInfoCircle} />
                 View Headers
               </Dropdown.Item>
-              {hasUnsubscribe && !targetEmail.isUnsubscribed && (
+              {hasUnsubscribe && !(targetEmail as FullEmailOptionalProps)?.isUnsubscribed && (
                 <Dropdown.Item
                   onClick={() => {
                     setActiveEmailForModal(targetEmail.id);
@@ -648,13 +674,13 @@ export function EmailView({
         <BackButton onClick={onBack} label="Back" />
         <GlobalHeaderSubject>{email.subject}</GlobalHeaderSubject>
         {hasThread && (
-          <ThreadCount bg="primary">{threadEmails.length} messages</ThreadCount>
+          <ThreadCount className="badge bg-primary">{threadEmails.length} messages</ThreadCount>
         )}
       </StickyHeader>
 
       <EmailContent>
-        {email.isUnsubscribed && (
-          <UnsubscribeBanner variant="success">
+        {(email as FullEmailOptionalProps)?.isUnsubscribed && (
+          <UnsubscribeBanner className="alert alert-success">
             <span>
               <FontAwesomeIcon icon={faCheck} className="me-2" />
               You have unsubscribed from this mailing list.
@@ -670,7 +696,7 @@ export function EmailView({
               style={{ color: '#6c757d', marginRight: 4 }}
             />
             {emailTags.map((tag) => (
-              <TagBadge key={tag.id} $bgColor={tag.color}>
+              <TagBadge key={tag.id} $bgColor={tag.color} className="badge">
                 {tag.name}
                 <TagRemoveBtn
                   onClick={() => handleRemoveTag(tag.id)}
@@ -696,13 +722,13 @@ export function EmailView({
                   $isSelected={isCurrentEmail || isNewEmail}
                 >
                   {isNewEmail && (
-                    <NewEmailBadge bg="success">
+                    <NewEmailBadge className="badge bg-success">
                       <FontAwesomeIcon icon={faStar} className="me-1" />
                       New
                     </NewEmailBadge>
                   )}
                   {isCurrentEmail && (
-                    <CurrentEmailBadge bg="primary">
+                    <CurrentEmailBadge className="badge bg-primary">
                       Current Email
                     </CurrentEmailBadge>
                   )}
@@ -778,7 +804,9 @@ export function EmailView({
                       {threadEmail.attachments &&
                         threadEmail.attachments.length > 0 && (
                           <AttachmentList
-                            attachments={threadEmail.attachments}
+                            attachments={
+                              threadEmail.attachments as Attachment[]
+                            }
                             onPreview={(att) => setPreviewAttachment(att)}
                             onDownload={downloadAttachment}
                           />
@@ -842,7 +870,7 @@ export function EmailView({
             )}
             {email.attachments && email.attachments.length > 0 && (
               <AttachmentList
-                attachments={email.attachments}
+                attachments={email.attachments as Attachment[]}
                 onPreview={(att) => setPreviewAttachment(att)}
                 onDownload={downloadAttachment}
               />
@@ -885,7 +913,7 @@ export function EmailView({
                   Are you sure you want to unsubscribe from this mailing list?
                 </p>
 
-                {modalEmail?.unsubscribeUrl && (
+                {(modalEmail as FullEmailOptionalProps)?.unsubscribeUrl && (
                   <Alert variant="success" className="small mb-2">
                     <strong>One-Click Unsubscribe (URL)</strong>
                     <br />
@@ -896,13 +924,13 @@ export function EmailView({
                     <code
                       style={{ fontSize: '0.75rem', wordBreak: 'break-all' }}
                     >
-                      {modalEmail.unsubscribeUrl}
+                      {(modalEmail as FullEmailOptionalProps).unsubscribeUrl}
                     </code>
                   </Alert>
                 )}
 
-                {modalEmail?.unsubscribeEmail &&
-                  !modalEmail?.unsubscribeUrl && (
+                {(modalEmail as FullEmailOptionalProps)?.unsubscribeEmail &&
+                  !(modalEmail as FullEmailOptionalProps)?.unsubscribeUrl && (
                     <Alert variant="warning" className="small mb-2">
                       <strong>Email-Based Unsubscribe</strong>
                       <br />
@@ -911,7 +939,7 @@ export function EmailView({
                         to:
                       </span>
                       <br />
-                      <code>{modalEmail.unsubscribeEmail}</code>
+                      <code>{(modalEmail as FullEmailOptionalProps).unsubscribeEmail}</code>
                       <br />
                       <small className="text-muted mt-2 d-block">
                         ⚠️ Note: An email will be sent from your configured SMTP
@@ -920,14 +948,15 @@ export function EmailView({
                     </Alert>
                   )}
 
-                {modalEmail?.unsubscribeEmail && modalEmail?.unsubscribeUrl && (
+                {(modalEmail as FullEmailOptionalProps)?.unsubscribeEmail &&
+                  (modalEmail as FullEmailOptionalProps)?.unsubscribeUrl && (
                   <Alert variant="secondary" className="small mb-2">
                     <strong>Alternative: Email-Based Unsubscribe</strong>
                     <br />
                     <span className="text-muted">
                       If the URL doesn't work, you can email:{' '}
                     </span>
-                    <code>{modalEmail.unsubscribeEmail}</code>
+                    <code>{(modalEmail as FullEmailOptionalProps).unsubscribeEmail}</code>
                   </Alert>
                 )}
               </>
@@ -1001,24 +1030,33 @@ export function EmailView({
         <Modal.Body style={{ maxHeight: '60vh', overflowY: 'auto' }}>
           {(() => {
             const modalEmail = getEmailForModal();
-            return modalEmail?.headers ? (
+            const headers = (modalEmail as FullEmailOptionalProps)?.headers;
+            if (!headers || typeof headers !== 'object') {
+              return (
+                <p className="text-muted">No headers available for this email.</p>
+              );
+            }
+            const entries: [string, unknown][] = Object.entries(headers);
+            return (
               <HeadersTable>
                 <tbody>
-                  {Object.entries(modalEmail.headers).map(([key, value]) => {
+                  {entries.map(([key, value]) => {
                     let displayValue: string;
 
                     if (value === null || value === undefined) {
                       displayValue = '';
-                    } else if (typeof value === 'object') {
-                      // Pretty-print JSON objects
+                    } else if (typeof value === 'object' && !Array.isArray(value)) {
                       displayValue = JSON.stringify(value, null, 2);
                     } else if (Array.isArray(value)) {
-                      displayValue = value.join('\n');
+                      displayValue = value
+                        .map((v) =>
+                          typeof v === 'string' ? v : JSON.stringify(v),
+                        )
+                        .join('\n');
                     } else if (typeof value === 'string') {
-                      // Check if it's a JSON string
                       try {
-                        const parsed = JSON.parse(value);
-                        if (typeof parsed === 'object') {
+                        const parsed: unknown = JSON.parse(value);
+                        if (typeof parsed === 'object' && parsed !== null) {
                           displayValue = JSON.stringify(parsed, null, 2);
                         } else {
                           displayValue = value;
@@ -1026,8 +1064,13 @@ export function EmailView({
                       } catch {
                         displayValue = value;
                       }
-                    } else {
+                    } else if (
+                      typeof value === 'number' ||
+                      typeof value === 'boolean'
+                    ) {
                       displayValue = String(value);
+                    } else {
+                      displayValue = JSON.stringify(value);
                     }
 
                     return (
@@ -1041,8 +1084,6 @@ export function EmailView({
                   })}
                 </tbody>
               </HeadersTable>
-            ) : (
-              <p className="text-muted">No headers available for this email.</p>
             );
           })()}
         </Modal.Body>

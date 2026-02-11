@@ -9,7 +9,6 @@ import {
   faLayerGroup,
   faGripLines,
   faBars,
-  faCalendarAlt,
   faCalendar,
   faShieldAlt,
   faImage,
@@ -134,7 +133,7 @@ export function ThemeSettings() {
     try {
       await updatePreferences({ inboxDensity: dense });
       toast.success(`Inbox density set to ${dense ? 'dense' : 'spacious'}`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to update inbox density preference');
     }
   };
@@ -143,7 +142,7 @@ export function ThemeSettings() {
     try {
       await updatePreferences({ inboxGroupByDate: groupByDate });
       toast.success(`Group by date ${groupByDate ? 'enabled' : 'disabled'}`);
-    } catch (error) {
+    } catch {
       toast.error('Failed to update group by date preference');
     }
   };
@@ -154,14 +153,14 @@ export function ThemeSettings() {
       toast.success(
         `External images will be ${block ? 'blocked' : 'loaded'} by default`,
       );
-    } catch (error) {
+    } catch {
       toast.error('Failed to update image blocking preference');
     }
   };
 
   return (
     <SettingsContainer>
-      <ThemeCard>
+      <ThemeCard className="card">
         <Card.Header>
           <FontAwesomeIcon icon={faPalette} className="me-2" />
           Appearance
@@ -200,7 +199,7 @@ export function ThemeSettings() {
         </Card.Body>
       </ThemeCard>
 
-      <PreviewSection>
+      <PreviewSection className="card">
         <Card.Header>Current Theme Preview</Card.Header>
         <Card.Body>
           <p className="text-muted" style={{ marginBottom: '0.75rem' }}>
@@ -237,7 +236,7 @@ export function ThemeSettings() {
         </Card.Body>
       </PreviewSection>
 
-      <ThemeCard>
+      <ThemeCard className="card">
         <Card.Header>
           <FontAwesomeIcon icon={faList} className="me-2" />
           Inbox Display Preferences
@@ -336,7 +335,7 @@ export function ThemeSettings() {
         </Card.Body>
       </ThemeCard>
 
-      <ThemeCard>
+      <ThemeCard className="card">
         <Card.Header>
           <FontAwesomeIcon icon={faShieldAlt} className="me-2" />
           Privacy & Security

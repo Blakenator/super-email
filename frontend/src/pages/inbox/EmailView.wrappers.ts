@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Alert, Badge } from 'react-bootstrap';
 
 export const Wrapper = styled.div`
   display: flex;
@@ -90,7 +89,7 @@ export const HtmlBodyContainer = styled.div`
   background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
-export const UnsubscribeBanner = styled(Alert)`
+export const UnsubscribeBanner = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.md};
   display: flex;
   align-items: center;
@@ -118,7 +117,7 @@ export const ThreadEmail = styled.div<{ $isSelected?: boolean }>`
       : props.theme.colors.backgroundWhite};
 `;
 
-export const CurrentEmailBadge = styled(Badge)`
+export const CurrentEmailBadge = styled.span`
   position: absolute;
   top: -8px;
   right: 12px;
@@ -126,7 +125,7 @@ export const CurrentEmailBadge = styled(Badge)`
   padding: 4px 8px;
 `;
 
-export const NewEmailBadge = styled(Badge)`
+export const NewEmailBadge = styled.span`
   position: absolute;
   top: -8px;
   left: 12px;
@@ -217,7 +216,7 @@ export const TagsContainer = styled.div`
   margin-bottom: ${({ theme }) => theme.spacing.md};
 `;
 
-export const TagBadge = styled(Badge)<{ $bgColor: string }>`
+export const TagBadge = styled.span<{ $bgColor: string }>`
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -322,6 +321,6 @@ export const GlobalHeaderSubject = styled.h2`
   white-space: nowrap;
 `;
 
-export const ThreadCount = styled(Badge)`
+export const ThreadCount = styled.span`
   flex-shrink: 0;
 `;

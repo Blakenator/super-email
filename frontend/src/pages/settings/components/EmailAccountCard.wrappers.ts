@@ -1,7 +1,6 @@
 import styled from 'styled-components';
-import { Card, ProgressBar } from 'react-bootstrap';
 
-export const AccountCardStyled = styled(Card)<{ $isSyncing?: boolean }>`
+export const AccountCardStyled = styled.div<{ $isSyncing?: boolean }>`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
   transition: box-shadow 0.2s ease, transform 0.2s ease;
@@ -20,7 +19,7 @@ export const AccountCardStyled = styled(Card)<{ $isSyncing?: boolean }>`
   }
 `;
 
-export const AccountCardHeader = styled(Card.Header)`
+export const AccountCardHeader = styled.div`
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   padding: ${({ theme }) => theme.spacing.md};
@@ -38,7 +37,7 @@ export const AccountCardSubtitle = styled.div`
   opacity: 0.9;
 `;
 
-export const AccountCardBody = styled(Card.Body)`
+export const AccountCardBody = styled.div`
   padding: ${({ theme }) => theme.spacing.md};
 `;
 
@@ -56,7 +55,7 @@ export const AccountDetailLabel = styled.span`
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
-export const AccountCardFooter = styled(Card.Footer)`
+export const AccountCardFooter = styled.div`
   background: ${({ theme }) => theme.colors.background};
   border-top: 1px solid ${({ theme }) => theme.colors.border};
   padding: ${({ theme }) => theme.spacing.sm} ${({ theme }) => theme.spacing.md};
@@ -86,10 +85,12 @@ export const SyncStatusText = styled.span`
   font-weight: 500;
 `;
 
-export const SyncProgressBar = styled(ProgressBar)`
-  height: 8px;
-  border-radius: 4px;
-  background-color: #e0e0e0 !important;
+export const SyncProgressBarWrapper = styled.div`
+  .progress {
+    height: 8px;
+    border-radius: 4px;
+    background-color: #e0e0e0 !important;
+  }
 
   .progress-bar {
     border-radius: 4px;

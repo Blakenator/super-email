@@ -1,13 +1,19 @@
-import { Button } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
 import styled from 'styled-components';
 
-const StyledButton = styled(Button)`
+const StyledButton = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0.375rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  background: transparent;
+  &:focus {
+    outline: none;
+  }
 `;
 
 interface BackButtonProps {
@@ -28,12 +34,13 @@ export function BackButton({
   size = 'sm',
   variant = 'outline-secondary',
 }: BackButtonProps) {
+  const sizeClass = size === 'lg' ? 'btn-lg' : 'btn-sm';
+  const variantClass = `btn-${variant}`;
+  const combinedClassName = `btn ${variantClass} ${sizeClass} ${className || ''}`.trim();
   return (
     <StyledButton
-      variant={variant}
-      size={size}
       onClick={onClick}
-      className={className}
+      className={combinedClassName}
       title={label || 'Go back'}
     >
       <FontAwesomeIcon icon={faArrowLeft} />

@@ -1,5 +1,4 @@
 import styled, { css } from 'styled-components';
-import { Nav, Button } from 'react-bootstrap';
 
 // Content wrapper that handles the hover expand (excludes the collapse handle)
 export const SidebarContent = styled.div<{ $collapsed?: boolean }>`
@@ -113,7 +112,7 @@ export const ComposeButtonText = styled.span<{ $collapsed?: boolean }>`
     `}
 `;
 
-export const ComposeButton = styled(Button)<{ $collapsed?: boolean }>`
+export const ComposeButton = styled.button<{ $collapsed?: boolean }>`
   margin: 0 ${({ $collapsed }) => ($collapsed ? '0.5rem' : '1rem')} 1.5rem;
   background: linear-gradient(
     135deg,
@@ -157,7 +156,7 @@ export const NavSection = styled.div`
   overflow-x: hidden;
 `;
 
-export const StyledNavLink = styled(Nav.Link)<{
+export const StyledNavLink = styled.a<{
   $active?: boolean;
   $collapsed?: boolean;
 }>`

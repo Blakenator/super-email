@@ -137,7 +137,7 @@ export function EmailAccountForm({
   };
 
   const handleTest = () => {
-    onTest(formData);
+    void onTest(formData);
   };
 
   const selectedProvider =
@@ -178,7 +178,7 @@ export function EmailAccountForm({
 
           {/* Provider Instructions */}
           {showInstructions && (
-            <InstructionsCard>
+            <InstructionsCard className="card">
               <Card.Body className="py-2 px-3">
                 <small className="d-flex align-items-start gap-2">
                   <FontAwesomeIcon icon={faInfoCircle} className="mt-1" />

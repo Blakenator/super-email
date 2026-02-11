@@ -84,12 +84,13 @@ export function PortalDropdown({
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: Event) => {
+      const target = event.target as Node;
       if (
         toggleRef.current &&
         menuRef.current &&
-        !toggleRef.current.contains(event.target as Node) &&
-        !menuRef.current.contains(event.target as Node)
+        !toggleRef.current.contains(target) &&
+        !menuRef.current.contains(target)
       ) {
         setIsOpen(false);
       }
@@ -125,7 +126,11 @@ export function PortalDropdown({
 
   return (
     <>
-      <div ref={toggleRef} onClick={handleToggleClick} style={{ width: '100%' }}>
+      <div
+        ref={toggleRef}
+        onClick={handleToggleClick}
+        style={{ width: '100%' }}
+      >
         {toggle}
       </div>
       {isOpen &&

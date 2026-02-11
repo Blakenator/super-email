@@ -88,8 +88,8 @@ export function TagsManager() {
     setShowModal(true);
   };
 
-  const handleOpenEditModal = (tag: typeof tags[0]) => {
-    setEditingTag(tag);
+  const handleOpenEditModal = (tag: (typeof tags)[0]) => {
+    setEditingTag({ ...tag, description: tag.description ?? null });
     setFormData({
       name: tag.name,
       color: tag.color,
@@ -112,7 +112,7 @@ export function TagsManager() {
     }
 
     if (editingTag) {
-      updateTag({
+      void updateTag({
         variables: {
           input: {
             id: editingTag.id,
@@ -123,7 +123,7 @@ export function TagsManager() {
         },
       });
     } else {
-      createTag({
+      void createTag({
         variables: {
           input: {
             name: formData.name.trim(),
@@ -137,7 +137,7 @@ export function TagsManager() {
 
   const handleDelete = (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete the tag "${name}"?`)) {
-      deleteTag({ variables: { id } });
+      void deleteTag({ variables: { id } });
     }
   };
 
@@ -173,14 +173,14 @@ export function TagsManager() {
           ) : (
             <ListGroup variant="flush">
               {tags.map((tag) => (
-                <TagListItem key={tag.id}>
+                <TagListItem key={tag.id} className="list-group-item">
                   <TagInfo>
                     <TagColorDot $color={tag.color} />
                     <TagName>{tag.name}</TagName>
                     {tag.description && (
                       <TagDescription>{tag.description}</TagDescription>
                     )}
-                    <EmailCount bg="secondary">
+                    <EmailCount className="badge bg-secondary">
                       <FontAwesomeIcon icon={faEnvelope} className="me-1" />
                       {tag.emailCount}
                     </EmailCount>

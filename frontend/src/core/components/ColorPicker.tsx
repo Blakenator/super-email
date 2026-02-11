@@ -119,14 +119,6 @@ export function ColorPicker({
     onChange(e.target.value);
   };
 
-  const handleCustomButtonClick = () => {
-    setShowCustom(true);
-    // Focus the input after a short delay to allow it to render
-    setTimeout(() => {
-      inputRef.current?.click();
-    }, 50);
-  };
-
   return (
     <PickerContainer>
       {label && <Label>{label}</Label>}

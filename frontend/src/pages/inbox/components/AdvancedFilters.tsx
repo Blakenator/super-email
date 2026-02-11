@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Form, Collapse, Row, Col, Badge } from 'react-bootstrap';
+import { Form, Collapse, Row, Col } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faFilter,
@@ -120,7 +120,7 @@ export function AdvancedFilters({
         >
           Advanced Filters
           {activeFilterCount > 0 && (
-            <ActiveFilterBadge bg="light" text="primary">
+            <ActiveFilterBadge className="badge bg-light text-primary">
               {activeFilterCount}
             </ActiveFilterBadge>
           )}
@@ -249,4 +249,5 @@ export function AdvancedFilters({
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- emptyFilters is a constant, not a component
 export { emptyFilters };

@@ -1,7 +1,6 @@
 import styled from 'styled-components';
-import { Badge, ListGroup } from 'react-bootstrap';
 
-export const TagListItem = styled(ListGroup.Item)`
+export const TagListItem = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -32,7 +31,7 @@ export const TagDescription = styled.span`
   margin-left: ${({ theme }) => theme.spacing.sm};
 `;
 
-export const EmailCount = styled(Badge)`
+export const EmailCount = styled.span`
   margin-left: ${({ theme }) => theme.spacing.sm};
 `;
 

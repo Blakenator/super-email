@@ -279,7 +279,7 @@ export function BillingSettings() {
   // Auto-refresh on page focus
   useEffect(() => {
     const handleFocus = () => {
-      refetch();
+      void refetch();
     };
 
     window.addEventListener('focus', handleFocus);
@@ -294,7 +294,7 @@ export function BillingSettings() {
       toast.success('Subscription updated successfully!');
       // Clean up URL
       window.history.replaceState({}, '', window.location.pathname);
-      refetch();
+      void refetch();
     } else if (checkout === 'canceled') {
       toast('Checkout was canceled', { icon: '⚠️' });
       window.history.replaceState({}, '', window.location.pathname);
@@ -308,8 +308,8 @@ export function BillingSettings() {
       if (url) {
         window.open(url, '_blank');
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to open billing portal');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to open billing portal');
     }
   };
 
@@ -318,8 +318,8 @@ export function BillingSettings() {
       await refreshUsage();
       await refetch();
       toast.success('Usage data refreshed');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to refresh usage');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to refresh usage');
     }
   };
 
@@ -375,8 +375,8 @@ export function BillingSettings() {
       if (url) {
         window.location.href = url;
       }
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to create checkout session');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create checkout session');
     }
     setShowConfirmModal(false);
   };
@@ -461,7 +461,7 @@ export function BillingSettings() {
       )}
 
       {/* Current Subscription Status */}
-      <BillingCard>
+      <BillingCard className="card">
         <Card.Header>
           <FontAwesomeIcon icon={faCreditCard} className="me-2" />
           Current Subscription
@@ -551,7 +551,7 @@ export function BillingSettings() {
       {/* Tier Selection */}
       {billing?.isStripeConfigured && (
         <>
-          <BillingCard>
+          <BillingCard className="card">
             <Card.Header>
               <FontAwesomeIcon icon={faDatabase} className="me-2" />
               Storage Plan
@@ -634,7 +634,7 @@ export function BillingSettings() {
             </Card.Body>
           </BillingCard>
 
-          <BillingCard>
+          <BillingCard className="card">
             <Card.Header>
               <FontAwesomeIcon icon={faEnvelope} className="me-2" />
               Email Accounts Plan
@@ -711,7 +711,7 @@ export function BillingSettings() {
       )}
 
       {/* Usage */}
-      <BillingCard>
+      <BillingCard className="card">
         <Card.Header className="d-flex justify-content-between align-items-center">
           <span>
             <FontAwesomeIcon icon={faChartPie} className="me-2" />
@@ -748,7 +748,6 @@ export function BillingSettings() {
               </UsageHeader>
               <SegmentedProgressContainer>
                 {(() => {
-                  const totalBytes = usage?.totalStorageBytes ?? 0;
                   const limitBytes = subscription?.storageLimitBytes ?? 1;
                   const emailBytes = usage?.totalBodySizeBytes ?? 0;
                   const attachmentBytes = usage?.totalAttachmentSizeBytes ?? 0;

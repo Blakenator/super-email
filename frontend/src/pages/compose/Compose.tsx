@@ -50,7 +50,6 @@ import {
   SenderDisplay,
   SenderInfo,
   SenderIdentity,
-  SenderEmail,
   AccountBadge,
   ChangeAccountButton,
 } from './Compose.wrappers';
@@ -103,6 +102,7 @@ interface ForwardState {
   originalTo?: string[];
   originalCc?: string[] | null;
   emailAccountId?: string;
+  inReplyTo?: string;
 }
 
 // Parse mailto: URL (when registered as handler)
@@ -137,12 +137,19 @@ function parseMailtoUrl(url: string): {
   }
 }
 
+interface ComposeLocationState {
+  replyTo?: ReplyToState;
+  draft?: DraftState;
+  forward?: ForwardState;
+}
+
 export function Compose() {
   const navigate = useNavigate();
   const location = useLocation();
-  const replyTo = location.state?.replyTo as ReplyToState | undefined;
-  const existingDraft = location.state?.draft as DraftState | undefined;
-  const forward = location.state?.forward as ForwardState | undefined;
+  const state = location.state as ComposeLocationState | null | undefined;
+  const replyTo = state?.replyTo;
+  const existingDraft = state?.draft;
+  const forward = state?.forward;
 
   // Parse mailto: URL if present
   const mailtoParams = useMemo(() => {
@@ -311,7 +318,7 @@ ${quotedHtml}
   const [sendEmail, { loading: sending }] = useMutation(SEND_EMAIL_MUTATION, {
     onCompleted: () => {
       toast.success('Email sent successfully!');
-      navigate('/inbox');
+      void navigate('/inbox');
     },
     onError: (err) => {
       toast.error(`Failed to send: ${err.message}`);
@@ -418,20 +425,20 @@ ${quotedHtml}
     if (hasChanges() && emailAccountId) {
       await doSaveDraft();
     }
-    navigate(-1);
+    void navigate(-1);
   }, [hasChanges, emailAccountId, doSaveDraft, navigate]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        handleExit();
+        void handleExit();
       }
     };
 
     const handlePopState = () => {
       if (hasChanges() && emailAccountId) {
-        doSaveDraft();
+        void doSaveDraft();
       }
     };
 
@@ -501,9 +508,9 @@ ${quotedHtml}
       });
     });
 
-    Promise.all(attachmentInputs)
+    void Promise.all(attachmentInputs)
       .then((attachmentData) => {
-        sendEmail({
+        void sendEmail({
           variables: {
             input: {
               emailAccountId,
@@ -561,7 +568,7 @@ ${quotedHtml}
           <Button
             variant="outline-secondary"
             size="sm"
-            onClick={doSaveDraft}
+            onClick={() => void doSaveDraft()}
             disabled={savingDraft || !emailAccountId}
           >
             {savingDraft ? (
@@ -621,7 +628,7 @@ ${quotedHtml}
             </Alert>
           )}
 
-          <ComposeCard>
+          <ComposeCard className="card">
             <Card.Body className="p-4">
               <Form onSubmit={handleSubmit}>
                 <Form.Group className="mb-3">

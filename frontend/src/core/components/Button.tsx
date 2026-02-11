@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, type CSSProperties, type MouseEvent } from 'react';
 import { Spinner } from 'react-bootstrap';
 import { StyledButton, ButtonContent } from './Button.wrappers';
 
@@ -25,12 +25,13 @@ export interface ButtonProps {
   icon?: ReactNode;
   iconPosition?: 'left' | 'right';
   children?: ReactNode;
-  onClick?: () => void;
+  onClick?: (e?: MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   loading?: boolean;
   type?: 'button' | 'submit' | 'reset';
   className?: string;
   title?: string;
+  style?: CSSProperties;
   'aria-label'?: string;
 }
 
@@ -46,12 +47,16 @@ export function Button({
   type = 'button',
   className,
   title,
+  style,
   'aria-label': ariaLabel,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const showLeftIcon = icon && iconPosition === 'left' && !loading;
   const showRightIcon = icon && iconPosition === 'right' && !loading;
-  const hasTextContent = children && (typeof children === 'string' || (Array.isArray(children) && children.some(c => typeof c === 'string')));
+  const hasTextContent =
+    children &&
+    (typeof children === 'string' ||
+      (Array.isArray(children) && children.some((c) => typeof c === 'string')));
 
   return (
     <StyledButton
@@ -62,6 +67,7 @@ export function Button({
       type={type}
       className={className}
       title={title}
+      style={style}
       aria-label={ariaLabel}
     >
       <ButtonContent>
@@ -73,11 +79,15 @@ export function Button({
           />
         )}
         {showLeftIcon && (
-          <span style={{ marginRight: hasTextContent ? '0.5rem' : 0 }}>{icon}</span>
+          <span style={{ marginRight: hasTextContent ? '0.5rem' : 0 }}>
+            {icon}
+          </span>
         )}
         {children}
         {showRightIcon && (
-          <span style={{ marginLeft: hasTextContent ? '0.5rem' : 0 }}>{icon}</span>
+          <span style={{ marginLeft: hasTextContent ? '0.5rem' : 0 }}>
+            {icon}
+          </span>
         )}
       </ButtonContent>
     </StyledButton>

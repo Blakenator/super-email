@@ -27,8 +27,7 @@ import {
   MobileNavbarContainer,
   MobileLogo,
   MobileNavActions,
-  MobileNavDropdown,
-  MobileNavMenu,
+  MobileNavDropdownWrapper,
   MobileNavItem,
   MobileNavDivider,
   MobileUserSection,
@@ -42,8 +41,8 @@ import {
 interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
 }
 
 interface MobileNavbarProps {
@@ -127,22 +126,24 @@ export function MobileNavbar({
           <FontAwesomeIcon icon={faPen} />
         </ComposeButtonMobile>
 
-        <MobileNavDropdown>
-          <Dropdown.Toggle id="mobile-nav-dropdown">
-            <FontAwesomeIcon icon={faBars} size="lg" />
-          </Dropdown.Toggle>
+        <MobileNavDropdownWrapper>
+          <Dropdown>
+            <Dropdown.Toggle id="mobile-nav-dropdown" variant="link">
+              <FontAwesomeIcon icon={faBars} size="lg" />
+            </Dropdown.Toggle>
 
-          <MobileNavMenu align="end">
+            <Dropdown.Menu align="end">
             {user && (
               <>
                 <MobileUserSection>
                   <MobileUserAvatar>
-                    {user.firstName[0]}
-                    {user.lastName[0]}
+                    {((user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')) ||
+                      user.email[0]?.toUpperCase() ||
+                      '?'}
                   </MobileUserAvatar>
                   <MobileUserInfo>
                     <MobileUserName>
-                      {user.firstName} {user.lastName}
+                      {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}
                     </MobileUserName>
                     <MobileUserEmail>{user.email}</MobileUserEmail>
                   </MobileUserInfo>
@@ -224,8 +225,9 @@ export function MobileNavbar({
               <FontAwesomeIcon icon={faSignOutAlt} />
               Sign Out
             </MobileNavItem>
-          </MobileNavMenu>
-        </MobileNavDropdown>
+            </Dropdown.Menu>
+          </Dropdown>
+        </MobileNavDropdownWrapper>
       </MobileNavActions>
     </MobileNavbarContainer>
   );

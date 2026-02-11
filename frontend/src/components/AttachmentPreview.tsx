@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Spinner, ButtonGroup } from 'react-bootstrap';
 import { Download, ZoomIn, ZoomOut } from 'lucide-react';
 import { Button } from '../core/components/Button';
@@ -123,7 +123,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
       }
     };
 
-    fetchAttachment();
+    void fetchAttachment();
 
     // Cleanup: revoke object URL when component unmounts
     return () => {
@@ -131,6 +131,7 @@ export const AttachmentPreview: React.FC<AttachmentPreviewProps> = ({
         URL.revokeObjectURL(previewUrl);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   const renderPreview = () => {

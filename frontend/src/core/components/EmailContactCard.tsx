@@ -10,7 +10,10 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 import { Popover, OverlayTrigger, Button } from 'react-bootstrap';
 import { gql } from '../../__generated__/gql';
-import { ContactFormModal } from './ContactFormModal';
+import {
+  ContactFormModal,
+  type ContactFormData,
+} from './ContactFormModal';
 import {
   EmailLink,
   EmailChip,
@@ -57,7 +60,8 @@ export function EmailContactCard({
   className,
 }: EmailContactCardProps) {
   const [showContactModal, setShowContactModal] = useState(false);
-  const [contactModalData, setContactModalData] = useState<any>(null);
+  const [contactModalData, setContactModalData] =
+    useState<Partial<ContactFormData> | null>(null);
 
   const [searchContact, { data: contactData }] = useLazyQuery(
     SEARCH_CONTACTS_BY_EMAIL,
@@ -67,12 +71,12 @@ export function EmailContactCard({
   );
 
   const contact = contactData?.searchContacts?.find(
-    (c) => c.email.toLowerCase() === email.toLowerCase(),
+    (c) => c.email != null && c.email.toLowerCase() === email.toLowerCase(),
   );
 
   const handlePopoverEnter = useCallback(() => {
     if (enablePopover && !contactData) {
-      searchContact({ variables: { query: email } });
+      void searchContact({ variables: { query: email } });
     }
   }, [enablePopover, contactData, searchContact, email]);
 
@@ -93,7 +97,11 @@ export function EmailContactCard({
   if (!enablePopover) {
     if (asChip) {
       return (
-        <EmailChip $isClickable={false} $isContact={isContact} className={className}>
+        <EmailChip
+          $isClickable={false}
+          $isContact={isContact}
+          className={className}
+        >
           {(showIcon || isContact) && (
             <FontAwesomeIcon icon={faUser} className="chip-icon" />
           )}
@@ -102,7 +110,11 @@ export function EmailContactCard({
       );
     }
     return (
-      <EmailLink $isClickable={false} $isContact={isContact} className={className}>
+      <EmailLink
+        $isClickable={false}
+        $isContact={isContact}
+        className={className}
+      >
         {showIcon && isContact && (
           <FontAwesomeIcon icon={faUser} className="contact-icon" />
         )}
@@ -120,7 +132,9 @@ export function EmailContactCard({
           </Avatar>
           <ContactName>
             {contact?.name ||
-              [contact?.firstName, contact?.lastName].filter(Boolean).join(' ') ||
+              [contact?.firstName, contact?.lastName]
+                .filter(Boolean)
+                .join(' ') ||
               name ||
               'Unknown Contact'}
           </ContactName>
@@ -153,7 +167,11 @@ export function EmailContactCard({
               Email
             </Button>
             {!contact && (
-              <Button variant="outline-secondary" size="sm" onClick={handleAddContact}>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={handleAddContact}
+              >
                 <FontAwesomeIcon icon={faUserPlus} className="me-1" />
                 Add Contact
               </Button>
@@ -189,12 +207,12 @@ export function EmailContactCard({
       <ContactFormModal
         show={showContactModal}
         onHide={() => setShowContactModal(false)}
-        initialData={contactModalData}
+        initialData={contactModalData ?? undefined}
         emailToAdd={email}
         onSuccess={() => {
           setShowContactModal(false);
           // Refetch contact data
-          searchContact({ variables: { query: email } });
+          void searchContact({ variables: { query: email } });
         }}
       />
     </>
