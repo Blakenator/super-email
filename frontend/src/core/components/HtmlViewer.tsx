@@ -534,8 +534,7 @@ export function HtmlViewer({
       <EmailViewerToolbar>
         {shouldBlockImages && (
           <ShowImagesButton
-            variant="outline-warning"
-            size="sm"
+            className="btn btn-outline-warning btn-sm"
             onClick={() => setShowImagesForThisEmail(true)}
           >
             <FontAwesomeIcon icon={faImage} />
@@ -544,8 +543,7 @@ export function HtmlViewer({
         )}
         <ToolbarSpacer />
         <ThemeToggleButton
-          variant="outline-secondary"
-          size="sm"
+          className="btn btn-outline-secondary btn-sm"
           onClick={() =>
             setEmailDarkMode((prev) => (prev === null ? !isDarkMode : !prev))
           }

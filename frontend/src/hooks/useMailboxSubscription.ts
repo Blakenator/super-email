@@ -1,30 +1,13 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { gql } from '@apollo/client/core';
 import { useSubscription } from '@apollo/client/react';
-import { useEmailStore, type MailboxUpdate, type CachedEmail } from '../stores/emailStore';
+import {
+  useEmailStore,
+  type MailboxUpdate,
+  type CachedEmail,
+} from '../stores/emailStore';
 import { useAuth } from '../contexts/AuthContext';
-
-// Notification detail level key in localStorage
-const NOTIFICATION_DETAIL_KEY = 'notification_detail_level';
-export type NotificationDetailLevel = 'minimal' | 'full';
-
-export function getNotificationDetailLevel(): NotificationDetailLevel {
-  try {
-    const value = localStorage.getItem(NOTIFICATION_DETAIL_KEY);
-    if (value === 'full' || value === 'minimal') return value;
-  } catch (e) {
-    // Ignore
-  }
-  return 'minimal'; // Default to minimal
-}
-
-export function setNotificationDetailLevel(level: NotificationDetailLevel) {
-  try {
-    localStorage.setItem(NOTIFICATION_DETAIL_KEY, level);
-  } catch (e) {
-    // Ignore
-  }
-}
+import type { Subscription } from '../__generated__/graphql';
 
 // GraphQL subscription document
 const MAILBOX_UPDATES_SUBSCRIPTION = gql`
@@ -60,16 +43,48 @@ const MAILBOX_UPDATES_SUBSCRIPTION = gql`
   }
 `;
 
+interface MailboxUpdatesSubscriptionData {
+  mailboxUpdates: Subscription['mailboxUpdates'];
+}
+
+// Notification detail level key in localStorage
+const NOTIFICATION_DETAIL_KEY = 'notification_detail_level';
+export type NotificationDetailLevel = 'minimal' | 'full';
+
+export function getNotificationDetailLevel(): NotificationDetailLevel {
+  try {
+    const value = localStorage.getItem(NOTIFICATION_DETAIL_KEY);
+    if (value === 'full' || value === 'minimal') return value;
+  } catch {
+    // Ignore
+  }
+  return 'minimal'; // Default to minimal
+}
+
+export function setNotificationDetailLevel(level: NotificationDetailLevel) {
+  try {
+    localStorage.setItem(NOTIFICATION_DETAIL_KEY, level);
+  } catch {
+    // Ignore
+  }
+}
+
 export function useMailboxSubscription() {
   const { token, isAuthenticated } = useAuth();
   const store = useEmailStore;
-  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const isFirstConnectionRef = useRef(true);
 
   // Handle incoming subscription data
   const handleUpdate = useCallback(
     (update: MailboxUpdate) => {
-      console.log('[Subscription] Received update:', update.type, update.message || '');
+      console.log(
+        '[Subscription] Received update:',
+        update.type,
+        update.message || '',
+      );
       store.getState().handleMailboxUpdate(update);
 
       // Show browser notification for new emails
@@ -85,25 +100,34 @@ export function useMailboxSubscription() {
   );
 
   // Use Apollo's subscription hook - only subscribe when authenticated
-  const { data, loading, error } = useSubscription(MAILBOX_UPDATES_SUBSCRIPTION, {
-    skip: !isAuthenticated || !token,
-    shouldResubscribe: true, // Automatically resubscribe on connection loss
-    onData: ({ data: subscriptionData }) => {
-      if (subscriptionData?.data?.mailboxUpdates) {
-        handleUpdate(subscriptionData.data.mailboxUpdates as MailboxUpdate);
-      }
+  const { data, loading, error } = useSubscription<MailboxUpdatesSubscriptionData>(
+    MAILBOX_UPDATES_SUBSCRIPTION,
+    {
+      skip: !isAuthenticated || !token,
+      shouldResubscribe: true, // Automatically resubscribe on connection loss
+      onData: ({ data: subscriptionData }) => {
+        const raw = subscriptionData?.data?.mailboxUpdates;
+        if (raw) {
+          const update: MailboxUpdate = {
+            ...raw,
+            message: raw.message ?? undefined,
+            emails: raw.emails?.filter((e): e is NonNullable<typeof e> => e != null) ?? undefined,
+          };
+          handleUpdate(update);
+        }
+      },
+      onComplete: () => {
+        console.log('[Subscription] Completed - will attempt to reconnect');
+        store.getState().setConnectionStatus('disconnected');
+        store.getState().setSubscriptionActive(false);
+      },
+      onError: (err) => {
+        console.error('[Subscription] Error:', err);
+        store.getState().setSubscriptionError(err.message);
+        store.getState().setConnectionStatus('error');
+      },
     },
-    onComplete: () => {
-      console.log('[Subscription] Completed - will attempt to reconnect');
-      store.getState().setConnectionStatus('disconnected');
-      store.getState().setSubscriptionActive(false);
-    },
-    onError: (err) => {
-      console.error('[Subscription] Error:', err);
-      store.getState().setSubscriptionError(err.message);
-      store.getState().setConnectionStatus('error');
-    },
-  });
+  );
 
   // Update connection status based on subscription state
   useEffect(() => {
@@ -186,11 +210,14 @@ function showNewEmailNotification(emails: CachedEmail[]) {
   if (detailLevel === 'full' && count === 1) {
     // Show full details for single email
     const email = emails[0];
-    notification = new Notification(`New Email from ${email.fromName || email.fromAddress}`, {
-      body: email.subject || '(No Subject)',
-      icon: '/icon-192x192.svg',
-      tag: `new-email-${email.id}`,
-    });
+    notification = new Notification(
+      `New Email from ${email.fromName || email.fromAddress}`,
+      {
+        body: email.subject || '(No Subject)',
+        icon: '/icon-192x192.svg',
+        tag: `new-email-${email.id}`,
+      },
+    );
     // Navigate to the specific email when clicked
     notification.onclick = () => {
       window.focus();

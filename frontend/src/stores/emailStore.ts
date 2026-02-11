@@ -9,6 +9,23 @@ import { persist, createJSONStorage, type StateStorage } from 'zustand/middlewar
 // Maximum number of emails to persist in localStorage
 const MAX_CACHED_EMAILS = 200;
 
+/** Tab lock structure in localStorage */
+interface TabLock {
+  tabId: string;
+  timestamp: number;
+}
+
+function isTabLock(data: unknown): data is TabLock {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'tabId' in data &&
+    'timestamp' in data &&
+    typeof (data as TabLock).tabId === 'string' &&
+    typeof (data as TabLock).timestamp === 'number'
+  );
+}
+
 /**
  * Custom storage that handles quota exceeded errors gracefully
  */
@@ -32,14 +49,14 @@ const safeLocalStorage: StateStorage = {
         try {
           localStorage.removeItem(name);
           // Parse the value and keep only essential data
-          const parsed = JSON.parse(value);
-          if (parsed.state?.emails) {
+          const parsed: unknown = JSON.parse(value);
+          if (isPersistedState(parsed) && parsed.state?.emails && typeof parsed.state.emails === 'object') {
             // Keep only the most recent emails
-            const emailEntries = Object.entries(parsed.state.emails) as [string, CachedEmail][];
-            const sortedEmails = emailEntries
+            const emailEntries = Object.entries(parsed.state.emails)
+              .filter((entry): entry is [string, CachedEmail] => isCachedEmail(entry[1]))
               .sort((a, b) => new Date(b[1].receivedAt).getTime() - new Date(a[1].receivedAt).getTime())
               .slice(0, MAX_CACHED_EMAILS / 2); // Keep even fewer on error
-            parsed.state.emails = Object.fromEntries(sortedEmails);
+            parsed.state.emails = Object.fromEntries(emailEntries);
           }
           localStorage.setItem(name, JSON.stringify(parsed));
         } catch (retryError) {
@@ -85,6 +102,27 @@ export interface CachedEmail {
   threadId?: string | null;
   threadCount?: number | null;
   tags?: Array<{ id: string; name: string; color: string }> | null;
+}
+
+/** Parsed structure from zustand persist storage */
+interface PersistedStateStructure {
+  state?: {
+    emails?: Record<string, unknown>;
+  };
+}
+
+function isPersistedState(data: unknown): data is PersistedStateStructure {
+  return typeof data === 'object' && data !== null;
+}
+
+function isCachedEmail(obj: unknown): obj is CachedEmail {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as Record<string, unknown>;
+  return (
+    typeof o.id === 'string' &&
+    typeof o.emailAccountId === 'string' &&
+    typeof o.receivedAt === 'string'
+  );
 }
 
 export interface CachedEmailAccount {
@@ -230,7 +268,7 @@ export const useEmailStore = create<EmailStoreState>()(
           const newEmails = { ...state.emails, ...emailMap };
           
           // If we have too many emails, prune the oldest ones
-          const emailEntries = Object.entries(newEmails) as [string, CachedEmail][];
+          const emailEntries = Object.entries(newEmails);
           if (emailEntries.length > MAX_CACHED_EMAILS * 1.5) {
             // Only prune if significantly over limit to avoid excessive operations
             const sortedEmails = emailEntries
@@ -370,12 +408,8 @@ export const useEmailStore = create<EmailStoreState>()(
         try {
           const lockData = localStorage.getItem(TAB_LOCK_KEY);
           if (lockData) {
-            const lock = JSON.parse(lockData);
-            // If lock exists and hasn't expired, and it's not ours, return false
-            if (
-              lock.tabId !== state.currentTabId &&
-              now - lock.timestamp < TAB_LOCK_TIMEOUT
-            ) {
+            const lock: unknown = JSON.parse(lockData);
+            if (isTabLock(lock) && lock.tabId !== state.currentTabId && now - lock.timestamp < TAB_LOCK_TIMEOUT) {
               return false;
             }
           }
@@ -390,7 +424,7 @@ export const useEmailStore = create<EmailStoreState>()(
           );
           set({ tabLockId: state.currentTabId });
           return true;
-        } catch (e) {
+        } catch {
           // If localStorage fails, assume we have the lock
           return true;
         }
@@ -401,12 +435,12 @@ export const useEmailStore = create<EmailStoreState>()(
         try {
           const lockData = localStorage.getItem(TAB_LOCK_KEY);
           if (lockData) {
-            const lock = JSON.parse(lockData);
-            if (lock.tabId === state.currentTabId) {
+            const lock: unknown = JSON.parse(lockData);
+            if (isTabLock(lock) && lock.tabId === state.currentTabId) {
               localStorage.removeItem(TAB_LOCK_KEY);
             }
           }
-        } catch (e) {
+        } catch {
           // Ignore errors
         }
         set({ tabLockId: null });
@@ -417,10 +451,10 @@ export const useEmailStore = create<EmailStoreState>()(
         try {
           const lockData = localStorage.getItem(TAB_LOCK_KEY);
           if (lockData) {
-            const lock = JSON.parse(lockData);
-            return lock.tabId === state.currentTabId;
+            const lock: unknown = JSON.parse(lockData);
+            return isTabLock(lock) && lock.tabId === state.currentTabId;
           }
-        } catch (e) {
+        } catch {
           // Ignore errors
         }
         return false;
@@ -440,7 +474,7 @@ export const useEmailStore = create<EmailStoreState>()(
       // Prune old emails to stay within limits
       pruneOldEmails: (maxToKeep: number = MAX_CACHED_EMAILS) => {
         const state = get();
-        const emailEntries = Object.entries(state.emails) as [string, CachedEmail][];
+        const emailEntries = Object.entries(state.emails);
         
         if (emailEntries.length <= maxToKeep) return;
 
@@ -463,11 +497,11 @@ export const useEmailStore = create<EmailStoreState>()(
       // Limit emails to avoid quota issues
       partialize: (state) => {
         // Only persist the most recent emails, and strip out large body content
-        const emailEntries = Object.entries(state.emails) as [string, CachedEmail][];
+        const emailEntries = Object.entries(state.emails);
         const limitedEmails = emailEntries
           .sort((a, b) => new Date(b[1].receivedAt).getTime() - new Date(a[1].receivedAt).getTime())
           .slice(0, MAX_CACHED_EMAILS)
-          .map(([id, email]) => [
+          .map(([id, email]): [string, CachedEmail] => [
             id,
             {
               ...email,

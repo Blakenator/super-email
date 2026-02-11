@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Card } from 'react-bootstrap';
 
 export const ErrorWrapper = styled.div`
   min-height: 100vh;
@@ -10,7 +9,7 @@ export const ErrorWrapper = styled.div`
   padding: ${({ theme }) => theme.spacing.xl};
 `;
 
-export const ErrorCard = styled(Card)`
+export const ErrorCard = styled.div`
   max-width: 500px;
   border: none;
   border-radius: ${({ theme }) => theme.borderRadius.xl};

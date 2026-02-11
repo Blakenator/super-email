@@ -1,8 +1,7 @@
-import styled, { css } from 'styled-components';
+import styled, { css, type DefaultTheme } from 'styled-components';
 import type { ButtonVariant, ButtonSize } from './Button';
-import type { Theme } from '../../core/theme';
 
-const getVariantStyles = (variant: ButtonVariant, theme: Theme) => {
+const getVariantStyles = (variant: ButtonVariant, theme: DefaultTheme) => {
   const isOutline = variant.startsWith('outline-');
   const baseVariant = isOutline ? variant.replace('outline-', '') : variant;
 
@@ -170,7 +169,7 @@ const getVariantStyles = (variant: ButtonVariant, theme: Theme) => {
   }
 };
 
-const getSizeStyles = (size: ButtonSize, theme: Theme) => {
+const getSizeStyles = (size: ButtonSize, theme: DefaultTheme) => {
   switch (size) {
     case 'sm':
       return css`
@@ -216,12 +215,13 @@ export const StyledButton = styled.button<{
 
   &:focus {
     outline: none;
-    box-shadow: 0 0 0 0.2rem ${({ theme, $variant }) => {
-      if ($variant === 'primary' || $variant === 'outline-primary') {
-        return `${theme.colors.primary}40`;
-      }
-      return `${theme.colors.border}40`;
-    }};
+    box-shadow: 0 0 0 0.2rem
+      ${({ theme, $variant }) => {
+        if ($variant === 'primary' || $variant === 'outline-primary') {
+          return `${theme.colors.primary}40`;
+        }
+        return `${theme.colors.border}40`;
+      }};
   }
 
   &:disabled {

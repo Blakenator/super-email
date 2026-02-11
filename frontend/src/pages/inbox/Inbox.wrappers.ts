@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Card, Alert, Badge } from 'react-bootstrap';
 
 export const PageToolbar = styled.div`
   display: flex;
@@ -61,7 +60,7 @@ export const SelectAllCheckbox = styled.div`
   }
 `;
 
-export const TrashWarning = styled(Alert)`
+export const TrashWarning = styled.div`
   margin: ${({ theme }) => theme.spacing.md};
   margin-bottom: 0;
   flex-shrink: 0;
@@ -73,7 +72,7 @@ export const EmailListContainer = styled.div`
   background: ${({ theme }) => theme.colors.backgroundWhite};
 `;
 
-export const GroupCard = styled(Card)`
+export const GroupCard = styled.div`
   margin-bottom: 1.5rem;
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-radius: ${({ theme }) => theme.borderRadius.lg};
@@ -81,7 +80,7 @@ export const GroupCard = styled(Card)`
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;
 
-export const GroupCardHeader = styled(Card.Header)`
+export const GroupCardHeader = styled.div`
   background: linear-gradient(
     135deg,
     ${({ theme }) => theme.colors.primary}15 0%,
@@ -100,12 +99,12 @@ export const GroupTitle = styled.div`
   gap: ${({ theme }) => theme.spacing.sm};
 `;
 
-export const GroupCount = styled(Badge)`
+export const GroupCount = styled.span`
   font-size: ${({ theme }) => theme.fontSizes.xs};
   font-weight: 500;
 `;
 
-export const GroupCardBody = styled(Card.Body)`
+export const GroupCardBody = styled.div`
   padding: 0;
 `;
 

@@ -141,9 +141,69 @@ export const theme = lightTheme;
 export type Theme = typeof lightTheme | typeof darkTheme;
 
 // Helper to access theme in styled-components
+// Uses widened string types so both lightTheme and darkTheme are assignable
 declare module 'styled-components' {
-  export interface DefaultTheme extends Omit<typeof lightTheme, 'mode'> {
+  export interface DefaultTheme {
     mode: 'light' | 'dark';
+    colors: {
+      primary: string;
+      primaryDark: string;
+      primaryLight: string;
+      secondary: string;
+      gradient: string;
+      textPrimary: string;
+      textSecondary: string;
+      textMuted: string;
+      text: string;
+      background: string;
+      backgroundGray: string;
+      backgroundWhite: string;
+      backgroundHover: string;
+      unreadBackground: string;
+      success: string;
+      warning: string;
+      danger: string;
+      info: string;
+      border: string;
+      borderLight: string;
+      star: string;
+      starInactive: string;
+    };
+    shadows: {
+      sm: string;
+      md: string;
+      lg: string;
+      primary: string;
+    };
+    spacing: {
+      xs: string;
+      sm: string;
+      md: string;
+      lg: string;
+      xl: string;
+      xxl: string;
+    };
+    borderRadius: {
+      sm: string;
+      md: string;
+      lg: string;
+      xl: string;
+      pill: string;
+      full: string;
+    };
+    transitions: {
+      fast: string;
+      normal: string;
+      slow: string;
+    };
+    fontSizes: {
+      xs: string;
+      sm: string;
+      md: string;
+      lg: string;
+      xl: string;
+      xxl: string;
+    };
   }
 }
 

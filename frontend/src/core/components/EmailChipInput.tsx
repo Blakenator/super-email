@@ -108,13 +108,13 @@ export function EmailChipInput({
             email: emailEntry.email,
             contactId: contact.id,
             contactName:
-              contact.name ||
-              [contact.firstName, contact.lastName].filter(Boolean).join(' ') ||
+              (contact.name ??
+                [contact.firstName, contact.lastName].filter(Boolean).join(' ')) ||
               null,
-            emailLabel: emailEntry.label,
+            emailLabel: emailEntry.label ?? null,
             isPrimary: emailEntry.isPrimary,
-            company: contact.company,
-            phone: contact.phone,
+            company: contact.company ?? null,
+            phone: contact.phone ?? null,
           });
         }
       } else if (contact.email) {
@@ -123,13 +123,13 @@ export function EmailChipInput({
           email: contact.email,
           contactId: contact.id,
           contactName:
-            contact.name ||
-            [contact.firstName, contact.lastName].filter(Boolean).join(' ') ||
+            (contact.name ??
+              [contact.firstName, contact.lastName].filter(Boolean).join(' ')) ||
             null,
           emailLabel: null,
           isPrimary: true,
-          company: contact.company,
-          phone: contact.phone,
+          company: contact.company ?? null,
+          phone: contact.phone ?? null,
         });
       }
     }
@@ -142,9 +142,10 @@ export function EmailChipInput({
     (email: string) => {
       return searchData?.searchContacts?.find(
         (c) =>
-          c.email.toLowerCase() === email.toLowerCase() ||
+          c.email?.toLowerCase() === email.toLowerCase() ||
           c.emails?.some(
-            (e: any) => e.email.toLowerCase() === email.toLowerCase(),
+            (e: { email: string }) =>
+              e.email.toLowerCase() === email.toLowerCase(),
           ),
       );
     },
@@ -186,15 +187,13 @@ export function EmailChipInput({
   // Search contacts as user types
   useEffect(() => {
     if (inputValue.length >= 2) {
-      searchContacts({ variables: { query: inputValue } });
+      void searchContacts({ variables: { query: inputValue } });
       setShowDropdown(true);
       setHighlightedIndex(0);
     } else {
       setShowDropdown(false);
     }
   }, [inputValue, searchContacts]);
-
-  const suggestions = searchData?.searchContacts ?? [];
 
   const addChip = useCallback(
     (chip: EmailChip) => {
@@ -455,7 +454,7 @@ export function EmailChipInput({
           setShowContactModal(false);
           // Re-search to update contact info
           if (addContactEmail) {
-            searchContacts({ variables: { query: addContactEmail } });
+            void searchContacts({ variables: { query: addContactEmail } });
           }
         }}
       />

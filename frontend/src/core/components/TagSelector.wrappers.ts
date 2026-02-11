@@ -1,7 +1,6 @@
 import styled from 'styled-components';
-import { Button } from 'react-bootstrap';
 
-export const TagButton = styled(Button).attrs({ variant: 'outline-secondary' })<{
+export const TagButton = styled.button.attrs({ type: 'button' })<{
   $isSelected: boolean;
   $color: string;
 }>`

@@ -4,7 +4,6 @@ import {
   Card,
   Form,
   Modal,
-  Badge,
   ListGroup,
   Spinner,
   Row,
@@ -218,17 +217,17 @@ export function MailRulesManager() {
   const handleRunRule = (ruleId: string) => {
     setSelectedRuleId(ruleId);
     setPreviewCount(null);
-    previewRule({ variables: { id: ruleId } });
+    void previewRule({ variables: { id: ruleId } });
   };
 
   const confirmRunRule = () => {
     if (selectedRuleId) {
-      runRule({ variables: { id: selectedRuleId } });
+      void runRule({ variables: { id: selectedRuleId } });
     }
   };
 
   const handleToggleEnabled = (rule: typeof rules[0]) => {
-    updateRule({
+    void updateRule({
       variables: {
         input: {
           id: rule.id,
@@ -296,15 +295,15 @@ export function MailRulesManager() {
     };
 
     if (editingRule) {
-      updateRule({ variables: { input: { id: editingRule, ...input } } });
+      void updateRule({ variables: { input: { id: editingRule, ...input } } });
     } else {
-      createRule({ variables: { input } });
+      void createRule({ variables: { input } });
     }
   };
 
   const handleDelete = (id: string, name: string) => {
     if (confirm(`Are you sure you want to delete the rule "${name}"?`)) {
-      deleteRule({ variables: { id } });
+      void deleteRule({ variables: { id } });
     }
   };
 
@@ -344,7 +343,7 @@ export function MailRulesManager() {
           ) : (
             <ListGroup variant="flush">
               {rules.map((rule) => (
-                <RuleListItem key={rule.id}>
+                <RuleListItem key={rule.id} className="list-group-item">
                   <RuleHeader>
                     <div>
                       <RuleName>
@@ -384,40 +383,40 @@ export function MailRulesManager() {
                   </RuleHeader>
                   <RuleDetails>
                     {rule.conditions.fromContains && (
-                      <RuleCondition bg="info">
+                      <RuleCondition className="badge bg-info">
                         From: {rule.conditions.fromContains}
                       </RuleCondition>
                     )}
                     {rule.conditions.toContains && (
-                      <RuleCondition bg="info">
+                      <RuleCondition className="badge bg-info">
                         To: {rule.conditions.toContains}
                       </RuleCondition>
                     )}
                     {rule.conditions.subjectContains && (
-                      <RuleCondition bg="info">
+                      <RuleCondition className="badge bg-info">
                         Subject: {rule.conditions.subjectContains}
                       </RuleCondition>
                     )}
                     {rule.conditions.bodyContains && (
-                      <RuleCondition bg="info">
+                      <RuleCondition className="badge bg-info">
                         Body: {rule.conditions.bodyContains}
                       </RuleCondition>
                     )}
                     <span className="text-muted">→</span>
                     {rule.actions.archive && (
-                      <RuleAction bg="secondary">
+                      <RuleAction className="badge bg-secondary">
                         <FontAwesomeIcon icon={faArchive} className="me-1" />
                         Archive
                       </RuleAction>
                     )}
                     {rule.actions.star && (
-                      <RuleAction bg="warning" text="dark">
+                      <RuleAction className="badge bg-warning text-dark">
                         <FontAwesomeIcon icon={faStar} className="me-1" />
                         Star
                       </RuleAction>
                     )}
                     {rule.actions.markRead && (
-                      <RuleAction bg="secondary">
+                      <RuleAction className="badge bg-secondary">
                         <FontAwesomeIcon
                           icon={faEnvelopeOpen}
                           className="me-1"
@@ -426,20 +425,20 @@ export function MailRulesManager() {
                       </RuleAction>
                     )}
                     {rule.actions.delete && (
-                      <RuleAction bg="danger">
+                      <RuleAction className="badge bg-danger">
                         <FontAwesomeIcon icon={faTrash} className="me-1" />
                         Delete
                       </RuleAction>
                     )}
                     {rule.actions.addTagIds &&
                       rule.actions.addTagIds.length > 0 && (
-                        <RuleAction bg="primary">
+                        <RuleAction className="badge bg-primary">
                           <FontAwesomeIcon icon={faTag} className="me-1" />
                           Add Tags
                         </RuleAction>
                       )}
                     {rule.actions.forwardTo && (
-                      <RuleAction bg="primary">
+                      <RuleAction className="badge bg-primary">
                         <FontAwesomeIcon icon={faShare} className="me-1" />
                         Forward
                       </RuleAction>

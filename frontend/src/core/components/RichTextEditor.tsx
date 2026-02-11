@@ -13,7 +13,11 @@ import { LexicalErrorBoundary } from '@lexical/react/LexicalErrorBoundary';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListNode, ListItemNode } from '@lexical/list';
 import { LinkNode, AutoLinkNode } from '@lexical/link';
-import { CodeNode, CodeHighlightNode } from '@lexical/code';
+import {
+  CodeNode,
+  CodeHighlightNode,
+  $isCodeNode,
+} from '@lexical/code';
 import { TableNode, TableCellNode, TableRowNode } from '@lexical/table';
 import { TablePlugin } from '@lexical/react/LexicalTablePlugin';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
@@ -28,6 +32,7 @@ import {
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $isTextNode,
   $createTextNode,
   FORMAT_TEXT_COMMAND,
   INDENT_CONTENT_COMMAND,
@@ -113,7 +118,8 @@ function ToolbarPlugin() {
           if (selection.hasFormat('bold')) formats.add('bold');
           if (selection.hasFormat('italic')) formats.add('italic');
           if (selection.hasFormat('underline')) formats.add('underline');
-          if (selection.hasFormat('strikethrough')) formats.add('strikethrough');
+          if (selection.hasFormat('strikethrough'))
+            formats.add('strikethrough');
           if (selection.hasFormat('code')) formats.add('code');
           setActiveFormats(formats);
         }
@@ -164,10 +170,6 @@ function ToolbarPlugin() {
     }
   }, [editor]);
 
-  const removeLink = useCallback(() => {
-    editor.dispatchCommand(TOGGLE_LINK_COMMAND, null);
-  }, [editor]);
-
   const indent = useCallback(() => {
     editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined);
   }, [editor]);
@@ -183,9 +185,8 @@ function ToolbarPlugin() {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
           selection.getNodes().forEach((node) => {
-            if (node.getType() === 'text') {
-              const textNode = node as any;
-              textNode.setStyle(`color: ${color}`);
+            if ($isTextNode(node)) {
+              node.setStyle(`color: ${color}`);
             }
           });
         }
@@ -201,9 +202,8 @@ function ToolbarPlugin() {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
           selection.getNodes().forEach((node) => {
-            if (node.getType() === 'text') {
-              const textNode = node as any;
-              textNode.setStyle(`font-size: ${size}`);
+            if ($isTextNode(node)) {
+              node.setStyle(`font-size: ${size}`);
             }
           });
         }
@@ -219,9 +219,8 @@ function ToolbarPlugin() {
         const selection = $getSelection();
         if ($isRangeSelection(selection)) {
           selection.getNodes().forEach((node) => {
-            if (node.getType() === 'text') {
-              const textNode = node as any;
-              textNode.setStyle(`font-family: ${family}`);
+            if ($isTextNode(node)) {
+              node.setStyle(`font-family: ${family}`);
             }
           });
         }
@@ -303,16 +302,10 @@ function ToolbarPlugin() {
       <ToolbarDivider />
 
       {/* Lists */}
-      <ToolbarButton
-        onClick={() => insertList('bullet')}
-        title="Bullet List"
-      >
+      <ToolbarButton onClick={() => insertList('bullet')} title="Bullet List">
         <FontAwesomeIcon icon={faListUl} />
       </ToolbarButton>
-      <ToolbarButton
-        onClick={() => insertList('number')}
-        title="Numbered List"
-      >
+      <ToolbarButton onClick={() => insertList('number')} title="Numbered List">
         <FontAwesomeIcon icon={faListOl} />
       </ToolbarButton>
 
@@ -357,7 +350,7 @@ function ToolbarPlugin() {
 const STRIKETHROUGH_TRANSFORMER: TextMatchTransformer = {
   dependencies: [],
   export: (node) => {
-    if (node.hasFormat && node.hasFormat('strikethrough')) {
+    if ($isTextNode(node) && node.hasFormat('strikethrough')) {
       return `~${node.getTextContent()}~`;
     }
     return null;
@@ -377,10 +370,9 @@ const STRIKETHROUGH_TRANSFORMER: TextMatchTransformer = {
 const CODE_BLOCK_TRANSFORMER: ElementTransformer = {
   dependencies: [CodeNode],
   export: (node) => {
-    if (node.getType() === 'code') {
-      const codeNode = node as any;
-      const language = codeNode.getLanguage?.() || '';
-      return `\`\`\`${language}\n${codeNode.getTextContent()}\n\`\`\``;
+    if ($isCodeNode(node)) {
+      const language = node.getLanguage() ?? '';
+      return `\`\`\`${language}\n${node.getTextContent()}\n\`\`\``;
     }
     return null;
   },
@@ -504,7 +496,7 @@ interface RichTextEditorProps {
 }
 
 export function RichTextEditor({
-  value,
+  value: _value,
   onChange,
   placeholder = 'Write your message...',
   initialHtml,

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faWifi } from '@fortawesome/free-solid-svg-icons';
 import { useEmailStore } from '../../stores/emailStore';

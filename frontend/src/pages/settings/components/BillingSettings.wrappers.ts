@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { Card, ProgressBar } from 'react-bootstrap';
+import { ProgressBar } from 'react-bootstrap';
 
 export const BillingContainer = styled.div`
   display: flex;
@@ -7,7 +7,7 @@ export const BillingContainer = styled.div`
   gap: ${({ theme }) => theme.spacing.lg};
 `;
 
-export const BillingCard = styled(Card)`
+export const BillingCard = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.borderLight};
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;

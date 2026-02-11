@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Form, InputGroup } from 'react-bootstrap';
+import { Form } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons';
 import { PasswordInputWrapper, ToggleButton } from './PasswordInput.wrappers';

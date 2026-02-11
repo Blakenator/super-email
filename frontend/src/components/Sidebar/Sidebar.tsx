@@ -58,8 +58,8 @@ import { PortalDropdown } from './PortalDropdown';
 interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName: string | null;
+  lastName: string | null;
 }
 
 interface SidebarProps {
@@ -239,7 +239,7 @@ export function Sidebar({
                     overlay={
                       isCollapsed ? (
                         <Tooltip id="user-tooltip">
-                          {user.firstName} {user.lastName}
+                          {user.firstName ?? ''} {user.lastName ?? ''}
                           <br />
                           {user.email}
                         </Tooltip>
@@ -249,13 +249,14 @@ export function Sidebar({
                     }
                   >
                     <UserAvatar $collapsed={isCollapsed}>
-                      {user.firstName[0]}
-                      {user.lastName[0]}
+                      {((user.firstName?.[0] ?? '') + (user.lastName?.[0] ?? '')) ||
+                        user.email[0]?.toUpperCase() ||
+                        '?'}
                     </UserAvatar>
                   </OverlayTrigger>
                   <UserInfo $collapsed={isCollapsed}>
                     <UserName>
-                      {user.firstName} {user.lastName}
+                      {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}
                     </UserName>
                     <UserEmail>{user.email}</UserEmail>
                   </UserInfo>
@@ -265,7 +266,7 @@ export function Sidebar({
               <UserPopoverMenu>
                 <PopoverHeader>
                   <PopoverUserName>
-                    {user.firstName} {user.lastName}
+                    {[user.firstName, user.lastName].filter(Boolean).join(' ') || user.email}
                   </PopoverUserName>
                   <PopoverUserEmail>{user.email}</PopoverUserEmail>
                 </PopoverHeader>

@@ -45,7 +45,7 @@ export function SignUp() {
 
     try {
       await signUp(email, password, firstName, lastName);
-      navigate('/inbox');
+      void navigate('/inbox');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed');
     } finally {
@@ -56,7 +56,7 @@ export function SignUp() {
   return (
     <PageWrapper>
       <Container>
-        <SignUpCard className="mx-auto">
+        <SignUpCard className="card mx-auto">
           <Card.Body className="p-5">
             <Logo>
               <FontAwesomeIcon icon={faEnvelope} className="me-2" />
@@ -74,7 +74,7 @@ export function SignUp() {
               </Alert>
             )}
 
-            <Form onSubmit={handleSubmit}>
+            <Form onSubmit={(e) => void handleSubmit(e)}>
               <Row>
                 <Col md={6}>
                   <Form.Group className="mb-3">

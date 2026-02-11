@@ -1,4 +1,3 @@
-import { Button } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCheck } from '@fortawesome/free-solid-svg-icons';
 import { TagButton } from './TagSelector.wrappers';
@@ -35,8 +34,8 @@ export function TagSelector({
             key={tag.id}
             $isSelected={isSelected}
             $color={tag.color}
+            className="btn btn-outline-secondary btn-sm"
             onClick={() => onToggleTag(tag.id)}
-            size="sm"
           >
             {isSelected && <FontAwesomeIcon icon={faCheck} className="me-1" />}
             {tag.name}

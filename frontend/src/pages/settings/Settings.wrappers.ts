@@ -1,5 +1,4 @@
-import styled, { css } from 'styled-components';
-import { Card } from 'react-bootstrap';
+import styled from 'styled-components';
 
 // Responsive tabs wrapper - always vertical or dropdown (never horizontal)
 export const ResponsiveTabsWrapper = styled.div`
@@ -94,7 +93,7 @@ export const Title = styled.h2`
   margin: 0;
 `;
 
-export const SectionCard = styled(Card)`
+export const SectionCard = styled.div`
   border: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   border-radius: 12px;

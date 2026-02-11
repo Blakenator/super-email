@@ -4,6 +4,7 @@ import {
   Spinner,
   OverlayTrigger,
   Tooltip,
+  ProgressBar,
 } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faSync, faTrash, faEdit, faCheck } from '@fortawesome/free-solid-svg-icons';
@@ -20,7 +21,7 @@ import {
   SyncStatusContainer,
   SyncStatusHeader,
   SyncStatusText,
-  SyncProgressBar,
+  SyncProgressBarWrapper,
 } from './EmailAccountCard.wrappers';
 
 export interface EmailAccountData {
@@ -64,8 +65,8 @@ export function EmailAccountCard({
     : account.updateSyncStatus;
 
   return (
-    <AccountCardStyled $isSyncing={isSyncing}>
-      <AccountCardHeader>
+    <AccountCardStyled $isSyncing={isSyncing} className="card">
+      <AccountCardHeader className="card-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <AccountCardTitle>{account.name}</AccountCardTitle>
           {account.isDefault && (
@@ -77,7 +78,7 @@ export function EmailAccountCard({
         </div>
         <AccountCardSubtitle>{account.email}</AccountCardSubtitle>
       </AccountCardHeader>
-      <AccountCardBody>
+      <AccountCardBody className="card-body">
         <AccountDetailRow>
           <AccountDetailLabel>Server</AccountDetailLabel>
           <span>
@@ -115,7 +116,7 @@ export function EmailAccountCard({
         </AccountDetailRow>
       </AccountCardBody>
       {isSyncing && (
-        <AccountCardFooter>
+        <AccountCardFooter className="card-footer">
           <SyncStatusContainer>
             <SyncStatusHeader>
               <Spinner
@@ -137,17 +138,19 @@ export function EmailAccountCard({
                     </Tooltip>
                   }
                 >
-                  <SyncProgressBar
-                    now={syncProgress}
-                    variant="primary"
-                    animated
-                  />
+                  <SyncProgressBarWrapper>
+                    <ProgressBar
+                      now={syncProgress}
+                      variant="primary"
+                      animated
+                    />
+                  </SyncProgressBarWrapper>
                 </OverlayTrigger>
               )}
           </SyncStatusContainer>
         </AccountCardFooter>
       )}
-      <AccountCardFooter>
+      <AccountCardFooter className="card-footer">
         <AccountCardActions>
           <Button
             variant="outline-secondary"

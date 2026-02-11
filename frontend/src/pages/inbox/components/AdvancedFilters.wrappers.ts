@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Badge, Form } from 'react-bootstrap';
 
 export const FilterWrapper = styled.div`
   background: ${({ theme }) => theme.colors.backgroundWhite};
@@ -26,11 +25,11 @@ export const FilterActions = styled.div`
   margin-top: ${({ theme }) => theme.spacing.md};
 `;
 
-export const ActiveFilterBadge = styled(Badge)`
+export const ActiveFilterBadge = styled.span`
   margin-left: ${({ theme }) => theme.spacing.xs};
 `;
 
-export const FilterLabel = styled(Form.Label)`
+export const FilterLabel = styled.label`
   font-size: ${({ theme }) => theme.fontSizes.sm};
   color: ${({ theme }) => theme.colors.textMuted};
   margin-bottom: 0.25rem;

@@ -13,6 +13,7 @@ import { useMutation, useQuery } from '@apollo/client/react';
 import toast from 'react-hot-toast';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUser, faPlus, faSearch } from '@fortawesome/free-solid-svg-icons';
+import type { DocumentNode } from 'graphql';
 import { gql } from '../../__generated__/gql';
 import { GET_CONTACTS_QUERY as CONTACTS_PAGE_QUERY } from '../../pages/contacts/queries';
 import {
@@ -116,7 +117,10 @@ interface ContactFormModalProps {
   editingContactId?: string;
   initialData?: Partial<ContactFormData>;
   onSuccess?: (contact: { id: string; email?: string | null; name?: string | null }) => void;
-  refetchQueries?: any[];
+  refetchQueries?: Array<
+    | { query: DocumentNode; variables?: Record<string, unknown> }
+    | DocumentNode
+  >;
   /** If provided, shows add to existing tab first and uses this as the email to add */
   emailToAdd?: string;
 }
@@ -233,7 +237,7 @@ export function ContactFormModal({
     }
 
     if (editingContactId) {
-      updateContact({
+      void updateContact({
         variables: {
           input: {
             id: editingContactId,
@@ -248,7 +252,7 @@ export function ContactFormModal({
         },
       });
     } else {
-      createContact({
+      void createContact({
         variables: {
           input: {
             emails: [{ email: formData.email, isPrimary: true }],
@@ -276,7 +280,7 @@ export function ContactFormModal({
       return;
     }
 
-    addEmailToContact({
+    void addEmailToContact({
       variables: {
         input: {
           contactId: selectedContactId,

@@ -12,17 +12,25 @@ import {
   FETCH_PROFILE_QUERY,
   UPDATE_USER_PREFERENCES_MUTATION,
 } from '../pages/auth/queries';
-import { useEmailStore, type SavedUser, type CachedUser } from '../stores/emailStore';
+import {
+  useEmailStore,
+  type SavedUser,
+  type CachedUser,
+} from '../stores/emailStore';
 import { config } from '../config';
 
 // Supabase client configuration
-export const supabase = createClient(config.supabase.url, config.supabase.anonKey, {
-  auth: {
-    redirectTo: config.supabase.redirectUrl,
-  },
-});
+export const supabase = createClient(
+  config.supabase.url,
+  config.supabase.anonKey,
+);
 
 import type { ThemePreference } from '../core/theme';
+import type { UpdateUserPreferencesInput as GqlUpdateUserPreferencesInput } from '../__generated__/graphql';
+import {
+  ThemePreference as GqlThemePreference,
+  NotificationDetailLevel as GqlNotificationDetailLevel,
+} from '../__generated__/graphql';
 
 type NotificationDetailLevel = 'MINIMAL' | 'FULL';
 
@@ -55,7 +63,11 @@ interface AuthContextType {
   isLoading: boolean;
   isOffline: boolean;
   savedUsers: SavedUser[];
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (
+    email: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<void>;
   loginAsSavedUser: (userId: string) => Promise<void>;
   signUp: (
     email: string,
@@ -88,15 +100,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const savedUsers = useEmailStore((state) => state.savedUsers);
   const setCachedUser = useEmailStore((state) => state.setCachedUser);
   const addSavedUser = useEmailStore((state) => state.addSavedUser);
-  const removeSavedUserFromStore = useEmailStore((state) => state.removeSavedUser);
-  const clearSavedUsersFromStore = useEmailStore((state) => state.clearSavedUsers);
+  const removeSavedUserFromStore = useEmailStore(
+    (state) => state.removeSavedUser,
+  );
+  const clearSavedUsersFromStore = useEmailStore(
+    (state) => state.clearSavedUsers,
+  );
 
   // Fetch profile from backend and sync user state
   const fetchProfileFromBackend = useCallback(
-    async (accessToken: string, rememberMe: boolean = false, force: boolean = false) => {
+    async (
+      accessToken: string,
+      rememberMe: boolean = false,
+      force: boolean = false,
+    ) => {
       // Throttle profile fetches - don't fetch more than once per minute unless forced
       const now = Date.now();
-      if (!force && now - lastProfileFetchRef.current < PROFILE_FETCH_INTERVAL_MS) {
+      if (
+        !force &&
+        now - lastProfileFetchRef.current < PROFILE_FETCH_INTERVAL_MS
+      ) {
         return null;
       }
 
@@ -178,10 +201,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: cachedUser.email,
             firstName: cachedUser.firstName || null,
             lastName: cachedUser.lastName || null,
-            themePreference: (cachedUser.themePreference as ThemePreference) || 'AUTO',
+            themePreference:
+              (cachedUser.themePreference as ThemePreference) || 'AUTO',
             navbarCollapsed: cachedUser.navbarCollapsed ?? false,
             notificationDetailLevel:
-              (cachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
+              (cachedUser.notificationDetailLevel as NotificationDetailLevel) ||
+              'FULL',
             inboxDensity: cachedUser.inboxDensity ?? false,
             inboxGroupByDate: cachedUser.inboxGroupByDate ?? false,
             blockExternalImages: cachedUser.blockExternalImages ?? false,
@@ -191,6 +216,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return null;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [apolloClient, setCachedUser, addSavedUser],
   );
 
@@ -228,13 +254,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 email: currentCachedUser.email,
                 firstName: currentCachedUser.firstName || null,
                 lastName: currentCachedUser.lastName || null,
-                themePreference: (currentCachedUser.themePreference as ThemePreference) || 'AUTO',
+                themePreference:
+                  (currentCachedUser.themePreference as ThemePreference) ||
+                  'AUTO',
                 navbarCollapsed: currentCachedUser.navbarCollapsed ?? false,
                 notificationDetailLevel:
-                  (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
+                  (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) ||
+                  'FULL',
                 inboxDensity: currentCachedUser.inboxDensity ?? false,
                 inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
-                blockExternalImages: currentCachedUser.blockExternalImages ?? false,
+                blockExternalImages:
+                  currentCachedUser.blockExternalImages ?? false,
               });
             } else {
               // Set minimal user data so app doesn't get stuck
@@ -264,13 +294,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               email: currentCachedUser.email,
               firstName: currentCachedUser.firstName || null,
               lastName: currentCachedUser.lastName || null,
-              themePreference: (currentCachedUser.themePreference as ThemePreference) || 'AUTO',
+              themePreference:
+                (currentCachedUser.themePreference as ThemePreference) ||
+                'AUTO',
               navbarCollapsed: currentCachedUser.navbarCollapsed ?? false,
               notificationDetailLevel:
-                (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
+                (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) ||
+                'FULL',
               inboxDensity: currentCachedUser.inboxDensity ?? false,
               inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
-              blockExternalImages: currentCachedUser.blockExternalImages ?? false,
+              blockExternalImages:
+                currentCachedUser.blockExternalImages ?? false,
             });
             // Set a placeholder token for offline mode
             setToken('offline-mode');
@@ -288,10 +322,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: currentCachedUser.email,
             firstName: currentCachedUser.firstName || null,
             lastName: currentCachedUser.lastName || null,
-            themePreference: (currentCachedUser.themePreference as ThemePreference) || 'AUTO',
+            themePreference:
+              (currentCachedUser.themePreference as ThemePreference) || 'AUTO',
             navbarCollapsed: currentCachedUser.navbarCollapsed ?? false,
             notificationDetailLevel:
-              (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) || 'FULL',
+              (currentCachedUser.notificationDetailLevel as NotificationDetailLevel) ||
+              'FULL',
             inboxDensity: currentCachedUser.inboxDensity ?? false,
             inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
             blockExternalImages: currentCachedUser.blockExternalImages ?? false,
@@ -311,7 +347,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         setToken(session.access_token);
-        
+
         // Don't fetch profile for SIGNED_IN events - the login function handles that
         // This prevents race conditions where rememberMe flag gets lost
         if (event !== 'SIGNED_IN') {
@@ -369,6 +405,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, fetchProfileFromBackend]);
 
   const login = useCallback(
@@ -384,21 +421,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.session) {
         setToken(data.session.access_token);
-        
+
         // If rememberMe is true, save the user info immediately
         // Do this BEFORE fetching profile to avoid race conditions with navigation
         if (rememberMe && data.session.user.email) {
           useEmailStore.getState().addSavedUser({
             id: data.session.user.id,
             email: data.session.user.email,
-            firstName: data.session.user.user_metadata?.firstName || null,
-            lastName: data.session.user.user_metadata?.lastName || null,
+            firstName: typeof data.session.user.user_metadata?.firstName === 'string' ? data.session.user.user_metadata.firstName : null,
+            lastName: typeof data.session.user.user_metadata?.lastName === 'string' ? data.session.user.user_metadata.lastName : null,
             lastLoginAt: new Date().toISOString(),
           });
         }
-        
+
         // Fetch profile from backend to ensure user/auth method exists
-        await fetchProfileFromBackend(data.session.access_token, rememberMe, true);
+        await fetchProfileFromBackend(
+          data.session.access_token,
+          rememberMe,
+          true,
+        );
       }
     },
     [fetchProfileFromBackend],
@@ -406,7 +447,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Login as a saved user (requires re-authentication with Supabase)
   const loginAsSavedUser = useCallback(
-    async (userId: string) => {
+    (userId: string) => {
       const savedUser = savedUsers.find((u) => u.id === userId);
       if (!savedUser) {
         throw new Error('Saved user not found');
@@ -524,7 +565,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         await apolloClient.mutate({
           mutation: UPDATE_USER_PREFERENCES_MUTATION,
-          variables: { input },
+          variables: {
+            input: {
+              ...input,
+              themePreference: input.themePreference
+                ? ({ LIGHT: GqlThemePreference.Light, DARK: GqlThemePreference.Dark, AUTO: GqlThemePreference.Auto })[input.themePreference]
+                : undefined,
+              notificationDetailLevel: input.notificationDetailLevel
+                ? ({ MINIMAL: GqlNotificationDetailLevel.Minimal, FULL: GqlNotificationDetailLevel.Full })[input.notificationDetailLevel]
+                : undefined,
+            } satisfies GqlUpdateUserPreferencesInput,
+          },
           context: {
             headers: {
               authorization: `Bearer ${token}`,

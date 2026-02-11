@@ -36,8 +36,8 @@ export function SmtpProfileCard({
   onDelete,
 }: SmtpProfileCardProps) {
   return (
-    <SmtpCardStyled>
-      <SmtpCardHeader $isDefault={profile.isDefault}>
+    <SmtpCardStyled className="card">
+      <SmtpCardHeader $isDefault={profile.isDefault} className="card-header">
         <SmtpCardTitle>
           {profile.name}
           {profile.isDefault && (
@@ -50,7 +50,7 @@ export function SmtpProfileCard({
           {profile.alias ? `${profile.alias} <${profile.email}>` : profile.email}
         </SmtpCardSubtitle>
       </SmtpCardHeader>
-      <SmtpCardBody>
+      <SmtpCardBody className="card-body">
         <SmtpDetailRow>
           <SmtpDetailLabel>Server</SmtpDetailLabel>
           <span>
@@ -79,7 +79,7 @@ export function SmtpProfileCard({
           </SmtpDetailRow>
         )}
       </SmtpCardBody>
-      <SmtpCardFooter>
+      <SmtpCardFooter className="card-footer">
         <SmtpCardActions>
           <Button
             variant="outline-secondary"

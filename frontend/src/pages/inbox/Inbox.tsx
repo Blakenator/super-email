@@ -10,7 +10,6 @@ import {
   Form,
   InputGroup,
   Dropdown,
-  Card,
   Modal,
 } from 'react-bootstrap';
 import { Button } from '../../core/components';
@@ -66,6 +65,7 @@ import {
   GET_TAGS_FOR_INBOX_QUERY,
   ADD_TAGS_TO_EMAILS_MUTATION,
 } from './queries';
+import type { NukeOldEmailsMutation } from '../../__generated__/graphql';
 
 import { RECENCY_GROUP_LABELS, groupEmailsByRecency } from './utils';
 
@@ -127,10 +127,11 @@ function serializeFiltersToUrl(filters: EmailFilters): string | null {
     if (key === 'tagIds') {
       const tagIds = (value as string[]) || [];
       if (tagIds.length > 0) {
-        cleanedFilters[key as keyof EmailFilters] = tagIds as any;
+        cleanedFilters.tagIds = tagIds;
       }
     } else if (typeof value === 'string' && value.trim() !== '') {
-      cleanedFilters[key as keyof EmailFilters] = value.trim() as any;
+      const k = key as Exclude<keyof EmailFilters, 'tagIds'>;
+      cleanedFilters[k] = value.trim();
     }
   }
 
@@ -194,18 +195,16 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     }
   }, [urlFilters]);
 
-  const handleViewModeChange = async (val: ViewMode) => {
+  const handleViewModeChange = (val: ViewMode) => {
     if (val) {
       setViewMode(val);
       localStorage.setItem('inboxViewMode', val);
       // Update user preference
       const isDense = val === 'dense';
       if (user?.inboxDensity !== isDense) {
-        try {
-          await updatePreferences({ inboxDensity: isDense });
-        } catch (error) {
+        void updatePreferences({ inboxDensity: isDense }).catch((error) => {
           console.error('Failed to update inbox density preference:', error);
-        }
+        });
       }
     }
   };
@@ -232,16 +231,14 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     }
   }, [user?.inboxGroupByDate]);
 
-  const handleGroupByRecencyChange = async (enabled: boolean) => {
+  const handleGroupByRecencyChange = (enabled: boolean) => {
     setGroupByRecency(enabled);
     localStorage.setItem('inboxGroupByRecency', String(enabled));
     // Update user preference
     if (user?.inboxGroupByDate !== enabled) {
-      try {
-        await updatePreferences({ inboxGroupByDate: enabled });
-      } catch (error) {
+      void updatePreferences({ inboxGroupByDate: enabled }).catch((error) => {
         console.error('Failed to update group by date preference:', error);
-      }
+      });
     }
   };
 
@@ -277,9 +274,9 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     onError: (err) => toast.error(`Failed to add tags: ${err.message}`),
   });
 
-  const handleBulkAddTag = async (tagId: string) => {
+  const handleBulkAddTag = (tagId: string) => {
     if (selectedIds.size === 0) return;
-    await addTagsToEmails({
+    void addTagsToEmails({
       variables: {
         input: {
           emailIds: Array.from(selectedIds),
@@ -326,17 +323,17 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   const handleAccountTabSelect = (accountId: string) => {
     const path =
       accountId === 'all' ? basePath : `${basePath}/account/${accountId}`;
-    navigate(path);
+    void navigate(path);
   };
 
   // Navigate to email view
   const navigateToEmail = (emailId: string) => {
-    navigate(buildUrl({ emailId }));
+    void navigate(buildUrl({ emailId }));
   };
 
   // Navigate back from email view
   const navigateBack = () => {
-    navigate(buildUrl({}));
+    void navigate(buildUrl({}));
   };
 
   // Update search in URL
@@ -347,7 +344,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     } else {
       newParams.delete('q');
     }
-    setSearchParams(newParams, { replace: true });
+    void setSearchParams(newParams, { replace: true });
   };
 
   // Update filters in URL
@@ -360,7 +357,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     } else {
       newParams.delete('filter');
     }
-    setSearchParams(newParams, { replace: true });
+    void setSearchParams(newParams, { replace: true });
   };
 
   const {
@@ -381,10 +378,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     someSelected,
     hasActiveFilters,
     setCurrentPage,
-    setActiveAccountTab,
     setPageSize,
-    setSearchQuery,
-    setAdvancedFilters,
     handleStarToggle,
     handleMarkRead,
     handleDelete,
@@ -406,15 +400,16 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   });
 
   // Nuke mutation
-  const [nukeOldEmails, { loading: nuking }] = useMutation(
+  const [nukeOldEmails, { loading: nuking }] = useMutation<NukeOldEmailsMutation>(
     NUKE_OLD_EMAILS_MUTATION,
     {
-      onCompleted: (data: any) => {
+      onCompleted: (data) => {
         toast.success(`Archived ${data.nukeOldEmails} email(s)`);
         setShowNukeModal(false);
-        handleRefresh();
+        void handleRefresh();
       },
-      onError: (err: any) => toast.error(`Failed to archive: ${err.message}`),
+      onError: (err: unknown) =>
+        toast.error(`Failed to archive: ${err instanceof Error ? err.message : 'Unknown error'}`),
     },
   );
 
@@ -442,7 +437,11 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
 
   const handleNuke = () => {
     const olderThan = getNukeDate();
-    nukeOldEmails({ variables: { input: { olderThan } } });
+    void nukeOldEmails({
+      variables: {
+        input: { olderThan: olderThan ? olderThan.toISOString() : undefined },
+      },
+    });
   };
 
   // Debounced search - update URL after typing stops
@@ -455,7 +454,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     return () => clearTimeout(timeoutId);
   }, [searchInput, urlSearchQuery]);
 
-  const handleEmailClick = async (email: {
+  const handleEmailClick = (email: {
     id: string;
     isRead: boolean;
     emailAccountId: string;
@@ -473,7 +472,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
   }) => {
     // For drafts, navigate to compose instead of email view
     if (folder === EmailFolder.Drafts) {
-      navigate('/compose', {
+      void navigate('/compose', {
         state: {
           draft: {
             draftId: email.id,
@@ -500,7 +499,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
 
     // Mark as read in parallel (non-blocking)
     if (!email.isRead) {
-      handleMarkRead(email.id, true).catch((error) => {
+      void handleMarkRead(email.id, true).catch((error: unknown) => {
         console.error('Failed to mark email as read:', error);
         // Don't show error toast - email view will still work
       });
@@ -517,7 +516,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
     receivedAt?: string;
     emailAccountId: string;
   }) => {
-    navigate('/compose', {
+    void navigate('/compose', {
       state: {
         replyTo: {
           to: email.fromAddress,
@@ -555,11 +554,11 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       <EmailView
         emailId={urlEmailId}
         onBack={handleBack}
-        onDelete={() => handleDeleteFromView(urlEmailId)}
+        onDelete={() => void handleDeleteFromView(urlEmailId)}
         onArchive={
           folder !== EmailFolder.Archive
             ? () => {
-                handleArchive(urlEmailId);
+                void handleArchive(urlEmailId);
                 navigateBack();
               }
             : undefined
@@ -567,7 +566,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         onUnarchive={
           folder === EmailFolder.Archive
             ? () => {
-                handleUnarchive(urlEmailId);
+                void handleUnarchive(urlEmailId);
                 navigateBack();
               }
             : undefined
@@ -654,7 +653,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
           <Button
             variant="outline-secondary"
             size="sm"
-            onClick={handleRefresh}
+            onClick={() => void handleRefresh()}
             disabled={syncing || loading}
           >
             <FontAwesomeIcon icon={faSync} spin={syncing} className="me-1" />
@@ -813,7 +812,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                   {availableTags.map((tag) => (
                     <Dropdown.Item
                       key={tag.id}
-                      onClick={() => handleBulkAddTag(tag.id)}
+                      onClick={() => void handleBulkAddTag(tag.id)}
                     >
                       <span
                         style={{
@@ -840,7 +839,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
       </BulkActionsBar>
 
       {folder === EmailFolder.Trash && emails.length > 0 && (
-        <TrashWarning variant="warning">
+        <TrashWarning className="alert alert-warning">
           <FontAwesomeIcon icon={faTrash} className="me-2" />
           Emails in trash will be permanently deleted after 30 days.
         </TrashWarning>
@@ -879,25 +878,31 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
           // Grouped by recency with cards
           <div style={{ padding: '1rem' }}>
             {groupEmailsByRecency(emails).map((group) => (
-              <GroupCard key={group.group}>
-                <GroupCardHeader>
+              <GroupCard key={group.group} className="card">
+                <GroupCardHeader className="card-header">
                   <GroupTitle>
                     {RECENCY_GROUP_LABELS[group.group]}
-                    <GroupCount bg="primary">{group.emails.length}</GroupCount>
+                    <GroupCount className="badge bg-primary">{group.emails.length}</GroupCount>
                   </GroupTitle>
                 </GroupCardHeader>
-                <GroupCardBody>
+                <GroupCardBody className="card-body">
                   {group.emails.map((email) => {
                     const account = accounts.find(
                       (a) => a.id === email.emailAccountId,
                     );
+                    const accountWithName = account
+                      ? {
+                          ...account,
+                          name: account.name ?? account.email.split('@')[0] ?? '',
+                        }
+                      : undefined;
                     const ItemComponent =
                       viewMode === 'dense' ? EmailListItemDense : EmailListItem;
                     return (
                       <ItemComponent
                         key={email.id}
                         email={email}
-                        account={account}
+                        account={accountWithName}
                         showAccount={activeAccountTab === 'all'}
                         showFolderBadge={hasActiveFilters}
                         showTags={showTagsOnList}
@@ -916,7 +921,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                             : undefined
                         }
                         onUnarchive={
-                          email.folder === 'ARCHIVE'
+                          (email.folder as EmailFolder) === EmailFolder.Archive
                             ? handleUnarchive
                             : undefined
                         }
@@ -931,13 +936,19 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
           // Flat list
           emails.map((email) => {
             const account = accounts.find((a) => a.id === email.emailAccountId);
+            const accountWithName = account
+              ? {
+                  ...account,
+                  name: account.name ?? account.email.split('@')[0] ?? '',
+                }
+              : undefined;
             const ItemComponent =
               viewMode === 'dense' ? EmailListItemDense : EmailListItem;
             return (
               <ItemComponent
                 key={email.id}
                 email={email}
-                account={account}
+                account={accountWithName}
                 showAccount={activeAccountTab === 'all'}
                 showFolderBadge={hasActiveFilters}
                 showTags={showTagsOnList}
@@ -952,7 +963,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
                   folder !== EmailFolder.Archive ? handleArchive : undefined
                 }
                 onUnarchive={
-                  email.folder === 'ARCHIVE' ? handleUnarchive : undefined
+                  (email.folder as EmailFolder) === EmailFolder.Archive ? handleUnarchive : undefined
                 }
               />
             );

@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Card, Form } from 'react-bootstrap';
 
 export const SettingsContainer = styled.div`
   display: flex;
@@ -7,7 +6,7 @@ export const SettingsContainer = styled.div`
   gap: ${({ theme }) => theme.spacing.lg};
 `;
 
-export const ThemeCard = styled(Card)`
+export const ThemeCard = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.borderLight};
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;
@@ -38,7 +37,7 @@ export const ThemeOption = styled.div<{ $selected?: boolean }>`
   }
 `;
 
-export const SectionLabel = styled(Form.Label)`
+export const SectionLabel = styled.label`
   margin-bottom: ${({ theme }) => theme.spacing.md};
   display: block;
 `;
@@ -79,7 +78,7 @@ export const ThemeDescription = styled.div`
   color: ${({ theme }) => theme.colors.textSecondary};
 `;
 
-export const PreviewSection = styled(Card)`
+export const PreviewSection = styled.div`
   border: 1px solid ${({ theme }) => theme.colors.borderLight};
   box-shadow: ${({ theme }) => theme.shadows.sm};
 `;

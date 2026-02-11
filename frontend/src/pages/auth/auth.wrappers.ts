@@ -1,5 +1,4 @@
 import styled from 'styled-components';
-import { Card } from 'react-bootstrap';
 
 export const PageWrapper = styled.div`
   min-height: 100vh;
@@ -10,7 +9,7 @@ export const PageWrapper = styled.div`
   padding: 2rem 0;
 `;
 
-export const AuthCard = styled(Card)`
+export const AuthCard = styled.div`
   width: 100%;
   max-width: 420px;
   border: none;
@@ -18,7 +17,7 @@ export const AuthCard = styled(Card)`
   box-shadow: ${({ theme }) => theme.shadows.lg};
 `;
 
-export const SignUpCard = styled(Card)`
+export const SignUpCard = styled.div`
   width: 100%;
   max-width: 480px;
   border: none;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import {
   Container,
@@ -7,7 +7,6 @@ import {
   Modal,
   Alert,
   Spinner,
-  Badge,
   Tabs,
   Tab,
 } from 'react-bootstrap';
@@ -29,7 +28,7 @@ import {
   GET_AUTHENTICATION_METHODS_QUERY,
   DELETE_AUTHENTICATION_METHOD_MUTATION,
 } from './queries';
-import { EmailAccountType } from '../../__generated__/graphql';
+import { AuthProvider, EmailAccountType } from '../../__generated__/graphql';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   EmailAccountForm,
@@ -44,7 +43,6 @@ import {
   ThemeSettings,
   BillingSettings,
 } from './components';
-import { ResponsiveTabs } from '../../core/components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCog,
@@ -53,9 +51,6 @@ import {
   faPlus,
   faSync,
   faTrash,
-  faCheckCircle,
-  faTimesCircle,
-  faCircle,
   faKey,
   faShieldAlt,
   faTag,
@@ -78,12 +73,6 @@ import {
   SectionCard,
   UserInfo,
   Avatar,
-  ProgressStepList,
-  ProgressStep,
-  StepIcon,
-  StepContent,
-  StepTitle,
-  StepSubtitle,
   AccountCardGrid,
   SmtpCardGrid,
   AuthMethodCard,
@@ -94,13 +83,6 @@ import {
   AuthMethodMeta,
   ResponsiveTabsWrapper,
 } from './Settings.wrappers';
-
-type SaveStep = {
-  id: string;
-  title: string;
-  status: 'pending' | 'active' | 'success' | 'error';
-  message?: string;
-};
 
 // Map URL tab slugs to internal tab keys
 const TAB_MAPPING: Record<string, string> = {
@@ -118,6 +100,7 @@ const REVERSE_TAB_MAPPING = Object.fromEntries(
   Object.entries(TAB_MAPPING).map(([k, v]) => [v, k]),
 );
 
+/* eslint-disable max-lines-per-function -- Settings page consolidates multiple tabs; refactor would require significant restructuring */
 export function Settings() {
   const { tab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
@@ -129,7 +112,7 @@ export function Settings() {
     success: boolean;
     message: string;
   } | null>(null);
-  const [connectionTested, setConnectionTested] = useState(false);
+  const [, setConnectionTested] = useState(false);
 
   // Determine active tab from URL
   const activeTab =
@@ -138,14 +121,9 @@ export function Settings() {
   const handleTabSelect = (key: string | null) => {
     if (key) {
       const urlTab = REVERSE_TAB_MAPPING[key] || 'accounts';
-      navigate(`/settings/${urlTab}`, { replace: true });
+      void navigate(`/settings/${urlTab}`, { replace: true });
     }
   };
-
-  // Progress modal state
-  const [showProgressModal, setShowProgressModal] = useState(false);
-  const [progressType, setProgressType] = useState<'email' | 'smtp'>('email');
-  const [saveSteps, setSaveSteps] = useState<SaveStep[]>([]);
 
   // Edit mode state
   const [editingEmailAccountId, setEditingEmailAccountId] = useState<
@@ -170,7 +148,7 @@ export function Settings() {
   } | null>(null);
 
   // Email Account form state
-  const [emailAccountForm, setEmailAccountForm] = useState({
+  const [, setEmailAccountForm] = useState({
     name: '',
     email: '',
     host: '',
@@ -183,7 +161,7 @@ export function Settings() {
   });
 
   // SMTP Profile form state
-  const [smtpProfileForm, setSmtpProfileForm] = useState({
+  const [, setSmtpProfileForm] = useState({
     name: '',
     email: '',
     alias: '' as string | null,
@@ -244,7 +222,7 @@ export function Settings() {
     DELETE_AUTHENTICATION_METHOD_MUTATION,
     {
       onCompleted: () => {
-        refetchAuthMethods();
+        void refetchAuthMethods();
         toast.success('Authentication method removed');
       },
       onError: (err) => toast.error(err.message),
@@ -261,7 +239,7 @@ export function Settings() {
     DELETE_EMAIL_ACCOUNT_MUTATION,
     {
       onCompleted: () => {
-        refetchEmailAccounts();
+        void refetchEmailAccounts();
         setShowDeleteAccountModal(false);
         setDeletingAccountId(null);
         toast.success('Email account deleted');
@@ -281,14 +259,14 @@ export function Settings() {
 
   const confirmDeleteAccount = () => {
     if (deletingAccountId) {
-      deleteEmailAccount({ variables: { id: deletingAccountId } });
+      void deleteEmailAccount({ variables: { id: deletingAccountId } });
     }
   };
 
-  const [syncEmailAccount, { loading: syncingAccount }] = useMutation(
+  const [syncEmailAccount] = useMutation(
     SYNC_EMAIL_ACCOUNT_MUTATION,
     {
-      onCompleted: () => refetchEmailAccounts(),
+      onCompleted: () => void refetchEmailAccounts(),
       onError: (err) => setError(err.message),
     },
   );
@@ -296,9 +274,9 @@ export function Settings() {
   const [syncAllAccounts, { loading: syncingAll }] = useMutation(
     SYNC_ALL_ACCOUNTS_MUTATION,
     {
-      onCompleted: async () => {
+      onCompleted: () => {
         // Refetch to get updated isSyncing state and trigger polling
-        await refetchEmailAccounts();
+        void refetchEmailAccounts();
         // Start polling immediately since accounts are now syncing
         startPolling(2000);
       },
@@ -311,7 +289,7 @@ export function Settings() {
   );
 
   const [deleteSmtpProfile] = useMutation(DELETE_SMTP_PROFILE_MUTATION, {
-    onCompleted: () => refetchSmtpProfiles(),
+    onCompleted: () => void refetchSmtpProfiles(),
     onError: (err) => setError(err.message),
   });
 
@@ -323,12 +301,12 @@ export function Settings() {
   );
 
   const [updateEmailAccount] = useMutation(UPDATE_EMAIL_ACCOUNT_MUTATION, {
-    onCompleted: () => refetchEmailAccounts(),
+    onCompleted: () => void refetchEmailAccounts(),
     onError: (err) => setError(err.message),
   });
 
   const [updateSmtpProfile] = useMutation(UPDATE_SMTP_PROFILE_MUTATION, {
-    onCompleted: () => refetchSmtpProfiles(),
+    onCompleted: () => void refetchSmtpProfiles(),
     onError: (err) => setError(err.message),
   });
 
@@ -404,59 +382,6 @@ export function Settings() {
     }
   };
 
-  const handleTestEmailAccountConnection = async () => {
-    setError(null);
-    setTestResult(null);
-    try {
-      const result = await testEmailAccountConnection({
-        variables: {
-          input: {
-            host: emailAccountForm.host,
-            port: emailAccountForm.port,
-            username: emailAccountForm.username,
-            password: emailAccountForm.password,
-            accountType: emailAccountForm.accountType,
-            useSsl: emailAccountForm.useSsl,
-          },
-        },
-      });
-      const testRes = result.data?.testEmailAccountConnection;
-      if (testRes) {
-        setTestResult(testRes);
-        setConnectionTested(testRes.success);
-      }
-    } catch (err: any) {
-      setTestResult({ success: false, message: err.message });
-    }
-  };
-
-  const handleTestSmtpConnection = async () => {
-    setError(null);
-    setTestResult(null);
-    try {
-      const result = await testSmtpConnection({
-        variables: {
-          input: {
-            host: smtpProfileForm.host,
-            port: smtpProfileForm.port,
-            username: smtpProfileForm.username,
-            password: smtpProfileForm.password || null,
-            useSsl: smtpProfileForm.useSsl,
-            // Pass profileId when editing to use saved password
-            profileId: editingSmtpProfileId || null,
-          },
-        },
-      });
-      const testRes = result.data?.testSmtpConnection;
-      if (testRes) {
-        setTestResult(testRes);
-        setConnectionTested(testRes.success);
-      }
-    } catch (err: any) {
-      setTestResult({ success: false, message: err.message });
-    }
-  };
-
   // Handler for the new EmailAccountForm component
   const handleEmailAccountFormTest = async (
     formData: EmailAccountFormData,
@@ -484,8 +409,10 @@ export function Settings() {
       };
       setTestResult(testRes);
       return testRes;
-    } catch (err: any) {
-      const errorResult = { success: false, message: err.message };
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorResult = { success: false, message };
       setTestResult(errorResult);
       return errorResult;
     }
@@ -557,9 +484,11 @@ export function Settings() {
       }
       setShowEmailAccountModal(false);
       resetEmailAccountForm();
-      refetchEmailAccounts();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save email account');
+      void refetchEmailAccounts();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to save email account';
+      toast.error(message);
     }
   };
 
@@ -589,8 +518,10 @@ export function Settings() {
       };
       setTestResult(testRes);
       return testRes;
-    } catch (err: any) {
-      const errorResult = { success: false, message: err.message };
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown error';
+      const errorResult = { success: false, message };
       setTestResult(errorResult);
       return errorResult;
     }
@@ -647,291 +578,11 @@ export function Settings() {
       }
       setShowSmtpProfileModal(false);
       resetSmtpProfileForm();
-      refetchSmtpProfiles();
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to save SMTP profile');
-    }
-  };
-
-  const handleSaveEmailAccount = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setShowEmailAccountModal(false);
-    setProgressType('email');
-
-    const isEditing = !!editingEmailAccountId;
-    const needsConnectionTest =
-      emailAccountForm.username && emailAccountForm.password;
-
-    const steps: SaveStep[] = needsConnectionTest
-      ? [
-          { id: 'test', title: 'Testing connection', status: 'pending' },
-          {
-            id: 'save',
-            title: isEditing ? 'Updating account' : 'Saving account',
-            status: 'pending',
-          },
-        ]
-      : [
-          {
-            id: 'save',
-            title: isEditing ? 'Updating account' : 'Saving account',
-            status: 'pending',
-          },
-        ];
-    setSaveSteps(steps);
-    setShowProgressModal(true);
-
-    try {
-      // Step 1: Test connection (only if credentials provided)
-      if (needsConnectionTest) {
-        setSaveSteps((prev) =>
-          prev.map((s) => (s.id === 'test' ? { ...s, status: 'active' } : s)),
-        );
-
-        const testResult = await testEmailAccountConnection({
-          variables: {
-            input: {
-              host: emailAccountForm.host,
-              port: emailAccountForm.port,
-              username: emailAccountForm.username,
-              password: emailAccountForm.password,
-              accountType: emailAccountForm.accountType,
-              useSsl: emailAccountForm.useSsl,
-            },
-          },
-        });
-
-        const testRes = testResult.data?.testEmailAccountConnection;
-        if (!testRes?.success) {
-          setSaveSteps((prev) =>
-            prev.map((s) =>
-              s.id === 'test'
-                ? {
-                    ...s,
-                    status: 'error',
-                    message: testRes?.message || 'Connection failed',
-                  }
-                : s,
-            ),
-          );
-          return;
-        }
-
-        setSaveSteps((prev) =>
-          prev.map((s) =>
-            s.id === 'test'
-              ? { ...s, status: 'success', message: 'Connection successful' }
-              : s,
-          ),
-        );
-      }
-
-      // Step 2: Save/Update account
-      setSaveSteps((prev) =>
-        prev.map((s) => (s.id === 'save' ? { ...s, status: 'active' } : s)),
-      );
-
-      if (isEditing) {
-        await updateEmailAccount({
-          variables: {
-            input: {
-              id: editingEmailAccountId,
-              name: emailAccountForm.name,
-              host: emailAccountForm.host,
-              port: emailAccountForm.port,
-              useSsl: emailAccountForm.useSsl,
-              defaultSmtpProfileId: emailAccountForm.defaultSmtpProfileId,
-              ...(emailAccountForm.username && {
-                username: emailAccountForm.username,
-              }),
-              ...(emailAccountForm.password && {
-                password: emailAccountForm.password,
-              }),
-            },
-          },
-        });
-      } else {
-        await createEmailAccount({
-          variables: {
-            input: {
-              ...emailAccountForm,
-              defaultSmtpProfileId:
-                emailAccountForm.defaultSmtpProfileId || undefined,
-            },
-          },
-        });
-      }
-
-      setSaveSteps((prev) =>
-        prev.map((s) =>
-          s.id === 'save'
-            ? { ...s, status: 'success', message: 'Account saved successfully' }
-            : s,
-        ),
-      );
-
-      // Auto-close after success
-      setTimeout(() => {
-        setShowProgressModal(false);
-        resetEmailAccountForm();
-        refetchEmailAccounts();
-      }, 1500);
-    } catch (err: any) {
-      setSaveSteps((prev) =>
-        prev.map((s) =>
-          s.status === 'active'
-            ? { ...s, status: 'error', message: err.message }
-            : s,
-        ),
-      );
-    }
-  };
-
-  const handleSaveSmtpProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setShowSmtpProfileModal(false);
-    setProgressType('smtp');
-
-    const isEditing = !!editingSmtpProfileId;
-    const needsConnectionTest =
-      smtpProfileForm.username && smtpProfileForm.password;
-
-    const steps: SaveStep[] = needsConnectionTest
-      ? [
-          { id: 'test', title: 'Testing connection', status: 'pending' },
-          {
-            id: 'save',
-            title: isEditing ? 'Updating profile' : 'Saving profile',
-            status: 'pending',
-          },
-        ]
-      : [
-          {
-            id: 'save',
-            title: isEditing ? 'Updating profile' : 'Saving profile',
-            status: 'pending',
-          },
-        ];
-    setSaveSteps(steps);
-    setShowProgressModal(true);
-
-    try {
-      // Step 1: Test connection (only if credentials provided)
-      if (needsConnectionTest) {
-        setSaveSteps((prev) =>
-          prev.map((s) => (s.id === 'test' ? { ...s, status: 'active' } : s)),
-        );
-
-        const testResult = await testSmtpConnection({
-          variables: {
-            input: {
-              host: smtpProfileForm.host,
-              port: smtpProfileForm.port,
-              username: smtpProfileForm.username,
-              password: smtpProfileForm.password,
-              useSsl: smtpProfileForm.useSsl,
-            },
-          },
-        });
-
-        const testRes = testResult.data?.testSmtpConnection;
-        if (!testRes?.success) {
-          setSaveSteps((prev) =>
-            prev.map((s) =>
-              s.id === 'test'
-                ? {
-                    ...s,
-                    status: 'error',
-                    message: testRes?.message || 'Connection failed',
-                  }
-                : s,
-            ),
-          );
-          return;
-        }
-
-        setSaveSteps((prev) =>
-          prev.map((s) =>
-            s.id === 'test'
-              ? { ...s, status: 'success', message: 'Connection successful' }
-              : s,
-          ),
-        );
-      }
-
-      // Step 2: Save/Update profile
-      setSaveSteps((prev) =>
-        prev.map((s) => (s.id === 'save' ? { ...s, status: 'active' } : s)),
-      );
-
-      if (isEditing) {
-        await updateSmtpProfile({
-          variables: {
-            input: {
-              id: editingSmtpProfileId,
-              name: smtpProfileForm.name,
-              alias: smtpProfileForm.alias || undefined,
-              host: smtpProfileForm.host,
-              port: smtpProfileForm.port,
-              useSsl: smtpProfileForm.useSsl,
-              isDefault: smtpProfileForm.isDefault,
-              ...(smtpProfileForm.username && {
-                username: smtpProfileForm.username,
-              }),
-              ...(smtpProfileForm.password && {
-                password: smtpProfileForm.password,
-              }),
-            },
-          },
-        });
-      } else {
-        await createSmtpProfile({
-          variables: {
-            input: {
-              ...smtpProfileForm,
-              alias: smtpProfileForm.alias || undefined,
-            },
-          },
-        });
-      }
-
-      setSaveSteps((prev) =>
-        prev.map((s) =>
-          s.id === 'save'
-            ? { ...s, status: 'success', message: 'Profile saved successfully' }
-            : s,
-        ),
-      );
-
-      // Auto-close after success
-      setTimeout(() => {
-        setShowProgressModal(false);
-        resetSmtpProfileForm();
-        refetchSmtpProfiles();
-      }, 1500);
-    } catch (err: any) {
-      setSaveSteps((prev) =>
-        prev.map((s) =>
-          s.status === 'active'
-            ? { ...s, status: 'error', message: err.message }
-            : s,
-        ),
-      );
-    }
-  };
-
-  const handleCloseProgressModal = () => {
-    setShowProgressModal(false);
-    // If there was an error, reopen the form modal
-    const hasError = saveSteps.some((s) => s.status === 'error');
-    if (hasError) {
-      if (progressType === 'email') {
-        setShowEmailAccountModal(true);
-      } else {
-        setShowSmtpProfileModal(true);
-      }
+      void refetchSmtpProfiles();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to save SMTP profile';
+      toast.error(message);
     }
   };
 
@@ -972,7 +623,7 @@ export function Settings() {
             <Button
               variant="outline-danger"
               className="ms-auto"
-              onClick={() => logout()}
+              onClick={() => void logout()}
             >
               <FontAwesomeIcon icon={faSignOutAlt} className="me-1" />
               Sign Out
@@ -995,7 +646,7 @@ export function Settings() {
                 </>
               }
             >
-              <SectionCard>
+              <SectionCard className="card">
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="mb-0">Incoming Email Accounts</h5>
@@ -1003,7 +654,7 @@ export function Settings() {
                       <Button
                         variant="outline-primary"
                         size="sm"
-                        onClick={() => syncAllAccounts()}
+                        onClick={() => void syncAllAccounts()}
                         disabled={syncingAll || emailAccounts.length === 0}
                       >
                         {syncingAll ? (
@@ -1068,7 +719,7 @@ export function Settings() {
                           account={account}
                           onEdit={handleEditEmailAccount}
                           onSync={(id) =>
-                            syncEmailAccount({
+                            void syncEmailAccount({
                               variables: { input: { emailAccountId: id } },
                             })
                           }
@@ -1090,7 +741,7 @@ export function Settings() {
                 </>
               }
             >
-              <SectionCard>
+              <SectionCard className="card">
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="mb-0">Outgoing Email Profiles</h5>
@@ -1143,7 +794,7 @@ export function Settings() {
                           profile={profile}
                           onEdit={handleEditSmtpProfile}
                           onDelete={(id) =>
-                            deleteSmtpProfile({ variables: { id } })
+                            void deleteSmtpProfile({ variables: { id } })
                           }
                         />
                       ))}
@@ -1162,7 +813,7 @@ export function Settings() {
                 </>
               }
             >
-              <SectionCard>
+              <SectionCard className="card">
                 <Card.Body>
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="mb-0">Authentication Methods</h5>
@@ -1184,15 +835,16 @@ export function Settings() {
                   ) : (
                     <>
                       {authMethods.map((method) => {
+                        const provider = method.provider;
                         const getProviderIcon = () => {
-                          switch (method.provider) {
-                            case 'GOOGLE':
+                          switch (provider) {
+                            case AuthProvider.Google:
                               return faGoogle;
-                            case 'GITHUB':
+                            case AuthProvider.Github:
                               return faGithub;
-                            case 'APPLE':
+                            case AuthProvider.Apple:
                               return faApple;
-                            case 'MICROSOFT':
+                            case AuthProvider.Microsoft:
                               return faMicrosoft;
                             default:
                               return faKey;
@@ -1200,16 +852,16 @@ export function Settings() {
                         };
 
                         const getProviderName = () => {
-                          switch (method.provider) {
-                            case 'EMAIL_PASSWORD':
+                          switch (provider) {
+                            case AuthProvider.EmailPassword:
                               return 'Email & Password';
-                            case 'GOOGLE':
+                            case AuthProvider.Google:
                               return 'Google';
-                            case 'GITHUB':
+                            case AuthProvider.Github:
                               return 'GitHub';
-                            case 'APPLE':
+                            case AuthProvider.Apple:
                               return 'Apple';
-                            case 'MICROSOFT':
+                            case AuthProvider.Microsoft:
                               return 'Microsoft';
                             default:
                               return method.provider;
@@ -1248,7 +900,7 @@ export function Settings() {
                                 variant="outline-danger"
                                 size="sm"
                                 onClick={() =>
-                                  deleteAuthMethod({
+                                  void deleteAuthMethod({
                                     variables: { id: method.id },
                                   })
                                 }
@@ -1346,7 +998,7 @@ export function Settings() {
             setShowEmailAccountModal(false);
             resetEmailAccountForm();
           }}
-          onSubmit={handleEmailAccountFormSubmit}
+          onSubmit={(formData) => void handleEmailAccountFormSubmit(formData)}
           onTest={handleEmailAccountFormTest}
           editingAccount={
             editingEmailAccountId
@@ -1368,7 +1020,7 @@ export function Settings() {
             setPendingSmtpData(null);
           }}
           onSubmit={(formData) => {
-            handleSmtpProfileFormSubmit(formData);
+            void handleSmtpProfileFormSubmit(formData);
             setPendingSmtpData(null);
           }}
           onTest={handleSmtpProfileFormTest}
@@ -1434,67 +1086,6 @@ export function Settings() {
               )}
             </Button>
           </Modal.Footer>
-        </Modal>
-
-        {/* Progress Modal */}
-        <Modal
-          show={showProgressModal}
-          onHide={handleCloseProgressModal}
-          centered
-          backdrop="static"
-        >
-          <Modal.Header
-            closeButton={saveSteps.some(
-              (s) => s.status === 'error' || s.status === 'success',
-            )}
-          >
-            <Modal.Title>
-              {progressType === 'email'
-                ? editingEmailAccountId
-                  ? 'Updating Email Account'
-                  : 'Adding Email Account'
-                : editingSmtpProfileId
-                  ? 'Updating SMTP Profile'
-                  : 'Adding SMTP Profile'}
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <ProgressStepList>
-              {saveSteps.map((step, index) => (
-                <ProgressStep key={step.id} $status={step.status}>
-                  <StepIcon $status={step.status}>
-                    {step.status === 'pending' && (
-                      <FontAwesomeIcon icon={faCircle} />
-                    )}
-                    {step.status === 'active' && (
-                      <Spinner animation="border" size="sm" />
-                    )}
-                    {step.status === 'success' && (
-                      <FontAwesomeIcon icon={faCheckCircle} />
-                    )}
-                    {step.status === 'error' && (
-                      <FontAwesomeIcon icon={faTimesCircle} />
-                    )}
-                  </StepIcon>
-                  <StepContent>
-                    <StepTitle>
-                      Step {index + 1}: {step.title}
-                    </StepTitle>
-                    {step.message && (
-                      <StepSubtitle>{step.message}</StepSubtitle>
-                    )}
-                  </StepContent>
-                </ProgressStep>
-              ))}
-            </ProgressStepList>
-          </Modal.Body>
-          {saveSteps.some((s) => s.status === 'error') && (
-            <Modal.Footer>
-              <Button variant="secondary" onClick={handleCloseProgressModal}>
-                Go Back &amp; Fix
-              </Button>
-            </Modal.Footer>
-          )}
         </Modal>
       </Container>
     </PageWrapper>

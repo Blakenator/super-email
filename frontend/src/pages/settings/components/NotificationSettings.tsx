@@ -26,7 +26,8 @@ import {
   faAndroid as fabAndroid,
 } from '@fortawesome/free-brands-svg-icons';
 import toast from 'react-hot-toast';
-import { gql } from '@apollo/client';
+import { gql } from '../../../__generated__/gql';
+import { PushPlatform } from '../../../__generated__/graphql';
 import { useMutation } from '@apollo/client/react';
 import {
   getNotificationDetailLevel,
@@ -46,8 +47,8 @@ import {
   initializeFirebase,
 } from '../../../services/firebase';
 
-// GraphQL queries and mutations for push tokens
-const GET_PUSH_TOKENS = gql`
+// GraphQL mutations for push tokens (typed via __generated__/gql)
+const GET_PUSH_TOKENS = gql(`
   mutation GetPushTokens {
     getPushTokens {
       id
@@ -59,22 +60,22 @@ const GET_PUSH_TOKENS = gql`
       createdAt
     }
   }
-`;
+`);
 
-const REGISTER_PUSH_TOKEN = gql`
+const REGISTER_PUSH_TOKEN = gql(`
   mutation RegisterPushToken($input: RegisterPushTokenInput!) {
     registerPushToken(input: $input) {
       success
       message
     }
   }
-`;
+`);
 
-const UNREGISTER_PUSH_TOKEN = gql`
+const UNREGISTER_PUSH_TOKEN = gql(`
   mutation UnregisterPushToken($token: String!) {
     unregisterPushToken(token: $token)
   }
-`;
+`);
 
 interface PushToken {
   id: string;
@@ -146,7 +147,7 @@ export function NotificationSettings() {
     serviceWorkerActive: false,
     mailtoHandlerRegistered: false,
   });
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [requestingPermission, setRequestingPermission] = useState(false);
   const [registeringMailto, setRegisteringMailto] = useState(false);
   const [notificationDetailLevel, setDetailLevel] =
@@ -167,7 +168,18 @@ export function NotificationSettings() {
     setLoadingTokens(true);
     try {
       const { data } = await getPushTokensMutation();
-      setPushTokens(data?.getPushTokens ?? []);
+      const tokens = data?.getPushTokens ?? [];
+      setPushTokens(
+        tokens.map((t) => ({
+          id: t.id,
+          token: t.token,
+          platform: t.platform,
+          deviceName: t.deviceName ?? null,
+          isActive: t.isActive,
+          lastUsedAt: t.lastUsedAt ?? null,
+          createdAt: t.createdAt ?? '',
+        })),
+      );
     } catch (error) {
       console.error('Failed to fetch push tokens:', error);
     } finally {
@@ -219,7 +231,9 @@ export function NotificationSettings() {
           // Generate a fallback token (won't work for background notifications)
           tokenToUse = `web-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
           localStorage.setItem('web-push-token', tokenToUse);
-          console.warn('Using fallback web token - background notifications will not work');
+          console.warn(
+            'Using fallback web token - background notifications will not work',
+          );
         }
       }
 
@@ -231,7 +245,7 @@ export function NotificationSettings() {
         variables: {
           input: {
             token: tokenToUse,
-            platform: 'WEB',
+            platform: PushPlatform.Web,
             deviceName,
           },
         },
@@ -258,7 +272,8 @@ export function NotificationSettings() {
             authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
             projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
             storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-            messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+            messagingSenderId: import.meta.env
+              .VITE_FIREBASE_MESSAGING_SENDER_ID,
             appId: import.meta.env.VITE_FIREBASE_APP_ID,
           },
         });
@@ -270,12 +285,12 @@ export function NotificationSettings() {
 
   // Load push tokens on mount and register if notifications already granted
   useEffect(() => {
-    fetchPushTokens();
+    void fetchPushTokens();
 
     // Initialize Firebase if configured
     if (isFirebaseConfigured()) {
-      initializeFirebase();
-      sendFirebaseConfigToServiceWorker();
+      void initializeFirebase();
+      void sendFirebaseConfigToServiceWorker();
 
       // Set up foreground message handler
       const unsubscribe = onForegroundMessage((payload) => {
@@ -301,7 +316,7 @@ export function NotificationSettings() {
       const existingToken = localStorage.getItem('web-push-token');
       if (!existingToken || existingToken.startsWith('web-')) {
         // Register with FCM token if possible
-        registerWebPushToken();
+        void registerWebPushToken();
       }
     }
   }, []);
@@ -342,7 +357,7 @@ export function NotificationSettings() {
     const checkStatus = async () => {
       const isStandalone =
         window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone === true;
+        (window.navigator as NavigatorStandalone).standalone === true;
 
       const notificationPermission: NotificationPermission | 'unsupported' =
         'Notification' in window ? Notification.permission : 'unsupported';
@@ -365,16 +380,16 @@ export function NotificationSettings() {
       });
     };
 
-    checkStatus();
+    void checkStatus();
 
     // Listen for beforeinstallprompt event
-    const handleBeforeInstall = (e: Event) => {
+    const handleBeforeInstall = (e: BeforeInstallPromptEvent) => {
       e.preventDefault();
       setDeferredPrompt(e);
       setStatus((prev) => ({ ...prev, isInstallable: true }));
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall as EventListener);
 
     // Listen for appinstalled event
     const handleAppInstalled = () => {
@@ -390,7 +405,7 @@ export function NotificationSettings() {
     window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall as EventListener);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, [deferredPrompt]);
@@ -399,7 +414,7 @@ export function NotificationSettings() {
     if (!deferredPrompt) return;
 
     try {
-      deferredPrompt.prompt();
+      await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         toast.success('App installation started!');
@@ -505,13 +520,13 @@ export function NotificationSettings() {
 
   return (
     <>
-      <StatusCard>
+      <StatusCard className="card">
         <Card.Header>
           <FontAwesomeIcon icon={faBell} className="me-2" />
           Notification & PWA Status
         </Card.Header>
         <ListGroup variant="flush">
-          <StatusItem>
+          <StatusItem className="list-group-item">
             <StatusLabel>
               <FontAwesomeIcon icon={faBell} />
               <span>Push Notifications</span>
@@ -545,7 +560,7 @@ export function NotificationSettings() {
             </StatusValue>
           </StatusItem>
 
-          <StatusItem>
+          <StatusItem className="list-group-item">
             <StatusLabel>
               <FontAwesomeIcon icon={faMobileAlt} />
               <span>PWA Installation</span>
@@ -569,7 +584,7 @@ export function NotificationSettings() {
             </StatusValue>
           </StatusItem>
 
-          <StatusItem>
+          <StatusItem className="list-group-item">
             <StatusLabel>
               <FontAwesomeIcon icon={faDesktop} />
               <span>Service Worker</span>
@@ -589,7 +604,7 @@ export function NotificationSettings() {
             </StatusValue>
           </StatusItem>
 
-          <StatusItem>
+          <StatusItem className="list-group-item">
             <StatusLabel>
               <FontAwesomeIcon icon={faEnvelope} />
               <span>Mailto Links Handler</span>
@@ -790,7 +805,7 @@ export function NotificationSettings() {
           <Button
             variant="outline-secondary"
             size="sm"
-            onClick={fetchPushTokens}
+            onClick={() => void fetchPushTokens()}
             disabled={loadingTokens}
           >
             {loadingTokens ? (
