@@ -766,7 +766,7 @@ export async function syncEmailsFromImapAccount(
         emailAccount.updateSyncLastAt || emailAccount.lastSyncedAt;
       const sinceDate = new Date(lastSyncTime!);
       const searchResult = await withRetry(
-        () => client.search({ since: sinceDate }),
+        () => client.search({ since: sinceDate }, { uid: true }),
         'Search for new messages',
       );
       const messageUids = searchResult === false ? [] : searchResult;
@@ -1031,7 +1031,7 @@ async function syncSentFolder(
       emailAccount.updateSyncLastAt || emailAccount.lastSyncedAt;
     const sinceDate = new Date(lastSyncTime!);
     const searchResult = await withRetry(
-      () => client.search({ since: sinceDate }),
+      () => client.search({ since: sinceDate }, { uid: true }),
       'Search Sent folder for new messages',
     );
     const messageUids = searchResult === false ? [] : searchResult;
