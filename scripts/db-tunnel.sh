@@ -42,11 +42,18 @@ check_prerequisites() {
         missing=1
     fi
 
-    if ! aws ssm start-session --help &> /dev/null 2>&1; then
+    # The .deb package installs to /usr/local/sessionmanagerplugin/bin/ which may not be on PATH
+    if ! command -v session-manager-plugin &> /dev/null && \
+       [ ! -x /usr/local/sessionmanagerplugin/bin/session-manager-plugin ]; then
         log_error "AWS Session Manager Plugin is not installed."
         log_error "Install it from: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html"
-        log_error "  macOS:  brew install --cask session-manager-plugin"
+        log_error "  macOS:   brew install --cask session-manager-plugin"
+        log_error "  Ubuntu:  curl \"https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb\" -o /tmp/session-manager-plugin.deb && sudo dpkg -i /tmp/session-manager-plugin.deb"
         missing=1
+    elif ! command -v session-manager-plugin &> /dev/null; then
+        # Plugin exists but isn't on PATH — add it
+        export PATH="$PATH:/usr/local/sessionmanagerplugin/bin"
+        log_warn "session-manager-plugin found at /usr/local/sessionmanagerplugin/bin (not on PATH). Added temporarily."
     fi
 
     if [ $missing -ne 0 ]; then
