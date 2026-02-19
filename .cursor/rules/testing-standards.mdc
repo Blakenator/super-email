@@ -44,9 +44,10 @@ let helperStub: sinon.SinonStub;
 beforeEach(async () => {
   helperStub = sinon.stub().resolves();
   const mod = await esmock(
-    '../../../mutations/some/resolver.js',  // module under test
+    '../../../mutations/some/resolver.js', // module under test
     {
-      '../../../helpers/some-helper.js': {  // paths relative to module under test
+      '../../../helpers/some-helper.js': {
+        // paths relative to module under test
         helperFunction: helperStub,
       },
     },
@@ -69,12 +70,12 @@ Resolvers should import constants from the `.constants.ts` file directly when po
 
 ## Test File Organization
 
-| Test category | Location | Naming |
-|---|---|---|
-| Helper/utility unit tests | `backend/test/helpers/` | `*.unit.test.ts` |
-| Mutation resolver tests | `backend/test/mutations/<domain>/` | `<mutationName>.test.ts` |
-| Query resolver tests | `backend/test/queries/<domain>/` | `<queryName>.test.ts` |
-| Integration tests | `backend/test/integration/` | `*.integration.test.ts` |
+| Test category             | Location                           | Naming                   |
+| ------------------------- | ---------------------------------- | ------------------------ |
+| Helper/utility unit tests | `backend/test/helpers/`            | `*.unit.test.ts`         |
+| Mutation resolver tests   | `backend/test/mutations/<domain>/` | `<mutationName>.test.ts` |
+| Query resolver tests      | `backend/test/queries/<domain>/`   | `<queryName>.test.ts`    |
+| Integration tests         | `backend/test/integration/`        | `*.integration.test.ts`  |
 
 ## Test Structure Checklist
 
@@ -107,10 +108,10 @@ pnpm run --filter backend test:integration
 
 ## Anti-Patterns to Avoid
 
-| Anti-pattern | Why it's wrong | Fix |
-|---|---|---|
-| Testing mock return values directly | Proves nothing about real code | Import and call the real function |
-| Re-implementing logic in the test | Couples test to implementation details | Test inputs → outputs via real function |
-| Hardcoding enum values that don't match source | Tests pass but don't reflect reality | Import enums or use exact string values |
-| Forgetting `sinon.restore()` | Stubs leak between tests | Always restore in `afterEach` |
-| Using `sinon.stub()` on ESM function exports | Throws `TypeError: ES Modules cannot be stubbed` | Use `esmock` for ESM function mocking |
+| Anti-pattern                                   | Why it's wrong                                   | Fix                                     |
+| ---------------------------------------------- | ------------------------------------------------ | --------------------------------------- |
+| Testing mock return values directly            | Proves nothing about real code                   | Import and call the real function       |
+| Re-implementing logic in the test              | Couples test to implementation details           | Test inputs → outputs via real function |
+| Hardcoding enum values that don't match source | Tests pass but don't reflect reality             | Import enums or use exact string values |
+| Forgetting `sinon.restore()`                   | Stubs leak between tests                         | Always restore in `afterEach`           |
+| Using `sinon.stub()` on ESM function exports   | Throws `TypeError: ES Modules cannot be stubbed` | Use `esmock` for ESM function mocking   |

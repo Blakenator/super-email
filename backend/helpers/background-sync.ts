@@ -61,11 +61,33 @@ export async function runBackgroundSyncCycle(): Promise<{
   };
 
   try {
+    // Run repair on every cycle (fast no-op when nothing to fix)
+    await repairHistoricalSyncFlags();
+
     const staleAccounts = await findStaleEmailAccounts();
     result.checked = staleAccounts.length;
 
     if (staleAccounts.length === 0) {
-      logger.info('BackgroundSync', 'No stale accounts found');
+      // Log diagnostic info to help debug why no accounts are eligible
+      const allAccounts = await EmailAccount.findAll({
+        attributes: ['id', 'email', 'historicalSyncComplete', 'lastSyncedAt', 'historicalSyncLastAt'],
+      });
+      if (allAccounts.length > 0) {
+        const summary = allAccounts.map((a) => {
+          const reasons: string[] = [];
+          if (!a.historicalSyncComplete) reasons.push('historicalSyncComplete=false');
+          if (a.lastSyncedAt) {
+            const ageMin = Math.round((Date.now() - new Date(a.lastSyncedAt).getTime()) / 60000);
+            reasons.push(`lastSyncedAt=${ageMin}m ago`);
+          } else {
+            reasons.push('lastSyncedAt=null');
+          }
+          return `${a.email}: ${reasons.join(', ')}`;
+        });
+        logger.info('BackgroundSync', `No stale accounts found. ${allAccounts.length} account(s) in system: ${summary.join('; ')}`);
+      } else {
+        logger.info('BackgroundSync', 'No stale accounts found (0 accounts in system)');
+      }
       return result;
     }
 
@@ -118,10 +140,17 @@ export async function runBackgroundSyncCycle(): Promise<{
 }
 
 /**
- * Repair accounts where historicalSyncComplete was never set due to a typo
- * (historicalSyncCompleted vs historicalSyncComplete). Accounts that have
- * historicalSyncLastAt set have completed their historical sync but were
- * never marked as complete, so background sync couldn't find them.
+ * Repair accounts where historicalSyncComplete was never set correctly.
+ *
+ * This can happen when:
+ *  - The old historicalSyncCompleted typo was renamed to historicalSyncComplete
+ *    and sequelize.sync({ alter: true }) added a new column with default false
+ *  - A sync completed but the process crashed before markSyncCompleted ran
+ *  - historicalSyncLastAt was also lost during the column recreate
+ *
+ * We use two signals that the account has been synced before:
+ *  1. historicalSyncLastAt is set (direct evidence of historical sync completion)
+ *  2. lastSyncedAt is set (indirect evidence - some sync completed successfully)
  */
 async function repairHistoricalSyncFlags(): Promise<void> {
   try {
@@ -130,7 +159,10 @@ async function repairHistoricalSyncFlags(): Promise<void> {
       {
         where: {
           historicalSyncComplete: false,
-          historicalSyncLastAt: { [Op.ne]: null },
+          [Op.or]: [
+            { historicalSyncLastAt: { [Op.ne]: null } },
+            { lastSyncedAt: { [Op.ne]: null } },
+          ],
         },
       },
     );
