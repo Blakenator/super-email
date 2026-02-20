@@ -343,20 +343,14 @@ export function Triage() {
   );
 
   const handleMarkAllAsRead = useCallback(async () => {
-    if (emailCount === 0) return;
+    if (emailCount === 0 || !currentSource?.fromAddress) return;
 
     try {
-      const allEmails = await refetchEmails();
-      const allIds =
-        allEmails.data?.getEmails?.map((e: TriageEmail) => e.id) ?? [];
-
-      if (allIds.length > 0) {
-        await bulkUpdateEmails({
-          variables: { input: { ids: allIds, isRead: true } },
-        });
-        toast.success(`Marked all ${allIds.length} emails as read`);
-        setProcessedCount((prev) => prev + allIds.length);
-      }
+      await bulkUpdateEmails({
+        variables: { input: { fromAddress: currentSource.fromAddress, isRead: true } },
+      });
+      toast.success(`Marked all ${emailCount} emails as read`);
+      setProcessedCount((prev) => prev + emailCount);
 
       void refetchEmails();
       void refetchCount();
@@ -366,6 +360,7 @@ export function Triage() {
     }
   }, [
     emailCount,
+    currentSource,
     bulkUpdateEmails,
     refetchEmails,
     refetchCount,
@@ -432,28 +427,22 @@ export function Triage() {
   ]);
 
   const handleArchiveAll = useCallback(async () => {
-    if (emailCount === 0) return;
+    if (emailCount === 0 || !currentSource?.fromAddress) return;
 
     try {
-      const allEmails = await refetchEmails();
-      const allIds =
-        allEmails.data?.getEmails?.map((e: TriageEmail) => e.id) ?? [];
-
-      if (allIds.length > 0) {
-        await bulkUpdateEmails({
-          variables: { input: { ids: allIds, folder: EmailFolder.Archive } },
-        });
-        toast.success(
-          `Archived all ${allIds.length} emails from ${currentSource?.fromName || currentSource?.fromAddress}`,
-        );
-        setProcessedCount((prev) => prev + allIds.length);
-      }
+      await bulkUpdateEmails({
+        variables: { input: { fromAddress: currentSource.fromAddress, folder: EmailFolder.Archive } },
+      });
+      toast.success(
+        `Archived all ${emailCount} emails from ${currentSource.fromName || currentSource.fromAddress}`,
+      );
+      setProcessedCount((prev) => prev + emailCount);
 
       handleNextSource();
     } catch {
       toast.error('Failed to archive all emails');
     }
-  }, [emailCount, bulkUpdateEmails, refetchEmails, currentSource, handleNextSource]);
+  }, [emailCount, bulkUpdateEmails, currentSource, handleNextSource]);
 
   const handleBulkDelete = useCallback(async () => {
     const ids = Array.from(selectedIds);

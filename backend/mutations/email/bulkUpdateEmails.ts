@@ -3,13 +3,16 @@ import { Email, EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { Op } from 'sequelize';
 import { logger } from '../../helpers/logger.js';
+import type { WhereOptions } from 'sequelize';
 
 export const bulkUpdateEmails = makeMutation(
   'bulkUpdateEmails',
   async (_parent, { input }, context) => {
     const userId = requireAuth(context);
+    const hasIds = input.ids && input.ids.length > 0;
+    const hasFromAddress = !!input.fromAddress;
 
-    if (input.ids.length === 0) {
+    if (!hasIds && !hasFromAddress) {
       return [];
     }
 
@@ -43,21 +46,27 @@ export const bulkUpdateEmails = makeMutation(
       return [];
     }
 
-    // Update emails that belong to user's accounts
-    await Email.update(updatePayload, {
-      where: {
-        id: { [Op.in]: input.ids },
-        emailAccountId: { [Op.in]: accountIds },
-      },
-    });
+    // Build where clause: by IDs or by fromAddress (scoped to INBOX)
+    const whereClause: WhereOptions = { emailAccountId: { [Op.in]: accountIds } };
 
-    // Return the updated emails
-    const updatedEmails = await Email.findAll({
-      where: {
-        id: { [Op.in]: input.ids },
-        emailAccountId: { [Op.in]: accountIds },
-      },
-    });
+    if (hasIds) {
+      (whereClause as any).id = { [Op.in]: input.ids };
+    } else {
+      (whereClause as any).fromAddress = input.fromAddress;
+      (whereClause as any).folder = 'INBOX';
+    }
+
+    const [affectedCount] = await Email.update(updatePayload, { where: whereClause });
+
+    // When using fromAddress, skip refetching potentially thousands of rows
+    if (hasFromAddress && !hasIds) {
+      logger.info('bulkUpdateEmails', `Updated ${affectedCount} emails by fromAddress for user ${userId}`, {
+        fromAddress: input.fromAddress,
+      });
+      return [];
+    }
+
+    const updatedEmails = await Email.findAll({ where: whereClause });
 
     logger.info('bulkUpdateEmails', `Updated ${updatedEmails.length} emails for user ${userId}`);
     return updatedEmails;

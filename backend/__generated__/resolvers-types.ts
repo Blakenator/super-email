@@ -229,12 +229,17 @@ export enum BillingSubscriptionStatus {
   Unpaid = 'UNPAID'
 }
 
-/** Input for bulk updating multiple emails at once. */
+/**
+ * Input for bulk updating multiple emails at once.
+ * Provide either ids or fromAddress (at least one is required).
+ */
 export type BulkUpdateEmailsInput = {
   /** Move to folder (null = don't change) */
   folder?: InputMaybe<EmailFolder>;
+  /** From address to match — updates all INBOX emails from this sender */
+  fromAddress?: InputMaybe<Scalars['String']['input']>;
   /** IDs of emails to update */
-  ids: Array<Scalars['String']['input']>;
+  ids?: InputMaybe<Array<Scalars['String']['input']>>;
   /** Set read status (null = don't change) */
   isRead?: InputMaybe<Scalars['Boolean']['input']>;
   /** Set starred status (null = don't change) */
