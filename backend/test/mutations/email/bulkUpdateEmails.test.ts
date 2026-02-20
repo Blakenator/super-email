@@ -27,10 +27,18 @@ describe('bulkUpdateEmails mutation', () => {
     }
   });
 
-  it('should return empty array when ids is empty', async () => {
+  it('should return empty array when ids is empty and no fromAddress', async () => {
     const context = createMockContext({ userId: 'user-123' });
 
     const result = await (bulkUpdateEmails as any)(null, { input: { ids: [] } }, context);
+
+    expect(result).to.deep.equal([]);
+  });
+
+  it('should return empty array when neither ids nor fromAddress is provided', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+
+    const result = await (bulkUpdateEmails as any)(null, { input: {} }, context);
 
     expect(result).to.deep.equal([]);
   });
@@ -155,5 +163,60 @@ describe('bulkUpdateEmails mutation', () => {
     // Verify findAll is called to return updated emails
     expect(findAllStub.calledOnce).to.be.true;
     expect(result).to.deep.equal(updatedEmails);
+  });
+
+  it('should update by fromAddress scoped to INBOX', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+
+    sinon.stub(EmailAccount, 'findAll').resolves([{ id: 'acc-1' }] as any);
+    const updateStub = sinon.stub(Email, 'update').resolves([5] as any);
+
+    const input = { fromAddress: 'spam@example.com', isRead: true };
+    const result = await (bulkUpdateEmails as any)(null, { input }, context);
+
+    expect(updateStub.calledOnce).to.be.true;
+    expect(updateStub.firstCall.args[0]).to.deep.equal({ isRead: true });
+
+    const whereClause = updateStub.firstCall.args[1].where;
+    expect(whereClause.fromAddress).to.equal('spam@example.com');
+    expect(whereClause.folder).to.equal('INBOX');
+
+    // fromAddress path returns empty array instead of refetching
+    expect(result).to.deep.equal([]);
+  });
+
+  it('should archive all emails by fromAddress', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+
+    sinon.stub(EmailAccount, 'findAll').resolves([{ id: 'acc-1' }] as any);
+    const updateStub = sinon.stub(Email, 'update').resolves([10] as any);
+
+    const input = { fromAddress: 'newsletter@example.com', folder: 'ARCHIVE' };
+    const result = await (bulkUpdateEmails as any)(null, { input }, context);
+
+    expect(updateStub.calledOnce).to.be.true;
+    expect(updateStub.firstCall.args[0]).to.deep.equal({ folder: 'ARCHIVE' });
+
+    const whereClause = updateStub.firstCall.args[1].where;
+    expect(whereClause.fromAddress).to.equal('newsletter@example.com');
+    expect(whereClause.folder).to.equal('INBOX');
+    expect(result).to.deep.equal([]);
+  });
+
+  it('should use ids when both ids and fromAddress are provided', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockUpdatedEmails = [{ id: 'e-1', isRead: true }];
+
+    sinon.stub(EmailAccount, 'findAll').resolves([{ id: 'acc-1' }] as any);
+    const updateStub = sinon.stub(Email, 'update').resolves([1] as any);
+    sinon.stub(Email, 'findAll').resolves(mockUpdatedEmails as any);
+
+    const input = { ids: ['e-1'], fromAddress: 'test@example.com', isRead: true };
+    const result = await (bulkUpdateEmails as any)(null, { input }, context);
+
+    const whereClause = updateStub.firstCall.args[1].where;
+    expect(whereClause.id).to.exist;
+    expect(whereClause.fromAddress).to.not.exist;
+    expect(result).to.deep.equal(mockUpdatedEmails);
   });
 });

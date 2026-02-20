@@ -1627,12 +1627,17 @@ input SaveDraftInput {
 
 """
 Input for bulk updating multiple emails at once.
+Provide either ids or fromAddress (at least one is required).
 """
 input BulkUpdateEmailsInput {
   """
   IDs of emails to update
   """
-  ids: [String!]!
+  ids: [String!]
+  """
+  From address to match — updates all INBOX emails from this sender
+  """
+  fromAddress: String
   """
   Set read status (null = don't change)
   """

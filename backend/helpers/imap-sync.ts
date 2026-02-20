@@ -6,7 +6,7 @@ import {
   type Headers,
   type Attachment as MailAttachment,
 } from 'mailparser';
-import type { EmailAccount } from '../db/models/email-account.model.js';
+import { EmailAccount } from '../db/models/email-account.model.js';
 import { Email, EmailFolder } from '../db/models/email.model.js';
 import { Attachment, AttachmentType } from '../db/models/attachment.model.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -176,23 +176,38 @@ async function clearExpiredSync(
 }
 
 /**
- * Start a sync of the given type
+ * Atomically start a sync of the given type.
+ * Uses a conditional UPDATE (compare-and-swap on syncId = NULL) to prevent
+ * concurrent startAsyncSync calls from overwriting each other's syncId.
+ * Returns false if another sync was started between our check and this write.
  */
 async function markSyncStarted(
   emailAccount: EmailAccount,
   syncType: SyncType,
   syncId: string,
-): Promise<void> {
+): Promise<boolean> {
   const fields = getSyncFields(syncType);
-  await emailAccount.update({
-    [fields.syncIdField]: syncId,
-    [fields.progressField]: 0,
-    [fields.statusField]:
-      syncType === 'historical'
-        ? 'Starting historical sync...'
-        : 'Starting sync...',
-    [fields.expiresAtField]: getSyncExpirationTime(),
-  });
+  const [affectedRows] = await EmailAccount.update(
+    {
+      [fields.syncIdField]: syncId,
+      [fields.progressField]: 0,
+      [fields.statusField]:
+        syncType === 'historical'
+          ? 'Starting historical sync...'
+          : 'Starting sync...',
+      [fields.expiresAtField]: getSyncExpirationTime(),
+    },
+    {
+      where: {
+        id: emailAccount.id,
+        [fields.syncIdField]: null,
+      },
+    },
+  );
+  if (affectedRows > 0) {
+    await emailAccount.reload();
+  }
+  return affectedRows > 0;
 }
 
 /**
@@ -236,6 +251,13 @@ async function markSyncCompleted(
 
   // Check if we're still the active sync
   if (emailAccount[fields.syncIdField] !== syncId) {
+    // Even if superseded, historicalSyncComplete is a monotonic flag (false→true).
+    // If this historical sync actually ran, mark completion so the account
+    // becomes eligible for background incremental syncs.
+    if (isHistoricalSync && !emailAccount.historicalSyncComplete) {
+      await emailAccount.update({ historicalSyncComplete: true });
+      logger.info('IMAP', `historicalSyncComplete set for ${emailAccount.email} (sync ${syncId} was superseded but completed)`);
+    }
     return false;
   }
 
@@ -373,8 +395,12 @@ export async function startAsyncSync(
   // Generate unique sync ID
   const syncId = uuidv4();
 
-  // Mark as syncing with our sync ID and initial expiration time
-  await markSyncStarted(emailAccount, syncType, syncId);
+  // Atomically mark as syncing - fails if another sync raced us
+  const started = await markSyncStarted(emailAccount, syncType, syncId);
+  if (!started) {
+    logger.debug('IMAP', `${syncType} sync lost race for ${emailAccount.email}, another sync started first`);
+    return false;
+  }
 
   // Notify subscribers that sync is starting
   publishMailboxUpdate(emailAccount.userId, {
