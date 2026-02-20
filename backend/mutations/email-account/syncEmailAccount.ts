@@ -17,12 +17,6 @@ export const syncEmailAccount = makeMutation(
       throw new Error('Email account not found');
     }
 
-    // Check if already syncing (historical or update sync)
-    if (emailAccount.historicalSyncId || emailAccount.updateSyncId) {
-      logger.debug('syncEmailAccount', `Account ${emailAccount.email} is already syncing, skipping`);
-      return true; // Already syncing, return success
-    }
-
     logger.info('syncEmailAccount', `Starting async sync for: ${emailAccount.email}`);
 
     // Start async sync - returns immediately
