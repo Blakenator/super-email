@@ -4,11 +4,7 @@ import {
   EmailAccount,
   EmailAccountType,
 } from '../db/models/email-account.model.js';
-import {
-  syncEmailsFromImapAccount,
-  startAsyncSync,
-  type SyncResult,
-} from './imap-sync.js';
+import { startAsyncSync } from './imap-sync.js';
 import { getSmtpCredentials } from './secrets.js';
 import { config } from '../config/env.js';
 import { logger } from './logger.js';
@@ -112,13 +108,6 @@ export async function sendEmail(
   });
 
   return { messageId: result.messageId };
-}
-
-/**
- * Check if a sync has expired (expiration time has passed)
- */
-function isSyncExpired(expiresAt: Date | null): boolean {
-  return !expiresAt ? true : new Date() > expiresAt;
 }
 
 /**

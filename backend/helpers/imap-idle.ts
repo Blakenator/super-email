@@ -1,10 +1,11 @@
-import { ImapFlow } from 'imapflow';
+import type { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { EmailAccount, Email, EmailFolder } from '../db/models/index.js';
 import { logger } from './logger.js';
 import { applyRulesToEmail } from './rule-matcher.js';
-import { getImapCredentials } from './secrets.js';
 import { sendNewEmailNotification } from './push-notifications.js';
+import { createImapClient } from './imap-client.js';
+import { createEmailDataFromParsed } from './email-parser.js';
 
 // Connection timeout - 4.5 minutes (server will close, client should reconnect)
 const CONNECTION_TIMEOUT_MS = 4.5 * 60 * 1000;
@@ -16,7 +17,7 @@ const userIdleConnections = new Map<
     connections: Map<string, ImapFlow>;
     timeout: NodeJS.Timeout;
     onUpdate: (update: MailboxUpdateEvent) => void;
-    activeSyncs: Set<string>; // Track in-progress sync operations
+    activeSyncs: Set<string>;
   }
 >();
 
@@ -42,7 +43,6 @@ export async function startIdleForUser(
   userId: string,
   onUpdate: (update: MailboxUpdateEvent) => void,
 ): Promise<void> {
-  // Check if user already has active connections
   if (userIdleConnections.has(userId)) {
     logger.info('IMAP-IDLE', `User ${userId} already has active IDLE connections`);
     return;
@@ -50,7 +50,6 @@ export async function startIdleForUser(
 
   logger.info('IMAP-IDLE', `Starting IDLE connections for user ${userId}`);
 
-  // Get all email accounts for the user
   const accounts = await EmailAccount.findAll({
     where: { userId },
   });
@@ -62,7 +61,6 @@ export async function startIdleForUser(
 
   const connections = new Map<string, ImapFlow>();
 
-  // Set up connection timeout
   const timeout = setTimeout(() => {
     logger.info('IMAP-IDLE', `Connection timeout for user ${userId}, closing all connections`);
     stopIdleForUser(userId);
@@ -73,10 +71,8 @@ export async function startIdleForUser(
     });
   }, CONNECTION_TIMEOUT_MS);
 
-  // Store the connection set
   userIdleConnections.set(userId, { connections, timeout, onUpdate, activeSyncs: new Set() });
 
-  // Start IDLE for each account
   for (const account of accounts) {
     try {
       await startIdleForAccount(userId, account, onUpdate);
@@ -90,7 +86,6 @@ export async function startIdleForUser(
     }
   }
 
-  // Notify client that connections are established
   onUpdate({
     type: 'CONNECTION_ESTABLISHED',
     emailAccountId: 'all',
@@ -109,35 +104,18 @@ async function startIdleForAccount(
   const userConnections = userIdleConnections.get(userId);
   if (!userConnections) return;
 
-  // Get credentials from secure store, fall back to DB during migration
-  const credentials = await getImapCredentials(account.id);
-  const username = credentials?.username || account.username;
-  const password = credentials?.password || account.password;
+  const client = await createImapClient(account);
 
-  const client = new ImapFlow({
-    host: account.host,
-    port: account.port,
-    secure: account.useSsl,
-    auth: {
-      user: username,
-      pass: password,
-    },
-    logger: false,
-  });
-
-  // Handle mailbox events - this catches any changes to the mailbox
   client.on('mailboxOpen', (mailbox: any) => {
     logger.info('IMAP-IDLE', `[${account.email}] Mailbox opened: ${mailbox.path}, ${mailbox.exists} messages`);
   });
 
-  // Handle new mail events
   client.on('exists', async (data: { path: string; count: number; prevCount: number }) => {
     logger.info('IMAP-IDLE', `[${account.email}] EXISTS event received: path=${data.path}, count=${data.count}, prevCount=${data.prevCount}`);
     const newCount = data.count - data.prevCount;
     if (newCount > 0) {
       logger.info('IMAP-IDLE', `[${account.email}] New mail detected: ${newCount} new message(s)`);
       
-      // Track this sync operation to prevent cleanup during operation
       const syncId = `${account.id}-${Date.now()}`;
       const userConnState = userIdleConnections.get(userId);
       if (userConnState) {
@@ -151,8 +129,6 @@ async function startIdleForAccount(
       });
 
       try {
-        // Fetch the new emails directly using this connection
-        // Calculate sequence range for new messages
         const startSeq = data.prevCount + 1;
         const endSeq = data.count;
         const seqRange = `${startSeq}:${endSeq}`;
@@ -161,11 +137,12 @@ async function startIdleForAccount(
         
         const savedEmails: Email[] = [];
         
-        // Fetch messages using sequence numbers (not UIDs since we know the sequence)
         for await (const message of client.fetch(seqRange, {
           envelope: true,
           source: true,
           uid: true,
+          internalDate: true,
+          flags: true,
         })) {
           try {
             if (!message.source) {
@@ -174,79 +151,51 @@ async function startIdleForAccount(
             }
             
             const parsed = await simpleParser(message.source);
-            
-            const messageId = parsed.messageId || `${message.uid}@${account.host}`;
-            const subject = parsed.subject || '(No Subject)';
+            const envelopeMessageId = message.envelope?.messageId || `uid-${message.uid}`;
             
             // Check if email already exists
+            const finalMessageId = parsed.messageId || envelopeMessageId;
             const existingEmail = await Email.findOne({
               where: {
                 emailAccountId: account.id,
-                messageId,
+                messageId: finalMessageId,
               },
             });
             
             if (existingEmail) {
-              logger.info('IMAP-IDLE', `[${account.email}] Email already exists: ${subject}`);
+              logger.info('IMAP-IDLE', `[${account.email}] Email already exists: ${parsed.subject || '(No Subject)'}`);
               continue;
             }
             
-            // Helper to extract addresses from AddressObject or AddressObject[]
-            const getAddresses = (addrObj: any): string[] => {
-              if (!addrObj) return [];
-              const values = Array.isArray(addrObj) ? addrObj.flatMap((a: any) => a.value || []) : (addrObj.value || []);
-              return values.map((a: any) => a.address).filter(Boolean);
-            };
+            const emailData = createEmailDataFromParsed(
+              account.id,
+              envelopeMessageId,
+              parsed,
+              EmailFolder.INBOX,
+              message,
+            );
             
-            const fromAddrs = getAddresses(parsed.from);
-            const toAddrs = getAddresses(parsed.to);
-            const ccAddrs = getAddresses(parsed.cc);
-            const bccAddrs = getAddresses(parsed.bcc);
+            const newEmail = await Email.create(emailData as any);
             
-            // Create the email record
-            const emailData = {
-              emailAccountId: account.id,
-              messageId,
-              folder: EmailFolder.INBOX,
-              fromAddress: fromAddrs[0] || '',
-              fromName: (Array.isArray(parsed.from) ? parsed.from[0]?.value?.[0]?.name : parsed.from?.value?.[0]?.name) || null,
-              toAddresses: toAddrs,
-              ccAddresses: ccAddrs,
-              bccAddresses: bccAddrs,
-              subject,
-              textBody: parsed.text || null,
-              htmlBody: typeof parsed.html === 'string' ? parsed.html : null,
-              receivedAt: parsed.date || new Date(),
-              isRead: false,
-              isStarred: false,
-              inReplyTo: parsed.inReplyTo || null,
-              threadId: parsed.references?.[0] || parsed.inReplyTo || messageId || null,
-            };
-            
-            const newEmail = await Email.create(emailData);
-            
-            // Verify the email was actually saved
             const verified = await Email.findByPk(newEmail.id);
             if (!verified) {
-              logger.error('IMAP-IDLE', `[${account.email}] Email save verification failed for: ${subject}`);
+              logger.error('IMAP-IDLE', `[${account.email}] Email save verification failed for: ${parsed.subject || '(No Subject)'}`);
               continue;
             }
             
-            logger.info('IMAP-IDLE', `[${account.email}] Saved new email (id=${newEmail.id}): ${subject}`);
+            logger.info('IMAP-IDLE', `[${account.email}] Saved new email (id=${newEmail.id}): ${parsed.subject || '(No Subject)'}`);
             
-            // Apply mail rules
             try {
               await applyRulesToEmail(newEmail, userId);
             } catch (ruleError: any) {
               logger.error('IMAP-IDLE', `[${account.email}] Error applying rules: ${ruleError.message}`);
             }
             
-            // Reload the email to check if it's still in INBOX after rules
             const reloadedEmail = await Email.findByPk(newEmail.id);
             if (reloadedEmail && reloadedEmail.folder === EmailFolder.INBOX) {
               savedEmails.push(reloadedEmail);
             } else {
-              logger.info('IMAP-IDLE', `[${account.email}] Email moved by rules, not in inbox: ${subject}`);
+              logger.info('IMAP-IDLE', `[${account.email}] Email moved by rules, not in inbox: ${parsed.subject || '(No Subject)'}`);
             }
           } catch (parseError: any) {
             logger.error('IMAP-IDLE', `[${account.email}] Error parsing message: ${parseError.message}`);
@@ -256,7 +205,6 @@ async function startIdleForAccount(
         logger.info('IMAP-IDLE', `[${account.email}] Saved ${savedEmails.length} new email(s) to inbox`);
 
         if (savedEmails.length > 0) {
-          // Send push notification for new inbox emails
           try {
             const latestEmail = savedEmails[0];
             await sendNewEmailNotification(
@@ -293,7 +241,6 @@ async function startIdleForAccount(
           message: `Sync failed: ${error.message}`,
         });
       } finally {
-        // Remove sync from active set
         const currentState = userIdleConnections.get(userId);
         if (currentState) {
           currentState.activeSyncs.delete(syncId);
@@ -302,13 +249,11 @@ async function startIdleForAccount(
     }
   });
 
-  // Handle connection close
   client.on('close', () => {
     logger.info('IMAP-IDLE', `IDLE connection closed for ${account.email}`);
     userConnections.connections.delete(account.id);
   });
 
-  // Handle errors
   client.on('error', (err: Error) => {
     logger.error('IMAP-IDLE', `IDLE error for ${account.email}: ${err.message}`);
     onUpdate({
@@ -319,7 +264,6 @@ async function startIdleForAccount(
   });
 
   try {
-    // Connect and start IDLE
     logger.info('IMAP-IDLE', `[${account.email}] Connecting to IMAP server...`);
     await client.connect();
     logger.info('IMAP-IDLE', `[${account.email}] Connected, opening INBOX...`);
@@ -328,9 +272,6 @@ async function startIdleForAccount(
     
     userConnections.connections.set(account.id, client);
     
-    // Start IDLE in background - this keeps the connection open and listens for changes
-    // The connection will notify us via the 'exists' event when new mail arrives
-    // Note: idle() returns a promise that resolves when IDLE ends, so we don't await it
     logger.info('IMAP-IDLE', `[${account.email}] Starting IDLE mode...`);
     client.idle().then(() => {
       logger.info('IMAP-IDLE', `[${account.email}] IDLE mode ended normally`);
@@ -354,10 +295,8 @@ export async function stopIdleForUser(userId: string): Promise<void> {
 
   logger.info('IMAP-IDLE', `Stopping IDLE connections for user ${userId}`);
 
-  // Clear the timeout
   clearTimeout(userConnections.timeout);
 
-  // Wait for any active syncs to complete (max 10 seconds)
   const maxWait = 10000;
   const startTime = Date.now();
   while (userConnections.activeSyncs.size > 0 && Date.now() - startTime < maxWait) {
@@ -369,7 +308,6 @@ export async function stopIdleForUser(userId: string): Promise<void> {
     logger.warn('IMAP-IDLE', `Forcing cleanup with ${userConnections.activeSyncs.size} active sync(s) still running`);
   }
 
-  // Close all connections
   for (const [accountId, client] of userConnections.connections) {
     try {
       await client.logout();
@@ -384,16 +322,10 @@ export async function stopIdleForUser(userId: string): Promise<void> {
   logger.info('IMAP-IDLE', `All IDLE connections closed for user ${userId}`);
 }
 
-/**
- * Check if a user has active IDLE connections
- */
 export function hasActiveIdleConnections(userId: string): boolean {
   return userIdleConnections.has(userId);
 }
 
-/**
- * Get the number of active connections for a user
- */
 export function getActiveConnectionCount(userId: string): number {
   const userConnections = userIdleConnections.get(userId);
   return userConnections?.connections.size ?? 0;

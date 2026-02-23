@@ -205,9 +205,6 @@ export function startBackgroundSync(): void {
 
   // Run once immediately after a short delay to allow server to fully start
   setTimeout(async () => {
-    // Repair accounts affected by the historicalSyncCompleted typo
-    await repairHistoricalSyncFlags();
-
     logger.info('BackgroundSync', 'Running initial sync cycle');
     runBackgroundSyncCycle().catch((err) => {
       logger.error('BackgroundSync', 'Initial sync cycle failed', err);

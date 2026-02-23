@@ -1,5 +1,5 @@
 import { makeMutation } from '../../types.js';
-import { testImapConnection } from '../../helpers/imap-sync.js';
+import { testImapConnection } from '../../helpers/imap-client.js';
 import { EmailAccountType } from '../../__generated__/resolvers-types.js';
 import { getImapCredentials } from '../../helpers/secrets.js';
 import { EmailAccount } from '../../db/models/email-account.model.js';

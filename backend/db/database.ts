@@ -51,6 +51,12 @@ export const sequelize = new Sequelize({
     PushToken,
   ],
   logging: false,
+  pool: {
+    max: config.isProduction ? 20 : 10,
+    min: config.isProduction ? 2 : 0,
+    acquire: 30000,
+    idle: 10000,
+  },
   // Enable SSL for production (required by AWS RDS)
   dialectOptions: config.isProduction
     ? {
