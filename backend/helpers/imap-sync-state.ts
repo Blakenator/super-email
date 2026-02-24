@@ -1,5 +1,4 @@
 import { EmailAccount } from '../db/models/email-account.model.js';
-import { Email } from '../db/models/email.model.js';
 import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
@@ -33,7 +32,6 @@ export function getSyncFields(syncType: SyncType) {
       progressField: 'historicalSyncProgress' as const,
       statusField: 'historicalSyncStatus' as const,
       expiresAtField: 'historicalSyncExpiresAt' as const,
-      lastAtField: 'historicalSyncLastAt' as const,
     };
   }
   return {
@@ -41,7 +39,6 @@ export function getSyncFields(syncType: SyncType) {
     progressField: 'updateSyncProgress' as const,
     statusField: 'updateSyncStatus' as const,
     expiresAtField: 'updateSyncExpiresAt' as const,
-    lastAtField: 'lastSyncEmailReceivedAt' as const,
   };
 }
 
@@ -154,35 +151,20 @@ export async function markSyncCompleted(
     return false;
   }
 
-  // For update syncs, anchor the sync date to the most recent email's receivedAt
-  // rather than the current wall-clock time so the next incremental sync picks up
-  // from where we actually have data.
-  let syncAnchorDate: Date = new Date();
-  if (!isHistoricalSync) {
-    const latestEmail = await Email.findOne({
-      where: { emailAccountId: emailAccount.id },
-      order: [['receivedAt', 'DESC']],
-      attributes: ['receivedAt'],
-    });
-    if (latestEmail?.receivedAt) {
-      syncAnchorDate = new Date(latestEmail.receivedAt);
-    }
-  }
-
   const updateData: Record<string, unknown> = {
     [fields.syncIdField]: null,
     [fields.progressField]: 100,
     [fields.statusField]: result.cancelled
       ? 'Sync cancelled'
       : `Synced ${result.synced} emails`,
-    [fields.lastAtField]: isHistoricalSync ? new Date() : syncAnchorDate,
     [fields.expiresAtField]: null,
     lastSyncedAt: new Date(),
-    ...(isHistoricalSync ? { historicalSyncComplete: true } : {}),
+    ...(isHistoricalSync
+      ? { historicalSyncComplete: true, historicalSyncLastAt: new Date() }
+      : {}),
   };
 
   if (isHistoricalSync && !result.cancelled) {
-    updateData.historicalSyncOldestDate = null;
     updateData.historicalSyncLastUidInbox = null;
     updateData.historicalSyncLastUidSent = null;
     updateData.historicalSyncTotalInbox = null;

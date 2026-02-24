@@ -91,14 +91,7 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare historicalSyncLastAt: Date | null;
 
-  // Resume point for interrupted historical syncs - stores the oldest message date synced so far
-  // This allows historical syncs to resume from where they left off instead of starting over
-  // Uses timestamp-based pagination which is more reliable than sequence numbers
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare historicalSyncOldestDate: Date | null;
-
-  // UID-based resume point for INBOX - stores the last processed UID
-  // More reliable than date-based resume since UIDs are unique and ordered
+  // UID-based resume point for INBOX during historical sync
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare historicalSyncLastUidInbox: number | null;
 
@@ -127,8 +120,14 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.DATE, allowNull: true })
   declare updateSyncExpiresAt: Date | null;
 
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare lastSyncEmailReceivedAt: Date | null;
+  // ===== UID-BASED INCREMENTAL SYNC =====
+  // Stores the IMAP UIDNEXT value after each sync so the next incremental
+  // sync can search by UID range instead of the less reliable SINCE date.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare lastSyncUidNextInbox: number | null;
+
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare lastSyncUidNextSent: number | null;
 
   @ForeignKey(() => SmtpProfile)
   @Column({ type: DataType.UUID, allowNull: true })

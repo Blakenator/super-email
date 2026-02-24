@@ -324,10 +324,6 @@ type EmailAccount implements BaseEntityProps {
   """
   updateSyncStatus: String
   """
-  Received date of the most recent synced email (anchor for incremental sync)
-  """
-  lastSyncEmailReceivedAt: Date
-  """
   ID of the default SMTP profile for sending from this account
   """
   defaultSmtpProfileId: String

@@ -42,6 +42,7 @@ interface FolderSyncConfig {
   folderLabel: string;
   resumeUidField: 'historicalSyncLastUidInbox' | 'historicalSyncLastUidSent';
   totalField: 'historicalSyncTotalInbox' | 'historicalSyncTotalSent';
+  uidNextField: 'lastSyncUidNextInbox' | 'lastSyncUidNextSent';
   /** When true, write progress/status to syncProgress & syncStatus DB fields */
   reportProgress: boolean;
 }
@@ -256,13 +257,9 @@ export async function syncEmailsFromImapAccount(
       folderLabel: 'INBOX',
       resumeUidField: 'historicalSyncLastUidInbox',
       totalField: 'historicalSyncTotalInbox',
+      uidNextField: 'lastSyncUidNextInbox',
       reportProgress: true,
     }, result, expirationTracker);
-
-    // Clear legacy field after INBOX historical sync
-    if (syncType === 'historical' && !result.cancelled) {
-      await emailAccount.update({ historicalSyncOldestDate: null });
-    }
 
     logger.info('IMAP', `${emailAccount.email} INBOX sync complete: ${result.synced} synced, ${result.skipped} skipped`);
 
@@ -415,22 +412,40 @@ async function syncFolderMessages(
         [config.resumeUidField]: null,
         [config.totalField]: null,
       });
+      // Store uidNext so the first incremental sync can use UID-based search
+      await storeUidNext(client, emailAccount, config);
       logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} historical sync completed, cleared resume point`);
     }
   } else {
-    // Incremental sync
-    const lastSyncTime =
-      emailAccount.lastSyncEmailReceivedAt || emailAccount.lastSyncedAt;
-    const sinceDate = new Date(lastSyncTime!);
-    const searchResult = await withRetry(
-      () => client.search({ since: sinceDate }, { uid: true }),
-      `Search ${config.folderLabel} for new messages`,
-    );
-    const messageUids = searchResult === false ? [] : searchResult;
+    // Incremental sync — prefer UID-based search over date-based IMAP SINCE,
+    // which is unreliable on some servers (date-only comparison, search index lag).
+    const sinceDate = new Date(emailAccount.lastSyncedAt!);
 
-    logger.info('IMAP', `${emailAccount.email} Incremental ${config.folderLabel} sync: ${messageUids.length} messages since ${sinceDate.toISOString()}`);
+    const storedUidNext = emailAccount[config.uidNextField];
+    let messageUids: number[];
+
+    if (storedUidNext) {
+      const searchResult = await withRetry(
+        () => client.search({ uid: `${storedUidNext}:*` }, { uid: true }),
+        `Search ${config.folderLabel} by UID range`,
+      );
+      if (searchResult === false) {
+        logger.warn('IMAP', `${emailAccount.email} ${config.folderLabel} UID range search failed, will scan recent messages`);
+        messageUids = await fetchRecentMessageUids(client, sinceDate, config.folderLabel, emailAccount.email);
+      } else {
+        messageUids = searchResult.filter(uid => uid >= storedUidNext);
+      }
+      logger.info('IMAP', `${emailAccount.email} Incremental ${config.folderLabel} sync: ${messageUids.length} messages (UID >= ${storedUidNext})`);
+    } else {
+      // No stored uidNext yet — scan recent messages by sequence number and
+      // filter by internalDate. This bypasses IMAP SEARCH SINCE entirely.
+      messageUids = await fetchRecentMessageUids(client, sinceDate, config.folderLabel, emailAccount.email);
+      logger.info('IMAP', `${emailAccount.email} Incremental ${config.folderLabel} sync: ${messageUids.length} messages since ${sinceDate.toISOString()} (scanned recent messages)`);
+    }
 
     if (messageUids.length === 0) {
+      // Still store uidNext even when nothing new so future syncs use UID path
+      await storeUidNext(client, emailAccount, config);
       return;
     }
 
@@ -475,6 +490,10 @@ async function syncFolderMessages(
       result.errors.push(...batchResult.errors);
 
       logger.debug('IMAP', `${emailAccount.email} ${config.folderLabel} batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
+    }
+
+    if (!result.cancelled) {
+      await storeUidNext(client, emailAccount, config);
     }
   }
 
@@ -541,8 +560,62 @@ async function syncSentFolder(
     folderLabel: 'SENT',
     resumeUidField: 'historicalSyncLastUidSent',
     totalField: 'historicalSyncTotalSent',
+    uidNextField: 'lastSyncUidNextSent',
     reportProgress: false,
   }, result, expirationTracker);
+}
+
+// ---------------------------------------------------------------------------
+// UID-based incremental sync helpers
+// ---------------------------------------------------------------------------
+
+const RECENT_FETCH_LIMIT = 500;
+
+/**
+ * Fallback when no stored uidNext is available or UID search fails.
+ * Fetches the last N messages by sequence number (lightweight: uid + internalDate)
+ * and returns UIDs of messages received on or after `sinceDate`.
+ */
+async function fetchRecentMessageUids(
+  client: ImapFlow,
+  sinceDate: Date,
+  folderLabel: string,
+  email: string,
+): Promise<number[]> {
+  const mailboxInfo = client.mailbox;
+  const exists = mailboxInfo && typeof mailboxInfo !== 'boolean' ? mailboxInfo.exists : 0;
+  if (exists === 0) return [];
+
+  const fetchCount = Math.min(RECENT_FETCH_LIMIT, exists);
+  const startSeq = Math.max(1, exists - fetchCount + 1);
+
+  const uids: number[] = [];
+  for await (const msg of client.fetch(`${startSeq}:*`, { uid: true, internalDate: true })) {
+    if (msg.internalDate && msg.internalDate >= sinceDate) {
+      uids.push(msg.uid);
+    }
+  }
+
+  logger.debug('IMAP', `${email} ${folderLabel} scanned ${fetchCount} recent messages, ${uids.length} match since ${sinceDate.toISOString()}`);
+  return uids;
+}
+
+/**
+ * Persist the current mailbox uidNext so the next incremental sync
+ * can use UID-range search instead of date-based SINCE.
+ */
+async function storeUidNext(
+  client: ImapFlow,
+  emailAccount: EmailAccount,
+  config: FolderSyncConfig,
+): Promise<void> {
+  const mailboxInfo = client.mailbox;
+  const uidNext = mailboxInfo && typeof mailboxInfo !== 'boolean'
+    ? (mailboxInfo as any).uidNext as number | undefined
+    : undefined;
+  if (uidNext) {
+    await emailAccount.update({ [config.uidNextField]: uidNext });
+  }
 }
 
 // ---------------------------------------------------------------------------

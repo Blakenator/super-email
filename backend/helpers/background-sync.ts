@@ -29,8 +29,6 @@ async function findStaleEmailAccounts(): Promise<EmailAccount[]> {
   logger.info('BackgroundSync', `Cutoff time: ${cutoffTime.toISO()}`);
 
   // Use lastSyncedAt (wall-clock time of last sync) for staleness checks.
-  // lastSyncEmailReceivedAt is anchored to the most recent email's receivedAt
-  // and should not be used for determining when a sync last ran.
   return EmailAccount.findAll({
     where: {
       historicalSyncComplete: true,
