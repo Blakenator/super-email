@@ -674,6 +674,7 @@ export function NotificationSettings() {
                   onChange={() => handleDetailLevelChange('full')}
                   className="mt-2"
                 />
+              </div>
             </Form.Group>
           </Card.Body>
         </Card>
