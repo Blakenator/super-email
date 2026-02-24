@@ -55,7 +55,7 @@ export interface MockUserData {
   lastName: string;
   themePreference: 'LIGHT' | 'DARK' | 'AUTO';
   navbarCollapsed: boolean;
-  notificationDetailLevel: 'MINIMAL' | 'FULL';
+  notificationDetailLevel: 'AGGREGATE_ONLY' | 'MINIMAL' | 'FULL';
   inboxDensity: boolean;
   inboxGroupByDate: boolean;
   createdAt: Date;

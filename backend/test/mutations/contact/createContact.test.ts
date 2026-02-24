@@ -9,7 +9,10 @@ import { expect } from 'chai';
 import sinon from 'sinon';
 import { Contact, ContactEmail } from '../../../db/models/index.js';
 import { createContact } from '../../../mutations/contact/createContact.js';
-import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
+import {
+  createMockContext,
+  createUnauthenticatedContext,
+} from '../../utils/index.js';
 
 describe('createContact mutation', () => {
   afterEach(() => {
@@ -36,16 +39,25 @@ describe('createContact mutation', () => {
       company: 'Example Corp',
       phone: '+1-555-1234',
       notes: 'Test contact',
-      emails: [
-        { email: 'john@example.com', isPrimary: true, label: 'Work' },
-      ],
+      emails: [{ email: 'john@example.com', isPrimary: true, label: 'Work' }],
     };
 
-    const mockContact = { id: 'contact-1', userId: 'user-123', name: 'John Doe' };
-    const mockContactWithEmails = { ...mockContact, ContactEmails: [{ email: 'john@example.com' }] };
+    const mockContact = {
+      id: 'contact-1',
+      userId: 'user-123',
+      name: 'John Doe',
+    };
+    const mockContactWithEmails = {
+      ...mockContact,
+      ContactEmails: [{ email: 'john@example.com' }],
+    };
 
-    const contactCreateStub = sinon.stub(Contact, 'create').resolves(mockContact as any);
-    const contactEmailCreateStub = sinon.stub(ContactEmail, 'create').resolves({} as any);
+    const contactCreateStub = sinon
+      .stub(Contact, 'create')
+      .resolves(mockContact as any);
+    const contactEmailCreateStub = sinon
+      .stub(ContactEmail, 'create')
+      .resolves({} as any);
     sinon.stub(Contact, 'findByPk').resolves(mockContactWithEmails as any);
 
     await (createContact as any)(null, { input }, context);
@@ -77,7 +89,9 @@ describe('createContact mutation', () => {
 
     const mockContact = { id: 'contact-2', userId: 'user-123' };
 
-    const contactCreateStub = sinon.stub(Contact, 'create').resolves(mockContact as any);
+    const contactCreateStub = sinon
+      .stub(Contact, 'create')
+      .resolves(mockContact as any);
     sinon.stub(ContactEmail, 'create').resolves({} as any);
     sinon.stub(Contact, 'findByPk').resolves(mockContact as any);
 
@@ -100,7 +114,9 @@ describe('createContact mutation', () => {
     const mockContact = { id: 'contact-3', userId: 'user-123' };
 
     sinon.stub(Contact, 'create').resolves(mockContact as any);
-    const contactEmailCreateStub = sinon.stub(ContactEmail, 'create').resolves({} as any);
+    const contactEmailCreateStub = sinon
+      .stub(ContactEmail, 'create')
+      .resolves({} as any);
     sinon.stub(Contact, 'findByPk').resolves(mockContact as any);
 
     await (createContact as any)(null, { input }, context);
@@ -125,18 +141,25 @@ describe('createContact mutation', () => {
     };
 
     const mockContact = { id: 'contact-4', userId: 'user-123' };
-    const mockReloaded = { ...mockContact, ContactEmails: [{ email: 'test@example.com' }] };
+    const mockReloaded = {
+      ...mockContact,
+      ContactEmails: [{ email: 'test@example.com' }],
+    };
 
     sinon.stub(Contact, 'create').resolves(mockContact as any);
     sinon.stub(ContactEmail, 'create').resolves({} as any);
-    const findByPkStub = sinon.stub(Contact, 'findByPk').resolves(mockReloaded as any);
+    const findByPkStub = sinon
+      .stub(Contact, 'findByPk')
+      .resolves(mockReloaded as any);
 
     const result = await (createContact as any)(null, { input }, context);
 
     // Verify findByPk was called with the contact ID and includes
     expect(findByPkStub.calledOnce).to.be.true;
     expect(findByPkStub.firstCall.args[0]).to.equal('contact-4');
-    expect(findByPkStub.firstCall.args[1]).to.deep.include({ include: [ContactEmail] });
+    expect(findByPkStub.firstCall.args[1]).to.deep.include({
+      include: [ContactEmail],
+    });
 
     // Verify the final result is the reloaded contact
     expect(result).to.equal(mockReloaded);
@@ -148,8 +171,12 @@ describe('createContact mutation', () => {
 
     const mockContact = { id: 'contact-5', userId: 'user-123' };
 
-    const contactCreateStub = sinon.stub(Contact, 'create').resolves(mockContact as any);
-    const contactEmailCreateStub = sinon.stub(ContactEmail, 'create').resolves({} as any);
+    const contactCreateStub = sinon
+      .stub(Contact, 'create')
+      .resolves(mockContact as any);
+    const contactEmailCreateStub = sinon
+      .stub(ContactEmail, 'create')
+      .resolves({} as any);
     sinon.stub(Contact, 'findByPk').resolves(mockContact as any);
 
     await (createContact as any)(null, { input }, context);

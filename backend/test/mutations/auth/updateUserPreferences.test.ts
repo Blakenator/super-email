@@ -109,6 +109,17 @@ describe('updateUserPreferences mutation', () => {
     }
   });
 
+  it('should accept AGGREGATE_ONLY as notification detail level', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const mockUser = createMockUser();
+    sinon.stub(User, 'findByPk').resolves(mockUser as any);
+
+    await (updateUserPreferences as any)(null, { input: { notificationDetailLevel: 'AGGREGATE_ONLY' } }, context);
+
+    expect(mockUser.update.calledOnce).to.be.true;
+    expect(mockUser.update.firstCall.args[0]).to.have.property('notificationDetailLevel', 'AGGREGATE_ONLY');
+  });
+
   it('should update multiple preferences at once', async () => {
     const context = createMockContext({ userId: 'user-123' });
     const mockUser = createMockUser();

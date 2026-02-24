@@ -3,7 +3,7 @@ import { simpleParser } from 'mailparser';
 import { EmailAccount, Email, EmailFolder } from '../db/models/index.js';
 import { logger } from './logger.js';
 import { applyRulesToEmail } from './rule-matcher.js';
-import { sendNewEmailNotification } from './push-notifications.js';
+import { sendNewEmailNotifications } from './push-notifications.js';
 import { createImapClient } from './imap-client.js';
 import { createEmailDataFromParsed } from './email-parser.js';
 
@@ -206,16 +206,7 @@ async function startIdleForAccount(
 
         if (savedEmails.length > 0) {
           try {
-            const latestEmail = savedEmails[0];
-            await sendNewEmailNotification(
-              userId,
-              savedEmails.length,
-              account.email,
-              latestEmail.subject ?? undefined,
-              latestEmail.fromName ?? latestEmail.fromAddress ?? undefined,
-              latestEmail.htmlBody ?? undefined,
-              latestEmail.textBody ?? undefined,
-            );
+            await sendNewEmailNotifications(userId, savedEmails, account.email);
           } catch (pushError: any) {
             logger.error('IMAP-IDLE', `[${account.email}] Failed to send push notification: ${pushError.message}`);
           }

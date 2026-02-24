@@ -43,7 +43,6 @@ import {
 import {
   isFirebaseConfigured,
   getFCMToken,
-  onForegroundMessage,
   initializeFirebase,
 } from '../../../services/firebase';
 
@@ -287,28 +286,11 @@ export function NotificationSettings() {
   useEffect(() => {
     void fetchPushTokens();
 
-    // Initialize Firebase if configured
+    // Initialize Firebase for background push (service worker handles display).
+    // Foreground notifications are handled by the GraphQL subscription in useMailboxSubscription.
     if (isFirebaseConfigured()) {
       void initializeFirebase();
       void sendFirebaseConfigToServiceWorker();
-
-      // Set up foreground message handler
-      const unsubscribe = onForegroundMessage((payload) => {
-        // Show notification manually for foreground messages
-        if (payload.notification) {
-          new Notification(payload.notification.title || 'New Email', {
-            body: payload.notification.body,
-            icon: '/icon-192x192.svg',
-          });
-        }
-      });
-
-      // Cleanup on unmount
-      return () => {
-        if (unsubscribe) {
-          unsubscribe();
-        }
-      };
     }
 
     // If notifications are already granted, ensure browser is registered
@@ -329,11 +311,12 @@ export function NotificationSettings() {
   const handleDetailLevelChange = (level: NotificationDetailLevel) => {
     setDetailLevel(level);
     setNotificationDetailLevel(level);
-    toast.success(
-      level === 'full'
-        ? 'Notifications will now show email details'
-        : 'Notifications will show minimal information',
-    );
+    const messages: Record<NotificationDetailLevel, string> = {
+      full: 'Notifications will show sender, subject, and preview',
+      minimal: 'Notifications will show sender and subject',
+      aggregate_only: 'Notifications will show email counts only',
+    };
+    toast.success(messages[level]);
   };
 
   // Check if mailto handler is registered
@@ -652,15 +635,30 @@ export function NotificationSettings() {
               <div>
                 <Form.Check
                   type="radio"
+                  id="notification-aggregate"
+                  name="notificationDetail"
+                  label={
+                    <span>
+                      <strong>Aggregate Only</strong> — "5 new emails" (no
+                      sender/subject details)
+                    </span>
+                  }
+                  checked={notificationDetailLevel === 'aggregate_only'}
+                  onChange={() => handleDetailLevelChange('aggregate_only')}
+                />
+                <Form.Check
+                  type="radio"
                   id="notification-minimal"
                   name="notificationDetail"
                   label={
                     <span>
-                      <strong>Minimal</strong> — "You have 1 new email"
+                      <strong>Minimal</strong> — Individual notifications with
+                      sender and subject
                     </span>
                   }
                   checked={notificationDetailLevel === 'minimal'}
                   onChange={() => handleDetailLevelChange('minimal')}
+                  className="mt-2"
                 />
                 <Form.Check
                   type="radio"
@@ -668,19 +666,14 @@ export function NotificationSettings() {
                   name="notificationDetail"
                   label={
                     <span>
-                      <strong>Full Details</strong> — Shows sender name and
-                      subject line
+                      <strong>Full Details</strong> — Individual notifications
+                      with sender, subject, and message preview
                     </span>
                   }
                   checked={notificationDetailLevel === 'full'}
                   onChange={() => handleDetailLevelChange('full')}
                   className="mt-2"
                 />
-              </div>
-              <Form.Text className="text-muted mt-2">
-                Note: Full details only shows for individual emails. Bulk email
-                notifications always show counts.
-              </Form.Text>
             </Form.Group>
           </Card.Body>
         </Card>

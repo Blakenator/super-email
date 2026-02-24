@@ -20,6 +20,7 @@ export enum ThemePreference {
 }
 
 export enum NotificationDetailLevel {
+  AGGREGATE_ONLY = 'AGGREGATE_ONLY',
   MINIMAL = 'MINIMAL',
   FULL = 'FULL',
 }

@@ -27,7 +27,7 @@ import {
 import { publishMailboxUpdate } from './pubsub.js';
 import { checkBillingLimits } from './billing-checks.js';
 import { recalculateUserUsage } from './usage-calculator.js';
-import { sendNewEmailNotification } from './push-notifications.js';
+import { sendNewEmailNotifications } from './push-notifications.js';
 import { logger } from './logger.js';
 
 const BATCH_SIZE = 100;
@@ -133,19 +133,16 @@ export async function startAsyncSync(
 
       if (syncType === 'update' && result.synced > 0 && !result.cancelled) {
         try {
-          const latestEmail = await Email.findOne({
+          const recentEmails = await Email.findAll({
             where: { emailAccountId: emailAccount.id },
             order: [['receivedAt', 'DESC']],
+            limit: Math.min(result.synced, 20),
           });
 
-          await sendNewEmailNotification(
+          await sendNewEmailNotifications(
             emailAccount.userId,
-            result.synced,
+            recentEmails,
             emailAccount.email,
-            latestEmail?.subject ?? undefined,
-            latestEmail?.fromName ?? latestEmail?.fromAddress ?? undefined,
-            latestEmail?.htmlBody ?? undefined,
-            latestEmail?.textBody ?? undefined,
           );
         } catch (pushError) {
           logger.error('IMAP', 'Failed to send push notification after sync', { error: pushError instanceof Error ? pushError.message : pushError });

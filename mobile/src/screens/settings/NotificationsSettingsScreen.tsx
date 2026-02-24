@@ -19,6 +19,8 @@ import { Icon } from '../../components/ui';
 import { useAuthStore } from '../../stores/authStore';
 import { scheduleLocalNotification } from '../../services/notifications';
 
+type DetailLevel = 'AGGREGATE_ONLY' | 'MINIMAL' | 'FULL';
+
 export function NotificationsSettingsScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -29,9 +31,12 @@ export function NotificationsSettingsScreen() {
     newEmailNotifications: true,
     soundEnabled: true,
     vibrationEnabled: true,
-    showPreview: user?.notificationDetailLevel === 'FULL',
     quietHoursEnabled: false,
   });
+
+  const [detailLevel, setDetailLevel] = useState<DetailLevel>(
+    (user?.notificationDetailLevel as DetailLevel) || 'FULL',
+  );
 
   const toggleSetting = (key: keyof typeof settings) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
@@ -78,6 +83,32 @@ export function NotificationsSettingsScreen() {
     </View>
   );
 
+  const renderDetailOption = (
+    level: DetailLevel,
+    title: string,
+    subtitle: string,
+  ) => (
+    <TouchableOpacity
+      style={[
+        styles.settingRow,
+        { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border },
+      ]}
+      onPress={() => setDetailLevel(level)}
+    >
+      <View style={styles.settingIcon}>
+        <Icon
+          name={detailLevel === level ? 'check-circle' : 'circle'}
+          size="md"
+          color={detailLevel === level ? theme.colors.primary : theme.colors.textMuted}
+        />
+      </View>
+      <View style={styles.settingContent}>
+        <Text style={[styles.settingTitle, { color: theme.colors.text }]}>{title}</Text>
+        <Text style={[styles.settingSubtitle, { color: theme.colors.textMuted }]}>{subtitle}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -106,16 +137,25 @@ export function NotificationsSettingsScreen() {
 
       <View style={[sharedStyles.sectionHeader]}>
         <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>
-          NOTIFICATION STYLE
+          NOTIFICATION DETAIL
         </Text>
       </View>
 
       <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        {renderSwitchRow(
-          'eye',
-          'Show Preview',
-          'Display sender and subject in notifications',
-          'showPreview'
+        {renderDetailOption(
+          'AGGREGATE_ONLY',
+          'Aggregate Only',
+          '"5 new emails" — no sender or subject details',
+        )}
+        {renderDetailOption(
+          'MINIMAL',
+          'Minimal',
+          'Individual notifications with sender and subject',
+        )}
+        {renderDetailOption(
+          'FULL',
+          'Full Details',
+          'Individual notifications with sender, subject, and preview',
         )}
       </View>
 

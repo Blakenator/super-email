@@ -1115,9 +1115,11 @@ export type MutationUpdateUserPreferencesArgs = {
 
 /** Level of detail shown in email notification previews. */
 export enum NotificationDetailLevel {
-  /** Show sender, subject, and message preview */
+  /** Show only that new emails arrived, no sender/subject details */
+  AggregateOnly = 'AGGREGATE_ONLY',
+  /** Individual notifications with sender, subject, and message preview */
   Full = 'FULL',
-  /** Show only sender and subject */
+  /** Individual notifications with sender and subject */
   Minimal = 'MINIMAL'
 }
 

@@ -34,11 +34,14 @@ function initializeFirebase() {
       console.log('[FCM SW] Received background message:', payload);
 
       const notificationTitle = payload.notification?.title || 'New Email';
+      const tag = payload.data?.emailId
+        ? 'email-' + payload.data.emailId
+        : 'email-notification';
       const notificationOptions = {
         body: payload.notification?.body || 'You have a new email',
         icon: '/icon-192x192.svg',
         badge: '/icon-192x192.svg',
-        tag: 'email-notification',
+        tag: tag,
         renotify: true,
         data: payload.data,
         actions: [

@@ -49,16 +49,16 @@ interface MailboxUpdatesSubscriptionData {
 
 // Notification detail level key in localStorage
 const NOTIFICATION_DETAIL_KEY = 'notification_detail_level';
-export type NotificationDetailLevel = 'minimal' | 'full';
+export type NotificationDetailLevel = 'aggregate_only' | 'minimal' | 'full';
 
 export function getNotificationDetailLevel(): NotificationDetailLevel {
   try {
     const value = localStorage.getItem(NOTIFICATION_DETAIL_KEY);
-    if (value === 'full' || value === 'minimal') return value;
+    if (value === 'full' || value === 'minimal' || value === 'aggregate_only') return value;
   } catch {
     // Ignore
   }
-  return 'minimal'; // Default to minimal
+  return 'full';
 }
 
 export function setNotificationDetailLevel(level: NotificationDetailLevel) {
@@ -205,34 +205,13 @@ function showNewEmailNotification(emails: CachedEmail[]) {
   const detailLevel = getNotificationDetailLevel();
   const count = emails.length;
 
-  let notification: Notification;
-
-  if (detailLevel === 'full' && count === 1) {
-    // Show full details for single email
-    const email = emails[0];
-    notification = new Notification(
-      `New Email from ${email.fromName || email.fromAddress}`,
-      {
-        body: email.subject || '(No Subject)',
-        icon: '/icon-192x192.svg',
-        tag: `new-email-${email.id}`,
-      },
-    );
-    // Navigate to the specific email when clicked
-    notification.onclick = () => {
-      window.focus();
-      window.location.href = `/inbox/email/${email.id}`;
-      notification.close();
-    };
-  } else {
-    // Minimal notification
-    notification = new Notification('New Email', {
+  if (detailLevel === 'aggregate_only') {
+    const notification = new Notification('New Email', {
       body:
         count === 1 ? 'You have 1 new email' : `You have ${count} new emails`,
       icon: '/icon-192x192.svg',
       tag: 'new-email',
     });
-    // Navigate to inbox when clicked, or to specific email if only one
     notification.onclick = () => {
       window.focus();
       if (count === 1 && emails[0]) {
@@ -240,6 +219,24 @@ function showNewEmailNotification(emails: CachedEmail[]) {
       } else {
         window.location.href = '/inbox';
       }
+      notification.close();
+    };
+    return;
+  }
+
+  // FULL and MINIMAL: show individual notifications per email
+  for (const email of emails) {
+    const title = `New email from ${email.fromName || email.fromAddress || 'Unknown'}`;
+    const body = email.subject || '(No Subject)';
+
+    const notification = new Notification(title, {
+      body,
+      icon: '/icon-192x192.svg',
+      tag: `new-email-${email.id}`,
+    });
+    notification.onclick = () => {
+      window.focus();
+      window.location.href = `/inbox/email/${email.id}`;
       notification.close();
     };
   }

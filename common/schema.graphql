@@ -51,11 +51,15 @@ Level of detail shown in email notification previews.
 """
 enum NotificationDetailLevel {
   """
-  Show only sender and subject
+  Show only that new emails arrived, no sender/subject details
+  """
+  AGGREGATE_ONLY
+  """
+  Individual notifications with sender and subject
   """
   MINIMAL
   """
-  Show sender, subject, and message preview
+  Individual notifications with sender, subject, and message preview
   """
   FULL
 }
