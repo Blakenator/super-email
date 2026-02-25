@@ -896,8 +896,8 @@ export function InboxScreen({
           <Icon name="edit-2" size="lg" color={theme.colors.textInverse} />
         </TouchableOpacity>
 
-        {/* Inline Loading Indicator (for tab changes, not full-screen) */}
-        {isLoading && filteredEmails.length > 0 && !isRefreshing && (
+        {/* Inline Loading Indicator */}
+        {isLoading && !isRefreshing && (
           <View
             style={[
               styles.inlineLoading,
@@ -919,20 +919,6 @@ export function InboxScreen({
           </View>
         )}
 
-        {/* Full Loading (only when no emails at all) */}
-        {isLoading && filteredEmails.length === 0 && !isRefreshing && (
-          <View
-            style={[
-              styles.loadingOverlay,
-              { backgroundColor: theme.colors.background + 'E6' },
-            ]}
-          >
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={[styles.loadingText, { color: theme.colors.text }]}>
-              Loading emails...
-            </Text>
-          </View>
-        )}
 
         {/* Account Picker Modal */}
         {renderAccountPicker()}
@@ -1454,15 +1440,6 @@ const styles = StyleSheet.create({
   },
   bulkButtonText: {
     fontSize: FONT_SIZE.sm,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: SPACING.sm,
-    fontSize: FONT_SIZE.lg,
   },
   inlineLoading: {
     position: 'absolute',

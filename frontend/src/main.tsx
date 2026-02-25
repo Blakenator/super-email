@@ -35,13 +35,25 @@ const wsLink = new GraphQLWsLink(
   createClient({
     url: wsUrl,
     connectionParams: async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      let token: string | undefined;
+      try {
+        const {
+          data: { session },
+        } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('WS session timeout')),
+              3000,
+            ),
+          ),
+        ]);
+        token = session?.access_token;
+      } catch {
+        // getSession() can hang due to navigator.locks contention after long absence
+      }
       return {
-        authorization: session?.access_token
-          ? `Bearer ${session.access_token}`
-          : '',
+        authorization: token ? `Bearer ${token}` : '',
       };
     },
     // Reconnect on close
@@ -67,11 +79,23 @@ const wsLink = new GraphQLWsLink(
 
 const authLink = setContext(async (_, prevContext) => {
   const headers = (prevContext.headers ?? {}) as Record<string, string>;
-  // Get the current session from Supabase
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token: string | undefined = session?.access_token;
+  let token: string | undefined;
+  try {
+    const {
+      data: { session },
+    } = await Promise.race([
+      supabase.auth.getSession(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error('Auth link session timeout')),
+          3000,
+        ),
+      ),
+    ]);
+    token = session?.access_token;
+  } catch {
+    // getSession() can hang due to navigator.locks contention after long absence
+  }
 
   return {
     headers: {

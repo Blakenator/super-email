@@ -908,7 +908,7 @@ export function EmailView({
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title>Confirm Unsubscribe</Modal.Title>
+          <Modal.Title>Unsubscribe</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {(() => {
@@ -916,15 +916,15 @@ export function EmailView({
             return (
               <>
                 <p>
-                  Are you sure you want to unsubscribe from this mailing list?
+                  Choose how you want to unsubscribe from this mailing list.
                 </p>
 
                 {(modalEmail as FullEmailOptionalProps)?.unsubscribeUrl && (
                   <Alert variant="success" className="small mb-2">
-                    <strong>One-Click Unsubscribe (URL)</strong>
+                    <strong>One-Click Unsubscribe</strong>
                     <br />
                     <span className="text-muted">
-                      We will automatically send an unsubscribe request to:
+                      Sends an automatic unsubscribe request to the sender.
                     </span>
                     <br />
                     <code
@@ -932,49 +932,68 @@ export function EmailView({
                     >
                       {(modalEmail as FullEmailOptionalProps).unsubscribeUrl}
                     </code>
+                    <div className="mt-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => {
+                          if (modalEmail) handleUnsubscribe(modalEmail.id);
+                        }}
+                        disabled={unsubscribing}
+                        loading={unsubscribing}
+                      >
+                        Unsubscribe via URL
+                      </Button>
+                    </div>
                   </Alert>
                 )}
 
-                {(modalEmail as FullEmailOptionalProps)?.unsubscribeEmail &&
-                  !(modalEmail as FullEmailOptionalProps)?.unsubscribeUrl && (
-                    <Alert variant="warning" className="small mb-2">
-                      <strong>Email-Based Unsubscribe</strong>
-                      <br />
-                      <span className="text-muted">
-                        This will send an unsubscribe email from your account
-                        to:
-                      </span>
-                      <br />
-                      <code>
-                        {
-                          (modalEmail as FullEmailOptionalProps)
-                            .unsubscribeEmail
+                {(modalEmail as FullEmailOptionalProps)?.unsubscribeEmail && (
+                  <Alert
+                    variant={
+                      (modalEmail as FullEmailOptionalProps)?.unsubscribeUrl
+                        ? 'secondary'
+                        : 'warning'
+                    }
+                    className="small mb-2"
+                  >
+                    <strong>
+                      {(modalEmail as FullEmailOptionalProps)?.unsubscribeUrl
+                        ? 'Alternative: '
+                        : ''}
+                      Email-Based Unsubscribe
+                    </strong>
+                    <br />
+                    <span className="text-muted">
+                      Sends an unsubscribe email from your configured SMTP
+                      profile to:
+                    </span>
+                    <br />
+                    <code>
+                      {
+                        (modalEmail as FullEmailOptionalProps)
+                          .unsubscribeEmail
+                      }
+                    </code>
+                    <div className="mt-2">
+                      <Button
+                        variant={
+                          (modalEmail as FullEmailOptionalProps)?.unsubscribeUrl
+                            ? 'secondary'
+                            : 'warning'
                         }
-                      </code>
-                      <br />
-                      <small className="text-muted mt-2 d-block">
-                        ⚠️ Note: An email will be sent from your configured SMTP
-                        profile.
-                      </small>
-                    </Alert>
-                  )}
-
-                {(modalEmail as FullEmailOptionalProps)?.unsubscribeEmail &&
-                  (modalEmail as FullEmailOptionalProps)?.unsubscribeUrl && (
-                    <Alert variant="secondary" className="small mb-2">
-                      <strong>Alternative: Email-Based Unsubscribe</strong>
-                      <br />
-                      <span className="text-muted">
-                        If the URL doesn't work, you can email:{' '}
-                      </span>
-                      <code>
-                        {
-                          (modalEmail as FullEmailOptionalProps)
-                            .unsubscribeEmail
-                        }
-                      </code>
-                    </Alert>
-                  )}
+                        size="sm"
+                        onClick={() => {
+                          if (modalEmail) handleUnsubscribe(modalEmail.id);
+                        }}
+                        disabled={unsubscribing}
+                        loading={unsubscribing}
+                      >
+                        Unsubscribe via Email
+                      </Button>
+                    </div>
+                  </Alert>
+                )}
               </>
             );
           })()}
@@ -987,20 +1006,7 @@ export function EmailView({
               setActiveEmailForModal(null);
             }}
           >
-            Cancel
-          </Button>
-          <Button
-            variant="warning"
-            onClick={() => {
-              const modalEmail = getEmailForModal();
-              if (modalEmail) {
-                handleUnsubscribe(modalEmail.id);
-              }
-            }}
-            disabled={unsubscribing}
-            loading={unsubscribing}
-          >
-            Unsubscribe
+            Close
           </Button>
         </Modal.Footer>
       </Modal>

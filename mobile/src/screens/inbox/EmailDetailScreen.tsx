@@ -49,6 +49,9 @@ const GET_EMAIL_QUERY = gql`
       attachmentCount
       threadId
       threadCount
+      isUnsubscribed
+      unsubscribeUrl
+      unsubscribeEmail
       tags {
         id
         name
@@ -60,6 +63,15 @@ const GET_EMAIL_QUERY = gql`
         mimeType
         size
       }
+    }
+  }
+`;
+
+const UNSUBSCRIBE_MUTATION = gql`
+  mutation Unsubscribe($input: UnsubscribeInput!) {
+    unsubscribe(input: $input) {
+      id
+      isUnsubscribed
     }
   }
 `;
@@ -109,6 +121,9 @@ interface Email {
   attachmentCount: number;
   threadId?: string | null;
   threadCount?: number | null;
+  isUnsubscribed?: boolean;
+  unsubscribeUrl?: string | null;
+  unsubscribeEmail?: string | null;
   tags: Array<{ id: string; name: string; color: string }>;
   attachments?: Array<{
     id: string;
@@ -187,6 +202,8 @@ export function EmailDetailScreen({
   const [error, setError] = useState<string | null>(null);
   const [webViewHeight, setWebViewHeight] = useState(300);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showUnsubscribeModal, setShowUnsubscribeModal] = useState(false);
+  const [unsubscribing, setUnsubscribing] = useState(false);
   
   // Image blocking state
   const [showImagesForThisEmail, setShowImagesForThisEmail] = useState(false);
@@ -438,6 +455,24 @@ export function EmailDetailScreen({
   const handleToggleMenu = useCallback(() => {
     setShowMoreMenu(!showMoreMenu);
   }, [showMoreMenu]);
+
+  const handleUnsubscribe = useCallback(async () => {
+    if (!email) return;
+    setUnsubscribing(true);
+    try {
+      await apolloClient.mutate({
+        mutation: UNSUBSCRIBE_MUTATION,
+        variables: { input: { emailId: email.id } },
+      });
+      setEmail((prev) => prev ? { ...prev, isUnsubscribed: true } : prev);
+      setShowUnsubscribeModal(false);
+      Alert.alert('Success', 'Successfully unsubscribed!');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to unsubscribe');
+    } finally {
+      setUnsubscribing(false);
+    }
+  }, [email]);
 
   const handleAddSenderToContacts = useCallback(() => {
     if (!email) return;
@@ -861,6 +896,16 @@ export function EmailDetailScreen({
         </TouchableOpacity>
       )}
 
+      {/* Unsubscribed banner */}
+      {email?.isUnsubscribed && (
+        <View style={[styles.unsubscribedBanner, { backgroundColor: theme.colors.success + '20' }]}>
+          <Icon name="check-circle" size="sm" color={theme.colors.success} />
+          <Text style={[styles.unsubscribedBannerText, { color: theme.colors.success }]}>
+            You have unsubscribed from this mailing list.
+          </Text>
+        </View>
+      )}
+
       {/* Thread count header */}
       {hasThread && (
         <View style={[styles.threadHeader, { backgroundColor: theme.colors.surface }]}>
@@ -1279,6 +1324,20 @@ export function EmailDetailScreen({
               }
             ]}
           >
+            {(email?.unsubscribeUrl || email?.unsubscribeEmail) && !email?.isUnsubscribed && (
+              <TouchableOpacity
+                style={[styles.moreMenuItem, { borderBottomColor: theme.colors.border }]}
+                onPress={() => {
+                  setShowMoreMenu(false);
+                  setShowUnsubscribeModal(true);
+                }}
+              >
+                <Icon name="bell-off" size="md" color={theme.colors.warning} />
+                <Text style={[styles.moreMenuItemText, { color: theme.colors.warning }]}>
+                  Unsubscribe
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.moreMenuItem, { borderBottomColor: theme.colors.border }]}
               onPress={() => {
@@ -1331,6 +1390,97 @@ export function EmailDetailScreen({
               <Icon name="trash-2" size="md" color={theme.colors.error} />
               <Text style={[styles.moreMenuItemText, { color: theme.colors.error }]}>
                 Delete Email
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Unsubscribe Modal */}
+      <Modal
+        visible={showUnsubscribeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUnsubscribeModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowUnsubscribeModal(false)}
+        >
+          <View
+            style={[
+              styles.unsubscribeModal,
+              { backgroundColor: theme.colors.surface },
+            ]}
+            onStartShouldSetResponder={() => true}
+          >
+            <Text style={[styles.unsubscribeTitle, { color: theme.colors.text }]}>
+              Unsubscribe
+            </Text>
+            <Text style={[styles.unsubscribeDescription, { color: theme.colors.textMuted }]}>
+              Choose how you want to unsubscribe from this mailing list.
+            </Text>
+
+            {email?.unsubscribeUrl && (
+              <View style={[styles.unsubscribeOption, { backgroundColor: theme.colors.success + '15', borderColor: theme.colors.success + '40' }]}>
+                <Text style={[styles.unsubscribeOptionTitle, { color: theme.colors.text }]}>
+                  One-Click Unsubscribe
+                </Text>
+                <Text style={[styles.unsubscribeOptionDesc, { color: theme.colors.textMuted }]}>
+                  Sends an automatic unsubscribe request to the sender.
+                </Text>
+                <Text style={[styles.unsubscribeOptionUrl, { color: theme.colors.textMuted }]} numberOfLines={2}>
+                  {email.unsubscribeUrl}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.unsubscribeOptionBtn, { backgroundColor: theme.colors.success }]}
+                  onPress={handleUnsubscribe}
+                  disabled={unsubscribing}
+                >
+                  {unsubscribing ? (
+                    <ActivityIndicator size="small" color={theme.colors.textInverse} />
+                  ) : (
+                    <Text style={[styles.unsubscribeOptionBtnText, { color: theme.colors.textInverse }]}>
+                      Unsubscribe via URL
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {email?.unsubscribeEmail && (
+              <View style={[styles.unsubscribeOption, { backgroundColor: theme.colors.warning + '15', borderColor: theme.colors.warning + '40' }]}>
+                <Text style={[styles.unsubscribeOptionTitle, { color: theme.colors.text }]}>
+                  {email.unsubscribeUrl ? 'Alternative: ' : ''}Email-Based Unsubscribe
+                </Text>
+                <Text style={[styles.unsubscribeOptionDesc, { color: theme.colors.textMuted }]}>
+                  Sends an unsubscribe email from your configured SMTP profile to:
+                </Text>
+                <Text style={[styles.unsubscribeOptionUrl, { color: theme.colors.textMuted }]}>
+                  {email.unsubscribeEmail}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.unsubscribeOptionBtn, { backgroundColor: theme.colors.warning }]}
+                  onPress={handleUnsubscribe}
+                  disabled={unsubscribing}
+                >
+                  {unsubscribing ? (
+                    <ActivityIndicator size="small" color={theme.colors.textInverse} />
+                  ) : (
+                    <Text style={[styles.unsubscribeOptionBtnText, { color: theme.colors.textInverse }]}>
+                      Unsubscribe via Email
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.unsubscribeCloseBtn, { borderColor: theme.colors.border }]}
+              onPress={() => setShowUnsubscribeModal(false)}
+            >
+              <Text style={[styles.unsubscribeCloseBtnText, { color: theme.colors.text }]}>
+                Close
               </Text>
             </TouchableOpacity>
           </View>
@@ -1680,5 +1830,80 @@ const styles = StyleSheet.create({
   },
   threadSeparator: {
     height: SPACING.md,
+  },
+  unsubscribedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.sm,
+    borderRadius: RADIUS.md,
+    marginBottom: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  unsubscribedBannerText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '500',
+  },
+  unsubscribeModal: {
+    margin: SPACING.lg,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    maxWidth: 400,
+    alignSelf: 'center',
+    width: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  unsubscribeTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: '600',
+    marginBottom: SPACING.xs,
+  },
+  unsubscribeDescription: {
+    fontSize: FONT_SIZE.sm,
+    marginBottom: SPACING.md,
+  },
+  unsubscribeOption: {
+    padding: SPACING.md,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    marginBottom: SPACING.sm,
+  },
+  unsubscribeOptionTitle: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+    marginBottom: SPACING.xs,
+  },
+  unsubscribeOptionDesc: {
+    fontSize: FONT_SIZE.sm,
+    marginBottom: SPACING.xs,
+  },
+  unsubscribeOptionUrl: {
+    fontSize: FONT_SIZE.xs,
+    fontFamily: 'monospace',
+    marginBottom: SPACING.sm,
+  },
+  unsubscribeOptionBtn: {
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    borderRadius: RADIUS.md,
+    alignItems: 'center',
+  },
+  unsubscribeOptionBtnText: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+  },
+  unsubscribeCloseBtn: {
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    marginTop: SPACING.xs,
+  },
+  unsubscribeCloseBtnText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '500',
   },
 });

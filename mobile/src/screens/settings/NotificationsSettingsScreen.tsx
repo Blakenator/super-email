@@ -31,7 +31,6 @@ export function NotificationsSettingsScreen() {
     newEmailNotifications: true,
     soundEnabled: true,
     vibrationEnabled: true,
-    quietHoursEnabled: false,
   });
 
   const [detailLevel, setDetailLevel] = useState<DetailLevel>(
@@ -171,21 +170,6 @@ export function NotificationsSettingsScreen() {
           'Notification Sound',
           'Play a sound for notifications',
           'soundEnabled'
-        )}
-      </View>
-
-      <View style={[sharedStyles.sectionHeader]}>
-        <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>
-          QUIET HOURS
-        </Text>
-      </View>
-
-      <View style={[sharedStyles.section, { borderColor: theme.colors.border }]}>
-        {renderSwitchRow(
-          'moon',
-          'Quiet Hours',
-          'Silence notifications during set hours',
-          'quietHoursEnabled'
         )}
       </View>
 

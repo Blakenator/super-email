@@ -6,7 +6,7 @@ import React, {
   useCallback,
 } from 'react';
 /* eslint-disable react-refresh/only-export-components */
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type Session } from '@supabase/supabase-js';
 import { useApolloClient } from '@apollo/client/react';
 import {
   FETCH_PROFILE_QUERY,
@@ -224,9 +224,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        // Supabase's getSession() uses navigator.locks internally and can hang
+        // indefinitely if a stale token refresh stalls (e.g. after long absence).
+        let session: Session | null = null;
+        try {
+          const { data } = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise<never>((_, reject) =>
+              setTimeout(
+                () => reject(new Error('Session fetch timeout')),
+                5000,
+              ),
+            ),
+          ]);
+          session = data.session;
+        } catch (sessionError) {
+          console.warn(
+            'Session fetch timed out or failed, proceeding without session:',
+            sessionError,
+          );
+        }
 
         if (session?.user) {
           setToken(session.access_token);
