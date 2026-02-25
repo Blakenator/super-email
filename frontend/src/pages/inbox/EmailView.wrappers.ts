@@ -208,6 +208,34 @@ export const HeaderValue = styled.pre`
   overflow-y: auto;
 `;
 
+export const HeaderValueCell = styled.td`
+  position: relative;
+
+  &:hover button {
+    opacity: 1;
+  }
+`;
+
+export const CopyHeaderButton = styled.button`
+  position: absolute;
+  top: ${({ theme }) => theme.spacing.xs};
+  right: ${({ theme }) => theme.spacing.xs};
+  opacity: 0;
+  border: none;
+  background: ${({ theme }) => theme.colors.backgroundWhite};
+  color: ${({ theme }) => theme.colors.textSecondary};
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: ${({ theme }) => theme.borderRadius.sm};
+  font-size: 0.7rem;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  line-height: 1;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.primary};
+  }
+`;
+
 export const TagsContainer = styled.div`
   display: flex;
   flex-wrap: wrap;

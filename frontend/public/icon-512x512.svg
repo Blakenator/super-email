@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="512" height="512">
   <defs>
-    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#667eea"/>
-      <stop offset="100%" style="stop-color:#764ba2"/>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#667eea"/>
+      <stop offset="100%" stop-color="#764ba2"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="80" fill="url(#gradient)"/>
-  <g transform="translate(80, 128)">
-    <path d="M0 64 L176 176 L352 64" stroke="white" stroke-width="20" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    <rect x="0" y="40" width="352" height="216" rx="16" stroke="white" stroke-width="16" fill="none"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <g fill="white">
+    <path d="M272 296 C240 296 216 320 216 352 C216 370 224 386 238 396 L488 572 C500 581 524 581 536 572 L786 396 C800 386 808 370 808 352 C808 320 784 296 752 296 H272 Z"/>
+    <path d="M216 440 V696 C216 728 240 752 272 752 H752 C784 752 808 728 808 696 V440 L548 608 C528 624 496 624 476 608 Z"/>
   </g>
 </svg>

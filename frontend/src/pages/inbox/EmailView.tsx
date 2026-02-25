@@ -30,6 +30,7 @@ import {
   faTimes,
   faStar,
   faEllipsisV,
+  faCopy,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   LoadingSpinner,
@@ -69,6 +70,8 @@ import {
   CollapsedPreview,
   HeadersTable,
   HeaderValue,
+  HeaderValueCell,
+  CopyHeaderButton,
   TagsContainer,
   TagBadge,
   TagRemoveBtn,
@@ -1094,9 +1097,18 @@ export function EmailView({
                     return (
                       <tr key={key}>
                         <th>{key}</th>
-                        <td>
+                        <HeaderValueCell>
                           <HeaderValue>{displayValue}</HeaderValue>
-                        </td>
+                          <CopyHeaderButton
+                            title="Copy value"
+                            onClick={() => {
+                              navigator.clipboard.writeText(displayValue);
+                              toast.success('Copied to clipboard');
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faCopy} />
+                          </CopyHeaderButton>
+                        </HeaderValueCell>
                       </tr>
                     );
                   })}

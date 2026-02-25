@@ -57,6 +57,14 @@ if ! eas whoami &> /dev/null; then
     eas login
 fi
 
+# Generate icon assets
+echo -e "${BLUE}Generating icon assets...${NC}"
+cd "$PROJECT_ROOT"
+pnpm run icons:generate || {
+    echo -e "${RED}Icon generation failed.${NC}"
+    exit 1
+}
+
 # Navigate to mobile directory
 cd "$MOBILE_DIR"
 

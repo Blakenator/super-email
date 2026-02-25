@@ -15,12 +15,13 @@ import * as SystemUI from 'expo-system-ui';
 // Import all modules at top level to avoid "Invalid hook call" errors
 import { apolloClient } from './src/services/apollo';
 import { useAuthStore } from './src/stores/authStore';
-import { AppNavigator } from './src/navigation';
+import { AppNavigator, navigationRef } from './src/navigation';
 import { useTheme, darkTheme } from './src/theme';
 import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
 } from './src/services/notifications';
+import * as Notifications from 'expo-notifications';
 
 // Keep splash screen visible while we initialize
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -122,6 +123,14 @@ function MainApp() {
   }, [theme.colors.background]);
 
   useEffect(() => {
+    function handleNotificationNavigation(data: Record<string, unknown> | undefined) {
+      if (!data) return;
+      const emailId = data.emailId as string | undefined;
+      if (emailId && navigationRef.isReady()) {
+        navigationRef.navigate('EmailDetail', { emailId });
+      }
+    }
+
     const notificationSubscription = addNotificationReceivedListener(
       (notification) => {
         console.log('[App] Notification received:', notification.request.content.title);
@@ -129,8 +138,16 @@ function MainApp() {
     );
 
     const responseSubscription = addNotificationResponseListener((response) => {
-      console.log('[App] Notification response:', response);
-      // TODO: Navigate to email detail or inbox based on response.notification.request.content.data
+      const data = response.notification.request.content.data;
+      handleNotificationNavigation(data);
+    });
+
+    // Handle cold-start: check if app was opened via a notification tap
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) {
+        const data = response.notification.request.content.data;
+        handleNotificationNavigation(data);
+      }
     });
 
     return () => {

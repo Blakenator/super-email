@@ -45,6 +45,10 @@ fi
 
 cd "$PROJECT_ROOT"
 
+# Generate icon assets
+log_info "Generating icon assets..."
+pnpm run icons:generate
+
 # Build common package first (needed by frontend)
 log_info "Building common package..."
 cd common

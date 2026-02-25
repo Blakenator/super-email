@@ -23,6 +23,7 @@ import {
   Pressable,
   TextInput,
   ScrollView,
+  AppState,
 } from 'react-native';
 import { DateTime } from 'luxon';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -219,6 +220,15 @@ export function InboxScreen({
     fetchEmails();
     fetchEmailAccounts();
   }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        fetchEmails();
+      }
+    });
+    return () => subscription.remove();
+  }, [fetchEmails]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);

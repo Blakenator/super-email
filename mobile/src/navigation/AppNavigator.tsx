@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme, DefaultTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
@@ -95,6 +95,8 @@ export type MainTabParamList = {
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const MainTab = createBottomTabNavigator<MainTabParamList>();
+
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 // Auth Navigator
 function AuthNavigator() {
@@ -381,7 +383,7 @@ export function AppNavigator() {
   };
 
   return (
-    <NavigationContainer theme={navigationTheme}>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme}>
       <RootStack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: theme.colors.surface },

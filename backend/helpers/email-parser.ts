@@ -221,9 +221,20 @@ function extractUnsubscribeInfo(headers: Headers): {
       listUnsubscribeStr = listUnsubscribeRaw.join(', ');
     } else if (typeof listUnsubscribeRaw === 'object') {
       const rawObj = listUnsubscribeRaw as any;
-      listUnsubscribeStr = rawObj.text || rawObj.value || rawObj.name;
-      if (listUnsubscribeStr) {
-        listUnsubscribeStr = decodeMimeEncodedString(listUnsubscribeStr);
+
+      if (rawObj.url && typeof rawObj.url === 'string') {
+        result.url = rawObj.url;
+      }
+      if (rawObj.mail && typeof rawObj.mail === 'string') {
+        const emailMatch = rawObj.mail.match(/^([^?]+)/);
+        if (emailMatch) result.email = emailMatch[1].replace('mailto:', '');
+      }
+
+      if (!result.url && !result.email) {
+        listUnsubscribeStr = rawObj.text || rawObj.value || rawObj.name;
+        if (listUnsubscribeStr) {
+          listUnsubscribeStr = decodeMimeEncodedString(listUnsubscribeStr);
+        }
       }
     }
     if (listUnsubscribeStr) {
@@ -272,6 +283,44 @@ function extractUnsubscribeInfo(headers: Headers): {
   return result;
 }
 
+/**
+ * Fallback extraction from the stored headers object (headersToObject output).
+ * The stored format is known and visible in the UI, making it more reliable
+ * than the opaque mailparser Headers Map when the raw extraction misses values.
+ */
+function extractUnsubscribeFromStoredHeaders(
+  headers: Record<string, string | string[]>,
+): { url?: string; email?: string } {
+  const result: { url?: string; email?: string } = {};
+
+  const listRaw = headers['list'];
+  if (typeof listRaw === 'string') {
+    try {
+      const list = JSON.parse(listRaw);
+      if (list.unsubscribe?.url) result.url = list.unsubscribe.url;
+      if (list.unsubscribe?.mail) {
+        const mailValue = list.unsubscribe.mail;
+        const emailMatch = mailValue.match(/^([^?]+)/);
+        if (emailMatch) result.email = emailMatch[1].replace('mailto:', '');
+      }
+    } catch {
+      logger.debug('EmailParser', 'Failed to parse stored list header as JSON');
+    }
+  }
+
+  if (!result.url && !result.email) {
+    const listUnsub = headers['list-unsubscribe'];
+    const str = Array.isArray(listUnsub) ? listUnsub.join(', ') : listUnsub;
+    if (typeof str === 'string') {
+      const parsed = parseUnsubscribeHeader(str);
+      if (parsed.url) result.url = parsed.url;
+      if (parsed.email) result.email = parsed.email;
+    }
+  }
+
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Email data construction
 // ---------------------------------------------------------------------------
@@ -304,6 +353,12 @@ export function createEmailDataFromParsed(
 
   const headers = headersToObject(parsed.headers);
   const unsubscribeInfo = extractUnsubscribeInfo(parsed.headers);
+
+  if (!unsubscribeInfo.url || !unsubscribeInfo.email) {
+    const fallback = extractUnsubscribeFromStoredHeaders(headers);
+    if (!unsubscribeInfo.url && fallback.url) unsubscribeInfo.url = fallback.url;
+    if (!unsubscribeInfo.email && fallback.email) unsubscribeInfo.email = fallback.email;
+  }
 
   const referencesArray = parsed.references
     ? Array.isArray(parsed.references)
