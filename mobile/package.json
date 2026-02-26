@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
+    "eas-build-post-install": "sh ../scripts/prebuild-icons.sh",
     "expo:start": "expo start",
     "android": "pnpm -w run icons:generate -- --dev && APP_VARIANT=development expo run:android",
     "ios": "pnpm -w run icons:generate -- --dev && APP_VARIANT=development expo run:ios",

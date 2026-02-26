@@ -1,14 +1,11 @@
 #!/bin/sh
-# Wrapper for EAS Build prebuildCommand.
-# EAS appends flags like --platform and may prefix with pnpm expo,
-# which causes pnpm to choke on unrecognized options. This script
-# isolates the pnpm invocation from those extra arguments.
+# Icon generation for EAS Build (called via eas-build-post-install hook).
+# Uses APP_VARIANT env var (set in eas.json) to determine dev vs prod icons.
 
 cd "$(dirname "$0")/.." || exit 1
 
-DEV_FLAG=""
-for arg in "$@"; do
-  [ "$arg" = "--dev" ] && DEV_FLAG="-- --dev"
-done
-
-exec pnpm run icons:generate $DEV_FLAG
+if [ "$APP_VARIANT" = "development" ]; then
+  exec pnpm run icons:generate -- --dev
+else
+  exec pnpm run icons:generate
+fi

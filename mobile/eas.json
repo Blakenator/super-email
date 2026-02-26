@@ -11,8 +11,7 @@
       },
       "env": {
         "APP_VARIANT": "development"
-      },
-      "prebuildCommand": "sh ../scripts/prebuild-icons.sh --dev"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -24,8 +23,7 @@
       },
       "env": {
         "APP_VARIANT": "production"
-      },
-      "prebuildCommand": "sh ../scripts/prebuild-icons.sh"
+      }
     },
     "production": {
       "ios": {
@@ -36,8 +34,7 @@
       },
       "env": {
         "APP_VARIANT": "production"
-      },
-      "prebuildCommand": "sh ../scripts/prebuild-icons.sh"
+      }
     }
   },
   "submit": {
