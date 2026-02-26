@@ -12,7 +12,7 @@
       "env": {
         "APP_VARIANT": "development"
       },
-      "prebuildCommand": "pnpm -w run icons:generate --dev"
+      "prebuildCommand": "sh ../scripts/prebuild-icons.sh --dev"
     },
     "preview": {
       "distribution": "internal",
@@ -25,7 +25,7 @@
       "env": {
         "APP_VARIANT": "production"
       },
-      "prebuildCommand": "pnpm -w run icons:generate"
+      "prebuildCommand": "sh ../scripts/prebuild-icons.sh"
     },
     "production": {
       "ios": {
@@ -37,7 +37,7 @@
       "env": {
         "APP_VARIANT": "production"
       },
-      "prebuildCommand": "pnpm -w run icons:generate"
+      "prebuildCommand": "sh ../scripts/prebuild-icons.sh"
     }
   },
   "submit": {
