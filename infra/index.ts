@@ -240,6 +240,8 @@ const database = new aws.rds.Instance(`${stackName}-db`, {
   finalSnapshotIdentifier: isProd ? `${stackName}-final-snapshot` : undefined,
   backupRetentionPeriod: isProd ? 7 : 1, // Cost optimization: Minimal backups for dev
   deletionProtection: isProd,
+  performanceInsightsEnabled: true,
+  performanceInsightsRetentionPeriod: 7, // Free tier: 7 days
   tags: {
     Name: `${stackName}-postgres`,
     Environment: environment,
