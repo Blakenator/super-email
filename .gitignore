@@ -255,6 +255,7 @@ coverage/
 
 # Firebase service account keys (contain secrets)
 *firebase-adminsdk*.json
+google-services.json
 
 .idea
 Pulumi.*.yaml
