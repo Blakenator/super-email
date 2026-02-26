@@ -30,6 +30,8 @@ import {
   getBiometricType,
   BiometricType,
 } from '../services/biometricAuth';
+import { initEncryption } from '../services/encryption';
+import { clearAllCaches, startCacheSweepListener } from '../services/emailCache';
 import { registerForPushNotifications, registerPushTokenWithBackend } from '../services/notifications';
 import { gql } from '@apollo/client';
 
@@ -120,6 +122,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     console.log('[AuthStore] Starting initialization...');
     try {
       set({ isLoading: true });
+
+      // Initialize encryption for cached data
+      console.log('[AuthStore] Initializing encryption...');
+      try {
+        const { isNewKey } = await initEncryption();
+        if (isNewKey) {
+          console.log('[AuthStore] New encryption key generated, clearing stale caches...');
+          await clearAllCaches();
+        }
+        startCacheSweepListener();
+      } catch (e) {
+        console.error('[AuthStore] Encryption init failed:', e);
+      }
 
       // Check biometric availability
       console.log('[AuthStore] Checking biometric availability...');
@@ -335,6 +350,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       stopMailboxSubscription();
       
       await supabaseSignOut();
+      await clearAllCaches();
       await clearSecureStorage();
       await clearApolloCache();
 

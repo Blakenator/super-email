@@ -7,13 +7,12 @@ import { create } from 'zustand';
 import { apolloClient, mailboxUpdateEmitter, startMailboxSubscription, stopMailboxSubscription, MailboxUpdate } from '../services/apollo';
 import { gql } from '@apollo/client';
 import { 
-  cacheSetObject, 
-  cacheGetObject, 
   secureSet,
   secureGet,
   STORAGE_KEYS,
-  CACHE_KEYS,
 } from '../services/secureStorage';
+import { inboxPageCache, folderCache } from '../services/emailCache';
+import type { FolderCacheData } from '../services/emailCache';
 
 // GraphQL queries
 const GET_EMAILS_QUERY = gql`
@@ -265,22 +264,32 @@ export const useEmailStore = create<EmailState>((set, get) => ({
       
       set({ emails, totalCount });
       
-      // Cache emails for offline mode (using AsyncStorage for larger data)
-      // Strip body content to reduce cache size - bodies can be fetched when viewing
+      // Strip body content to reduce cache size — bodies are cached individually when viewed
       const emailsForCache = emails.map((email: Email) => ({
         ...email,
         textBody: null,
         htmlBody: null,
       }));
+
+      const cacheData: FolderCacheData = {
+        folder: currentFolder,
+        accountId: currentAccountId,
+        emails: emailsForCache,
+        totalCount,
+      };
       
       try {
-        await cacheSetObject(CACHE_KEYS.CACHED_EMAILS, {
-          folder: currentFolder,
-          accountId: currentAccountId,
-          emails: emailsForCache,
-          totalCount,
-          timestamp: new Date().toISOString(),
-        });
+        // Always cache current folder view
+        await folderCache.set(currentFolder, cacheData);
+        
+        // Also persist inbox page 1 to a dedicated key so it's always available
+        if (currentFolder === 'INBOX' && page === 1) {
+          await inboxPageCache.set('page1', {
+            emails: emailsForCache,
+            totalCount,
+            accountId: currentAccountId,
+          });
+        }
       } catch (cacheError) {
         console.warn('Failed to cache emails:', cacheError);
       }
@@ -426,24 +435,26 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   loadCachedData: async () => {
     const { currentFolder, currentAccountId } = get();
     
-    const cached = await cacheGetObject<{
-      folder: EmailFolder;
-      accountId: string | null;
-      emails: Email[];
-      totalCount: number;
-      timestamp: string;
-    }>(CACHE_KEYS.CACHED_EMAILS);
-    
+    // Try folder-specific cache first
+    const folderCached = await folderCache.get(currentFolder);
     if (
-      cached &&
-      cached.folder === currentFolder &&
-      cached.accountId === currentAccountId
+      folderCached &&
+      folderCached.folder === currentFolder &&
+      folderCached.accountId === currentAccountId
     ) {
       set({
-        emails: cached.emails,
-        totalCount: cached.totalCount,
-        lastSyncTime: cached.timestamp,
+        emails: folderCached.emails as Email[],
+        totalCount: folderCached.totalCount,
       });
+    } else if (currentFolder === 'INBOX') {
+      // Fall back to the dedicated inbox page 1 cache
+      const inboxCached = await inboxPageCache.get('page1');
+      if (inboxCached && inboxCached.accountId === currentAccountId) {
+        set({
+          emails: inboxCached.emails as Email[],
+          totalCount: inboxCached.totalCount,
+        });
+      }
     }
     
     const lastSyncTime = await secureGet(STORAGE_KEYS.LAST_SYNC_TIME);

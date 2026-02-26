@@ -1,3 +1,4 @@
+export { AppLogo } from './AppLogo';
 export { Button } from './Button';
 export { EmailChipInput } from './EmailChipInput';
 export { Input } from './Input';

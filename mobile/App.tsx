@@ -5,6 +5,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { AppLogo } from './src/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -95,7 +96,7 @@ export default function App() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.loadingContainer}>
           <StatusBar style="light" />
-          <Text style={styles.appIcon}>✉️</Text>
+          <AppLogo size={80} />
           <Text style={styles.appName}>SuperMail</Text>
           <ActivityIndicator
             size="large"
@@ -174,10 +175,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#667eea',
-  },
-  appIcon: {
-    fontSize: 80,
-    marginBottom: 16,
   },
   appName: {
     fontSize: 32,

@@ -15,7 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { useAuthStore } from '../../stores/authStore';
-import { Button, Input, useSafeInsets } from '../../components/ui';
+import { AppLogo, Button, Input, useSafeInsets } from '../../components/ui';
 
 interface SignupScreenProps {
   onNavigateToLogin: () => void;
@@ -77,7 +77,7 @@ export function SignupScreen({ onNavigateToLogin }: SignupScreenProps) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.logoIcon}>✉️</Text>
+            <AppLogo size={64} />
             <Text
               style={[styles.logoText, { color: theme.colors.textInverse }]}
             >
@@ -210,10 +210,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 32,
-  },
-  logoIcon: {
-    fontSize: 48,
-    marginBottom: 8,
   },
   logoText: {
     fontSize: FONT_SIZE.xxxl,

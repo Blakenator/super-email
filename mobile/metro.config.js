@@ -27,4 +27,7 @@ config.resolver.blockList = [
   /infra\/node_modules\/react\/.*/,
 ];
 
+// Enable package.json "exports" field resolution (needed by @noble/ciphers)
+config.resolver.unstable_enablePackageExports = true;
+
 module.exports = config;

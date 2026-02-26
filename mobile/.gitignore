@@ -36,6 +36,16 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# generated icons (rendered from scripts/*.svg by generate-icons.ts)
+assets/icon.png
+assets/icon-dev.png
+assets/adaptive-icon.png
+assets/adaptive-icon-dev.png
+assets/notification-icon.png
+assets/notification-icon-dev.png
+assets/splash-icon.png
+assets/favicon.png
+
 # generated native folders
 /ios
 /android

@@ -8,7 +8,11 @@
       "distribution": "internal",
       "ios": {
         "simulator": true
-      }
+      },
+      "env": {
+        "APP_VARIANT": "development"
+      },
+      "prebuildCommand": "pnpm -w run icons:generate -- --dev"
     },
     "preview": {
       "distribution": "internal",
@@ -17,7 +21,11 @@
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "env": {
+        "APP_VARIANT": "development"
+      },
+      "prebuildCommand": "pnpm -w run icons:generate -- --dev"
     },
     "production": {
       "ios": {
@@ -25,7 +33,11 @@
       },
       "android": {
         "buildType": "apk"
-      }
+      },
+      "env": {
+        "APP_VARIANT": "production"
+      },
+      "prebuildCommand": "pnpm -w run icons:generate"
     }
   },
   "submit": {

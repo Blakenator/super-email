@@ -1,13 +1,15 @@
 /**
  * Secure Storage Service
  * Uses expo-secure-store for encrypted storage of sensitive data (tokens, etc.)
- * and AsyncStorage for less sensitive cached data (emails, contacts).
+ * and AsyncStorage with AES encryption for larger cached data (emails, contacts).
  * 
  * SecureStore has a 2KB limit, so we use AsyncStorage for larger cached data.
+ * All AsyncStorage cache data is encrypted using a key stored in SecureStore.
  */
 
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { encrypt, decrypt, isEncryptionReady } from './encryption';
 
 // Keys for secure storage (sensitive, small data - uses SecureStore)
 export const STORAGE_KEYS = {
@@ -29,7 +31,7 @@ export const CACHE_KEYS = {
 } as const;
 
 type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
-type CacheKey = typeof CACHE_KEYS[keyof typeof CACHE_KEYS];
+type CacheKey = typeof CACHE_KEYS[keyof typeof CACHE_KEYS] | `@cache/${string}`;
 
 /**
  * Save a value to secure storage (for small, sensitive data)
@@ -96,22 +98,32 @@ export async function secureGetObject<T>(key: StorageKey): Promise<T | null> {
 // ============================================================================
 
 /**
- * Save a value to async storage (for larger, non-sensitive cached data)
+ * Save a value to async storage (encrypted via AES before writing)
  */
 export async function cacheSet(key: CacheKey, value: string): Promise<void> {
   try {
-    await AsyncStorage.setItem(key, value);
+    const stored = isEncryptionReady() ? encrypt(value) : value;
+    await AsyncStorage.setItem(key, stored);
   } catch (error) {
     console.error(`Error saving to cache [${key}]:`, error);
   }
 }
 
 /**
- * Get a value from async storage cache
+ * Get a value from async storage cache (decrypted after reading)
  */
 export async function cacheGet(key: CacheKey): Promise<string | null> {
   try {
-    return await AsyncStorage.getItem(key);
+    const stored = await AsyncStorage.getItem(key);
+    if (!stored) return null;
+    if (!isEncryptionReady()) return stored;
+    try {
+      return decrypt(stored);
+    } catch {
+      // Data was written before encryption was enabled, or key rotated — discard
+      await AsyncStorage.removeItem(key);
+      return null;
+    }
   } catch (error) {
     console.error(`Error reading from cache [${key}]:`, error);
     return null;
@@ -166,11 +178,23 @@ export async function clearSecureStorage(): Promise<void> {
   // Clear sensitive data from SecureStore
   await Promise.all(keysToDelete.map(key => secureDelete(key)));
   
-  // Clear cached data from AsyncStorage
-  await Promise.all([
-    cacheDelete(CACHE_KEYS.CACHED_EMAILS),
-    cacheDelete(CACHE_KEYS.CACHED_CONTACTS),
-  ]);
+  // Clear all @cache/ keys from AsyncStorage
+  await clearAllCacheKeys();
+}
+
+/**
+ * Remove all AsyncStorage keys that start with @cache/
+ */
+export async function clearAllCacheKeys(): Promise<void> {
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const cacheKeys = allKeys.filter(k => k.startsWith('@cache/'));
+    if (cacheKeys.length > 0) {
+      await AsyncStorage.multiRemove(cacheKeys);
+    }
+  } catch (error) {
+    console.error('Error clearing cache keys:', error);
+  }
 }
 
 /**

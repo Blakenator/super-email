@@ -27,6 +27,8 @@ import { gql } from '@apollo/client';
 import { DateTime } from 'luxon';
 import { wrapEmailHtml } from '../../../../common/src/emailHtmlStyles';
 import { useAuthStore } from '../../stores/authStore';
+import { viewedEmailCache } from '../../services/emailCache';
+import type { ViewedEmailData } from '../../services/emailCache';
 
 const GET_EMAIL_QUERY = gql`
   query GetEmail($input: GetEmailInput!) {
@@ -332,11 +334,39 @@ export function EmailDetailScreen({
   }, [currentSectionIndex, threadSections, threadWebViewHeights]);
 
 
+  const cacheEmailData = async (emailData: ViewedEmailData) => {
+    try {
+      await viewedEmailCache.set(emailData.id, emailData);
+    } catch {
+      // Non-critical — cache write failure shouldn't affect UX
+    }
+  };
+
+  const cacheThreadEmails = async (threadEmailList: ThreadEmail[]) => {
+    try {
+      await Promise.all(
+        threadEmailList.map(te =>
+          viewedEmailCache.set(te.id, te as unknown as ViewedEmailData),
+        ),
+      );
+    } catch {
+      // Non-critical
+    }
+  };
+
   const loadEmail = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
+      // 1. Try cache first for instant display (stale-while-revalidate)
+      const cached = await viewedEmailCache.get(emailId);
+      if (cached) {
+        setEmail(cached as unknown as Email);
+        setIsLoading(false);
+      }
+
+      // 2. Fetch fresh data from network
       const { data, errors } = await apolloClient.query({
         query: GET_EMAIL_QUERY,
         variables: { input: { id: emailId } },
@@ -344,7 +374,7 @@ export function EmailDetailScreen({
       });
 
       if (errors?.length) {
-        setError(errors[0].message);
+        if (!cached) setError(errors[0].message);
         return;
       }
 
@@ -352,6 +382,9 @@ export function EmailDetailScreen({
         const emailData = data.getEmail;
         setEmail(emailData);
         
+        // Cache the viewed email
+        cacheEmailData(emailData as ViewedEmailData);
+
         // If email has a thread with multiple messages, fetch thread emails
         if (emailData.threadId && (emailData.threadCount ?? 1) > 1) {
           try {
@@ -365,21 +398,26 @@ export function EmailDetailScreen({
               setThreadEmails(threadData.getEmailsByThread);
               // Auto-expand all thread emails by default
               setExpandedThreadEmails(new Set(threadData.getEmailsByThread.map((e: ThreadEmail) => e.id)));
+              
+              // Cache all thread sibling emails
+              cacheThreadEmails(threadData.getEmailsByThread);
             }
           } catch (threadErr) {
             console.error('Error loading thread emails:', threadErr);
-            // Continue without thread - not a fatal error
           }
         } else {
           setThreadEmails([]);
           setExpandedThreadEmails(new Set());
         }
-      } else {
+      } else if (!cached) {
         setError('Email not found');
       }
     } catch (err: any) {
       console.error('Error loading email:', err);
-      setError(err.message || 'Failed to load email');
+      // Only show error if we had no cached data to display
+      if (!email) {
+        setError(err.message || 'Failed to load email');
+      }
     } finally {
       setIsLoading(false);
     }
