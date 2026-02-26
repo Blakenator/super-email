@@ -1,0 +1,41 @@
+# EAS Build archive ignore file.
+# Replaces all .gitignore files when present. Combines root and mobile
+# gitignore patterns, but allows generated mobile icon assets through
+# (they are built locally before eas build).
+
+# --- Root patterns ---
+
+node_modules/
+*.log
+*.tsbuildinfo
+.env
+.env.*
+dist
+coverage/
+.cache
+.idea
+.DS_*
+**/*.backup.*
+**/*.back.*
+data/
+.deploy-outputs
+.backend-image-tag
+*firebase-adminsdk*.json
+google-services.json
+Pulumi.*.yaml
+
+# --- Mobile patterns ---
+
+.expo/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+mobile/ios
+mobile/android
