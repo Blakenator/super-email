@@ -12,7 +12,7 @@
       "env": {
         "APP_VARIANT": "development"
       },
-      "prebuildCommand": "pnpm -w run icons:generate -- --dev"
+      "prebuildCommand": "pnpm -w run icons:generate --dev"
     },
     "preview": {
       "distribution": "internal",
@@ -23,9 +23,9 @@
         "buildType": "apk"
       },
       "env": {
-        "APP_VARIANT": "development"
+        "APP_VARIANT": "production"
       },
-      "prebuildCommand": "pnpm -w run icons:generate -- --dev"
+      "prebuildCommand": "pnpm -w run icons:generate"
     },
     "production": {
       "ios": {
