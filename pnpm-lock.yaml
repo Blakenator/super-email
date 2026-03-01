@@ -385,6 +385,9 @@ importers:
       '@pulumi/awsx':
         specifier: ^2.0.0
         version: 2.22.0(ts-node@10.9.2(@types/node@20.19.28)(typescript@5.9.3))(typescript@5.9.3)
+      '@pulumi/cloudflare':
+        specifier: ^5.0.0
+        version: 5.49.1(ts-node@10.9.2(@types/node@20.19.28)(typescript@5.9.3))(typescript@5.9.3)
       '@pulumi/docker':
         specifier: ^4.0.0
         version: 4.11.0(ts-node@10.9.2(@types/node@20.19.28)(typescript@5.9.3))(typescript@5.9.3)
@@ -3896,6 +3899,9 @@ packages:
 
   '@pulumi/awsx@2.22.0':
     resolution: {integrity: sha512-uajrWX6zkk8G9DCCkCkRaH2yzeGRkCElkC8FOE9viUtb9WyVt01EbNqJkje+QwYq4g055jWqcq2YRn7xT1Y44w==}
+
+  '@pulumi/cloudflare@5.49.1':
+    resolution: {integrity: sha512-sc4j3XgKId9g9hIB5ZS4QXCLStZzYwzIAgbeAfW4+O78Nd3/tkNsuEWmUnPTpsw5Ezpc5zIwZxBCwhPX5qg+sA==}
 
   '@pulumi/docker-build@0.0.8':
     resolution: {integrity: sha512-tS6UUgmDjQ+LVekMXGC/6ND7riY75h3oO9fLiVOrvNafCBumxK+Cjm6ZZ9tUChLYvw6H+rZRExZEhfC8F/SQgQ==}
@@ -15522,6 +15528,15 @@ snapshots:
       mime: 2.6.0
     transitivePeerDependencies:
       - aws-crt
+      - bluebird
+      - supports-color
+      - ts-node
+      - typescript
+
+  '@pulumi/cloudflare@5.49.1(ts-node@10.9.2(@types/node@20.19.28)(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@pulumi/pulumi': 3.215.0(ts-node@10.9.2(@types/node@20.19.28)(typescript@5.9.3))(typescript@5.9.3)
+    transitivePeerDependencies:
       - bluebird
       - supports-color
       - ts-node

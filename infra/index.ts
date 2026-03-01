@@ -1,6 +1,7 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
+import * as cloudflare from '@pulumi/cloudflare';
 
 // =============================================================================
 // COST-OPTIMIZED ECS ARCHITECTURE
@@ -34,6 +35,8 @@ const dbInstanceClass = config.get('dbInstanceClass') || 'db.t4g.micro'; // ARM-
 const supabaseUrl = config.require('supabaseUrl');
 const supabaseAnonKey = config.require('supabaseAnonKey');
 const supabaseServiceRoleKey = config.requireSecret('supabaseServiceRoleKey');
+
+const domainName = config.get('domainName');
 
 const stackName = `email-client-${environment}`;
 const isProd = environment === 'prod';
@@ -732,6 +735,45 @@ new aws.lb.Listener(`${stackName}-http-listener`, {
 });
 
 // =============================================================================
+// Custom Domain: ACM Certificate + Cloudflare DNS
+// =============================================================================
+
+const certificate = domainName
+  ? new aws.acm.Certificate(`${stackName}-cert`, {
+      domainName: domainName,
+      subjectAlternativeNames: [`*.${domainName}`],
+      validationMethod: 'DNS',
+      tags: { Name: `${stackName}-cert`, Environment: environment },
+    })
+  : undefined;
+
+let certValidation: aws.acm.CertificateValidation | undefined;
+
+if (domainName && certificate) {
+  const zone = cloudflare.getZoneOutput({ name: domainName });
+
+  const validationRecords = certificate.domainValidationOptions.apply((opts) =>
+    opts.map(
+      (opt, i) =>
+        new cloudflare.Record(`${stackName}-cert-validation-${i}`, {
+          zoneId: zone.zoneId,
+          name: opt.resourceRecordName,
+          type: opt.resourceRecordType,
+          content: opt.resourceRecordValue,
+          ttl: 60,
+          proxied: false,
+        }),
+    ),
+  );
+
+  certValidation = new aws.acm.CertificateValidation(
+    `${stackName}-cert-validation`,
+    { certificateArn: certificate.arn },
+    { dependsOn: validationRecords },
+  );
+}
+
+// =============================================================================
 // CloudFront CDN
 // =============================================================================
 // Note: Created before Task Definition so backend can use the CloudFront URL
@@ -821,14 +863,36 @@ const frontendDistribution = new aws.cloudfront.Distribution(
       geoRestriction: { restrictionType: 'none' },
     },
 
-    viewerCertificate: {
-      cloudfrontDefaultCertificate: true,
-    },
+    aliases: domainName ? [domainName] : undefined,
+    viewerCertificate:
+      domainName && certificate
+        ? {
+            acmCertificateArn: certificate.arn,
+            sslSupportMethod: 'sni-only' as const,
+            minimumProtocolVersion: 'TLSv1.2_2021',
+          }
+        : { cloudfrontDefaultCertificate: true },
 
     tags: { Name: `${stackName}-cdn`, Environment: environment },
   },
-  { dependsOn: [alb, frontendBucketPolicy] },
+  {
+    dependsOn: [alb, frontendBucketPolicy, ...(certValidation ? [certValidation] : [])],
+  },
 );
+
+// Cloudflare CNAME pointing domain to CloudFront
+if (domainName) {
+  const zone = cloudflare.getZoneOutput({ name: domainName });
+
+  new cloudflare.Record(`${stackName}-dns`, {
+    zoneId: zone.zoneId,
+    name: domainName,
+    type: 'CNAME',
+    content: frontendDistribution.domainName,
+    ttl: 1,
+    proxied: false,
+  });
+}
 
 // =============================================================================
 // ECS Task Definition
@@ -895,8 +959,12 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'SUPABASE_URL', value: supabaseUrl },
                 { name: 'SUPABASE_ANON_KEY', value: supabaseAnonKey },
                 { name: 'STRIPE_PUBLISHABLE_KEY', value: stripePublishableKey },
-                // Frontend URL for Stripe checkout redirects (from CloudFront)
-                { name: 'FRONTEND_URL', value: `https://${cloudfrontDomain}` },
+                {
+                  name: 'FRONTEND_URL',
+                  value: domainName
+                    ? `https://${domainName}`
+                    : `https://${cloudfrontDomain}`,
+                },
                 // Stripe price IDs for subscription tiers
                 { name: 'STRIPE_PRICE_STORAGE_BASIC', value: stripePriceStorageBasic },
                 { name: 'STRIPE_PRICE_STORAGE_PRO', value: stripePriceStoragePro },
@@ -1085,8 +1153,9 @@ const syncLambda = new aws.lambda.Function(
     }),
     environment: {
       variables: {
-        // Use CloudFront URL to reach the backend via /api/* path
-        BACKEND_URL: pulumi.interpolate`https://${frontendDistribution.domainName}`,
+        BACKEND_URL: domainName
+          ? `https://${domainName}`
+          : pulumi.interpolate`https://${frontendDistribution.domainName}`,
         INTERNAL_API_TOKEN: internalApiTokenVersion.secretString.apply(
           (s) => s || '',
         ),
@@ -1135,9 +1204,14 @@ const syncLambdaPermission = new aws.lambda.Permission(
 // =============================================================================
 
 export const vpcId = vpc.vpcId;
-export const backendApiUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`;
-export const frontendUrl = pulumi.interpolate`https://${frontendDistribution.domainName}`;
+export const backendApiUrl = domainName
+  ? `https://${domainName}`
+  : pulumi.interpolate`https://${frontendDistribution.domainName}`;
+export const frontendUrl = domainName
+  ? `https://${domainName}`
+  : pulumi.interpolate`https://${frontendDistribution.domainName}`;
 export const cloudfrontDomain = frontendDistribution.domainName;
+export const customDomain = domainName;
 export const frontendBucketName = frontendBucket.bucket;
 export const frontendDistributionId = frontendDistribution.id;
 export const backendRepoUrl = backendRepo.repositoryUrl;
