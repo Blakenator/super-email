@@ -36,7 +36,8 @@ const supabaseUrl = config.require('supabaseUrl');
 const supabaseAnonKey = config.require('supabaseAnonKey');
 const supabaseServiceRoleKey = config.requireSecret('supabaseServiceRoleKey');
 
-const domainName = config.get('domainName');
+const domainName = process.env.DOMAIN_NAME || config.get('domainName');
+const cloudflareZoneId = process.env.CLOUDFLARE_ZONE_ID || config.get('cloudflareZoneId');
 
 const stackName = `email-client-${environment}`;
 const isProd = environment === 'prod';
@@ -749,14 +750,12 @@ const certificate = domainName
 
 let certValidation: aws.acm.CertificateValidation | undefined;
 
-if (domainName && certificate) {
-  const zone = cloudflare.getZoneOutput({ name: domainName });
-
+if (domainName && certificate && cloudflareZoneId) {
   const validationRecords = certificate.domainValidationOptions.apply((opts) =>
     opts.map(
       (opt, i) =>
         new cloudflare.Record(`${stackName}-cert-validation-${i}`, {
-          zoneId: zone.zoneId,
+          zoneId: cloudflareZoneId,
           name: opt.resourceRecordName,
           type: opt.resourceRecordType,
           content: opt.resourceRecordValue,
@@ -881,11 +880,9 @@ const frontendDistribution = new aws.cloudfront.Distribution(
 );
 
 // Cloudflare CNAME pointing domain to CloudFront
-if (domainName) {
-  const zone = cloudflare.getZoneOutput({ name: domainName });
-
+if (domainName && cloudflareZoneId) {
   new cloudflare.Record(`${stackName}-dns`, {
-    zoneId: zone.zoneId,
+    zoneId: cloudflareZoneId,
     name: domainName,
     type: 'CNAME',
     content: frontendDistribution.domainName,

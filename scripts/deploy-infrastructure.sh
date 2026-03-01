@@ -15,6 +15,10 @@
 # Environment variables optional (for paid subscription tiers):
 #   - Any STRIPE_PRICE_* variables are auto-loaded into Pulumi config
 #   - e.g., STRIPE_PRICE_STORAGE_BASIC -> stripePriceStorageBasic
+# Environment variables optional (for custom domain):
+#   - DOMAIN_NAME (e.g., super-mail.app)
+#   - CLOUDFLARE_API_TOKEN (auto-read by Cloudflare provider)
+#   - CLOUDFLARE_ZONE_ID (zone ID from Cloudflare dashboard)
 # ============================================================================
 
 set -e
@@ -116,6 +120,19 @@ if [ "$PRICE_COUNT" -eq 0 ]; then
     log_warn "No Stripe price IDs configured - paid subscription tiers will be unavailable"
 else
     log_info "Loaded $PRICE_COUNT Stripe price ID(s)"
+fi
+
+# Set custom domain configuration (optional)
+if [ -n "$DOMAIN_NAME" ]; then
+    log_info "Setting custom domain: $DOMAIN_NAME"
+    pulumi config set domainName "$DOMAIN_NAME"
+else
+    log_warn "DOMAIN_NAME not set - using default CloudFront domain"
+fi
+
+if [ -n "$CLOUDFLARE_ZONE_ID" ]; then
+    log_info "Setting Cloudflare zone ID..."
+    pulumi config set cloudflareZoneId "$CLOUDFLARE_ZONE_ID"
 fi
 
 # Deploy infrastructure
