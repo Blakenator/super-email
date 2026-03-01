@@ -85,6 +85,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         color: "#667eea",
       },
     ],
+    "./plugins/withMailtoHandler",
   ],
   extra: {
     eas: {

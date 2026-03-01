@@ -10,6 +10,7 @@ import {
   from,
   split,
   gql,
+  Observable,
 } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
@@ -17,7 +18,8 @@ import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
 import { getMainDefinition } from '@apollo/client/utilities';
 import { createClient } from 'graphql-ws';
 import { config } from '../config/env';
-import { secureGet, STORAGE_KEYS } from './secureStorage';
+import { secureGet, secureSet, STORAGE_KEYS } from './secureStorage';
+import { refreshSession } from './supabase';
 import { Alert, AppState } from 'react-native';
 
 // Create HTTP link
@@ -74,30 +76,86 @@ const getWsClient = () => {
 // Create WebSocket link
 const wsLink = new GraphQLWsLink(getWsClient());
 
-// Error handling link
-const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
+// Token refresh state - ensures only one refresh happens at a time
+let isRefreshingToken = false;
+let pendingRefreshSubscribers: Array<(token: string) => void> = [];
+
+function onTokenRefreshed(token: string) {
+  pendingRefreshSubscribers.forEach(cb => cb(token));
+  pendingRefreshSubscribers = [];
+}
+
+function addRefreshSubscriber(cb: (token: string) => void) {
+  pendingRefreshSubscribers.push(cb);
+}
+
+function isAuthError(code: string | undefined, message: string): boolean {
+  return (
+    code === 'UNAUTHENTICATED' ||
+    message.includes('Not authenticated') ||
+    message.includes('jwt expired')
+  );
+}
+
+// Error handling link with automatic token refresh and retry
+const errorLink = onError(({ graphQLErrors, networkError, operation, forward }) => {
   if (graphQLErrors) {
+    const authErr = graphQLErrors.find(({ message, extensions }) =>
+      isAuthError(extensions?.code as string | undefined, message),
+    );
+
+    if (authErr) {
+      // Attempt to refresh the token and retry the operation
+      return new Observable(observer => {
+        const retryWithNewToken = (newToken: string) => {
+          operation.setContext(({ headers = {} }: Record<string, any>) => ({
+            headers: {
+              ...headers,
+              authorization: `Bearer ${newToken}`,
+            },
+          }));
+          forward(operation).subscribe(observer);
+        };
+
+        if (isRefreshingToken) {
+          addRefreshSubscriber(retryWithNewToken);
+          return;
+        }
+
+        isRefreshingToken = true;
+        console.log('[Apollo] Auth error detected, refreshing token...');
+
+        refreshSession()
+          .then(async (session) => {
+            if (session?.access_token) {
+              console.log('[Apollo] Token refreshed, retrying operation');
+              await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+              isRefreshingToken = false;
+              onTokenRefreshed(session.access_token);
+              retryWithNewToken(session.access_token);
+            } else {
+              throw new Error('No access token in refreshed session');
+            }
+          })
+          .catch((err) => {
+            console.log('[Apollo] Token refresh failed, emitting authError:', err);
+            isRefreshingToken = false;
+            pendingRefreshSubscribers = [];
+            authErrorEmitter.emit('authError', authErr.message);
+            observer.error(authErr);
+          });
+      });
+    }
+
     graphQLErrors.forEach(({ message, locations, path, extensions }) => {
       // eslint-disable-next-line no-console
       console.error(
         `[GraphQL error]: Message: ${message}, Location: ${JSON.stringify(locations)}, Path: ${path?.join('.') ?? 'unknown'}`,
       );
 
-      // Handle specific error codes
       const code = extensions?.code as string | undefined;
 
-      if (
-        code === 'UNAUTHENTICATED' ||
-        message.includes('Not authenticated') ||
-        message.includes('jwt expired')
-      ) {
-        // Emit event for auth store to handle
-        authErrorEmitter.emit('authError', message);
-        return;
-      }
-
       if (code === 'BAD_USER_INPUT' || code === 'GRAPHQL_VALIDATION_FAILED') {
-        // Handle validation errors - these are usually GQL issues
         // eslint-disable-next-line no-console
         console.error('[GQL Validation Error]:', message);
         errorEmitter.emit('gqlError', {
@@ -107,7 +165,6 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
         return;
       }
 
-      // For other errors, emit a general error event
       errorEmitter.emit('error', {
         message,
         code: code ?? 'UNKNOWN',
@@ -120,7 +177,6 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
     // eslint-disable-next-line no-console
     console.error(`[Network error]: ${networkError}`);
 
-    // Check for HTTP status codes
     if ('statusCode' in networkError) {
       const statusCode = (networkError as { statusCode: number }).statusCode;
 
@@ -135,8 +191,42 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
       }
 
       if (statusCode === 401 || statusCode === 403) {
-        authErrorEmitter.emit('authError', 'Session expired');
-        return;
+        // Attempt token refresh for HTTP-level auth errors too
+        return new Observable(observer => {
+          const retryWithNewToken = (newToken: string) => {
+            operation.setContext(({ headers = {} }: Record<string, any>) => ({
+              headers: {
+                ...headers,
+                authorization: `Bearer ${newToken}`,
+              },
+            }));
+            forward(operation).subscribe(observer);
+          };
+
+          if (isRefreshingToken) {
+            addRefreshSubscriber(retryWithNewToken);
+            return;
+          }
+
+          isRefreshingToken = true;
+          refreshSession()
+            .then(async (session) => {
+              if (session?.access_token) {
+                await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+                isRefreshingToken = false;
+                onTokenRefreshed(session.access_token);
+                retryWithNewToken(session.access_token);
+              } else {
+                throw new Error('No access token in refreshed session');
+              }
+            })
+            .catch(() => {
+              isRefreshingToken = false;
+              pendingRefreshSubscribers = [];
+              authErrorEmitter.emit('authError', 'Session expired');
+              observer.error(networkError);
+            });
+        });
       }
 
       if (statusCode >= 500) {
@@ -148,7 +238,6 @@ const errorLink = onError(({ graphQLErrors, networkError, operation }) => {
       }
     }
 
-    // Handle offline mode
     if (networkError.message.includes('Network request failed')) {
       offlineEmitter.emit('offline');
     }
@@ -219,17 +308,9 @@ const cache = new InMemoryCache({
     Query: {
       fields: {
         getEmails: {
-          // Merge paginated results
-          keyArgs: ['input', ['folder', 'emailAccountId', 'searchQuery']],
-          merge(existing = [], incoming, { args }) {
-            const offset = args?.input?.offset || 0;
-            const merged = existing.slice(0);
-
-            for (let i = 0; i < incoming.length; i++) {
-              merged[offset + i] = incoming[i];
-            }
-
-            return merged;
+          keyArgs: ['input', ['folder', 'emailAccountId', 'searchQuery', 'offset', 'limit']],
+          merge(_existing, incoming) {
+            return incoming;
           },
         },
       },
@@ -364,14 +445,22 @@ export interface MailboxUpdate {
 export const mailboxUpdateEmitter = new SimpleEventEmitter<MailboxUpdate>();
 
 let subscriptionHandle: { unsubscribe: () => void } | null = null;
+let subscriptionRetryTimeout: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Start mailbox subscription - call this when user is authenticated
+ * Start mailbox subscription - call this when user is authenticated.
+ * On auth errors, automatically refreshes the token, reconnects the
+ * WebSocket, and retries.
  */
 export function startMailboxSubscription(): void {
   if (subscriptionHandle) {
     console.log('[Subscription] Already subscribed, skipping');
     return;
+  }
+
+  if (subscriptionRetryTimeout) {
+    clearTimeout(subscriptionRetryTimeout);
+    subscriptionRetryTimeout = null;
   }
 
   console.log('[Subscription] Starting mailbox subscription...');
@@ -389,6 +478,35 @@ export function startMailboxSubscription(): void {
     },
     error: (err) => {
       console.error('[Subscription] Error:', err);
+      subscriptionHandle = null;
+
+      const errMsg = err?.message || String(err);
+      const isAuth =
+        errMsg.includes('Authentication required') ||
+        errMsg.includes('Not authenticated') ||
+        errMsg.includes('jwt expired') ||
+        errMsg.includes('UNAUTHENTICATED');
+
+      if (isAuth) {
+        console.log('[Subscription] Auth error, refreshing token and reconnecting...');
+        refreshSession()
+          .then(async (session) => {
+            if (session?.access_token) {
+              await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+              reconnectWebSocket();
+              subscriptionRetryTimeout = setTimeout(() => {
+                startMailboxSubscription();
+              }, 500);
+            } else {
+              authErrorEmitter.emit('authError', errMsg);
+            }
+          })
+          .catch(() => {
+            authErrorEmitter.emit('authError', errMsg);
+          });
+        return;
+      }
+
       subscriptionEmitter.emit('error', err);
     },
     complete: () => {
@@ -402,6 +520,10 @@ export function startMailboxSubscription(): void {
  * Stop mailbox subscription - call this when user logs out
  */
 export function stopMailboxSubscription(): void {
+  if (subscriptionRetryTimeout) {
+    clearTimeout(subscriptionRetryTimeout);
+    subscriptionRetryTimeout = null;
+  }
   if (subscriptionHandle) {
     console.log('[Subscription] Stopping mailbox subscription...');
     subscriptionHandle.unsubscribe();
@@ -409,18 +531,10 @@ export function stopMailboxSubscription(): void {
   }
 }
 
-// Handle app state changes - reconnect when app comes to foreground
-AppState.addEventListener('change', (nextAppState) => {
-  if (nextAppState === 'active' && subscriptionHandle === null) {
-    // Check if we should be subscribed (user is authenticated)
-    secureGet(STORAGE_KEYS.AUTH_TOKEN).then((token) => {
-      if (token) {
-        console.log('[Subscription] App came to foreground, reconnecting...');
-        startMailboxSubscription();
-      }
-    });
-  }
-});
+// NOTE: Subscription reconnection on foreground is handled by the auth store's
+// AppState listener, which refreshes the token first and then restarts the
+// subscription. We intentionally do NOT start subscriptions here to avoid
+// racing ahead of the token refresh.
 
 /**
  * Helper to safely execute a GraphQL operation with error handling

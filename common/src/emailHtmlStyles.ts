@@ -165,7 +165,7 @@ export function wrapEmailHtml(
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.1, maximum-scale=10.0, user-scalable=yes">
   <meta name="color-scheme" content="${options.isDarkMode ? 'dark' : 'light'}">
   <base target="_blank">
   <style>${css}</style>

@@ -71,9 +71,16 @@ interface ComposeScreenProps {
     htmlBody?: string;
     attachments?: Array<{ id: string; filename: string }>;
   };
+  mailto?: {
+    to: string;
+    cc?: string;
+    bcc?: string;
+    subject?: string;
+    body?: string;
+  };
 }
 
-export function ComposeScreen({ onClose, replyTo, replyAll, forward }: ComposeScreenProps) {
+export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: ComposeScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { emailAccounts, fetchEmailAccounts } = useEmailStore();
@@ -87,24 +94,24 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward }: ComposeSc
   const isReplyAll = !!replyAll;
   const isForward = !!forward;
   
-  // Get initial To addresses
   const getInitialTo = (): string => {
     if (replyTo) return replyTo.toAddress;
     if (replyAll) return replyAll.toAddresses.join(', ');
+    if (mailto?.to) return mailto.to;
     return '';
   };
   
-  // Get initial CC addresses (for reply all)
   const getInitialCc = (): string => {
     if (replyAll?.ccAddresses) return replyAll.ccAddresses.join(', ');
+    if (mailto?.cc) return mailto.cc;
     return '';
   };
   
-  // Get initial subject
   const getInitialSubject = (): string => {
     if (replyTo?.subject) return `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}`;
     if (replyAll?.subject) return `Re: ${replyAll.subject.replace(/^Re:\s*/i, '')}`;
     if (forward?.subject) return `Fwd: ${forward.subject.replace(/^Fwd:\s*/i, '')}`;
+    if (mailto?.subject) return mailto.subject;
     return '';
   };
   
@@ -115,12 +122,12 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward }: ComposeSc
   
   const [to, setTo] = useState(getInitialTo());
   const [cc, setCc] = useState(getInitialCc());
-  const [bcc, setBcc] = useState('');
+  const [bcc, setBcc] = useState(mailto?.bcc || '');
   const [subject, setSubject] = useState(getInitialSubject());
   const [bodyHtml, setBodyHtml] = useState('');
-  const [bodyText, setBodyText] = useState('');
+  const [bodyText, setBodyText] = useState(mailto?.body || '');
   const [isSending, setIsSending] = useState(false);
-  const [showCcBcc, setShowCcBcc] = useState(isReplyAll || !!getInitialCc());
+  const [showCcBcc, setShowCcBcc] = useState(isReplyAll || !!getInitialCc() || !!mailto?.bcc);
   
   // Format quoted original email for reply/forward using shared utility
   const getQuotedOriginalEmail = (): string => {
@@ -311,7 +318,13 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward }: ComposeSc
             placeholder="Compose your email..."
             minHeight={250}
             autoFocus={!(isReply || isReplyAll || isForward)}
-            initialHtml={getOriginalHtmlBody() ? getQuotedOriginalEmail() : undefined}
+            initialHtml={
+              getOriginalHtmlBody()
+                ? getQuotedOriginalEmail()
+                : mailto?.body
+                  ? `<p>${mailto.body.replace(/\n/g, '<br/>')}</p>`
+                  : undefined
+            }
           />
         </View>
 

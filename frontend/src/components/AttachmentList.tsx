@@ -2,24 +2,16 @@ import React, { useState } from 'react';
 import { Card, Badge, Collapse } from 'react-bootstrap';
 import {
   Download,
-  FileText,
-  Image,
-  Video,
-  File,
   Eye,
   Grid3x3,
   List,
-  FileSpreadsheet,
-  FileArchive,
-  FileCode,
-  Music,
-  Presentation,
   Paperclip,
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
 import { Button } from '../core/components/Button';
 import type { Attachment } from '../__generated__/graphql';
+import { getFileIcon, formatFileSize, canPreview } from './attachmentUtils';
 import {
   AttachmentContainer,
   AttachmentHeader,
@@ -43,95 +35,6 @@ interface AttachmentListProps {
 }
 
 type ViewMode = 'list' | 'grid';
-
-const getFileIcon = (mimeType: string, filename: string, size: number = 20) => {
-  const props = { size };
-  const lowerFilename = filename.toLowerCase();
-
-  // Images
-  if (mimeType.startsWith('image/')) return <Image {...props} />;
-
-  // Videos
-  if (mimeType.startsWith('video/')) return <Video {...props} />;
-
-  // Audio
-  if (mimeType.startsWith('audio/')) return <Music {...props} />;
-
-  // PDF
-  if (mimeType.includes('pdf')) return <FileText {...props} />;
-
-  // Spreadsheets (Excel, CSV, etc.)
-  if (
-    mimeType.includes('spreadsheet') ||
-    mimeType.includes('excel') ||
-    lowerFilename.endsWith('.csv') ||
-    lowerFilename.endsWith('.xls') ||
-    lowerFilename.endsWith('.xlsx')
-  )
-    return <FileSpreadsheet {...props} />;
-
-  // Presentations (PowerPoint, etc.)
-  if (
-    mimeType.includes('presentation') ||
-    mimeType.includes('powerpoint') ||
-    lowerFilename.endsWith('.ppt') ||
-    lowerFilename.endsWith('.pptx')
-  )
-    return <Presentation {...props} />;
-
-  // Archives (zip, rar, etc.)
-  if (
-    mimeType.includes('zip') ||
-    mimeType.includes('compressed') ||
-    mimeType.includes('archive') ||
-    lowerFilename.endsWith('.zip') ||
-    lowerFilename.endsWith('.rar') ||
-    lowerFilename.endsWith('.7z') ||
-    lowerFilename.endsWith('.tar') ||
-    lowerFilename.endsWith('.gz')
-  )
-    return <FileArchive {...props} />;
-
-  // Code files
-  if (
-    mimeType.includes('javascript') ||
-    mimeType.includes('json') ||
-    mimeType.includes('xml') ||
-    lowerFilename.endsWith('.js') ||
-    lowerFilename.endsWith('.ts') ||
-    lowerFilename.endsWith('.jsx') ||
-    lowerFilename.endsWith('.tsx') ||
-    lowerFilename.endsWith('.html') ||
-    lowerFilename.endsWith('.css') ||
-    lowerFilename.endsWith('.py') ||
-    lowerFilename.endsWith('.java') ||
-    lowerFilename.endsWith('.cpp') ||
-    lowerFilename.endsWith('.c') ||
-    lowerFilename.endsWith('.go') ||
-    lowerFilename.endsWith('.rs')
-  )
-    return <FileCode {...props} />;
-
-  // Default file icon
-  return <File {...props} />;
-};
-
-const formatFileSize = (bytes: number): string => {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-};
-
-const canPreview = (mimeType: string): boolean => {
-  return (
-    mimeType.startsWith('image/') ||
-    mimeType.startsWith('video/') ||
-    mimeType.includes('pdf') ||
-    mimeType.startsWith('text/')
-  );
-};
 
 export const AttachmentList: React.FC<AttachmentListProps> = ({
   attachments,

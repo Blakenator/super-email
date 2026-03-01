@@ -1,0 +1,58 @@
+---
+description: How to get debug logs from the React Native mobile app running on a physical device
+globs: mobile/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Mobile App Debug Logging
+
+The mobile app runs on a physical Android device, not the dev machine. This affects how debug instrumentation works.
+
+## Key Constraint
+
+The device **cannot reach `127.0.0.1`** on the dev machine. Use the dev machine's LAN IP instead (same IP the device uses for Metro, typically `10.0.0.184`).
+
+## WebView Logging
+
+WebView content runs in a separate web context. Use `postMessage` to relay debug data to React Native:
+
+```javascript
+// Inside injected WebView HTML/JS
+window.ReactNativeWebView.postMessage(JSON.stringify({
+  type: 'debug',
+  message: 'description',
+  data: { key: value }
+}));
+```
+
+Then handle in the React Native `onMessage` handler:
+
+```typescript
+const handleWebViewMessage = (event: any) => {
+  const data = JSON.parse(event.nativeEvent.data);
+  if (data.type === 'debug') {
+    // Forward to logging endpoint using LAN IP, not 127.0.0.1
+    fetch(`http://10.0.0.184:7242/ingest/...`, { ... });
+  }
+};
+```
+
+## React Native Logging
+
+For RN-side code (stores, services, components), use `fetch` with the dev machine's LAN IP:
+
+```typescript
+fetch('http://10.0.0.184:7242/ingest/...', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ location: 'file:line', message: 'desc', data: {}, timestamp: Date.now() })
+}).catch(() => {});
+```
+
+## Finding the Dev Machine IP
+
+The device connects to Metro at the dev machine's IP. Run on the dev machine:
+
+```bash
+ipconfig getifaddr en0
+```

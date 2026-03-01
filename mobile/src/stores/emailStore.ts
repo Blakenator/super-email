@@ -169,6 +169,7 @@ interface EmailState {
   loadCachedData: () => Promise<void>;
   startSubscription: () => void;
   stopSubscription: () => void;
+  restartSubscription: () => void;
   handleMailboxUpdate: (update: MailboxUpdate) => void;
 }
 
@@ -483,6 +484,13 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     console.log('[EmailStore] Stopping mailbox subscription...');
     stopMailboxSubscription();
     set({ isSubscribed: false, connectionStatus: 'disconnected' });
+  },
+
+  restartSubscription: () => {
+    console.log('[EmailStore] Restarting mailbox subscription after token refresh...');
+    set({ isSubscribed: false, connectionStatus: 'connecting' });
+    startMailboxSubscription();
+    set({ isSubscribed: true, connectionStatus: 'connected' });
   },
   
   handleMailboxUpdate: (update: MailboxUpdate) => {

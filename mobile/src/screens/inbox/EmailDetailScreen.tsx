@@ -223,6 +223,10 @@ export function EmailDetailScreen({
   const sectionListRef = useRef<SectionList>(null);
   const hasScrolledRef = useRef(false);
 
+  // Gesture conflict resolution: disable parent scroll during pinch/horizontal gestures
+  const [parentScrollEnabled, setParentScrollEnabled] = useState(true);
+  const initialTouchRef = useRef<{ x: number; y: number; decided: boolean }>({ x: 0, y: 0, decided: false });
+
   // Build sections data for SectionList (thread view) - must be before conditional returns
   const threadSections = useMemo(() => {
     return threadEmails
@@ -656,7 +660,49 @@ export function EmailDetailScreen({
     });
   }, []);
 
-  // Generate HTML content for WebView using shared styles
+  // Touch handlers to prevent parent ScrollView from interfering with
+  // horizontal scroll and pinch-to-zoom gestures inside the WebView.
+  const handleBodyTouchStart = useCallback((e: any) => {
+    const touches = e.nativeEvent.touches;
+    if (touches && touches.length >= 2) {
+      initialTouchRef.current.decided = true;
+      setParentScrollEnabled(false);
+    } else if (touches && touches.length === 1) {
+      initialTouchRef.current = { x: touches[0].pageX, y: touches[0].pageY, decided: false };
+    }
+  }, []);
+
+  const handleBodyTouchMove = useCallback((e: any) => {
+    const touches = e.nativeEvent.touches;
+    if (!touches) return;
+    if (touches.length >= 2 && !initialTouchRef.current.decided) {
+      initialTouchRef.current.decided = true;
+      setParentScrollEnabled(false);
+      return;
+    }
+    if (touches.length === 1 && !initialTouchRef.current.decided) {
+      const dx = Math.abs(touches[0].pageX - initialTouchRef.current.x);
+      const dy = Math.abs(touches[0].pageY - initialTouchRef.current.y);
+      if (dx > 8 || dy > 8) {
+        initialTouchRef.current.decided = true;
+        if (dx > dy) {
+          setParentScrollEnabled(false);
+        }
+      }
+    }
+  }, []);
+
+  const handleBodyTouchEnd = useCallback((e: any) => {
+    const touches = e.nativeEvent.touches;
+    if (!touches || touches.length === 0) {
+      setParentScrollEnabled(true);
+      initialTouchRef.current = { x: 0, y: 0, decided: false };
+    }
+  }, []);
+
+  // Generate HTML content for WebView using shared styles.
+  // scrollEnabled={false} on the WebView eliminates dead scroll zones.
+  // Horizontal scrolling and pinch-to-zoom are handled in JavaScript/CSS.
   const getHtmlContent = (emailData: Email | ThreadEmail, messageId?: string) => {
     if (!emailData) return '';
 
@@ -673,7 +719,14 @@ export function EmailDetailScreen({
       content = blockExternalImagesInHtml(content);
     }
 
-    const html = wrapEmailHtml(content, {
+    // Wrap in a scrollable container so horizontal scroll and zoom
+    // work even with the native scroll view disabled.
+    const wrappedContent =
+      '<div id="email-wrapper"><div id="email-content">' +
+      content +
+      '</div></div>';
+
+    const html = wrapEmailHtml(wrappedContent, {
       isDarkMode: isDark,
       backgroundColor: theme.colors.background,
       textColor: theme.colors.text,
@@ -682,59 +735,122 @@ export function EmailDetailScreen({
       mutedColor: theme.colors.textMuted,
     });
 
-    // Add height reporting script with message ID for thread emails
-    // Use more accurate height calculation that excludes excess whitespace
     const msgIdStr = messageId || 'main';
     return html.replace(
       '</body>',
-      `<script>
+      `<style>
+        #email-wrapper {
+          overflow-x: auto;
+          overflow-y: visible;
+          -webkit-overflow-scrolling: touch;
+          width: 100%;
+        }
+        #email-content {
+          min-width: 100%;
+        }
+      </style>
+      <script>
+        var _zoomScale = 1;
+
         function reportHeight() {
-          // Get the actual content height by finding the bottom of the last element
-          var body = document.body;
-          var html = document.documentElement;
-          
-          // Try multiple methods to get accurate height
-          var contentHeight = Math.max(
-            body.scrollHeight,
-            body.offsetHeight,
-            html.clientHeight,
-            html.scrollHeight,
-            html.offsetHeight
-          );
-          
-          // Also check the bounding rect of body children
-          var children = body.children;
-          var maxBottom = 0;
-          for (var i = 0; i < children.length; i++) {
-            var rect = children[i].getBoundingClientRect();
-            if (rect.bottom > maxBottom) {
-              maxBottom = rect.bottom;
-            }
-          }
-          
-          // Use the smaller of scrollHeight or actual content bottom
-          var finalHeight = maxBottom > 0 ? Math.min(contentHeight, maxBottom + 20) : contentHeight;
-          
+          var wrapper = document.getElementById('email-wrapper');
+          var rect = wrapper ? wrapper.getBoundingClientRect() : null;
+          var height = rect ? Math.ceil(rect.height) : document.body.scrollHeight;
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'height',
             id: '${msgIdStr}',
-            height: Math.ceil(finalHeight)
+            height: Math.max(height, 50)
           }));
         }
-        
+
+        (function() {
+          var content = document.getElementById('email-content');
+          if (!content) return;
+          var startDist = 0;
+          var startScale = 1;
+          var pinching = false;
+
+          function dist(t) {
+            return Math.hypot(
+              t[0].clientX - t[1].clientX,
+              t[0].clientY - t[1].clientY
+            );
+          }
+
+          document.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 2) {
+              pinching = true;
+              startDist = dist(e.touches);
+              startScale = _zoomScale;
+              window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scrollLock', locked: true}));
+            }
+          }, { passive: true });
+
+          document.addEventListener('touchmove', function(e) {
+            if (pinching && e.touches.length === 2) {
+              e.preventDefault();
+              _zoomScale = Math.max(0.1, Math.min(10, startScale * dist(e.touches) / startDist));
+              content.style.zoom = _zoomScale;
+            }
+          }, { passive: false });
+
+          document.addEventListener('touchend', function(e) {
+            if (pinching && e.touches.length < 2) {
+              pinching = false;
+              window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scrollLock', locked: false}));
+              setTimeout(reportHeight, 150);
+            }
+          }, { passive: true });
+        })();
+
+        // Detect horizontal scroll intent and request parent scroll lock
+        (function() {
+          var wrapper = document.getElementById('email-wrapper');
+          if (!wrapper) return;
+          var startX = 0, startY = 0, decided = false, locked = false;
+
+          wrapper.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 1) {
+              startX = e.touches[0].clientX;
+              startY = e.touches[0].clientY;
+              decided = false;
+            }
+          }, { passive: true });
+
+          wrapper.addEventListener('touchmove', function(e) {
+            if (e.touches.length === 1 && !decided) {
+              var dx = Math.abs(e.touches[0].clientX - startX);
+              var dy = Math.abs(e.touches[0].clientY - startY);
+              if (dx > 8 || dy > 8) {
+                decided = true;
+                if (dx > dy && wrapper.scrollWidth > wrapper.clientWidth) {
+                  locked = true;
+                  window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scrollLock', locked: true}));
+                }
+              }
+            }
+          }, { passive: true });
+
+          document.addEventListener('touchend', function(e) {
+            if (e.touches.length === 0 && locked) {
+              locked = false;
+              decided = false;
+              window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scrollLock', locked: false}));
+            }
+          }, { passive: true });
+        })();
+
         // Report height once on load
         var hasReported = false;
         function reportOnce() {
           if (!hasReported) {
             hasReported = true;
-            // Small delay to let content settle
             setTimeout(reportHeight, 100);
           }
         }
-        
+
         window.onload = reportOnce;
-        
-        // Also check if already loaded
+
         if (document.readyState === 'complete') {
           reportOnce();
         }
@@ -745,14 +861,15 @@ export function EmailDetailScreen({
   const handleWebViewMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'scrollLock') {
+        setParentScrollEnabled(!data.locked);
+      }
       if (data.type === 'height') {
-        // Use the reported height
         const height = Math.max(data.height, 50);
         if (data.id === 'main') {
           setWebViewHeight(height);
         } else if (data.id) {
           setThreadWebViewHeights(prev => {
-            // Only update if not already set or significantly different
             const currentHeight = prev[data.id];
             if (currentHeight === undefined || Math.abs(currentHeight - height) > 50) {
               return { ...prev, [data.id]: height };
@@ -887,7 +1004,7 @@ export function EmailDetailScreen({
     );
   }
 
-  // Render the header content (shared between ScrollView and SectionList)
+  // Render the header content (shared between single email and thread views)
   const renderHeaderContent = () => (
     <View style={styles.headerContent}>
       {/* Subject with Thread Count */}
@@ -969,6 +1086,7 @@ export function EmailDetailScreen({
           style={styles.scrollView}
           contentContainerStyle={styles.sectionListContent}
           showsVerticalScrollIndicator={true}
+          scrollEnabled={parentScrollEnabled}
           // Disable virtualization to ensure all sections are rendered for scroll
           initialNumToRender={50}
           maxToRenderPerBatch={50}
@@ -1091,6 +1209,9 @@ export function EmailDetailScreen({
                   { backgroundColor: theme.colors.background },
                   !isExpanded && styles.collapsedBody,
                 ]}
+                onTouchStart={handleBodyTouchStart}
+                onTouchMove={handleBodyTouchMove}
+                onTouchEnd={handleBodyTouchEnd}
               >
                 {isExpanded && (
                   <Text style={[styles.threadRecipients, { color: theme.colors.textMuted }]}>
@@ -1109,11 +1230,9 @@ export function EmailDetailScreen({
                     opacity: isExpanded ? 1 : 0,
                   }}
                   scrollEnabled={false}
-                  nestedScrollEnabled={false}
                   onMessage={handleWebViewMessage}
                   originWhitelist={['*']}
                   javaScriptEnabled
-                  showsVerticalScrollIndicator={false}
                 />
               </View>
             );
@@ -1121,11 +1240,12 @@ export function EmailDetailScreen({
           ListHeaderComponent={renderHeaderContent}
         />
       ) : (
-        /* Single Email View - Using ScrollView */
+        /* Single Email View - ScrollView for full-page vertical scroll */
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={true}
+          scrollEnabled={parentScrollEnabled}
         >
           {renderHeaderContent()}
 
@@ -1271,12 +1391,15 @@ export function EmailDetailScreen({
               </View>
             )}
 
-          {/* Single Email Body */}
+          {/* Email Body */}
           <View
             style={[
               styles.bodyContainer,
               { backgroundColor: theme.colors.surface, minHeight: 300 },
             ]}
+            onTouchStart={handleBodyTouchStart}
+            onTouchMove={handleBodyTouchMove}
+            onTouchEnd={handleBodyTouchEnd}
           >
             <WebView
               source={{ html: getHtmlContent(email, 'main') }}
@@ -1285,11 +1408,9 @@ export function EmailDetailScreen({
                 width: width - SPACING.md * 2,
               }}
               scrollEnabled={false}
-              nestedScrollEnabled={false}
               onMessage={handleWebViewMessage}
               originWhitelist={['*']}
               javaScriptEnabled
-              showsVerticalScrollIndicator={false}
             />
           </View>
         </ScrollView>

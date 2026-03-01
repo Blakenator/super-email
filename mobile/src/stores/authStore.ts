@@ -20,7 +20,7 @@ import {
   getSession,
   refreshSession,
 } from '../services/supabase';
-import { apolloClient, clearApolloCache, authErrorEmitter, stopMailboxSubscription } from '../services/apollo';
+import { apolloClient, clearApolloCache, authErrorEmitter, stopMailboxSubscription, reconnectWebSocket } from '../services/apollo';
 import { useEmailStore } from './emailStore';
 import {
   isBiometricAvailable,
@@ -153,12 +153,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({ biometricAvailable, biometricEnabled, biometricType });
 
-      // Check for existing session
+      // Check for existing session and refresh it to ensure a valid token
       console.log('[AuthStore] Checking for existing session...');
       let session = null;
       try {
         session = await getSession();
         console.log('[AuthStore] Session check done, hasSession:', !!session);
+
+        if (session) {
+          // Proactively refresh to get a fresh access token.
+          // The stored session may have an expired access token but a valid refresh token.
+          console.log('[AuthStore] Refreshing session to ensure fresh token...');
+          try {
+            const refreshed = await refreshSession();
+            if (refreshed?.access_token) {
+              session = refreshed;
+              console.log('[AuthStore] Session refreshed successfully');
+            }
+          } catch (refreshErr) {
+            console.log('[AuthStore] Session refresh failed, using existing token:', refreshErr);
+          }
+        }
       } catch (e) {
         console.log('[AuthStore] Session check failed:', e);
       }
@@ -171,6 +186,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.log('[AuthStore] Found valid session, setting token...');
         await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
         set({ token: session.access_token });
+
+        // Ensure the WebSocket will use the fresh token
+        reconnectWebSocket();
 
         // Fetch user profile
         console.log('[AuthStore] Fetching user profile...');
@@ -420,13 +438,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
         set({ token: session.access_token, isOffline: false });
         console.log('[AuthStore] Session refreshed proactively');
+
+        // Reconnect WebSocket with the new token and restart subscription
+        reconnectWebSocket();
+        stopMailboxSubscription();
+        useEmailStore.getState().restartSubscription();
+
         return true;
       }
     } catch (error) {
       console.log('[AuthStore] Proactive session refresh failed:', error);
       
-      // If biometric is enabled, we can try that when the actual auth error occurs
-      // For now, just mark as potentially needing re-auth
       const { biometricEnabled, biometricAvailable } = get();
       if (biometricEnabled && biometricAvailable) {
         set({ shouldPromptBiometric: true });
@@ -555,13 +577,13 @@ authErrorEmitter.on('authError', async () => {
   try {
     console.log('[AuthStore] Auth error detected, attempting session refresh...');
     
-    // First, try to refresh the session
     const session = await refreshSession();
     
     if (session?.access_token) {
       console.log('[AuthStore] Session refreshed successfully');
       await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
-      store.setOffline(false);
+      useAuthStore.setState({ token: session.access_token, isOffline: false });
+      reconnectWebSocket();
       isHandlingAuthError = false;
       return;
     }
@@ -576,6 +598,7 @@ authErrorEmitter.on('authError', async () => {
     const success = await store.loginWithBiometric();
     if (success) {
       console.log('[AuthStore] Biometric re-authentication successful');
+      reconnectWebSocket();
       isHandlingAuthError = false;
       return;
     }

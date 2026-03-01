@@ -55,6 +55,14 @@ export interface ComposeForward {
   attachments?: Array<{ id: string; filename: string }>;
 }
 
+export interface ComposeMailto {
+  to: string;
+  cc?: string;
+  bcc?: string;
+  subject?: string;
+  body?: string;
+}
+
 export type RootStackParamList = {
   Auth: undefined;
   Main: undefined;
@@ -64,6 +72,7 @@ export type RootStackParamList = {
     replyTo?: ComposeReplyTo;
     replyAll?: ComposeReplyAll;
     forward?: ComposeForward;
+    mailto?: ComposeMailto;
   } | undefined;
   Nuke: undefined;
   // Settings sub-screens
@@ -236,6 +245,7 @@ function ComposeScreenWrapper() {
       replyTo={params?.replyTo}
       replyAll={params?.replyAll}
       forward={params?.forward}
+      mailto={params?.mailto}
     />
   );
 }

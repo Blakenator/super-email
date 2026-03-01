@@ -17,12 +17,14 @@ import * as SystemUI from 'expo-system-ui';
 import { apolloClient } from './src/services/apollo';
 import { useAuthStore } from './src/stores/authStore';
 import { AppNavigator, navigationRef } from './src/navigation';
+import type { ComposeMailto } from './src/navigation';
 import { useTheme, darkTheme } from './src/theme';
 import {
   addNotificationReceivedListener,
   addNotificationResponseListener,
 } from './src/services/notifications';
 import * as Notifications from 'expo-notifications';
+import * as Linking from 'expo-linking';
 
 // Keep splash screen visible while we initialize
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -113,7 +115,28 @@ export default function App() {
   return <MainApp />;
 }
 
-// Main app component
+function parseMailtoUrl(url: string): ComposeMailto {
+  const withoutScheme = url.replace(/^mailto:/i, '');
+  const [addresses, queryString] = withoutScheme.split('?');
+  const params: ComposeMailto = {
+    to: decodeURIComponent(addresses || ''),
+  };
+
+  if (queryString) {
+    const searchParams = new URLSearchParams(queryString);
+    if (searchParams.has('subject')) params.subject = searchParams.get('subject')!;
+    if (searchParams.has('body')) params.body = searchParams.get('body')!;
+    if (searchParams.has('cc')) params.cc = searchParams.get('cc')!;
+    if (searchParams.has('bcc')) params.bcc = searchParams.get('bcc')!;
+    if (searchParams.has('to')) {
+      const additionalTo = searchParams.get('to')!;
+      params.to = params.to ? `${params.to}, ${additionalTo}` : additionalTo;
+    }
+  }
+
+  return params;
+}
+
 function MainApp() {
   const theme = useTheme();
   const isDark = theme.colors.background === darkTheme.colors.background;
@@ -124,6 +147,22 @@ function MainApp() {
   }, [theme.colors.background]);
 
   useEffect(() => {
+    function handleIncomingUrl(url: string) {
+      if (!url.toLowerCase().startsWith('mailto:')) return;
+      const mailto = parseMailtoUrl(url);
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('Compose', { mailto });
+      }
+    }
+
+    const linkingSubscription = Linking.addEventListener('url', ({ url }) => {
+      handleIncomingUrl(url);
+    });
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleIncomingUrl(url);
+    });
+
     function handleNotificationNavigation(data: Record<string, unknown> | undefined) {
       if (!data) return;
       const emailId = data.emailId as string | undefined;
@@ -143,7 +182,6 @@ function MainApp() {
       handleNotificationNavigation(data);
     });
 
-    // Handle cold-start: check if app was opened via a notification tap
     Notifications.getLastNotificationResponseAsync().then((response) => {
       if (response) {
         const data = response.notification.request.content.data;
@@ -152,6 +190,7 @@ function MainApp() {
     });
 
     return () => {
+      linkingSubscription.remove();
       notificationSubscription.remove();
       responseSubscription.remove();
     };
