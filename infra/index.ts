@@ -738,14 +738,23 @@ new aws.lb.Listener(`${stackName}-http-listener`, {
 // =============================================================================
 // Custom Domain: ACM Certificate + Cloudflare DNS
 // =============================================================================
+// CloudFront requires ACM certificates in us-east-1 regardless of stack region.
+
+const usEast1 = new aws.Provider(`${stackName}-us-east-1`, {
+  region: 'us-east-1',
+});
 
 const certificate = domainName
-  ? new aws.acm.Certificate(`${stackName}-cert`, {
-      domainName: domainName,
-      subjectAlternativeNames: [`*.${domainName}`],
-      validationMethod: 'DNS',
-      tags: { Name: `${stackName}-cert`, Environment: environment },
-    })
+  ? new aws.acm.Certificate(
+      `${stackName}-cert`,
+      {
+        domainName: domainName,
+        subjectAlternativeNames: [`*.${domainName}`],
+        validationMethod: 'DNS',
+        tags: { Name: `${stackName}-cert`, Environment: environment },
+      },
+      { provider: usEast1 },
+    )
   : undefined;
 
 let certValidation: aws.acm.CertificateValidation | undefined;
@@ -774,7 +783,7 @@ if (domainName && certificate && cloudflareZoneId) {
   certValidation = new aws.acm.CertificateValidation(
     `${stackName}-cert-validation`,
     { certificateArn: certificate.arn },
-    { dependsOn: validationRecords },
+    { provider: usEast1, dependsOn: validationRecords },
   );
 }
 
