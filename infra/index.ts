@@ -751,8 +751,14 @@ const certificate = domainName
 let certValidation: aws.acm.CertificateValidation | undefined;
 
 if (domainName && certificate && cloudflareZoneId) {
-  const validationRecords = certificate.domainValidationOptions.apply((opts) =>
-    opts.map(
+  // ACM returns one validation option per SAN, but wildcard + apex share the
+  // same CNAME record. Deduplicate by record name to avoid conflicts.
+  const validationRecords = certificate.domainValidationOptions.apply((opts) => {
+    const unique = new Map<string, (typeof opts)[number]>();
+    for (const opt of opts) {
+      unique.set(opt.resourceRecordName, opt);
+    }
+    return [...unique.values()].map(
       (opt, i) =>
         new cloudflare.Record(`${stackName}-cert-validation-${i}`, {
           zoneId: cloudflareZoneId,
@@ -762,8 +768,8 @@ if (domainName && certificate && cloudflareZoneId) {
           ttl: 60,
           proxied: false,
         }),
-    ),
-  );
+    );
+  });
 
   certValidation = new aws.acm.CertificateValidation(
     `${stackName}-cert-validation`,
