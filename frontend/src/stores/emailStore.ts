@@ -567,6 +567,15 @@ if (typeof window !== 'undefined') {
     useEmailStore.getState().setOnline(false);
   });
 
+  // Re-sync when tab becomes visible (covers cases where the store
+  // was incorrectly set to offline while the tab was in the background
+  // or after a transient error).
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      useEmailStore.getState().setOnline(navigator.onLine);
+    }
+  });
+
   // Initialize with current online status
   useEmailStore.getState().setOnline(navigator.onLine);
 }

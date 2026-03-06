@@ -28,6 +28,8 @@ import { DateTime } from 'luxon';
 import { wrapEmailHtml } from '../../../../common/src/emailHtmlStyles';
 import { useAuthStore } from '../../stores/authStore';
 import { viewedEmailCache } from '../../services/emailCache';
+import { refreshSession } from '../../services/supabase';
+import { secureSet, STORAGE_KEYS } from '../../services/secureStorage';
 import type { ViewedEmailData } from '../../services/emailCache';
 
 const GET_EMAIL_QUERY = gql`
@@ -258,44 +260,36 @@ export function EmailDetailScreen({
   const DEFAULT_ITEM_HEIGHT = 100;
   const LIST_HEADER_HEIGHT = 150;
   const RECIPIENTS_HEIGHT = 30;
-  const SEPARATOR_HEIGHT = 0; // No visible separators
-  
-  
-  // getItemLayout for SectionList
-  // SectionList uses flat indexing: each section has 3 entries (separator, header, item)
-  // flatIndex = sectionIndex * 3 + offset (0=separator, 1=header, 2=item)
+
+  // Flat index layout: index 0 = ListHeaderComponent, then 2 entries per
+  // section (header + item) since there is no SectionSeparatorComponent.
   const getItemLayout = useCallback((data: any, index: number) => {
-    const sectionIndex = Math.floor(index / 3);
-    const itemType = index % 3; // 0=separator, 1=header, 2=item
-    
-    // Calculate base offset for this section
+    if (index === 0) {
+      return { length: LIST_HEADER_HEIGHT, offset: 0, index };
+    }
+
+    const adjustedIndex = index - 1;
+    const sectionIndex = Math.floor(adjustedIndex / 2);
+    const isHeader = adjustedIndex % 2 === 0;
+
     let offset = LIST_HEADER_HEIGHT;
     for (let i = 0; i < sectionIndex; i++) {
       const section = threadSections[i];
-      const bodyHeight = section?.threadEmail?.id 
+      const bodyHeight = section?.threadEmail?.id
         ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
         : DEFAULT_ITEM_HEIGHT;
-      offset += SEPARATOR_HEIGHT + STICKY_HEADER_HEIGHT + bodyHeight;
+      offset += STICKY_HEADER_HEIGHT + bodyHeight;
     }
-    
-    // Add offset within section
-    let length = 0;
-    if (itemType === 0) {
-      // Separator
-      length = SEPARATOR_HEIGHT;
-    } else if (itemType === 1) {
-      // Header
-      offset += SEPARATOR_HEIGHT;
-      length = STICKY_HEADER_HEIGHT;
-    } else {
-      // Item
-      offset += SEPARATOR_HEIGHT + STICKY_HEADER_HEIGHT;
-      const section = threadSections[sectionIndex];
-      length = section?.threadEmail?.id 
-        ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
-        : DEFAULT_ITEM_HEIGHT;
+
+    if (isHeader) {
+      return { length: STICKY_HEADER_HEIGHT, offset, index };
     }
-    
+
+    offset += STICKY_HEADER_HEIGHT;
+    const section = threadSections[sectionIndex];
+    const length = section?.threadEmail?.id
+      ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
+      : DEFAULT_ITEM_HEIGHT;
     return { length, offset, index };
   }, [threadSections, threadWebViewHeights]);
 
@@ -418,7 +412,34 @@ export function EmailDetailScreen({
       }
     } catch (err: any) {
       console.error('Error loading email:', err);
-      // Only show error if we had no cached data to display
+      const errMsg = err.message || '';
+      const isAuthError =
+        errMsg.includes('Not authenticated') ||
+        errMsg.includes('jwt expired') ||
+        errMsg.includes('UNAUTHENTICATED') ||
+        errMsg.includes('Authentication required');
+
+      if (isAuthError) {
+        try {
+          const session = await refreshSession();
+          if (session?.access_token) {
+            await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
+            const { data: retryData } = await apolloClient.query({
+              query: GET_EMAIL_QUERY,
+              variables: { input: { id: emailId } },
+              fetchPolicy: 'network-only',
+            });
+            if (retryData?.getEmail) {
+              setEmail(retryData.getEmail);
+              cacheEmailData(retryData.getEmail as ViewedEmailData);
+              return;
+            }
+          }
+        } catch {
+          // Fall through to error display
+        }
+      }
+
       if (!email) {
         setError(err.message || 'Failed to load email');
       }
@@ -1093,11 +1114,11 @@ export function EmailDetailScreen({
           windowSize={100}
           getItemLayout={getItemLayout}
           onScrollToIndexFailed={(info) => {
-            // Retry scroll after sections render
             setTimeout(() => {
               try {
+                const sectionIdx = Math.max(0, Math.floor((info.index - 1) / 2));
                 (sectionListRef.current as any)?.scrollToLocation({
-                  sectionIndex: info.index,
+                  sectionIndex: sectionIdx,
                   itemIndex: 0,
                   animated: false,
                   viewPosition: 0,

@@ -225,7 +225,14 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   fetchEmails: async () => {
     const { currentFolder, currentAccountId, page, pageSize, searchQuery, filterIsRead, filterIsStarred, filterHasAttachments } = get();
     
-    set({ isLoading: true });
+    // Load cached data first for instant display (stale-while-revalidate)
+    await get().loadCachedData();
+    
+    // Only show loading spinner if we have no cached data to display
+    const hasCachedEmails = get().emails.length > 0;
+    if (!hasCachedEmails) {
+      set({ isLoading: true });
+    }
     
     try {
       const { data } = await apolloClient.query({

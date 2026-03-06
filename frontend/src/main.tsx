@@ -107,9 +107,10 @@ const authLink = setContext(async (_, prevContext) => {
 
 // Error handling link for offline support
 const errorLink = onError(({ error, operation, forward }) => {
-  // In Apollo Client v4, all errors come through the single `error` field.
-  // Non-GraphQL errors indicate network issues.
-  if (error && !('errors' in error)) {
+  // Only mark offline when the browser itself reports no network.
+  // Apollo errors can be transient (auth race, timeout, 5xx) and don't
+  // necessarily mean the user lost connectivity.
+  if (error && !('errors' in error) && !navigator.onLine) {
     useEmailStore.getState().setOnline(false);
     console.log('[Apollo] Network error detected, switching to offline mode');
   }
