@@ -90,6 +90,7 @@ type Documents = {
     "\n  mutation CreateBillingPortalSession {\n    createBillingPortalSession\n  }\n": typeof types.CreateBillingPortalSessionDocument,
     "\n  mutation RefreshStorageUsage {\n    refreshStorageUsage\n  }\n": typeof types.RefreshStorageUsageDocument,
     "\n  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier)\n  }\n": typeof types.CreateCheckoutSessionDocument,
+    "\n  query PreviewSubscriptionChange($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    previewSubscriptionChange(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier) {\n      immediateAmount\n      recurringAmount\n      currency\n      interval\n      lineItems {\n        description\n        amount\n      }\n    }\n  }\n": typeof types.PreviewSubscriptionChangeDocument,
     "\n  query GetTopEmailSources($limit: Int) {\n    getTopEmailSources(limit: $limit) {\n      fromAddress\n      fromName\n      count\n    }\n  }\n": typeof types.GetTopEmailSourcesDocument,
     "\n  query GetEmailsForTriage($input: GetEmailsInput!) {\n    getEmails(input: $input) {\n      id\n      messageId\n      folder\n      fromAddress\n      fromName\n      toAddresses\n      subject\n      textBody\n      receivedAt\n      isRead\n      isStarred\n      emailAccountId\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": typeof types.GetEmailsForTriageDocument,
     "\n  query GetEmailCountForTriage($input: GetEmailsInput!) {\n    getEmailCount(input: $input)\n  }\n": typeof types.GetEmailCountForTriageDocument,
@@ -173,6 +174,7 @@ const documents: Documents = {
     "\n  mutation CreateBillingPortalSession {\n    createBillingPortalSession\n  }\n": types.CreateBillingPortalSessionDocument,
     "\n  mutation RefreshStorageUsage {\n    refreshStorageUsage\n  }\n": types.RefreshStorageUsageDocument,
     "\n  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier)\n  }\n": types.CreateCheckoutSessionDocument,
+    "\n  query PreviewSubscriptionChange($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    previewSubscriptionChange(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier) {\n      immediateAmount\n      recurringAmount\n      currency\n      interval\n      lineItems {\n        description\n        amount\n      }\n    }\n  }\n": types.PreviewSubscriptionChangeDocument,
     "\n  query GetTopEmailSources($limit: Int) {\n    getTopEmailSources(limit: $limit) {\n      fromAddress\n      fromName\n      count\n    }\n  }\n": types.GetTopEmailSourcesDocument,
     "\n  query GetEmailsForTriage($input: GetEmailsInput!) {\n    getEmails(input: $input) {\n      id\n      messageId\n      folder\n      fromAddress\n      fromName\n      toAddresses\n      subject\n      textBody\n      receivedAt\n      isRead\n      isStarred\n      emailAccountId\n      tags {\n        id\n        name\n        color\n      }\n    }\n  }\n": types.GetEmailsForTriageDocument,
     "\n  query GetEmailCountForTriage($input: GetEmailsInput!) {\n    getEmailCount(input: $input)\n  }\n": types.GetEmailCountForTriageDocument,
@@ -498,6 +500,10 @@ export function gql(source: "\n  mutation RefreshStorageUsage {\n    refreshStor
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "\n  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier)\n  }\n"): (typeof documents)["\n  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier)\n  }\n"];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n  query PreviewSubscriptionChange($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    previewSubscriptionChange(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier) {\n      immediateAmount\n      recurringAmount\n      currency\n      interval\n      lineItems {\n        description\n        amount\n      }\n    }\n  }\n"): (typeof documents)["\n  query PreviewSubscriptionChange($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {\n    previewSubscriptionChange(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier) {\n      immediateAmount\n      recurringAmount\n      currency\n      interval\n      lineItems {\n        description\n        amount\n      }\n    }\n  }\n"];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

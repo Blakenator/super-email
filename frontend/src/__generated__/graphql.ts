@@ -945,11 +945,12 @@ export type Mutation = {
    */
   createBillingPortalSession: Scalars['String']['output'];
   /**
-   * Create a Stripe Checkout session to upgrade subscription.
-   * Returns the URL to redirect the user to.
+   * Create or update a subscription.
+   * If the user already has an active subscription, updates it in-place and returns null.
+   * If this is the first subscription, creates a Stripe Checkout session and returns the URL to redirect to.
    * Requires Stripe to be configured on the server.
    */
-  createCheckoutSession: Scalars['String']['output'];
+  createCheckoutSession?: Maybe<Scalars['String']['output']>;
   /** Create a new contact. */
   createContact: Contact;
   /**
@@ -1367,6 +1368,15 @@ export type NukeOldEmailsInput = {
   olderThan?: InputMaybe<Scalars['Date']['input']>;
 };
 
+/** A single line item in a subscription change preview. */
+export type PreviewLineItem = {
+  __typename?: 'PreviewLineItem';
+  /** Amount in cents (negative for credits) */
+  amount: Scalars['Int']['output'];
+  /** Human-readable description of this charge/credit */
+  description: Scalars['String']['output'];
+};
+
 /** Platform type for push notification tokens. */
 export enum PushPlatform {
   /** Android device (FCM) */
@@ -1543,6 +1553,12 @@ export type Query = {
    */
   previewMailRule: Scalars['Int']['output'];
   /**
+   * Preview the cost of changing subscription tiers before confirming.
+   * Returns prorated charges and the new recurring total.
+   * Only works when the user has an existing active Stripe subscription.
+   */
+  previewSubscriptionChange?: Maybe<SubscriptionPreview>;
+  /**
    * Search contacts by name or email address.
    * Performs case-insensitive partial matching.
    */
@@ -1682,6 +1698,17 @@ export type QueryGetTopEmailSourcesArgs = {
  */
 export type QueryPreviewMailRuleArgs = {
   id: Scalars['String']['input'];
+};
+
+
+/**
+ * GraphQL queries for fetching data. All queries require authentication
+ * unless otherwise noted.
+ */
+export type QueryPreviewSubscriptionChangeArgs = {
+  accountTier: AccountTier;
+  domainTier: DomainTier;
+  storageTier: StorageTier;
 };
 
 
@@ -1956,6 +1983,24 @@ export type Subscription = {
    * - ERROR: Error occurred (check message field)
    */
   mailboxUpdates: MailboxUpdate;
+};
+
+/**
+ * Preview of prorated cost for a subscription change.
+ * Returned by previewSubscriptionChange before the user confirms.
+ */
+export type SubscriptionPreview = {
+  __typename?: 'SubscriptionPreview';
+  /** Currency code (e.g., "usd") */
+  currency: Scalars['String']['output'];
+  /** Amount due immediately in cents (prorated charge, can be negative for downgrades) */
+  immediateAmount: Scalars['Int']['output'];
+  /** Billing interval (e.g., "month", "year") */
+  interval: Scalars['String']['output'];
+  /** Line items describing each change */
+  lineItems: Array<PreviewLineItem>;
+  /** New recurring total per billing period in cents */
+  recurringAmount: Scalars['Int']['output'];
 };
 
 /** Input for triggering a sync of a specific email account. */
@@ -2695,7 +2740,16 @@ export type CreateCheckoutSessionMutationVariables = Exact<{
 }>;
 
 
-export type CreateCheckoutSessionMutation = { __typename?: 'Mutation', createCheckoutSession: string };
+export type CreateCheckoutSessionMutation = { __typename?: 'Mutation', createCheckoutSession?: string | null };
+
+export type PreviewSubscriptionChangeQueryVariables = Exact<{
+  storageTier: StorageTier;
+  accountTier: AccountTier;
+  domainTier: DomainTier;
+}>;
+
+
+export type PreviewSubscriptionChangeQuery = { __typename?: 'Query', previewSubscriptionChange?: { __typename?: 'SubscriptionPreview', immediateAmount: number, recurringAmount: number, currency: string, interval: string, lineItems: Array<{ __typename?: 'PreviewLineItem', description: string, amount: number }> } | null };
 
 export type GetTopEmailSourcesQueryVariables = Exact<{
   limit?: InputMaybe<Scalars['Int']['input']>;
@@ -2809,6 +2863,7 @@ export const GetBillingInfoDocument = {"kind":"Document","definitions":[{"kind":
 export const CreateBillingPortalSessionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateBillingPortalSession"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createBillingPortalSession"}}]}}]} as unknown as DocumentNode<CreateBillingPortalSessionMutation, CreateBillingPortalSessionMutationVariables>;
 export const RefreshStorageUsageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RefreshStorageUsage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"refreshStorageUsage"}}]}}]} as unknown as DocumentNode<RefreshStorageUsageMutation, RefreshStorageUsageMutationVariables>;
 export const CreateCheckoutSessionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateCheckoutSession"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"StorageTier"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountTier"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"domainTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"DomainTier"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createCheckoutSession"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"storageTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}}},{"kind":"Argument","name":{"kind":"Name","value":"accountTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}}},{"kind":"Argument","name":{"kind":"Name","value":"domainTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"domainTier"}}}]}]}}]} as unknown as DocumentNode<CreateCheckoutSessionMutation, CreateCheckoutSessionMutationVariables>;
+export const PreviewSubscriptionChangeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PreviewSubscriptionChange"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"StorageTier"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountTier"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"domainTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"DomainTier"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"previewSubscriptionChange"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"storageTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}}},{"kind":"Argument","name":{"kind":"Name","value":"accountTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}}},{"kind":"Argument","name":{"kind":"Name","value":"domainTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"domainTier"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"immediateAmount"}},{"kind":"Field","name":{"kind":"Name","value":"recurringAmount"}},{"kind":"Field","name":{"kind":"Name","value":"currency"}},{"kind":"Field","name":{"kind":"Name","value":"interval"}},{"kind":"Field","name":{"kind":"Name","value":"lineItems"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}}]}}]}}]}}]} as unknown as DocumentNode<PreviewSubscriptionChangeQuery, PreviewSubscriptionChangeQueryVariables>;
 export const GetTopEmailSourcesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetTopEmailSources"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getTopEmailSources"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"count"}}]}}]}}]} as unknown as DocumentNode<GetTopEmailSourcesQuery, GetTopEmailSourcesQueryVariables>;
 export const GetEmailsForTriageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailsForTriage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmails"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageId"}},{"kind":"Field","name":{"kind":"Name","value":"folder"}},{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"toAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"textBody"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isRead"}},{"kind":"Field","name":{"kind":"Name","value":"isStarred"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}},{"kind":"Field","name":{"kind":"Name","value":"tags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailsForTriageQuery, GetEmailsForTriageQueryVariables>;
 export const GetEmailCountForTriageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailCountForTriage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailCount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<GetEmailCountForTriageQuery, GetEmailCountForTriageQueryVariables>;

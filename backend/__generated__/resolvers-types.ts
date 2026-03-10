@@ -946,11 +946,12 @@ export type Mutation = {
    */
   createBillingPortalSession: Scalars['String']['output'];
   /**
-   * Create a Stripe Checkout session to upgrade subscription.
-   * Returns the URL to redirect the user to.
+   * Create or update a subscription.
+   * If the user already has an active subscription, updates it in-place and returns null.
+   * If this is the first subscription, creates a Stripe Checkout session and returns the URL to redirect to.
    * Requires Stripe to be configured on the server.
    */
-  createCheckoutSession: Scalars['String']['output'];
+  createCheckoutSession?: Maybe<Scalars['String']['output']>;
   /** Create a new contact. */
   createContact: Contact;
   /**
@@ -1368,6 +1369,15 @@ export type NukeOldEmailsInput = {
   olderThan?: InputMaybe<Scalars['Date']['input']>;
 };
 
+/** A single line item in a subscription change preview. */
+export type PreviewLineItem = {
+  __typename?: 'PreviewLineItem';
+  /** Amount in cents (negative for credits) */
+  amount: Scalars['Int']['output'];
+  /** Human-readable description of this charge/credit */
+  description: Scalars['String']['output'];
+};
+
 /** Platform type for push notification tokens. */
 export enum PushPlatform {
   /** Android device (FCM) */
@@ -1544,6 +1554,12 @@ export type Query = {
    */
   previewMailRule: Scalars['Int']['output'];
   /**
+   * Preview the cost of changing subscription tiers before confirming.
+   * Returns prorated charges and the new recurring total.
+   * Only works when the user has an existing active Stripe subscription.
+   */
+  previewSubscriptionChange?: Maybe<SubscriptionPreview>;
+  /**
    * Search contacts by name or email address.
    * Performs case-insensitive partial matching.
    */
@@ -1683,6 +1699,17 @@ export type QueryGetTopEmailSourcesArgs = {
  */
 export type QueryPreviewMailRuleArgs = {
   id: Scalars['String']['input'];
+};
+
+
+/**
+ * GraphQL queries for fetching data. All queries require authentication
+ * unless otherwise noted.
+ */
+export type QueryPreviewSubscriptionChangeArgs = {
+  accountTier: AccountTier;
+  domainTier: DomainTier;
+  storageTier: StorageTier;
 };
 
 
@@ -1957,6 +1984,24 @@ export type Subscription = {
    * - ERROR: Error occurred (check message field)
    */
   mailboxUpdates: MailboxUpdate;
+};
+
+/**
+ * Preview of prorated cost for a subscription change.
+ * Returned by previewSubscriptionChange before the user confirms.
+ */
+export type SubscriptionPreview = {
+  __typename?: 'SubscriptionPreview';
+  /** Currency code (e.g., "usd") */
+  currency: Scalars['String']['output'];
+  /** Amount due immediately in cents (prorated charge, can be negative for downgrades) */
+  immediateAmount: Scalars['Int']['output'];
+  /** Billing interval (e.g., "month", "year") */
+  interval: Scalars['String']['output'];
+  /** Line items describing each change */
+  lineItems: Array<PreviewLineItem>;
+  /** New recurring total per billing period in cents */
+  recurringAmount: Scalars['Int']['output'];
 };
 
 /** Input for triggering a sync of a specific email account. */
@@ -2353,6 +2398,7 @@ export type ResolversTypes = ResolversObject<{
   Mutation: ResolverTypeWrapper<Record<PropertyKey, never>>;
   NotificationDetailLevel: NotificationDetailLevel;
   NukeOldEmailsInput: NukeOldEmailsInput;
+  PreviewLineItem: ResolverTypeWrapper<PreviewLineItem>;
   PushPlatform: PushPlatform;
   PushToken: ResolverTypeWrapper<PushToken>;
   PushTokenResult: ResolverTypeWrapper<PushTokenResult>;
@@ -2373,6 +2419,7 @@ export type ResolversTypes = ResolversObject<{
   String: ResolverTypeWrapper<Scalars['String']['output']>;
   StripePrice: ResolverTypeWrapper<StripePrice>;
   Subscription: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  SubscriptionPreview: ResolverTypeWrapper<SubscriptionPreview>;
   SyncEmailAccountInput: SyncEmailAccountInput;
   Tag: ResolverTypeWrapper<Tag>;
   TestConnectionResult: ResolverTypeWrapper<TestConnectionResult>;
@@ -2431,6 +2478,7 @@ export type ResolversParentTypes = ResolversObject<{
   MailboxUpdate: MailboxUpdate;
   Mutation: Record<PropertyKey, never>;
   NukeOldEmailsInput: NukeOldEmailsInput;
+  PreviewLineItem: PreviewLineItem;
   PushToken: PushToken;
   PushTokenResult: PushTokenResult;
   Query: Record<PropertyKey, never>;
@@ -2448,6 +2496,7 @@ export type ResolversParentTypes = ResolversObject<{
   String: Scalars['String']['output'];
   StripePrice: StripePrice;
   Subscription: Record<PropertyKey, never>;
+  SubscriptionPreview: SubscriptionPreview;
   SyncEmailAccountInput: SyncEmailAccountInput;
   Tag: Tag;
   TestConnectionResult: TestConnectionResult;
@@ -2723,7 +2772,7 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   bulkDeleteEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationBulkDeleteEmailsArgs, 'ids'>>;
   bulkUpdateEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationBulkUpdateEmailsArgs, 'input'>>;
   createBillingPortalSession?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  createCheckoutSession?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<MutationCreateCheckoutSessionArgs, 'accountTier' | 'domainTier' | 'storageTier'>>;
+  createCheckoutSession?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType, RequireFields<MutationCreateCheckoutSessionArgs, 'accountTier' | 'domainTier' | 'storageTier'>>;
   createContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactArgs, 'input'>>;
   createContactFromEmail?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactFromEmailArgs, 'emailId'>>;
   createCustomDomainAccount?: Resolver<ResolversTypes['CustomDomainAccount'], ParentType, ContextType, RequireFields<MutationCreateCustomDomainAccountArgs, 'input'>>;
@@ -2762,6 +2811,11 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   updateThemePreference?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateThemePreferenceArgs, 'themePreference'>>;
   updateUserPreferences?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateUserPreferencesArgs, 'input'>>;
   verifyCustomDomain?: Resolver<ResolversTypes['CustomDomain'], ParentType, ContextType, RequireFields<MutationVerifyCustomDomainArgs, 'id'>>;
+}>;
+
+export type PreviewLineItemResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['PreviewLineItem'] = ResolversParentTypes['PreviewLineItem']> = ResolversObject<{
+  amount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  description?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
 }>;
 
 export type PushTokenResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['PushToken'] = ResolversParentTypes['PushToken']> = ResolversObject<{
@@ -2809,6 +2863,7 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getTopEmailSources?: Resolver<Array<ResolversTypes['EmailSource']>, ParentType, ContextType, Partial<QueryGetTopEmailSourcesArgs>>;
   healthCheck?: Resolver<ResolversTypes['HealthInfo'], ParentType, ContextType>;
   previewMailRule?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<QueryPreviewMailRuleArgs, 'id'>>;
+  previewSubscriptionChange?: Resolver<Maybe<ResolversTypes['SubscriptionPreview']>, ParentType, ContextType, RequireFields<QueryPreviewSubscriptionChangeArgs, 'accountTier' | 'domainTier' | 'storageTier'>>;
   searchContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QuerySearchContactsArgs, 'query'>>;
 }>;
 
@@ -2888,6 +2943,14 @@ export type SubscriptionResolvers<ContextType = MyContext, ParentType extends Re
   mailboxUpdates?: SubscriptionResolver<ResolversTypes['MailboxUpdate'], "mailboxUpdates", ParentType, ContextType>;
 }>;
 
+export type SubscriptionPreviewResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['SubscriptionPreview'] = ResolversParentTypes['SubscriptionPreview']> = ResolversObject<{
+  currency?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  immediateAmount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  interval?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  lineItems?: Resolver<Array<ResolversTypes['PreviewLineItem']>, ParentType, ContextType>;
+  recurringAmount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+}>;
+
 export type TagResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Tag'] = ResolversParentTypes['Tag']> = ResolversObject<{
   color?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
@@ -2945,6 +3008,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   MailRule?: MailRuleResolvers<ContextType>;
   MailboxUpdate?: MailboxUpdateResolvers<ContextType>;
   Mutation?: MutationResolvers<ContextType>;
+  PreviewLineItem?: PreviewLineItemResolvers<ContextType>;
   PushToken?: PushTokenResolvers<ContextType>;
   PushTokenResult?: PushTokenResultResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
@@ -2956,6 +3020,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   StorageUsage?: StorageUsageResolvers<ContextType>;
   StripePrice?: StripePriceResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;
+  SubscriptionPreview?: SubscriptionPreviewResolvers<ContextType>;
   Tag?: TagResolvers<ContextType>;
   TestConnectionResult?: TestConnectionResultResolvers<ContextType>;
   User?: UserResolvers<ContextType>;

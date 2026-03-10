@@ -107,7 +107,6 @@ const REVERSE_TAB_MAPPING = Object.fromEntries(
   Object.entries(TAB_MAPPING).map(([k, v]) => [v, k]),
 );
 
-/* eslint-disable max-lines-per-function -- Settings page consolidates multiple tabs; refactor would require significant restructuring */
 export function Settings() {
   const { tab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
@@ -297,8 +296,9 @@ export function Settings() {
     onError: (err) => setError(err.message),
   });
 
-  const [testImapConnection, { loading: testingEmailAccount }] =
-    useMutation(TEST_IMAP_CONNECTION_MUTATION);
+  const [testImapConnection, { loading: testingEmailAccount }] = useMutation(
+    TEST_IMAP_CONNECTION_MUTATION,
+  );
 
   const [testSmtpConnection, { loading: testingSmtp }] = useMutation(
     TEST_SMTP_CONNECTION_MUTATION,
@@ -643,7 +643,7 @@ export function Settings() {
               title={
                 <>
                   <FontAwesomeIcon icon={faInbox} className="me-1" />
-                  Email Accounts (IMAP/POP)
+                  Email Accounts
                 </>
               }
             >

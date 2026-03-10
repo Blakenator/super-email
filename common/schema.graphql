@@ -2215,6 +2215,17 @@ type Query {
   Use this before syncing to check current limits.
   """
   getStorageUsageRealtime: StorageUsage
+
+  """
+  Preview the cost of changing subscription tiers before confirming.
+  Returns prorated charges and the new recurring total.
+  Only works when the user has an existing active Stripe subscription.
+  """
+  previewSubscriptionChange(
+    storageTier: StorageTier!
+    accountTier: AccountTier!
+    domainTier: DomainTier!
+  ): SubscriptionPreview
 }
 
 # ============ Mutations ============
@@ -2649,8 +2660,9 @@ type Mutation {
 
   # Billing
   """
-  Create a Stripe Checkout session to upgrade subscription.
-  Returns the URL to redirect the user to.
+  Create or update a subscription.
+  If the user already has an active subscription, updates it in-place and returns null.
+  If this is the first subscription, creates a Stripe Checkout session and returns the URL to redirect to.
   Requires Stripe to be configured on the server.
   """
   createCheckoutSession(
@@ -2666,7 +2678,7 @@ type Mutation {
     Domain tier to subscribe to
     """
     domainTier: DomainTier!
-  ): String!
+  ): String
 
   """
   Create a Stripe Billing Portal session to manage subscription.
@@ -3272,6 +3284,47 @@ type BillingInfo {
   Available prices from Stripe for subscription tiers
   """
   prices: [StripePrice!]!
+}
+
+"""
+Preview of prorated cost for a subscription change.
+Returned by previewSubscriptionChange before the user confirms.
+"""
+type SubscriptionPreview {
+  """
+  Amount due immediately in cents (prorated charge, can be negative for downgrades)
+  """
+  immediateAmount: Int!
+  """
+  New recurring total per billing period in cents
+  """
+  recurringAmount: Int!
+  """
+  Currency code (e.g., "usd")
+  """
+  currency: String!
+  """
+  Billing interval (e.g., "month", "year")
+  """
+  interval: String!
+  """
+  Line items describing each change
+  """
+  lineItems: [PreviewLineItem!]!
+}
+
+"""
+A single line item in a subscription change preview.
+"""
+type PreviewLineItem {
+  """
+  Human-readable description of this charge/credit
+  """
+  description: String!
+  """
+  Amount in cents (negative for credits)
+  """
+  amount: Int!
 }
 
 """

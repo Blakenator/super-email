@@ -3,7 +3,7 @@
  * User preferences and app settings
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  Pressable,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
+import { gql } from '@apollo/client';
 import { config } from '../../config/env';
+import { apolloClient } from '../../services/apollo';
 import {
   useTheme,
   sharedStyles,
@@ -31,6 +37,55 @@ import {
   ListItemSwitch,
   ListSection,
 } from '../../components/ui';
+
+const GET_BILLING_INFO_QUERY = gql`
+  query GetBillingInfoMobile {
+    getBillingInfo {
+      subscription {
+        status
+        storageTier
+        accountTier
+        domainTier
+        isValid
+        currentPeriodEnd
+        cancelAtPeriodEnd
+      }
+    }
+  }
+`;
+
+interface BillingSubscription {
+  status: string;
+  storageTier: string;
+  accountTier: string;
+  domainTier: string;
+  isValid: boolean;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+
+function formatTierName(tier: string): string {
+  switch (tier) {
+    case 'FREE':
+      return 'Free';
+    case 'BASIC':
+      return 'Basic';
+    case 'PRO':
+      return 'Pro';
+    case 'ENTERPRISE':
+      return 'Enterprise';
+    default:
+      return tier;
+  }
+}
+
+function formatStatus(status: string, isValid: boolean): string {
+  if (isValid && status === 'ACTIVE') return 'Active';
+  if (status === 'PAST_DUE') return 'Past Due';
+  if (status === 'UNPAID') return 'Unpaid';
+  if (status === 'CANCELED') return 'Canceled';
+  return status;
+}
 
 interface SettingsScreenProps {
   onNavigateToAccounts: () => void;
@@ -89,6 +144,36 @@ export function SettingsScreen({
     await setBlockExternalImages(enabled);
   };
 
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [subscription, setSubscription] =
+    useState<BillingSubscription | null>(null);
+  const [billingLoading, setBillingLoading] = useState(false);
+
+  const fetchBillingInfo = async () => {
+    setBillingLoading(true);
+    try {
+      const { data } = await apolloClient.query({
+        query: GET_BILLING_INFO_QUERY,
+        fetchPolicy: 'network-only',
+      });
+      setSubscription(data?.getBillingInfo?.subscription ?? null);
+    } catch (error) {
+      // Billing info may not be available — show modal anyway
+    } finally {
+      setBillingLoading(false);
+    }
+  };
+
+  const handleOpenSubscriptionModal = () => {
+    setShowSubscriptionModal(true);
+    fetchBillingInfo();
+  };
+
+  const handleOpenWebApp = () => {
+    Linking.openURL(`${config.api.baseUrl}/settings`);
+    setShowSubscriptionModal(false);
+  };
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -137,7 +222,7 @@ export function SettingsScreen({
         <ListItem
           icon="inbox"
           title="Email Accounts"
-          subtitle="IMAP/POP email accounts"
+          subtitle="Email accounts"
           onPress={onNavigateToAccounts}
         />
         <ListItem
@@ -283,6 +368,20 @@ export function SettingsScreen({
         />
       </View>
 
+      {/* Subscription */}
+      <ListSection title="SUBSCRIPTION" />
+      <View
+        style={[sharedStyles.section, { borderColor: theme.colors.border }]}
+      >
+        <ListItem
+          icon="globe"
+          title="Manage Subscription"
+          subtitle="View and change your plan"
+          onPress={handleOpenSubscriptionModal}
+          showBorder={false}
+        />
+      </View>
+
       {/* Account Actions */}
       <ListSection title="ACCOUNT" />
       <View
@@ -295,6 +394,224 @@ export function SettingsScreen({
           showBorder={false}
         />
       </View>
+
+      {/* Subscription Modal */}
+      <Modal
+        visible={showSubscriptionModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSubscriptionModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSubscriptionModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.subscriptionModal,
+              { backgroundColor: theme.colors.surface },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.subscriptionModalIcon}>
+              <Icon name="globe" size="xl" color={theme.colors.primary} />
+            </View>
+            <Text
+              style={[
+                styles.subscriptionModalTitle,
+                { color: theme.colors.text },
+              ]}
+            >
+              Manage Your Subscription
+            </Text>
+
+            {billingLoading ? (
+              <ActivityIndicator
+                style={styles.subscriptionModalLoader}
+                color={theme.colors.primary}
+              />
+            ) : subscription ? (
+              <View
+                style={[
+                  styles.subscriptionDetails,
+                  { backgroundColor: theme.colors.background },
+                ]}
+              >
+                <View style={styles.subscriptionRow}>
+                  <Text
+                    style={[
+                      styles.subscriptionLabel,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    Status
+                  </Text>
+                  <Text
+                    style={[
+                      styles.subscriptionValue,
+                      {
+                        color: subscription.isValid
+                          ? theme.colors.primary
+                          : theme.colors.error,
+                      },
+                    ]}
+                  >
+                    {formatStatus(subscription.status, subscription.isValid)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.subscriptionDivider,
+                    { backgroundColor: theme.colors.border },
+                  ]}
+                />
+                <View style={styles.subscriptionRow}>
+                  <Text
+                    style={[
+                      styles.subscriptionLabel,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    Storage
+                  </Text>
+                  <Text
+                    style={[
+                      styles.subscriptionValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {formatTierName(subscription.storageTier)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.subscriptionDivider,
+                    { backgroundColor: theme.colors.border },
+                  ]}
+                />
+                <View style={styles.subscriptionRow}>
+                  <Text
+                    style={[
+                      styles.subscriptionLabel,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    Accounts
+                  </Text>
+                  <Text
+                    style={[
+                      styles.subscriptionValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {formatTierName(subscription.accountTier)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.subscriptionDivider,
+                    { backgroundColor: theme.colors.border },
+                  ]}
+                />
+                <View style={styles.subscriptionRow}>
+                  <Text
+                    style={[
+                      styles.subscriptionLabel,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    Domains
+                  </Text>
+                  <Text
+                    style={[
+                      styles.subscriptionValue,
+                      { color: theme.colors.text },
+                    ]}
+                  >
+                    {formatTierName(subscription.domainTier)}
+                  </Text>
+                </View>
+                {subscription.currentPeriodEnd && (
+                  <>
+                    <View
+                      style={[
+                        styles.subscriptionDivider,
+                        { backgroundColor: theme.colors.border },
+                      ]}
+                    />
+                    <View style={styles.subscriptionRow}>
+                      <Text
+                        style={[
+                          styles.subscriptionLabel,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        {subscription.cancelAtPeriodEnd
+                          ? 'Cancels On'
+                          : 'Renews On'}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.subscriptionValue,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        {new Date(
+                          subscription.currentPeriodEnd,
+                        ).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </View>
+            ) : null}
+
+            <Text
+              style={[
+                styles.subscriptionModalBody,
+                { color: theme.colors.textMuted },
+              ]}
+            >
+              To change your plan or update billing information, visit the
+              SuperMail web app.
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.subscriptionModalButton,
+                { backgroundColor: theme.colors.primary },
+              ]}
+              onPress={handleOpenWebApp}
+            >
+              <Icon
+                name="external-link"
+                size="sm"
+                color={theme.colors.textInverse}
+              />
+              <Text
+                style={[
+                  styles.subscriptionModalButtonText,
+                  { color: theme.colors.textInverse },
+                ]}
+              >
+                Open Web App
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.subscriptionModalDismiss}
+              onPress={() => setShowSubscriptionModal(false)}
+            >
+              <Text
+                style={[
+                  styles.subscriptionModalDismissText,
+                  { color: theme.colors.textMuted },
+                ]}
+              >
+                Close
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* App Info */}
       <View style={styles.appInfo}>
@@ -361,6 +678,82 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  subscriptionModal: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.lg,
+    alignItems: 'center',
+  },
+  subscriptionModalIcon: {
+    marginBottom: SPACING.md,
+  },
+  subscriptionModalTitle: {
+    fontSize: FONT_SIZE.xl,
+    fontWeight: '700',
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
+  },
+  subscriptionModalLoader: {
+    marginVertical: SPACING.lg,
+  },
+  subscriptionDetails: {
+    width: '100%',
+    borderRadius: RADIUS.md,
+    padding: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  subscriptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
+  },
+  subscriptionLabel: {
+    fontSize: FONT_SIZE.sm,
+  },
+  subscriptionValue: {
+    fontSize: FONT_SIZE.sm,
+    fontWeight: '600',
+  },
+  subscriptionDivider: {
+    height: StyleSheet.hairlineWidth,
+  },
+  subscriptionModalBody: {
+    fontSize: FONT_SIZE.sm,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  subscriptionModalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+    width: '100%',
+  },
+  subscriptionModalButtonText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+  },
+  subscriptionModalDismiss: {
+    marginTop: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  subscriptionModalDismissText: {
+    fontSize: FONT_SIZE.md,
   },
   appInfo: {
     alignItems: 'center',

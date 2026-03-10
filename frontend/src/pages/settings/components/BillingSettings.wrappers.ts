@@ -460,4 +460,7 @@ export const PendingChangesBar = styled.div`
   color: white;
   border-radius: ${({ theme }) => theme.borderRadius.md};
   margin-bottom: ${({ theme }) => theme.spacing.md};
+  position: sticky;
+  top: 0;
+  z-index: 100;
 `;

@@ -97,62 +97,20 @@ export async function createCheckoutSession(
   accountTier: AccountTier,
   successUrl: string,
   cancelUrl: string,
-  domainTier?: DomainTier,
+  domainTier: DomainTier = DomainTier.FREE,
 ): Promise<string> {
   const stripeClient = getStripeClient();
   const customerId = await getOrCreateStripeCustomer(user);
+  const desired = collectPriceItems(storageTier, accountTier, domainTier);
 
-  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
-  const missingPriceIds: string[] = [];
-
-  if (storageTier !== StorageTier.FREE) {
-    const priceId = getPriceIdForStorageTier(storageTier);
-    if (priceId) {
-      lineItems.push({ price: priceId, quantity: 1 });
-    } else {
-      missingPriceIds.push(`storage ${storageTier}`);
-    }
-  }
-
-  if (accountTier !== AccountTier.FREE) {
-    const priceId = getPriceIdForAccountTier(accountTier);
-    if (priceId) {
-      lineItems.push({ price: priceId, quantity: 1 });
-    } else {
-      missingPriceIds.push(`account ${accountTier}`);
-    }
-  }
-
-  if (domainTier && domainTier !== DomainTier.FREE) {
-    const priceId = getPriceIdForDomainTier(domainTier);
-    if (priceId) {
-      lineItems.push({ price: priceId, quantity: 1 });
-    } else {
-      missingPriceIds.push(`domain ${domainTier}`);
-    }
-  }
-
-  if (lineItems.length === 0) {
-    if (missingPriceIds.length > 0) {
-      throw new Error(
-        `The selected plan(s) are not available: ${missingPriceIds.join(', ')}. ` +
-          'Please contact support or try a different plan.',
-      );
-    }
+  if (desired.length === 0) {
     throw new Error(
       'Cannot create checkout session for free tier. ' +
         'Please select at least one paid plan to upgrade.',
     );
   }
 
-  // Warn if some paid tiers couldn't be added (partial selection)
-  if (missingPriceIds.length > 0) {
-    logger.warn(
-      'Stripe',
-      `Missing price IDs for: ${missingPriceIds.join(', ')}. ` +
-        'These tiers will not be included in the checkout.',
-    );
-  }
+  const lineItems = desired.map((d) => ({ price: d.priceId, quantity: 1 }));
 
   const session = await stripeClient.checkout.sessions.create({
     customer: customerId,
@@ -164,15 +122,216 @@ export async function createCheckoutSession(
       userId: user.id,
       storageTier,
       accountTier,
-      domainTier: domainTier || DomainTier.FREE,
+      domainTier,
     },
   });
 
   logger.info(
     'Stripe',
-    `Created checkout session ${session.id} for user ${user.id}`,
+    `Created checkout session ${session.id} for user ${user.id}: ` +
+      `${lineItems.length} line item(s), ` +
+      `storage=${storageTier}, accounts=${accountTier}, domains=${domainTier}`,
   );
   return session.url!;
+}
+
+/**
+ * Collect the Stripe price IDs for the requested tiers.
+ * Throws if any paid tier is missing its env-var configuration.
+ */
+function collectPriceItems(
+  storageTier: StorageTier,
+  accountTier: AccountTier,
+  domainTier: DomainTier,
+): { priceId: string; tier: string }[] {
+  const items: { priceId: string; tier: string }[] = [];
+  const missing: string[] = [];
+
+  if (storageTier !== StorageTier.FREE) {
+    const priceId = getPriceIdForStorageTier(storageTier);
+    if (priceId) items.push({ priceId, tier: `storage ${storageTier}` });
+    else missing.push(`storage ${storageTier}`);
+  }
+  if (accountTier !== AccountTier.FREE) {
+    const priceId = getPriceIdForAccountTier(accountTier);
+    if (priceId) items.push({ priceId, tier: `account ${accountTier}` });
+    else missing.push(`account ${accountTier}`);
+  }
+  if (domainTier !== DomainTier.FREE) {
+    const priceId = getPriceIdForDomainTier(domainTier);
+    if (priceId) items.push({ priceId, tier: `domain ${domainTier}` });
+    else missing.push(`domain ${domainTier}`);
+  }
+
+  if (missing.length > 0) {
+    logger.error(
+      'Stripe',
+      `Missing Stripe price IDs for: ${missing.join(', ')}. ` +
+        'Check that STRIPE_PRICE_* environment variables are configured.',
+    );
+    throw new Error(
+      `The selected plan(s) are not available: ${missing.join(', ')}. ` +
+        'Please contact support or try a different plan.',
+    );
+  }
+
+  return items;
+}
+
+/**
+ * Update an existing Stripe subscription's line items in-place.
+ * Replaces all current items with the desired tier items.
+ * Stripe automatically prorates the changes.
+ */
+export async function updateExistingSubscription(
+  stripeSubscriptionId: string,
+  storageTier: StorageTier,
+  accountTier: AccountTier,
+  domainTier: DomainTier,
+): Promise<void> {
+  const stripeClient = getStripeClient();
+  const desired = collectPriceItems(storageTier, accountTier, domainTier);
+
+  if (desired.length === 0) {
+    throw new Error(
+      'Cannot update subscription to all-free tiers. ' +
+        'Use the Manage Billing portal to cancel your subscription.',
+    );
+  }
+
+  const stripeSub = await stripeClient.subscriptions.retrieve(
+    stripeSubscriptionId,
+    { expand: ['items'] },
+  );
+
+  const currentItems = stripeSub.items?.data ?? [];
+  const currentPriceIds = new Set(currentItems.map((i) => i.price.id));
+  const desiredPriceIds = new Set(desired.map((d) => d.priceId));
+
+  const updateItems: Stripe.SubscriptionUpdateParams.Item[] = [];
+
+  // Keep existing items whose price is still desired, delete the rest
+  for (const item of currentItems) {
+    if (desiredPriceIds.has(item.price.id)) {
+      desiredPriceIds.delete(item.price.id);
+    } else {
+      updateItems.push({ id: item.id, deleted: true });
+    }
+  }
+
+  // Add new items that don't already exist on the subscription
+  for (const priceId of desiredPriceIds) {
+    updateItems.push({ price: priceId, quantity: 1 });
+  }
+
+  if (updateItems.length === 0) {
+    logger.info('Stripe', `Subscription ${stripeSubscriptionId} already matches desired tiers`);
+    return;
+  }
+
+  await stripeClient.subscriptions.update(stripeSubscriptionId, {
+    items: updateItems,
+    proration_behavior: 'create_prorations',
+  });
+
+  logger.info(
+    'Stripe',
+    `Updated subscription ${stripeSubscriptionId} in-place: ` +
+      `storage=${storageTier}, accounts=${accountTier}, domains=${domainTier} ` +
+      `(${updateItems.length} item change(s))`,
+  );
+}
+
+export interface SubscriptionPreview {
+  /** Amount due immediately (in cents), can be negative for downgrades */
+  immediateAmount: number;
+  /** New recurring total per period (in cents) */
+  recurringAmount: number;
+  /** Currency code, e.g. "usd" */
+  currency: string;
+  /** Billing interval, e.g. "month" */
+  interval: string;
+  /** Individual line items describing what changed */
+  lineItems: {
+    description: string;
+    amount: number;
+  }[];
+}
+
+/**
+ * Preview the cost of changing a subscription before applying it.
+ * Uses Stripe's invoice preview API to calculate prorations.
+ */
+export async function previewSubscriptionUpdate(
+  stripeSubscriptionId: string,
+  stripeCustomerId: string,
+  storageTier: StorageTier,
+  accountTier: AccountTier,
+  domainTier: DomainTier,
+): Promise<SubscriptionPreview> {
+  const stripeClient = getStripeClient();
+  const desired = collectPriceItems(storageTier, accountTier, domainTier);
+
+  const stripeSub = await stripeClient.subscriptions.retrieve(
+    stripeSubscriptionId,
+    { expand: ['items'] },
+  );
+
+  const currentItems = stripeSub.items?.data ?? [];
+  const desiredPriceIds = new Set(desired.map((d) => d.priceId));
+
+  // Build the items array for the preview in the same way as the update
+  const previewItems: Stripe.InvoiceCreatePreviewParams.SubscriptionDetails.Item[] = [];
+
+  for (const item of currentItems) {
+    if (desiredPriceIds.has(item.price.id)) {
+      // Item stays — keep it as-is
+      previewItems.push({ id: item.id, price: item.price.id });
+      desiredPriceIds.delete(item.price.id);
+    } else {
+      // Item removed
+      previewItems.push({ id: item.id, deleted: true });
+    }
+  }
+
+  // New items to add
+  for (const priceId of desiredPriceIds) {
+    previewItems.push({ price: priceId, quantity: 1 });
+  }
+
+  const preview = await stripeClient.invoices.createPreview({
+    customer: stripeCustomerId,
+    subscription_details: {
+      items: previewItems,
+    },
+    subscription: stripeSubscriptionId,
+  });
+
+  const allLines = preview.lines?.data ?? [];
+
+  const lineItems = allLines.map((line) => ({
+    description: line.description || 'Subscription change',
+    amount: line.amount,
+  }));
+
+  // Recurring amount = sum of non-proration line items (the full-period charges)
+  const recurringAmount = allLines
+    .filter((l) => !l.proration)
+    .reduce((sum, l) => sum + l.amount, 0);
+
+  let interval = 'month';
+  const recurringLine = allLines.find((l) => l.price?.recurring);
+  if (recurringLine?.price?.recurring?.interval) {
+    interval = recurringLine.price.recurring.interval;
+  }
+
+  return {
+    immediateAmount: preview.amount_due ?? 0,
+    recurringAmount,
+    currency: preview.currency || 'usd',
+    interval,
+    lineItems,
+  };
 }
 
 /**
@@ -349,14 +508,38 @@ async function handleCheckoutCompleted(
     return;
   }
 
-  // Update with Stripe subscription ID
-  if (session.subscription) {
-    await subscription.update({
-      stripeSubscriptionId: session.subscription as string,
-      status: SubscriptionStatus.ACTIVE,
-    });
-    logger.info('Stripe Webhook', `Updated subscription for user ${userId}`);
+  const newSubId = session.subscription as string | null;
+  if (!newSubId) {
+    return;
   }
+
+  // If replacing an existing Stripe subscription, cancel the old one
+  const oldSubId = subscription.stripeSubscriptionId;
+  if (oldSubId && oldSubId !== newSubId) {
+    logger.info(
+      'Stripe Webhook',
+      `Checkout created new subscription ${newSubId}, replacing old ${oldSubId} for user ${userId}`,
+    );
+    try {
+      const stripeClient = getStripeClient();
+      await stripeClient.subscriptions.cancel(oldSubId);
+      logger.info('Stripe Webhook', `Canceled old subscription ${oldSubId}`);
+    } catch (err) {
+      logger.warn(
+        'Stripe Webhook',
+        `Failed to cancel old subscription ${oldSubId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  await subscription.update({
+    stripeSubscriptionId: newSubId,
+    status: SubscriptionStatus.ACTIVE,
+  });
+  logger.info(
+    'Stripe Webhook',
+    `Updated subscription for user ${userId}: ${newSubId}`,
+  );
 }
 
 /**
@@ -560,11 +743,6 @@ export async function resolveCheckoutSession(
   subscription: Subscription,
   sessionId: string,
 ): Promise<Subscription> {
-  // If subscription already has a Stripe subscription ID, no need to resolve
-  if (subscription.stripeSubscriptionId) {
-    return subscription;
-  }
-
   if (!isStripeConfigured()) {
     return subscription;
   }
@@ -573,22 +751,46 @@ export async function resolveCheckoutSession(
     const stripeClient = getStripeClient();
     const session = await stripeClient.checkout.sessions.retrieve(sessionId);
 
-    if (session.subscription) {
+    const newSubId = session.subscription as string | null;
+    if (!newSubId) {
+      return subscription;
+    }
+
+    // If the checkout created a different subscription than what we have,
+    // cancel the old one on Stripe to avoid double-charging.
+    const oldSubId = subscription.stripeSubscriptionId;
+    if (oldSubId && oldSubId !== newSubId) {
+      logger.info(
+        'Stripe',
+        `Checkout created new subscription ${newSubId}, replacing old ${oldSubId} for user ${subscription.userId}`,
+      );
+      try {
+        await stripeClient.subscriptions.cancel(oldSubId);
+        logger.info('Stripe', `Canceled old subscription ${oldSubId}`);
+      } catch (err) {
+        logger.warn(
+          'Stripe',
+          `Failed to cancel old subscription ${oldSubId}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+    }
+
+    if (oldSubId !== newSubId) {
       await subscription.update({
-        stripeSubscriptionId: session.subscription as string,
+        stripeSubscriptionId: newSubId,
         status: SubscriptionStatus.ACTIVE,
       });
       await subscription.reload();
 
       logger.info(
         'Stripe',
-        `Resolved checkout session ${sessionId} -> subscription ${session.subscription} for user ${subscription.userId}`,
+        `Resolved checkout session ${sessionId} -> subscription ${newSubId} for user ${subscription.userId}`,
       );
     }
   } catch (error) {
     logger.warn(
       'Stripe',
-      `Failed to resolve checkout session ${sessionId}: ${error}`,
+      `Failed to resolve checkout session ${sessionId}: ${error instanceof Error ? error.message : error}`,
     );
   }
 

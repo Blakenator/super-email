@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
+import { useQuery, useMutation, useLazyQuery } from '@apollo/client/react';
 import { Card, Button, Spinner, Alert, Modal } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -23,6 +23,7 @@ import {
   CREATE_BILLING_PORTAL_SESSION_MUTATION,
   REFRESH_STORAGE_USAGE_MUTATION,
   CREATE_CHECKOUT_SESSION_MUTATION,
+  PREVIEW_SUBSCRIPTION_CHANGE_QUERY,
 } from '../queries';
 import { StorageTier, AccountTier, DomainTier } from '../../../__generated__/graphql';
 import {
@@ -66,6 +67,13 @@ function formatBytes(bytes: number): string {
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function formatCents(cents: number, currency = 'usd'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(cents / 100);
 }
 
 function formatTier(tier: string, category?: 'storage' | 'account' | 'domain'): string {
@@ -349,6 +357,10 @@ export function BillingSettings() {
   const [createCheckoutSession, { loading: creatingCheckout }] = useMutation(
     CREATE_CHECKOUT_SESSION_MUTATION,
   );
+  const [fetchPreview, { data: previewData, loading: loadingPreview }] =
+    useLazyQuery(PREVIEW_SUBSCRIPTION_CHANGE_QUERY, {
+      fetchPolicy: 'network-only',
+    });
 
   // Pending tier selections
   const [pendingStorageTier, setPendingStorageTier] =
@@ -475,13 +487,39 @@ export function BillingSettings() {
       });
       const url = result.data?.createCheckoutSession;
       if (url) {
+        // First-time subscription: redirect to Stripe Checkout
         window.location.href = url;
+      } else {
+        // Existing subscription updated in-place
+        setPendingStorageTier(null);
+        setPendingAccountTier(null);
+        setPendingDomainTier(null);
+        await refetch();
+        toast.success('Subscription updated successfully');
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create checkout session');
+      toast.error(err instanceof Error ? err.message : 'Failed to update subscription');
     }
     setShowConfirmModal(false);
   };
+
+  const handleOpenConfirmModal = () => {
+    setShowConfirmModal(true);
+    if (hasStripeCustomer) {
+      const storageTier =
+        pendingStorageTier ||
+        (data?.getBillingInfo?.subscription?.storageTier as StorageTier);
+      const accountTier =
+        pendingAccountTier ||
+        (data?.getBillingInfo?.subscription?.accountTier as AccountTier);
+      const domainTier =
+        pendingDomainTier ||
+        (data?.getBillingInfo?.subscription?.domainTier as DomainTier);
+      void fetchPreview({ variables: { storageTier, accountTier, domainTier } });
+    }
+  };
+
+  const preview = previewData?.previewSubscriptionChange;
 
   const hasPendingChanges =
     pendingStorageTier !== null ||
@@ -556,7 +594,7 @@ export function BillingSettings() {
             <Button
               variant="light"
               size="sm"
-              onClick={() => setShowConfirmModal(true)}
+              onClick={handleOpenConfirmModal}
               disabled={creatingCheckout}
             >
               {creatingCheckout ? (
@@ -1150,9 +1188,66 @@ export function BillingSettings() {
                   </li>
                 )}
               </ul>
-              <p className="text-muted mb-0">
-                You'll be redirected to Stripe to complete the payment.
-              </p>
+
+              {hasStripeCustomer && loadingPreview && (
+                <div className="text-center py-3">
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Calculating cost...
+                </div>
+              )}
+
+              {hasStripeCustomer && preview && !loadingPreview && (
+                <>
+                  <hr />
+                  {preview.lineItems.map((item, i) => (
+                    <div
+                      key={i}
+                      className="d-flex justify-content-between mb-1"
+                    >
+                      <small className="text-muted">{item.description}</small>
+                      <small
+                        className={
+                          item.amount < 0 ? 'text-success' : 'text-body'
+                        }
+                      >
+                        {item.amount < 0 ? '−' : ''}
+                        {formatCents(Math.abs(item.amount), preview.currency)}
+                      </small>
+                    </div>
+                  ))}
+                  <hr />
+                  <div className="d-flex justify-content-between align-items-center">
+                    <strong>Due now</strong>
+                    <strong>
+                      {formatCents(
+                        Math.max(0, preview.immediateAmount),
+                        preview.currency,
+                      )}
+                    </strong>
+                  </div>
+                  {preview.immediateAmount < 0 && (
+                    <small className="text-success">
+                      {formatCents(
+                        Math.abs(preview.immediateAmount),
+                        preview.currency,
+                      )}{' '}
+                      credit applied to your account
+                    </small>
+                  )}
+                  <div className="d-flex justify-content-between mt-2">
+                    <small className="text-muted">
+                      Then {formatCents(preview.recurringAmount, preview.currency)}/
+                      {preview.interval}
+                    </small>
+                  </div>
+                </>
+              )}
+
+              {!hasStripeCustomer && (
+                <p className="text-muted mb-0">
+                  You'll be redirected to Stripe to complete the payment.
+                </p>
+              )}
             </>
           )}
         </Modal.Body>
@@ -1200,12 +1295,12 @@ export function BillingSettings() {
               <Button
                 variant="primary"
                 onClick={handleConfirmChanges}
-                disabled={creatingCheckout}
+                disabled={creatingCheckout || (hasStripeCustomer && loadingPreview)}
               >
                 {creatingCheckout ? (
                   <Spinner animation="border" size="sm" className="me-1" />
                 ) : null}
-                Continue to Payment
+                {hasStripeCustomer ? 'Confirm & Pay' : 'Continue to Payment'}
               </Button>
             </>
           )}

@@ -26,6 +26,7 @@ import { getAttachmentDownloadUrl } from './attachment/getAttachmentDownloadUrl.
 import { getBillingInfo } from './billing/getBillingInfo.js';
 import { getStorageUsage } from './billing/getStorageUsage.js';
 import { getStorageUsageRealtime } from './billing/getStorageUsageRealtime.js';
+import { previewSubscriptionChange } from './billing/previewSubscriptionChange.js';
 
 export const QueryResolvers: AllQueries = {
   healthCheck,
@@ -55,4 +56,5 @@ export const QueryResolvers: AllQueries = {
   getBillingInfo,
   getStorageUsage,
   getStorageUsageRealtime,
+  previewSubscriptionChange,
 };

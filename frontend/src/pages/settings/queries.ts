@@ -501,3 +501,18 @@ export const CREATE_CHECKOUT_SESSION_MUTATION = gql(`
     createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier)
   }
 `);
+
+export const PREVIEW_SUBSCRIPTION_CHANGE_QUERY = gql(`
+  query PreviewSubscriptionChange($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {
+    previewSubscriptionChange(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier) {
+      immediateAmount
+      recurringAmount
+      currency
+      interval
+      lineItems {
+        description
+        amount
+      }
+    }
+  }
+`);
