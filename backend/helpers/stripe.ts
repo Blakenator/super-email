@@ -314,15 +314,24 @@ export async function previewSubscriptionUpdate(
     amount: line.amount,
   }));
 
+  const isProration = (l: Stripe.InvoiceLineItem) => {
+    const details = l.parent?.subscription_item_details ?? l.parent?.invoice_item_details;
+    return details?.proration ?? false;
+  };
+
   // Recurring amount = sum of non-proration line items (the full-period charges)
   const recurringAmount = allLines
-    .filter((l) => !l.proration)
+    .filter((l) => !isProration(l))
     .reduce((sum, l) => sum + l.amount, 0);
 
   let interval = 'month';
-  const recurringLine = allLines.find((l) => l.price?.recurring);
-  if (recurringLine?.price?.recurring?.interval) {
-    interval = recurringLine.price.recurring.interval;
+  const recurringLine = allLines.find((l) => {
+    const price = l.pricing?.price_details?.price;
+    return typeof price === 'object' && price?.recurring;
+  });
+  const price = recurringLine?.pricing?.price_details?.price;
+  if (typeof price === 'object' && price?.recurring?.interval) {
+    interval = price.recurring.interval;
   }
 
   return {
