@@ -788,6 +788,19 @@ export type GetEmailsInput = {
   toContains?: InputMaybe<Scalars['String']['input']>;
 };
 
+/** Server health and version information returned by the healthCheck query. */
+export type HealthInfo = {
+  __typename?: 'HealthInfo';
+  /** Server status (e.g. "ok") */
+  status: Scalars['String']['output'];
+  /** Server timestamp (ISO 8601) */
+  timestamp: Scalars['String']['output'];
+  /** Server uptime in seconds */
+  uptimeSeconds: Scalars['Float']['output'];
+  /** Backend package version */
+  version: Scalars['String']['output'];
+};
+
 /**
  * IMAP/POP3 specific settings for an email account.
  * Only present when the parent EmailAccount has type IMAP.
@@ -1523,6 +1536,8 @@ export type Query = {
    * Aggregates senders by email count.
    */
   getTopEmailSources: Array<EmailSource>;
+  /** Returns server health and version information. Does not require authentication. */
+  healthCheck: HealthInfo;
   /**
    * Preview how many existing emails would match a rule's conditions.
    * Useful for testing rules before running them.
@@ -2327,6 +2342,7 @@ export type ResolversTypes = ResolversObject<{
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
+  HealthInfo: ResolverTypeWrapper<HealthInfo>;
   ImapAccountSettings: ResolverTypeWrapper<ImapAccountSettings>;
   ImapAccountType: ImapAccountType;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
@@ -2407,6 +2423,7 @@ export type ResolversParentTypes = ResolversObject<{
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
+  HealthInfo: HealthInfo;
   ImapAccountSettings: ImapAccountSettings;
   Int: Scalars['Int']['output'];
   JSON: Scalars['JSON']['output'];
@@ -2644,6 +2661,13 @@ export type EmailSourceResolvers<ContextType = MyContext, ParentType extends Res
   fromName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 }>;
 
+export type HealthInfoResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['HealthInfo'] = ResolversParentTypes['HealthInfo']> = ResolversObject<{
+  status?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  timestamp?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  uptimeSeconds?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  version?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+}>;
+
 export type ImapAccountSettingsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['ImapAccountSettings'] = ResolversParentTypes['ImapAccountSettings']> = ResolversObject<{
   accountType?: Resolver<ResolversTypes['ImapAccountType'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
@@ -2783,6 +2807,7 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getTag?: Resolver<Maybe<ResolversTypes['Tag']>, ParentType, ContextType, RequireFields<QueryGetTagArgs, 'id'>>;
   getTags?: Resolver<Array<ResolversTypes['Tag']>, ParentType, ContextType>;
   getTopEmailSources?: Resolver<Array<ResolversTypes['EmailSource']>, ParentType, ContextType, Partial<QueryGetTopEmailSourcesArgs>>;
+  healthCheck?: Resolver<ResolversTypes['HealthInfo'], ParentType, ContextType>;
   previewMailRule?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<QueryPreviewMailRuleArgs, 'id'>>;
   searchContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QuerySearchContactsArgs, 'query'>>;
 }>;
@@ -2914,6 +2939,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   Email?: EmailResolvers<ContextType>;
   EmailAccount?: EmailAccountResolvers<ContextType>;
   EmailSource?: EmailSourceResolvers<ContextType>;
+  HealthInfo?: HealthInfoResolvers<ContextType>;
   ImapAccountSettings?: ImapAccountSettingsResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   MailRule?: MailRuleResolvers<ContextType>;

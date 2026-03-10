@@ -261,16 +261,18 @@ export function EmailDetailScreen({
   const LIST_HEADER_HEIGHT = 150;
   const RECIPIENTS_HEIGHT = 30;
 
-  // Flat index layout: index 0 = ListHeaderComponent, then 2 entries per
-  // section (header + item) since there is no SectionSeparatorComponent.
+  // Flat index layout for SectionList:
+  //   index 0 = ListHeaderComponent
+  //   then 3 entries per section (header + item + footer)
+  // React Native always counts a section footer slot even without renderSectionFooter.
   const getItemLayout = useCallback((data: any, index: number) => {
     if (index === 0) {
       return { length: LIST_HEADER_HEIGHT, offset: 0, index };
     }
 
     const adjustedIndex = index - 1;
-    const sectionIndex = Math.floor(adjustedIndex / 2);
-    const isHeader = adjustedIndex % 2 === 0;
+    const sectionIndex = Math.floor(adjustedIndex / 3);
+    const positionInSection = adjustedIndex % 3; // 0=header, 1=item, 2=footer
 
     let offset = LIST_HEADER_HEIGHT;
     for (let i = 0; i < sectionIndex; i++) {
@@ -278,24 +280,36 @@ export function EmailDetailScreen({
       const bodyHeight = section?.threadEmail?.id
         ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
         : DEFAULT_ITEM_HEIGHT;
-      offset += STICKY_HEADER_HEIGHT + bodyHeight;
+      offset += STICKY_HEADER_HEIGHT + bodyHeight; // footer has 0 height
     }
 
-    if (isHeader) {
+    if (positionInSection === 0) {
+      // Section header
       return { length: STICKY_HEADER_HEIGHT, offset, index };
     }
 
+    if (positionInSection === 1) {
+      // Section item (email body)
+      offset += STICKY_HEADER_HEIGHT;
+      const section = threadSections[sectionIndex];
+      const length = section?.threadEmail?.id
+        ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
+        : DEFAULT_ITEM_HEIGHT;
+      return { length, offset, index };
+    }
+
+    // Section footer (always 0 height — no renderSectionFooter provided)
     offset += STICKY_HEADER_HEIGHT;
     const section = threadSections[sectionIndex];
-    const length = section?.threadEmail?.id
+    const bodyHeight = section?.threadEmail?.id
       ? (threadWebViewHeights[section.threadEmail.id] || DEFAULT_ITEM_HEIGHT) + RECIPIENTS_HEIGHT
       : DEFAULT_ITEM_HEIGHT;
-    return { length, offset, index };
+    offset += bodyHeight;
+    return { length: 0, offset, index };
   }, [threadSections, threadWebViewHeights]);
 
   // Scroll to current email section when thread loads and heights are measured
   useEffect(() => {
-    // Count how many heights we have for sections before target
     let measuredCount = 0;
     for (let i = 0; i < currentSectionIndex; i++) {
       const section = threadSections[i];
@@ -304,16 +318,15 @@ export function EmailDetailScreen({
       }
     }
     const hasEnoughHeights = measuredCount >= currentSectionIndex;
-    
+
     if (
-      currentSectionIndex > 0 && 
-      !hasScrolledRef.current && 
+      currentSectionIndex > 0 &&
+      !hasScrolledRef.current &&
       threadSections.length > 1 &&
       hasEnoughHeights
     ) {
       hasScrolledRef.current = true;
-      
-      // Small delay to ensure layout is stable
+
       setTimeout(() => {
         if (sectionListRef.current) {
           try {
@@ -465,7 +478,7 @@ export function EmailDetailScreen({
     const currentUserEmail = user?.email?.toLowerCase();
     
     // Reply All: To = original sender, CC = all other recipients (excluding ourselves)
-    const allToRecipients = [email.fromAddress, ...email.toAddresses];
+    const allToRecipients = [email.fromAddress, ...(email.toAddresses ?? [])];
     const allCcRecipients = email.ccAddresses ?? [];
     
     // Filter out the current user's email from all recipients
@@ -914,7 +927,7 @@ export function EmailDetailScreen({
 
   const handleThreadReplyAll = useCallback((threadEmail: ThreadEmail) => {
     const currentUserEmail = user?.email?.toLowerCase();
-    const allToRecipients = [threadEmail.fromAddress, ...threadEmail.toAddresses];
+    const allToRecipients = [threadEmail.fromAddress, ...(threadEmail.toAddresses ?? [])];
     const allCcRecipients = threadEmail.ccAddresses ?? [];
     
     const filteredTo = allToRecipients.filter(
@@ -1043,7 +1056,7 @@ export function EmailDetailScreen({
       </View>
 
       {/* Tags */}
-      {email.tags.length > 0 && (
+      {email.tags && email.tags.length > 0 && (
         <View style={styles.tagsRow}>
           {email.tags.map((tag) => (
             <View
@@ -1108,7 +1121,6 @@ export function EmailDetailScreen({
           contentContainerStyle={styles.sectionListContent}
           showsVerticalScrollIndicator={true}
           scrollEnabled={parentScrollEnabled}
-          // Disable virtualization to ensure all sections are rendered for scroll
           initialNumToRender={50}
           maxToRenderPerBatch={50}
           windowSize={100}
@@ -1116,7 +1128,7 @@ export function EmailDetailScreen({
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
               try {
-                const sectionIdx = Math.max(0, Math.floor((info.index - 1) / 2));
+                const sectionIdx = Math.max(0, Math.floor((info.index - 1) / 3));
                 (sectionListRef.current as any)?.scrollToLocation({
                   sectionIndex: sectionIdx,
                   itemIndex: 0,
@@ -1149,13 +1161,13 @@ export function EmailDetailScreen({
                 >
                   <View style={[styles.threadAvatarSmall, { backgroundColor: isCurrentEmail ? theme.colors.primary : theme.colors.secondary }]}>
                     <Text style={[styles.threadAvatarText, { color: theme.colors.textInverse }]}>
-                      {(threadEmail.fromName || threadEmail.fromAddress)[0].toUpperCase()}
+                      {((threadEmail.fromName || threadEmail.fromAddress) ?? '?')[0]?.toUpperCase() ?? '?'}
                     </Text>
                   </View>
                   <View style={styles.threadStickyMeta}>
                     <View style={styles.threadStickyTop}>
                       <Text style={[styles.threadSenderName, { color: theme.colors.text }]} numberOfLines={1}>
-                        {threadEmail.fromName || threadEmail.fromAddress.split('@')[0]}
+                        {threadEmail.fromName || (threadEmail.fromAddress ?? '').split('@')[0] || 'Unknown'}
                       </Text>
                       <Text style={[styles.threadStickyDate, { color: theme.colors.textMuted }]}>
                         {formatShortDate(threadEmail.receivedAt)}
@@ -1236,7 +1248,7 @@ export function EmailDetailScreen({
               >
                 {isExpanded && (
                   <Text style={[styles.threadRecipients, { color: theme.colors.textMuted }]}>
-                    To: {threadEmail.toAddresses.join(', ')}
+                    To: {(threadEmail.toAddresses ?? []).join(', ')}
                     {threadEmail.ccAddresses && threadEmail.ccAddresses.length > 0 && (
                       `  •  Cc: ${threadEmail.ccAddresses.join(', ')}`
                     )}
@@ -1287,12 +1299,12 @@ export function EmailDetailScreen({
                   { color: theme.colors.textInverse },
                 ]}
               >
-                {(email.fromName || email.fromAddress)[0].toUpperCase()}
+                {((email.fromName || email.fromAddress) ?? '?')[0]?.toUpperCase() ?? '?'}
               </Text>
             </View>
             <View style={styles.senderInfo}>
               <Text style={[styles.senderName, { color: theme.colors.text }]}>
-                {email.fromName || email.fromAddress.split('@')[0]}
+                {email.fromName || (email.fromAddress ?? '').split('@')[0] || 'Unknown'}
               </Text>
               <Text
                 style={[styles.senderEmail, { color: theme.colors.textMuted }]}
@@ -1327,7 +1339,7 @@ export function EmailDetailScreen({
               style={[styles.recipientText, { color: theme.colors.text }]}
               numberOfLines={2}
             >
-              {email.toAddresses.join(', ')}
+              {(email.toAddresses ?? []).join(', ')}
             </Text>
             {email.ccAddresses && email.ccAddresses.length > 0 && (
               <>

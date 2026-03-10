@@ -96,7 +96,7 @@ export function useInboxEmails({
           id: a.id,
           name: a.name,
           email: a.email,
-          host: a.host,
+          host: a.imapSettings?.host ?? '',
           providerId: a.providerId,
         })),
       );

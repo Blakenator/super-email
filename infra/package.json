@@ -1,6 +1,6 @@
 {
   "name": "@main/infra",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Infrastructure as Code for Email Client using Pulumi and AWS",
   "main": "index.ts",
   "scripts": {

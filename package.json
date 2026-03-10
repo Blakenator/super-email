@@ -1,6 +1,6 @@
 {
   "name": "@main/email-client",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "A self-hosted email client with IMAP/POP and SMTP support",
   "main": "index.js",
   "scripts": {
@@ -43,6 +43,8 @@
   "packageManager": "pnpm@10.18.2",
   "devDependencies": {
     "@babel/plugin-bugfix-firefox-class-in-computed-class-key": "^7.28.5",
+    "@changesets/changelog-git": "^0.2.1",
+    "@changesets/cli": "^2.30.0",
     "@types/luxon": "^3.7.1",
     "prettier": "^3.6.2",
     "sharp": "^0.34.5",

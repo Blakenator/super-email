@@ -1,6 +1,6 @@
 {
   "name": "@main/backend",
-  "version": "1.0.0",
+  "version": "0.1.1",
   "description": "Email client backend with IMAP/POP sync and SMTP sending",
   "type": "module",
   "main": "index.js",

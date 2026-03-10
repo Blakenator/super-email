@@ -1,5 +1,18 @@
 import { gql } from '../../__generated__/gql';
 
+// ============ Health ============
+
+export const HEALTH_CHECK_QUERY = gql(`
+  query HealthCheck {
+    healthCheck {
+      status
+      version
+      timestamp
+      uptimeSeconds
+    }
+  }
+`);
+
 // ============ Email Accounts ============
 
 export const GET_EMAIL_ACCOUNTS_QUERY = gql(`

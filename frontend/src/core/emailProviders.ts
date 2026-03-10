@@ -196,6 +196,7 @@ export const SMTP_PORTS = [587, 465, 25];
 
 // Get provider by host matching
 export function getProviderByHost(host: string): EmailProviderPreset | null {
+  if (!host) return null;
   const hostLower = host.toLowerCase();
 
   for (const provider of EMAIL_PROVIDERS) {

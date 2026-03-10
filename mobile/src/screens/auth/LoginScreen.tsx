@@ -72,7 +72,8 @@ export function LoginScreen({ onNavigateToSignup }: LoginScreenProps) {
     const success = await loginWithBiometric();
 
     if (!success) {
-      // Biometric failed - don't automatically switch, let user retry or switch manually
+      setError('Session expired. Please sign in with your password.');
+      setShowPasswordLogin(true);
     }
   };
 

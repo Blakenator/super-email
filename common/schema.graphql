@@ -1930,6 +1930,30 @@ type EmailSource {
   count: Int!
 }
 
+# ============ Health ============
+
+"""
+Server health and version information returned by the healthCheck query.
+"""
+type HealthInfo {
+  """
+  Server status (e.g. "ok")
+  """
+  status: String!
+  """
+  Backend package version
+  """
+  version: String!
+  """
+  Server timestamp (ISO 8601)
+  """
+  timestamp: String!
+  """
+  Server uptime in seconds
+  """
+  uptimeSeconds: Float!
+}
+
 # ============ Queries ============
 
 """
@@ -1937,6 +1961,12 @@ GraphQL queries for fetching data. All queries require authentication
 unless otherwise noted.
 """
 type Query {
+  # Health
+  """
+  Returns server health and version information. Does not require authentication.
+  """
+  healthCheck: HealthInfo!
+
   # Auth
   """
   Fetch the current user's profile. Creates the user record if this is

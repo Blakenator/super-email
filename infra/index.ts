@@ -709,9 +709,9 @@ const stripePriceStorageEnterprise = config.get('stripePriceStorageEnterprise') 
 const stripePriceAccountsBasic = config.get('stripePriceAccountsBasic') || '';
 const stripePriceAccountsPro = config.get('stripePriceAccountsPro') || '';
 const stripePriceAccountsEnterprise = config.get('stripePriceAccountsEnterprise') || '';
-const stripePriceDomainBasic = config.get('stripePriceDomainBasic') || '';
-const stripePriceDomainPro = config.get('stripePriceDomainPro') || '';
-const stripePriceDomainEnterprise = config.get('stripePriceDomainEnterprise') || '';
+const stripePriceDomainBasic = config.get('stripePriceDomainsBasic') || '';
+const stripePriceDomainPro = config.get('stripePriceDomainsPro') || '';
+const stripePriceDomainEnterprise = config.get('stripePriceDomainsEnterprise') || '';
 
 // Stripe secret key
 const stripeKeySecret = new aws.secretsmanager.Secret(

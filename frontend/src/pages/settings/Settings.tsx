@@ -43,6 +43,7 @@ import {
   NotificationSettings,
   ThemeSettings,
   BillingSettings,
+  AppInformation,
 } from './components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -61,6 +62,7 @@ import {
   faSignOutAlt,
   faCreditCard,
   faGlobe,
+  faInfoCircle,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faGoogle,
@@ -98,6 +100,7 @@ const TAB_MAPPING: Record<string, string> = {
   notifications: 'notifications',
   appearance: 'appearance',
   billing: 'billing',
+  about: 'app-info',
 };
 
 const REVERSE_TAB_MAPPING = Object.fromEntries(
@@ -997,6 +1000,18 @@ export function Settings() {
               }
             >
               <BillingSettings />
+            </Tab>
+
+            <Tab
+              eventKey="app-info"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
+                  App Information
+                </>
+              }
+            >
+              <AppInformation />
             </Tab>
           </Tabs>
         </ResponsiveTabsWrapper>

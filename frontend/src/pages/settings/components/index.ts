@@ -8,3 +8,4 @@ export * from './MailRulesManager';
 export * from './NotificationSettings';
 export * from './ThemeSettings';
 export * from './BillingSettings';
+export * from './AppInformation';

@@ -685,7 +685,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
               // Get provider icon from providerId or by matching host
               const provider =
                 (account.providerId && getProviderById(account.providerId)) ||
-                getProviderByHost(account.host);
+                (account.host ? getProviderByHost(account.host) : null);
               return (
                 <Tab
                   key={account.id}

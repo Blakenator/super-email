@@ -310,16 +310,44 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     }
 
-    // Check for existing valid session
+    // Try to restore or refresh the Supabase session
     try {
-      const session = await getSession();
+      let session = await getSession();
+
+      if (!session?.access_token) {
+        // No stored session — try refreshing (the refresh token may still be valid)
+        try {
+          session = await refreshSession();
+        } catch {
+          // Refresh token is also expired; password login is required
+        }
+      } else {
+        // Stored session exists but may be stale — proactively refresh
+        try {
+          const refreshed = await refreshSession();
+          if (refreshed?.access_token) {
+            session = refreshed;
+          }
+        } catch {
+          // Refresh failed; fall through to use the existing token
+        }
+      }
 
       if (session?.access_token) {
         await secureSet(STORAGE_KEYS.AUTH_TOKEN, session.access_token);
         set({ token: session.access_token, isAuthenticated: true, shouldPromptBiometric: false });
+        reconnectWebSocket();
         await get().refreshProfile();
-        
-        // Start mailbox subscription for real-time updates
+
+        // Register for push notifications (non-blocking)
+        registerForPushNotifications()
+          .then(async (pushToken) => {
+            if (pushToken && session?.access_token) {
+              await registerPushTokenWithBackend(pushToken.token, session.access_token);
+            }
+          })
+          .catch((e) => console.error('[AuthStore] Push registration failed after biometric login:', e));
+
         useEmailStore.getState().startSubscription();
         return true;
       }

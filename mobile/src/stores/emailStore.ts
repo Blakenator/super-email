@@ -203,12 +203,12 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   connectionStatus: 'disconnected',
   
   setFolder: (folder) => {
-    set({ currentFolder: folder, page: 1, selectedIds: new Set() });
+    set({ currentFolder: folder, page: 1, selectedIds: new Set(), emails: [], totalCount: 0 });
     get().fetchEmails();
   },
   
   setAccountId: (accountId) => {
-    set({ currentAccountId: accountId, page: 1, selectedIds: new Set() });
+    set({ currentAccountId: accountId, page: 1, selectedIds: new Set(), emails: [], totalCount: 0 });
     get().fetchEmails();
   },
   

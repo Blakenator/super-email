@@ -1,4 +1,5 @@
 import type { AllQueries } from '../types.js';
+import { healthCheck } from './health/healthCheck.js';
 import { fetchProfile } from './auth/fetchProfile.js';
 import { getAuthenticationMethods } from './auth/getAuthenticationMethods.js';
 import { getEmailAccounts } from './email-account/getEmailAccounts.js';
@@ -27,6 +28,7 @@ import { getStorageUsage } from './billing/getStorageUsage.js';
 import { getStorageUsageRealtime } from './billing/getStorageUsageRealtime.js';
 
 export const QueryResolvers: AllQueries = {
+  healthCheck,
   fetchProfile,
   getAuthenticationMethods,
   getEmailAccounts,
