@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { config } from '../../config/env';
 import {
   useTheme,
   sharedStyles,
@@ -298,7 +299,7 @@ export function SettingsScreen({
       {/* App Info */}
       <View style={styles.appInfo}>
         <Text style={[styles.appInfoText, { color: theme.colors.textMuted }]}>
-          SuperMail v1.0.0
+          SuperMail v{config.app.version}
         </Text>
       </View>
     </ScrollView>

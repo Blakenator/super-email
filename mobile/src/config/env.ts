@@ -60,7 +60,7 @@ export const config = {
   },
   app: {
     name: 'SuperMail',
-    version: Constants.expoConfig?.version || '1.0.0',
+    version: Constants.expoConfig?.version || '0.1.0',
     buildNumber: Constants.expoConfig?.ios?.buildNumber || '1',
   },
   // Feature flags
