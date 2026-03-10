@@ -122,6 +122,12 @@ else
     log_info "Loaded $PRICE_COUNT Stripe price ID(s)"
 fi
 
+# SES region (SES is not available in all regions, e.g. us-west-1)
+if [ -n "$SES_REGION" ]; then
+    log_info "Setting SES region: $SES_REGION"
+    pulumi config set sesRegion "$SES_REGION"
+fi
+
 # Set custom domain configuration (optional)
 if [ -n "$DOMAIN_NAME" ]; then
     log_info "Setting custom domain: $DOMAIN_NAME"

@@ -122,6 +122,7 @@ jobs:
           STRIPE_PRICE_DOMAINS_BASIC: ${{ secrets.STRIPE_PRICE_DOMAINS_BASIC }}
           STRIPE_PRICE_DOMAINS_PRO: ${{ secrets.STRIPE_PRICE_DOMAINS_PRO }}
           STRIPE_PRICE_DOMAINS_ENTERPRISE: ${{ secrets.STRIPE_PRICE_DOMAINS_ENTERPRISE }}
+          SES_REGION: ${{ secrets.SES_REGION }}
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
           ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"

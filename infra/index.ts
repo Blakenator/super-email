@@ -713,6 +713,9 @@ const stripePriceDomainBasic = config.get('stripePriceDomainsBasic') || '';
 const stripePriceDomainPro = config.get('stripePriceDomainsPro') || '';
 const stripePriceDomainEnterprise = config.get('stripePriceDomainsEnterprise') || '';
 
+// SES region override (SES is not available in all regions, e.g. us-west-1)
+const sesRegion = config.get('sesRegion') || 'us-west-2';
+
 // Stripe secret key
 const stripeKeySecret = new aws.secretsmanager.Secret(
   `${stackName}-stripe-key`,
@@ -1080,16 +1083,25 @@ const rawEmailsSesPolicy = new aws.s3.BucketPolicy(
   },
 );
 
+// SES provider — SES is only available in certain regions (not us-west-1).
+// Uses the sesRegion config value, defaulting to us-west-2.
+const sesProvider = new aws.Provider(`${stackName}-ses-provider`, {
+  region: sesRegion as aws.Region,
+});
+
 // SES Receipt Rule Set (container for all receipt rules)
 const sesReceiptRuleSet = new aws.ses.ReceiptRuleSet(
   `${stackName}-receipt-rule-set`,
   { ruleSetName: `${stackName}-receipt-rules` },
+  { provider: sesProvider },
 );
 
 // Activate the receipt rule set
-new aws.ses.ActiveReceiptRuleSet(`${stackName}-active-receipt-rule-set`, {
-  ruleSetName: sesReceiptRuleSet.ruleSetName,
-});
+new aws.ses.ActiveReceiptRuleSet(
+  `${stackName}-active-receipt-rule-set`,
+  { ruleSetName: sesReceiptRuleSet.ruleSetName },
+  { provider: sesProvider },
+);
 
 // Catch-all receipt rule: save inbound email to S3 + notify SNS
 // SES only delivers for verified domain identities, so catch-all is safe.
@@ -1109,7 +1121,7 @@ new aws.ses.ReceiptRule(
       },
     ],
   },
-  { dependsOn: [rawEmailsSesPolicy] },
+  { provider: sesProvider, dependsOn: [rawEmailsSesPolicy] },
 );
 
 // =============================================================================
@@ -1198,6 +1210,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'STRIPE_PRICE_DOMAINS_PRO', value: stripePriceDomainPro },
                 { name: 'STRIPE_PRICE_DOMAINS_ENTERPRISE', value: stripePriceDomainEnterprise },
                 // Custom domain email infrastructure
+                { name: 'SES_REGION', value: sesRegion },
                 { name: 'RAW_EMAILS_S3_BUCKET', value: rawEmailsBucketName },
                 { name: 'SQS_CUSTOM_EMAIL_QUEUE_URL', value: customEmailQueueUrl },
                 // Disable in-process background sync - Lambda handles this
