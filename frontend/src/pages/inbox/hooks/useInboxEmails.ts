@@ -96,8 +96,11 @@ export function useInboxEmails({
           id: a.id,
           name: a.name,
           email: a.email,
-          host: a.imapSettings?.host ?? '',
+          type: a.type,
           providerId: a.providerId,
+          imapSettings: a.imapSettings
+            ? { host: a.imapSettings.host, lastSyncedAt: a.imapSettings.lastSyncedAt }
+            : null,
         })),
       );
     }

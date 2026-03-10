@@ -391,7 +391,7 @@ ${quotedHtml}
           input: {
             id: draftId,
             emailAccountId,
-            smtpProfileId: smtpProfileId || undefined,
+            sendProfileId: smtpProfileId || undefined,
             toAddresses: toList.length > 0 ? toList : undefined,
             ccAddresses: ccList.length > 0 ? ccList : undefined,
             bccAddresses: bccList.length > 0 ? bccList : undefined,
@@ -514,7 +514,7 @@ ${quotedHtml}
           variables: {
             input: {
               emailAccountId,
-              smtpProfileId,
+              sendProfileId: smtpProfileId,
               toAddresses: toList,
               ccAddresses: ccList.length > 0 ? ccList : undefined,
               bccAddresses: bccList.length > 0 ? bccList : undefined,

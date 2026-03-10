@@ -9,3 +9,6 @@ export * from './NotificationSettings';
 export * from './ThemeSettings';
 export * from './BillingSettings';
 export * from './AppInformation';
+export * from './EmailAccountsTab';
+export * from './SendProfilesTab';
+export * from './AuthMethodsTab';

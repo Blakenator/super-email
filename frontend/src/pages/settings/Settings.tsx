@@ -1,59 +1,11 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@apollo/client/react';
-import {
-  Container,
-  Card,
-  Button,
-  Modal,
-  Alert,
-  Spinner,
-  Tabs,
-  Tab,
-} from 'react-bootstrap';
-import toast from 'react-hot-toast';
+import { useEffect } from 'react';
+import { Container, Button, Alert, Tabs, Tab } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router';
-import {
-  GET_EMAIL_ACCOUNTS_QUERY,
-  CREATE_EMAIL_ACCOUNT_MUTATION,
-  DELETE_EMAIL_ACCOUNT_MUTATION,
-  SYNC_EMAIL_ACCOUNT_MUTATION,
-  SYNC_ALL_ACCOUNTS_MUTATION,
-  GET_SEND_PROFILES_FULL_QUERY,
-  CREATE_SEND_PROFILE_MUTATION,
-  DELETE_SEND_PROFILE_MUTATION,
-  TEST_IMAP_CONNECTION_MUTATION,
-  TEST_SMTP_CONNECTION_MUTATION,
-  UPDATE_EMAIL_ACCOUNT_MUTATION,
-  UPDATE_SEND_PROFILE_MUTATION,
-  GET_AUTHENTICATION_METHODS_QUERY,
-  DELETE_AUTHENTICATION_METHOD_MUTATION,
-} from './queries';
-import { AuthProvider, EmailAccountType } from '../../__generated__/graphql';
-import { useAuth } from '../../contexts/AuthContext';
-import {
-  EmailAccountForm,
-  type EmailAccountFormData,
-  SmtpProfileForm,
-  type SmtpProfileFormData,
-  EmailAccountCard,
-  SmtpProfileCard,
-  DomainSettings,
-  TagsManager,
-  MailRulesManager,
-  NotificationSettings,
-  ThemeSettings,
-  BillingSettings,
-  AppInformation,
-} from './components';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCog,
   faInbox,
   faPaperPlane,
-  faPlus,
-  faSync,
-  faTrash,
-  faKey,
   faShieldAlt,
   faTag,
   faFilter,
@@ -64,32 +16,37 @@ import {
   faGlobe,
   faInfoCircle,
 } from '@fortawesome/free-solid-svg-icons';
-import {
-  faGoogle,
-  faGithub,
-  faApple,
-  faMicrosoft,
-} from '@fortawesome/free-brands-svg-icons';
+import { useAuth } from '../../contexts/AuthContext';
 import { PageWrapper } from '../../core/components';
+import {
+  EmailAccountForm,
+  SmtpProfileForm,
+  DomainSettings,
+  TagsManager,
+  MailRulesManager,
+  NotificationSettings,
+  ThemeSettings,
+  BillingSettings,
+  AppInformation,
+  EmailAccountsTab,
+  SendProfilesTab,
+  AuthMethodsTab,
+} from './components';
+import {
+  useEmailAccounts,
+  useSendProfiles,
+  useAuthMethods,
+  useCustomDomains,
+} from './hooks';
 import {
   Header,
   Title,
-  SectionCard,
   UserInfo,
   Avatar,
-  AccountCardGrid,
-  SmtpCardGrid,
-  AuthMethodCard,
-  AuthMethodIcon,
-  AuthMethodInfo,
-  AuthMethodName,
-  AuthMethodEmail,
-  AuthMethodMeta,
   ResponsiveTabsWrapper,
   AppVersion,
 } from './Settings.wrappers';
 
-// Map URL tab slugs to internal tab keys
 const TAB_MAPPING: Record<string, string> = {
   accounts: 'email-accounts',
   smtp: 'smtp-profiles',
@@ -111,16 +68,7 @@ export function Settings() {
   const { tab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [showEmailAccountModal, setShowEmailAccountModal] = useState(false);
-  const [showSmtpProfileModal, setShowSmtpProfileModal] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
-  const [, setConnectionTested] = useState(false);
 
-  // Determine active tab from URL
   const activeTab =
     tab && TAB_MAPPING[tab] ? TAB_MAPPING[tab] : 'email-accounts';
 
@@ -131,467 +79,24 @@ export function Settings() {
     }
   };
 
-  // Edit mode state
-  const [editingEmailAccountId, setEditingEmailAccountId] = useState<
-    string | null
-  >(null);
-  const [editingSmtpProfileId, setEditingSmtpProfileId] = useState<
-    string | null
-  >(null);
-
-  // Delete confirmation state
-  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
-  const [deletingAccountId, setDeletingAccountId] = useState<string | null>(
-    null,
-  );
-
-  // Pending SMTP profile creation (for "also create SMTP" flow)
-  const [pendingSmtpData, setPendingSmtpData] = useState<{
-    name: string;
-    email: string;
-    providerId: string;
-    password: string;
-  } | null>(null);
-
-  // Email Account form state
-  const [, setEmailAccountForm] = useState({
-    name: '',
-    email: '',
-    host: '',
-    port: 993,
-    username: '',
-    password: '',
-    accountType: EmailAccountType.Imap,
-    useSsl: true,
-    defaultSendProfileId: '' as string | null,
-  });
-
-  // Send Profile form state
-  const [, setSmtpProfileForm] = useState({
-    name: '',
-    email: '',
-    alias: '' as string | null,
-    host: '',
-    port: 587,
-    username: '',
-    password: '',
-    useSsl: true,
-    isDefault: false,
-  });
-
-  const {
-    data: emailAccountsData,
-    loading: emailAccountsLoading,
-    refetch: refetchEmailAccounts,
-    startPolling,
-    stopPolling,
-  } = useQuery(GET_EMAIL_ACCOUNTS_QUERY, {
-    // Keep previous data while refetching to prevent flickering
-    notifyOnNetworkStatusChange: false,
-  });
-
-  // Poll when any account is syncing
-  const isSyncing = emailAccountsData?.getEmailAccounts?.some(
-    (a) => a.isHistoricalSyncing || a.isUpdateSyncing,
-  );
-
-  // Use useEffect for polling to avoid initialization error
-  useEffect(() => {
-    if (isSyncing) {
-      startPolling(10000);
-    } else {
-      stopPolling();
-    }
-    return () => stopPolling();
-  }, [isSyncing, startPolling, stopPolling]);
+  const emailAccounts = useEmailAccounts();
+  const customDomains = useCustomDomains();
+  const sendProfiles = useSendProfiles(customDomains.domains);
+  const authMethods = useAuthMethods();
 
   // Open SMTP modal when email account is created with "also create SMTP" checked
   useEffect(() => {
-    if (pendingSmtpData) {
-      setShowSmtpProfileModal(true);
+    if (emailAccounts.pendingSmtpData) {
+      sendProfiles.openCreate();
     }
-  }, [pendingSmtpData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emailAccounts.pendingSmtpData]);
 
-  const {
-    data: smtpProfilesData,
-    loading: smtpProfilesLoading,
-    refetch: refetchSmtpProfiles,
-  } = useQuery(GET_SEND_PROFILES_FULL_QUERY);
-
-  const {
-    data: authMethodsData,
-    loading: authMethodsLoading,
-    refetch: refetchAuthMethods,
-  } = useQuery(GET_AUTHENTICATION_METHODS_QUERY);
-
-  const [deleteAuthMethod, { loading: deletingAuthMethod }] = useMutation(
-    DELETE_AUTHENTICATION_METHOD_MUTATION,
-    {
-      onCompleted: () => {
-        void refetchAuthMethods();
-        toast.success('Authentication method removed');
-      },
-      onError: (err) => toast.error(err.message),
-    },
-  );
-
-  const authMethods = authMethodsData?.getAuthenticationMethods ?? [];
-
-  const [createEmailAccount, { loading: creatingEmailAccount }] = useMutation(
-    CREATE_EMAIL_ACCOUNT_MUTATION,
-  );
-
-  const [deleteEmailAccount, { loading: deletingAccount }] = useMutation(
-    DELETE_EMAIL_ACCOUNT_MUTATION,
-    {
-      onCompleted: () => {
-        void refetchEmailAccounts();
-        setShowDeleteAccountModal(false);
-        setDeletingAccountId(null);
-        toast.success('Email account deleted');
-      },
-      onError: (err) => {
-        setError(err.message);
-        setShowDeleteAccountModal(false);
-        setDeletingAccountId(null);
-      },
-    },
-  );
-
-  const handleDeleteAccountClick = (accountId: string) => {
-    setDeletingAccountId(accountId);
-    setShowDeleteAccountModal(true);
+  const error = emailAccounts.error || sendProfiles.error;
+  const clearError = () => {
+    emailAccounts.setError(null);
+    sendProfiles.setError(null);
   };
-
-  const confirmDeleteAccount = () => {
-    if (deletingAccountId) {
-      void deleteEmailAccount({ variables: { id: deletingAccountId } });
-    }
-  };
-
-  const [syncEmailAccount] = useMutation(SYNC_EMAIL_ACCOUNT_MUTATION, {
-    onCompleted: () => void refetchEmailAccounts(),
-    onError: (err) => setError(err.message),
-  });
-
-  const [syncAllAccounts, { loading: syncingAll }] = useMutation(
-    SYNC_ALL_ACCOUNTS_MUTATION,
-    {
-      onCompleted: () => {
-        // Refetch to get updated isSyncing state and trigger polling
-        void refetchEmailAccounts();
-        // Start polling immediately since accounts are now syncing
-        startPolling(2000);
-      },
-      onError: (err) => setError(err.message),
-    },
-  );
-
-  const [createSendProfile, { loading: creatingSendProfile }] = useMutation(
-    CREATE_SEND_PROFILE_MUTATION,
-  );
-
-  const [deleteSendProfile] = useMutation(DELETE_SEND_PROFILE_MUTATION, {
-    onCompleted: () => void refetchSmtpProfiles(),
-    onError: (err) => setError(err.message),
-  });
-
-  const [testImapConnection, { loading: testingEmailAccount }] = useMutation(
-    TEST_IMAP_CONNECTION_MUTATION,
-  );
-
-  const [testSmtpConnection, { loading: testingSmtp }] = useMutation(
-    TEST_SMTP_CONNECTION_MUTATION,
-  );
-
-  const [updateEmailAccount] = useMutation(UPDATE_EMAIL_ACCOUNT_MUTATION, {
-    onCompleted: () => void refetchEmailAccounts(),
-    onError: (err) => setError(err.message),
-  });
-
-  const [updateSendProfile] = useMutation(UPDATE_SEND_PROFILE_MUTATION, {
-    onCompleted: () => void refetchSmtpProfiles(),
-    onError: (err) => setError(err.message),
-  });
-
-  const resetEmailAccountForm = () => {
-    setEmailAccountForm({
-      name: '',
-      email: '',
-      host: '',
-      port: 993,
-      username: '',
-      password: '',
-      accountType: EmailAccountType.Imap,
-      useSsl: true,
-      defaultSendProfileId: null,
-    });
-    setEditingEmailAccountId(null);
-    setTestResult(null);
-    setConnectionTested(false);
-  };
-
-  const resetSmtpProfileForm = () => {
-    setSmtpProfileForm({
-      name: '',
-      email: '',
-      alias: null,
-      host: '',
-      port: 587,
-      username: '',
-      password: '',
-      useSsl: true,
-      isDefault: false,
-    });
-    setEditingSmtpProfileId(null);
-    setTestResult(null);
-    setConnectionTested(false);
-  };
-
-  const handleEditEmailAccount = (accountId: string) => {
-    const account = emailAccounts.find((a) => a.id === accountId);
-    if (account) {
-      setEmailAccountForm({
-        name: account.name,
-        email: account.email,
-        host: account.imapSettings?.host || '',
-        port: account.imapSettings?.port || 993,
-        username: '',
-        password: '',
-        accountType: account.imapSettings?.accountType || EmailAccountType.Imap,
-        useSsl: account.imapSettings?.useSsl ?? true,
-        defaultSendProfileId: account.defaultSendProfileId || null,
-      });
-      setEditingEmailAccountId(accountId);
-      setShowEmailAccountModal(true);
-    }
-  };
-
-  const handleEditSmtpProfile = (profileId: string) => {
-    const profile = smtpProfiles.find((p) => p.id === profileId);
-    if (profile) {
-      setSmtpProfileForm({
-        name: profile.name,
-        email: profile.email,
-        alias: profile.alias || null,
-        host: profile.smtpSettings?.host || '',
-        port: profile.smtpSettings?.port || 587,
-        username: '',
-        password: '',
-        useSsl: profile.smtpSettings?.useSsl ?? false,
-        isDefault: profile.isDefault,
-      });
-      setEditingSmtpProfileId(profileId);
-      setShowSmtpProfileModal(true);
-    }
-  };
-
-  // Handler for the new EmailAccountForm component
-  const handleEmailAccountFormTest = async (
-    formData: EmailAccountFormData,
-  ): Promise<{ success: boolean; message: string }> => {
-    setError(null);
-    setTestResult(null);
-    try {
-      const result = await testImapConnection({
-        variables: {
-          input: {
-            host: formData.host,
-            port: formData.port,
-            username: formData.username,
-            password: formData.password || null,
-            accountType: formData.accountType,
-            useSsl: formData.useSsl,
-            accountId: editingEmailAccountId || null,
-          },
-        },
-      });
-      const testRes = result.data?.testImapConnection || {
-        success: false,
-        message: 'Unknown error',
-      };
-      setTestResult(testRes);
-      return testRes;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      const errorResult = { success: false, message };
-      setTestResult(errorResult);
-      return errorResult;
-    }
-  };
-
-  const handleEmailAccountFormSubmit = async (
-    formData: EmailAccountFormData,
-  ) => {
-    setError(null);
-
-    try {
-      if (editingEmailAccountId) {
-        // Update existing account
-        const result = await updateEmailAccount({
-          variables: {
-            input: {
-              id: editingEmailAccountId,
-              name: formData.name,
-              imapHost: formData.host || undefined,
-              imapPort: formData.port || undefined,
-              imapUsername: formData.username || undefined,
-              imapPassword: formData.password || undefined,
-              imapUseSsl: formData.useSsl,
-              defaultSendProfileId: formData.defaultSendProfileId || undefined,
-              providerId: formData.providerId || undefined,
-              isDefault: formData.isDefault,
-            },
-          },
-        });
-        if (result.error) {
-          throw new Error(result.error?.message);
-        }
-        toast.success('Email account updated!');
-      } else {
-        // Create new account
-        const result = await createEmailAccount({
-          variables: {
-            input: {
-              name: formData.name,
-              email: formData.email,
-              type: formData.accountType,
-              imapHost: formData.host,
-              imapPort: formData.port,
-              imapUsername: formData.username,
-              imapPassword: formData.password,
-              imapAccountType: formData.accountType,
-              imapUseSsl: formData.useSsl,
-              defaultSendProfileId: formData.defaultSendProfileId || undefined,
-              providerId: formData.providerId || undefined,
-              isDefault: formData.isDefault,
-            },
-          },
-        });
-        if (result.error) {
-          throw new Error(result.error?.message);
-        }
-        toast.success('Email account added!');
-
-        // If user wants to also create SMTP profile, save the data and open modal after 1s
-        if (formData.alsoCreateSmtpProfile) {
-          setTimeout(() => {
-            setPendingSmtpData({
-              name: formData.name,
-              email: formData.email,
-              providerId: formData.providerId,
-              password: formData.password,
-            });
-          }, 1000);
-        }
-      }
-      setShowEmailAccountModal(false);
-      resetEmailAccountForm();
-      void refetchEmailAccounts();
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to save email account';
-      toast.error(message);
-    }
-  };
-
-  // Handler for the new SmtpProfileForm component
-  const handleSmtpProfileFormTest = async (
-    formData: SmtpProfileFormData,
-  ): Promise<{ success: boolean; message: string }> => {
-    setError(null);
-    setTestResult(null);
-    try {
-      const result = await testSmtpConnection({
-        variables: {
-          input: {
-            host: formData.host,
-            port: formData.port,
-            username: formData.username,
-            password: formData.password || null,
-            useSsl: formData.useSsl,
-            // Pass profileId when editing to use saved password
-            profileId: editingSmtpProfileId || null,
-          },
-        },
-      });
-      const testRes = result.data?.testSmtpConnection || {
-        success: false,
-        message: 'Unknown error',
-      };
-      setTestResult(testRes);
-      return testRes;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      const errorResult = { success: false, message };
-      setTestResult(errorResult);
-      return errorResult;
-    }
-  };
-
-  const handleSmtpProfileFormSubmit = async (formData: SmtpProfileFormData) => {
-    setError(null);
-
-    try {
-      if (editingSmtpProfileId) {
-        const result = await updateSendProfile({
-          variables: {
-            input: {
-              id: editingSmtpProfileId,
-              name: formData.name,
-              alias: formData.alias || undefined,
-              smtpHost: formData.host || undefined,
-              smtpPort: formData.port || undefined,
-              smtpUsername: formData.username || undefined,
-              smtpPassword: formData.password || undefined,
-              smtpUseSsl: formData.useSsl,
-              isDefault: formData.isDefault,
-              providerId: formData.providerId || undefined,
-            },
-          },
-        });
-        if (result.error) {
-          throw new Error(result.error.message);
-        }
-        toast.success('Send profile updated!');
-      } else {
-        const result = await createSendProfile({
-          variables: {
-            input: {
-              name: formData.name,
-              email: formData.email,
-              alias: formData.alias || undefined,
-              type: 'SMTP' as any,
-              smtpHost: formData.host,
-              smtpPort: formData.port,
-              smtpUsername: formData.username,
-              smtpPassword: formData.password,
-              smtpUseSsl: formData.useSsl,
-              isDefault: formData.isDefault,
-              providerId: formData.providerId || undefined,
-            },
-          },
-        });
-        if (result.error) {
-          throw new Error(result.error.message);
-        }
-        toast.success('Send profile added!');
-      }
-      setShowSmtpProfileModal(false);
-      resetSmtpProfileForm();
-      void refetchSmtpProfiles();
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Failed to save send profile';
-      toast.error(message);
-    }
-  };
-
-  const emailAccounts = emailAccountsData?.getEmailAccounts ?? [];
-  const smtpProfiles = smtpProfilesData?.getSendProfiles ?? [];
-  const deletingAccountData = emailAccounts.find(
-    (a) => a.id === deletingAccountId,
-  );
 
   return (
     <PageWrapper $padding $overflow="auto">
@@ -604,7 +109,7 @@ export function Settings() {
         </Header>
 
         {error && (
-          <Alert variant="danger" dismissible onClose={() => setError(null)}>
+          <Alert variant="danger" dismissible onClose={clearError}>
             {error}
           </Alert>
         )}
@@ -647,90 +152,21 @@ export function Settings() {
                 </>
               }
             >
-              <SectionCard className="card">
-                <Card.Body>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5 className="mb-0">Incoming Email Accounts</h5>
-                    <div className="d-flex gap-2">
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        onClick={() => void syncAllAccounts()}
-                        disabled={syncingAll || emailAccounts.length === 0}
-                      >
-                        {syncingAll ? (
-                          <Spinner
-                            animation="border"
-                            size="sm"
-                            className="me-1"
-                          />
-                        ) : (
-                          <FontAwesomeIcon icon={faSync} className="me-1" />
-                        )}
-                        Sync All
-                      </Button>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setShowEmailAccountModal(true)}
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-1" />
-                        Add Account
-                      </Button>
-                    </div>
-                  </div>
-
-                  {emailAccountsLoading && emailAccounts.length === 0 ? (
-                    <div className="text-center py-4">
-                      <Spinner animation="border" size="sm" />
-                    </div>
-                  ) : emailAccounts.length === 0 ? (
-                    <div className="text-center py-5">
-                      <FontAwesomeIcon
-                        icon={faInbox}
-                        size="3x"
-                        className="text-muted mb-3"
-                      />
-                      <h5>No Email Accounts Yet</h5>
-                      <p className="text-muted mb-3">
-                        Add an email account to start receiving emails. You'll
-                        need your email server's IMAP settings (host, port) and
-                        your credentials (usually your email and an app
-                        password).
-                      </p>
-                      <p className="text-muted small mb-4">
-                        <strong>First time setup:</strong> After adding an email
-                        account, you'll also need to add a send profile to send
-                        emails. You can check "Also create a send profile" when
-                        adding your account to set this up automatically.
-                      </p>
-                      <Button
-                        variant="primary"
-                        onClick={() => setShowEmailAccountModal(true)}
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-1" />
-                        Add Your First Account
-                      </Button>
-                    </div>
-                  ) : (
-                    <AccountCardGrid>
-                      {emailAccounts.map((account) => (
-                        <EmailAccountCard
-                          key={account.id}
-                          account={account}
-                          onEdit={handleEditEmailAccount}
-                          onSync={(id) =>
-                            void syncEmailAccount({
-                              variables: { input: { emailAccountId: id } },
-                            })
-                          }
-                          onDelete={(id) => handleDeleteAccountClick(id)}
-                        />
-                      ))}
-                    </AccountCardGrid>
-                  )}
-                </Card.Body>
-              </SectionCard>
+              <EmailAccountsTab
+                accounts={emailAccounts.accounts}
+                loading={emailAccounts.loading}
+                syncingAll={emailAccounts.syncingAll}
+                showDeleteModal={emailAccounts.showDeleteModal}
+                deletingAccount={emailAccounts.deletingAccount}
+                deleting={emailAccounts.deleting}
+                onAddAccount={emailAccounts.openCreate}
+                onEditAccount={emailAccounts.openEdit}
+                onSyncAccount={emailAccounts.handleSync}
+                onDeleteAccount={emailAccounts.openDelete}
+                onSyncAll={emailAccounts.handleSyncAll}
+                onConfirmDelete={emailAccounts.confirmDelete}
+                onCancelDelete={emailAccounts.closeDeleteModal}
+              />
             </Tab>
 
             <Tab
@@ -742,67 +178,13 @@ export function Settings() {
                 </>
               }
             >
-              <SectionCard className="card">
-                <Card.Body>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5 className="mb-0">Outgoing Email Profiles</h5>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setShowSmtpProfileModal(true)}
-                    >
-                      <FontAwesomeIcon icon={faPlus} className="me-1" />
-                      Add Profile
-                    </Button>
-                  </div>
-
-                  {smtpProfilesLoading ? (
-                    <div className="text-center py-4">
-                      <Spinner animation="border" size="sm" />
-                    </div>
-                  ) : smtpProfiles.length === 0 ? (
-                    <div className="text-center py-5">
-                      <FontAwesomeIcon
-                        icon={faPaperPlane}
-                        size="3x"
-                        className="text-muted mb-3"
-                      />
-                      <h5>No Send Profiles Yet</h5>
-                      <p className="text-muted mb-3">
-                        Add a send profile to send emails. For SMTP-based
-                        accounts, you'll need your email server's SMTP settings
-                        (host, port) and your credentials.
-                      </p>
-                      <p className="text-muted small mb-4">
-                        <strong>Tip:</strong> Most email providers use the same
-                        credentials for IMAP and SMTP, but different servers.
-                        For example, Gmail uses <code>imap.gmail.com</code> for
-                        receiving and <code>smtp.gmail.com</code> for sending.
-                      </p>
-                      <Button
-                        variant="primary"
-                        onClick={() => setShowSmtpProfileModal(true)}
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-1" />
-                        Add Your First Profile
-                      </Button>
-                    </div>
-                  ) : (
-                    <SmtpCardGrid>
-                      {smtpProfiles.map((profile) => (
-                        <SmtpProfileCard
-                          key={profile.id}
-                          profile={profile}
-                          onEdit={handleEditSmtpProfile}
-                          onDelete={(id) =>
-                            void deleteSendProfile({ variables: { id } })
-                          }
-                        />
-                      ))}
-                    </SmtpCardGrid>
-                  )}
-                </Card.Body>
-              </SectionCard>
+              <SendProfilesTab
+                profiles={sendProfiles.profiles}
+                loading={sendProfiles.loading}
+                onAddProfile={sendProfiles.openCreate}
+                onEditProfile={sendProfiles.openEdit}
+                onDeleteProfile={sendProfiles.handleDelete}
+              />
             </Tab>
 
             <Tab
@@ -826,120 +208,12 @@ export function Settings() {
                 </>
               }
             >
-              <SectionCard className="card">
-                <Card.Body>
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5 className="mb-0">Authentication Methods</h5>
-                  </div>
-                  <p className="text-muted mb-4">
-                    Manage the ways you can sign in to your account. You can
-                    link multiple email addresses or social accounts.
-                  </p>
-
-                  {authMethodsLoading ? (
-                    <div className="text-center py-4">
-                      <Spinner animation="border" size="sm" />
-                    </div>
-                  ) : authMethods.length === 0 ? (
-                    <Alert variant="warning">
-                      No authentication methods found. This may indicate an
-                      issue with your account.
-                    </Alert>
-                  ) : (
-                    <>
-                      {authMethods.map((method) => {
-                        const provider = method.provider;
-                        const getProviderIcon = () => {
-                          switch (provider) {
-                            case AuthProvider.Google:
-                              return faGoogle;
-                            case AuthProvider.Github:
-                              return faGithub;
-                            case AuthProvider.Apple:
-                              return faApple;
-                            case AuthProvider.Microsoft:
-                              return faMicrosoft;
-                            default:
-                              return faKey;
-                          }
-                        };
-
-                        const getProviderName = () => {
-                          switch (provider) {
-                            case AuthProvider.EmailPassword:
-                              return 'Email & Password';
-                            case AuthProvider.Google:
-                              return 'Google';
-                            case AuthProvider.Github:
-                              return 'GitHub';
-                            case AuthProvider.Apple:
-                              return 'Apple';
-                            case AuthProvider.Microsoft:
-                              return 'Microsoft';
-                            default:
-                              return method.provider;
-                          }
-                        };
-
-                        return (
-                          <AuthMethodCard key={method.id}>
-                            <AuthMethodIcon $provider={method.provider}>
-                              <FontAwesomeIcon icon={getProviderIcon()} />
-                            </AuthMethodIcon>
-                            <AuthMethodInfo>
-                              <AuthMethodName>
-                                {getProviderName()}
-                              </AuthMethodName>
-                              <AuthMethodEmail>{method.email}</AuthMethodEmail>
-                              <AuthMethodMeta>
-                                Added{' '}
-                                {method.createdAt
-                                  ? new Date(
-                                      method.createdAt,
-                                    ).toLocaleDateString()
-                                  : 'Unknown'}
-                                {method.lastUsedAt && (
-                                  <>
-                                    {' · '}Last used{' '}
-                                    {new Date(
-                                      method.lastUsedAt,
-                                    ).toLocaleDateString()}
-                                  </>
-                                )}
-                              </AuthMethodMeta>
-                            </AuthMethodInfo>
-                            {authMethods.length > 1 && (
-                              <Button
-                                variant="outline-danger"
-                                size="sm"
-                                onClick={() =>
-                                  void deleteAuthMethod({
-                                    variables: { id: method.id },
-                                  })
-                                }
-                                disabled={deletingAuthMethod}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faTrash}
-                                  className="me-1"
-                                />
-                                Remove
-                              </Button>
-                            )}
-                          </AuthMethodCard>
-                        );
-                      })}
-
-                      <Alert variant="info" className="mt-4">
-                        <FontAwesomeIcon icon={faShieldAlt} className="me-2" />
-                        <strong>Coming Soon:</strong> Link additional sign-in
-                        methods like Google, GitHub, Apple, or Microsoft to your
-                        account.
-                      </Alert>
-                    </>
-                  )}
-                </Card.Body>
-              </SectionCard>
+              <AuthMethodsTab
+                methods={authMethods.methods}
+                loading={authMethods.loading}
+                deleting={authMethods.deleting}
+                onDelete={authMethods.handleDelete}
+              />
             </Tab>
 
             <Tab
@@ -1016,102 +290,50 @@ export function Settings() {
           </Tabs>
         </ResponsiveTabsWrapper>
 
-        {/* Email Account Modal */}
         <EmailAccountForm
-          show={showEmailAccountModal}
-          onHide={() => {
-            setShowEmailAccountModal(false);
-            resetEmailAccountForm();
-          }}
-          onSubmit={(formData) => void handleEmailAccountFormSubmit(formData)}
-          onTest={handleEmailAccountFormTest}
-          editingAccount={
-            editingEmailAccountId
-              ? emailAccounts.find((a) => a.id === editingEmailAccountId)
-              : null
+          show={emailAccounts.showModal}
+          onHide={emailAccounts.closeModal}
+          onSubmit={emailAccounts.handleSubmit}
+          onTest={emailAccounts.handleTest}
+          editingAccount={emailAccounts.editingAccount}
+          smtpProfiles={sendProfiles.profiles}
+          isSubmitting={emailAccounts.creating}
+          isTesting={emailAccounts.testing}
+          testResult={emailAccounts.testResult}
+          customDomains={customDomains.domains}
+          onCreateCustomDomainAccount={(data) =>
+            void customDomains.handleCreateAccount(data, () => {
+              emailAccounts.closeModal();
+              void emailAccounts.refetch();
+              void sendProfiles.refetch();
+            })
           }
-          smtpProfiles={smtpProfiles}
-          isSubmitting={creatingEmailAccount}
-          isTesting={testingEmailAccount}
-          testResult={testResult}
+          isCreatingCustomDomainAccount={customDomains.creatingAccount}
         />
 
-        {/* SMTP Profile Modal */}
         <SmtpProfileForm
-          show={showSmtpProfileModal}
+          show={sendProfiles.showModal}
           onHide={() => {
-            setShowSmtpProfileModal(false);
-            resetSmtpProfileForm();
-            setPendingSmtpData(null);
+            sendProfiles.closeModal();
+            emailAccounts.setPendingSmtpData(null);
           }}
           onSubmit={(formData) => {
-            void handleSmtpProfileFormSubmit(formData);
-            setPendingSmtpData(null);
+            sendProfiles.handleSubmit(formData);
+            emailAccounts.setPendingSmtpData(null);
           }}
-          onTest={handleSmtpProfileFormTest}
-          editingProfile={
-            editingSmtpProfileId
-              ? smtpProfiles.find((p) => p.id === editingSmtpProfileId)
-              : null
+          onTest={sendProfiles.handleTest}
+          editingProfile={sendProfiles.editingProfile}
+          initialData={emailAccounts.pendingSmtpData}
+          isSubmitting={sendProfiles.creating}
+          isTesting={sendProfiles.testing}
+          testResult={sendProfiles.testResult}
+          customDomains={customDomains.domains}
+          onCreateCustomDomainSendProfile={
+            sendProfiles.handleCreateCustomDomainProfile
           }
-          initialData={pendingSmtpData}
-          isSubmitting={creatingSendProfile}
-          isTesting={testingSmtp}
-          testResult={testResult}
+          isCreatingCustomDomainSendProfile={sendProfiles.creatingCustomDomain}
         />
 
-        {/* Delete Account Confirmation Modal */}
-        <Modal
-          show={showDeleteAccountModal}
-          onHide={() => {
-            setShowDeleteAccountModal(false);
-            setDeletingAccountId(null);
-          }}
-          centered
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>Delete Email Account</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <p>
-              Are you sure you want to delete the account{' '}
-              <strong>{deletingAccountData?.name}</strong>?
-            </p>
-            <Alert variant="danger">
-              <strong>Warning:</strong> This will permanently delete the email
-              account and all associated emails. This action cannot be undone.
-            </Alert>
-            <div className="text-muted small">
-              <strong>Account:</strong> {deletingAccountData?.email}
-            </div>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowDeleteAccountModal(false);
-                setDeletingAccountId(null);
-              }}
-              disabled={deletingAccount}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={confirmDeleteAccount}
-              disabled={deletingAccount}
-            >
-              {deletingAccount ? (
-                <>
-                  <Spinner animation="border" size="sm" className="me-1" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete Account'
-              )}
-            </Button>
-          </Modal.Footer>
-        </Modal>
         <AppVersion>v{__APP_VERSION__}</AppVersion>
       </Container>
     </PageWrapper>

@@ -29,6 +29,7 @@ export const createCustomDomainAccount = makeMutation(
     }
 
     const emailAddress = `${input.localPart}@${customDomain.domain}`;
+    const displayName = input.name || emailAddress;
 
     const existingAccount = await CustomDomainAccount.findOne({
       where: { customDomainId: input.customDomainId, localPart: input.localPart },
@@ -39,7 +40,7 @@ export const createCustomDomainAccount = makeMutation(
 
     const emailAccount = await EmailAccount.create({
       userId,
-      name: input.name,
+      name: displayName,
       email: emailAddress,
       type: EmailAccountType.CUSTOM_DOMAIN,
       isDefault: false,
@@ -47,7 +48,7 @@ export const createCustomDomainAccount = makeMutation(
 
     const sendProfile = await SendProfile.create({
       userId,
-      name: input.name,
+      name: displayName,
       email: emailAddress,
       type: SendProfileType.CUSTOM_DOMAIN,
       isDefault: false,

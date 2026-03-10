@@ -129,8 +129,12 @@ export interface CachedEmailAccount {
   id: string;
   name?: string | null;
   email: string;
-  host: string;
+  type: string;
   providerId?: string | null;
+  imapSettings?: {
+    host: string;
+    lastSyncedAt?: string | null;
+  } | null;
 }
 
 export interface CachedUser {

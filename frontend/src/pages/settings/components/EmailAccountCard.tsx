@@ -170,21 +170,23 @@ export function EmailAccountCard({
             <FontAwesomeIcon icon={faEdit} className="me-1" />
             Edit
           </Button>
-          <Button
-            variant="outline-primary"
-            size="sm"
-            onClick={() => onSync(account.id)}
-            disabled={isSyncing}
-          >
-            {isSyncing ? (
-              <Spinner animation="border" size="sm" />
-            ) : (
-              <>
-                <FontAwesomeIcon icon={faSync} className="me-1" />
-                Sync
-              </>
-            )}
-          </Button>
+          {!isCustomDomain && (
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={() => onSync(account.id)}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <Spinner animation="border" size="sm" />
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faSync} className="me-1" />
+                  Sync
+                </>
+              )}
+            </Button>
+          )}
           <Button
             variant="outline-danger"
             size="sm"

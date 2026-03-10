@@ -3017,9 +3017,9 @@ input CreateCustomDomainAccountInput {
   """
   localPart: String!
   """
-  Display name for the account
+  Display name for the account. Defaults to the full email address if not provided.
   """
-  name: String!
+  name: String
 }
 
 # ============ Billing ============

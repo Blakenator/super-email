@@ -139,8 +139,10 @@ export async function getSesVerificationStatus(
       dkim,
       overallVerified,
       recordStatuses: {
-        dkim: dkim,
-        identity: overallVerified,
+        dkim,
+        spf: overallVerified,
+        dmarc: overallVerified,
+        mx_inbound: overallVerified,
       },
     };
   } catch (error: any) {

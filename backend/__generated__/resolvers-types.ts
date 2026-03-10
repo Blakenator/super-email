@@ -373,8 +373,8 @@ export type CreateCustomDomainAccountInput = {
   customDomainId: Scalars['String']['input'];
   /** Local part of the email address (e.g., "blake" for blake@example.com) */
   localPart: Scalars['String']['input'];
-  /** Display name for the account */
-  name: Scalars['String']['input'];
+  /** Display name for the account. Defaults to the full email address if not provided. */
+  name?: InputMaybe<Scalars['String']['input']>;
 };
 
 /**

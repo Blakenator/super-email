@@ -20,17 +20,17 @@ import {
   faCheckCircle,
   faTimesCircle,
   faClock,
-  faUserPlus,
   faEnvelope,
   faCopy,
+  faExternalLinkAlt,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router';
 import {
   GET_CUSTOM_DOMAINS_QUERY,
   ADD_CUSTOM_DOMAIN_MUTATION,
   VERIFY_CUSTOM_DOMAIN_MUTATION,
   DELETE_CUSTOM_DOMAIN_MUTATION,
-  CREATE_CUSTOM_DOMAIN_ACCOUNT_MUTATION,
   DELETE_CUSTOM_DOMAIN_ACCOUNT_MUTATION,
 } from '../queries';
 
@@ -68,10 +68,9 @@ function copyToClipboard(text: string) {
 }
 
 export function DomainSettings() {
+  const navigate = useNavigate();
   const [showAddDomain, setShowAddDomain] = useState(false);
   const [newDomain, setNewDomain] = useState('');
-  const [showAddAccount, setShowAddAccount] = useState<string | null>(null);
-  const [newLocalPart, setNewLocalPart] = useState('');
   const [showDeleteDomain, setShowDeleteDomain] = useState<string | null>(null);
 
   const { data, loading, refetch } = useQuery(GET_CUSTOM_DOMAINS_QUERY);
@@ -113,19 +112,6 @@ export function DomainSettings() {
         void refetch();
         setShowDeleteDomain(null);
         toast.success('Domain deleted');
-      },
-      onError: (err) => toast.error(err.message),
-    },
-  );
-
-  const [createAccount, { loading: creatingAccount }] = useMutation(
-    CREATE_CUSTOM_DOMAIN_ACCOUNT_MUTATION,
-    {
-      onCompleted: () => {
-        void refetch();
-        setShowAddAccount(null);
-        setNewLocalPart('');
-        toast.success('Email account created!');
       },
       onError: (err) => toast.error(err.message),
     },
@@ -317,9 +303,9 @@ export function DomainSettings() {
                       <Button
                         variant="outline-primary"
                         size="sm"
-                        onClick={() => setShowAddAccount(domain.id)}
+                        onClick={() => void navigate('/settings/accounts')}
                       >
-                        <FontAwesomeIcon icon={faUserPlus} className="me-1" />
+                        <FontAwesomeIcon icon={faPlus} className="me-1" />
                         Add Account
                       </Button>
                     )}
@@ -355,17 +341,28 @@ export function DomainSettings() {
                               {account.localPart}@{domain.domain}
                             </strong>
                           </div>
-                          <Button
-                            variant="outline-danger"
-                            size="sm"
-                            onClick={() =>
-                              void deleteAccount({
-                                variables: { id: account.id },
-                              })
-                            }
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
-                          </Button>
+                          <div className="d-flex gap-2">
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              onClick={() => void navigate('/settings/accounts')}
+                              title="Edit in Email Accounts"
+                            >
+                              <FontAwesomeIcon icon={faExternalLinkAlt} className="me-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline-danger"
+                              size="sm"
+                              onClick={() =>
+                                void deleteAccount({
+                                  variables: { id: account.id },
+                                })
+                              }
+                            >
+                              <FontAwesomeIcon icon={faTrash} />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -432,75 +429,6 @@ export function DomainSettings() {
                 <FontAwesomeIcon icon={faPlus} className="me-1" />
               )}
               Add Domain
-            </Button>
-          </Modal.Footer>
-        </Modal>
-
-        {/* Add Account Modal */}
-        <Modal
-          show={showAddAccount !== null}
-          onHide={() => {
-            setShowAddAccount(null);
-            setNewLocalPart('');
-          }}
-          centered
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>Create Email Account</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            <Form.Group>
-              <Form.Label>Email Address</Form.Label>
-              <div className="d-flex align-items-center gap-1">
-                <Form.Control
-                  type="text"
-                  placeholder="username"
-                  value={newLocalPart}
-                  onChange={(e) => setNewLocalPart(e.target.value)}
-                  style={{ maxWidth: '200px' }}
-                />
-                <span className="text-muted">
-                  @
-                  {domains.find((d) => d.id === showAddAccount)?.domain ??
-                    '...'}
-                </span>
-              </div>
-              <Form.Text className="text-muted">
-                This will create both an email account (for receiving) and a
-                send profile (for sending).
-              </Form.Text>
-            </Form.Group>
-          </Modal.Body>
-          <Modal.Footer>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowAddAccount(null);
-                setNewLocalPart('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() =>
-                void createAccount({
-                  variables: {
-                    input: {
-                      customDomainId: showAddAccount!,
-                      localPart: newLocalPart,
-                    },
-                  },
-                })
-              }
-              disabled={creatingAccount || !newLocalPart.trim()}
-            >
-              {creatingAccount ? (
-                <Spinner animation="border" size="sm" className="me-1" />
-              ) : (
-                <FontAwesomeIcon icon={faUserPlus} className="me-1" />
-              )}
-              Create Account
             </Button>
           </Modal.Footer>
         </Modal>

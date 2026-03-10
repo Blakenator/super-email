@@ -1,5 +1,6 @@
 import { makeMutation } from '../../types.js';
 import { EmailAccount, ImapAccountSettings } from '../../db/models/index.js';
+import { EmailAccountType } from '../../db/models/email-account.model.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { startAsyncEmailSync } from '../../helpers/email.js';
 import { logger } from '../../helpers/logger.js';
@@ -10,7 +11,7 @@ export const syncAllAccounts = makeMutation(
     const userId = requireAuth(context);
 
     const accounts = await EmailAccount.findAll({
-      where: { userId },
+      where: { userId, type: EmailAccountType.IMAP },
       include: [{ model: ImapAccountSettings, as: 'imapSettings' }],
     });
 
