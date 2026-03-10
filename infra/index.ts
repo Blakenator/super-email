@@ -1001,11 +1001,22 @@ if (domainName && cloudflareZoneId) {
 // Custom Domain Email Infrastructure (SES → S3 → SNS → SQS → Lambda)
 // =============================================================================
 
-// SNS topic - SES notifies here after saving raw email to S3
-const customEmailTopic = new aws.sns.Topic(`${stackName}-custom-email-topic`, {
-  name: `${stackName}-custom-email-topic`,
-  tags: { Name: `${stackName}-custom-email-topic`, Environment: environment },
+// SES provider — SES is only available in certain regions (not us-west-1).
+// Uses the sesRegion config value, defaulting to us-west-2.
+const sesProvider = new aws.Provider(`${stackName}-ses-provider`, {
+  region: sesRegion as aws.Region,
 });
+
+// SNS topic - SES notifies here after saving raw email to S3.
+// Must be in the SES region (SES can only publish to same-region SNS topics).
+const customEmailTopic = new aws.sns.Topic(
+  `${stackName}-custom-email-topic`,
+  {
+    name: `${stackName}-custom-email-topic`,
+    tags: { Name: `${stackName}-custom-email-topic`, Environment: environment },
+  },
+  { provider: sesProvider },
+);
 
 // SQS Dead Letter Queue for failed email processing
 const customEmailDlq = new aws.sqs.Queue(`${stackName}-custom-email-dlq`, {
@@ -1048,13 +1059,17 @@ new aws.sqs.QueuePolicy(`${stackName}-custom-email-queue-policy`, {
     ),
 });
 
-// SNS → SQS subscription
-new aws.sns.TopicSubscription(`${stackName}-custom-email-sns-sqs`, {
-  topic: customEmailTopic.arn,
-  protocol: 'sqs',
-  endpoint: customEmailQueue.arn,
-  rawMessageDelivery: false,
-});
+// SNS → SQS subscription (created in the SES/SNS region, targeting cross-region SQS)
+new aws.sns.TopicSubscription(
+  `${stackName}-custom-email-sns-sqs`,
+  {
+    topic: customEmailTopic.arn,
+    protocol: 'sqs',
+    endpoint: customEmailQueue.arn,
+    rawMessageDelivery: false,
+  },
+  { provider: sesProvider },
+);
 
 // Bucket policy allowing SES to write raw emails to S3
 const rawEmailsSesPolicy = new aws.s3.BucketPolicy(
@@ -1082,12 +1097,6 @@ const rawEmailsSesPolicy = new aws.s3.BucketPolicy(
       ),
   },
 );
-
-// SES provider — SES is only available in certain regions (not us-west-1).
-// Uses the sesRegion config value, defaulting to us-west-2.
-const sesProvider = new aws.Provider(`${stackName}-ses-provider`, {
-  region: sesRegion as aws.Region,
-});
 
 // SES Receipt Rule Set (container for all receipt rules)
 const sesReceiptRuleSet = new aws.ses.ReceiptRuleSet(
