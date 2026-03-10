@@ -21,7 +21,6 @@ data/
 .deploy-outputs
 .backend-image-tag
 *firebase-adminsdk*.json
-google-services.json
 Pulumi.*.yaml
 
 # --- Mobile patterns ---

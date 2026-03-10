@@ -18,3 +18,4 @@ export * from './subscription.model.js';
 export * from './subscription.constants.js';
 export * from './user-usage.model.js';
 export * from './push-token.model.js';
+export * from './smtp-profile.model.js';

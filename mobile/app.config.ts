@@ -1,5 +1,7 @@
 import { ExpoConfig, ConfigContext } from "expo/config";
 
+const { version } = require("./package.json");
+
 const IS_DEV = process.env.APP_VARIANT === "development";
 
 const getAppName = () => (IS_DEV ? "SuperMail (Dev)" : "SuperMail");
@@ -23,7 +25,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: getAppName(),
   slug: "supermail",
-  version: "1.0.0",
+  version,
   orientation: "portrait",
   icon: getIcon(),
   scheme: IS_DEV ? "supermail-dev" : "supermail",

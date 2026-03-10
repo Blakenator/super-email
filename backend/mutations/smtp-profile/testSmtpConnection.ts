@@ -3,6 +3,7 @@ import { testSmtpConnection as testSmtpConnectionHelper } from '../../helpers/em
 import { SmtpProfile } from '../../db/models/smtp-profile.model.js';
 import { getSmtpCredentials } from '../../helpers/secrets.js';
 import { logger } from '../../helpers/logger.js';
+import type { SmtpAccountSettings } from '../../db/models/smtp-account-settings.model.js';
 
 export const testSmtpConnection = makeMutation(
   'testSmtpConnection',
@@ -29,7 +30,6 @@ export const testSmtpConnection = makeMutation(
       if (credentials?.password) {
         password = credentials.password;
       } else if (profile.password) {
-        // Fallback to DB password during migration
         password = profile.password;
       }
     }
@@ -41,18 +41,17 @@ export const testSmtpConnection = makeMutation(
       };
     }
 
-    // Create a temporary SmtpProfile-like object for testing
-    const tempProfile = {
+    const tempSmtpSettings = {
       host,
       port,
-      username,
-      password,
       useSsl,
-      name: 'Test',
-      email: username,
-    } as SmtpProfile;
+    } as SmtpAccountSettings;
 
-    const result = await testSmtpConnectionHelper(tempProfile);
+    const result = await testSmtpConnectionHelper(
+      profileId ?? 'test',
+      tempSmtpSettings,
+      { username, password },
+    );
     if (!result.success) {
       logger.warn('testSmtpConnection', `SMTP connection failed for ${host}:${port}`, { username, useSsl, error: result.message });
     }

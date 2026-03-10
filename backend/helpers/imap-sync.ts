@@ -264,7 +264,7 @@ export async function syncEmailsFromImapAccount(
     logger.info('IMAP', `${emailAccount.email} INBOX sync complete: ${result.synced} synced, ${result.skipped} skipped`);
 
     // Sync Sent folder
-    await syncSentFolder(client, emailAccount, syncId, syncType, result, expirationTracker);
+    await syncSentFolder(client, emailAccount, imapSettings, syncId, syncType, result, expirationTracker);
 
     await client.logout();
     logger.info('IMAP', `Sync complete for ${emailAccount.email}: ${result.synced} emails synced, ${result.skipped} skipped`);
@@ -512,6 +512,7 @@ const SENT_FOLDER_NAMES = [
 async function syncSentFolder(
   client: ImapFlow,
   emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncId: string,
   syncType: SyncType,
   result: SyncResult,

@@ -41,8 +41,9 @@ import {
 import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
 import { parseAndStoreCustomEmail } from './helpers/custom-email-parser.js';
-import { sendNewEmailNotifications } from './helpers/push-notifications.js';
+import { sendNewEmailNotifications, type NewEmailInfo } from './helpers/push-notifications.js';
 import { EmailAccountType } from './db/models/email-account.model.js';
+import type { Email } from './db/models/email.model.js';
 import { setupBillingDatabase } from './db/setup-billing.js';
 import { runMigrations } from './db/migrations/migrator.js';
 import { API_ROUTES } from '@main/common';
@@ -708,9 +709,9 @@ export async function createServer(
       const rawBuffer = Buffer.from(rawEmail, 'base64');
       const result = await parseAndStoreCustomEmail(rawBuffer, emailAccountId!, recipientAddress);
 
-      const savedEmail = await deps.models.Email.findByPk(result.emailId);
+      const savedEmail = await deps.models.Email.findByPk(result.emailId) as Email | null;
       if (savedEmail) {
-        await sendNewEmailNotifications(userId!, [savedEmail], recipientAddress);
+        await sendNewEmailNotifications(userId!, [savedEmail as NewEmailInfo], recipientAddress);
 
         publishMailboxUpdate(userId!, {
           type: 'NEW_EMAILS',

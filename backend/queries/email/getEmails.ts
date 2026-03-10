@@ -1,5 +1,5 @@
 import { makeQuery } from '../../types.js';
-import { Email, EmailAccount } from '../../db/models/index.js';
+import { Email, EmailAccount, ImapAccountSettings } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { startAsyncEmailSync } from '../../helpers/email.js';
 import { buildEmailWhereClause } from '../../helpers/email-filters.js';
@@ -12,9 +12,10 @@ export const getEmails = makeQuery(
   async (_parent, { input }, context) => {
     const userId = requireAuth(context);
 
-    // Get user's email accounts
+    // Get user's email accounts with IMAP settings for sync state
     const userAccounts = await EmailAccount.findAll({
       where: { userId },
+      include: [ImapAccountSettings],
     });
 
     if (userAccounts.length === 0) {
@@ -27,11 +28,12 @@ export const getEmails = makeQuery(
     if ((input.folder === 'INBOX' || !input.folder) && !input.searchQuery) {
       const now = new Date();
       const accountsNeedingSync = userAccounts.filter((account) => {
-        // Already syncing (historical or update sync)
-        if (account.historicalSyncId || account.updateSyncId) return false;
-        if (!account.lastSyncedAt) return true;
+        const imap = account.imapSettings;
+        if (!imap) return false;
+        if (imap.historicalSyncId || imap.updateSyncId) return false;
+        if (!imap.lastSyncedAt) return true;
         const timeSinceSync =
-          now.getTime() - new Date(account.lastSyncedAt).getTime();
+          now.getTime() - new Date(imap.lastSyncedAt).getTime();
         return timeSinceSync > TWO_MINUTES_MS;
       });
 
