@@ -6,7 +6,6 @@
 # Environment variables required:
 #   - FRONTEND_BUCKET
 #   - FRONTEND_DISTRIBUTION_ID
-#   - BACKEND_API_URL
 #   - FRONTEND_URL
 #   - SUPABASE_URL
 #   - SUPABASE_ANON_KEY
@@ -23,11 +22,6 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 log_info "Deploying frontend for environment: $ENVIRONMENT"
 
 # Validate required environment variables
-if [ -z "$BACKEND_API_URL" ]; then
-    log_error "BACKEND_API_URL is not set. Cannot deploy frontend without backend URL."
-    exit 1
-fi
-
 if [ -z "$FRONTEND_URL" ]; then
     log_error "FRONTEND_URL is not set. Cannot deploy frontend."
     exit 1
@@ -61,17 +55,6 @@ cd "$PROJECT_ROOT/frontend"
 export VITE_SUPABASE_URL="$SUPABASE_URL"
 export VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 export VITE_APP_URL="$FRONTEND_URL"
-
-# Backend URL:
-# - If DOMAIN_NAME is set: use api subdomain (e.g., https://api.super-mail.app)
-# - Otherwise: defaults to window.location.origin (frontend will call /api/* on same domain)
-if [ -n "$DOMAIN_NAME" ]; then
-    export VITE_BACKEND_URL="https://${BACKEND_SUBDOMAIN:-api}.${DOMAIN_NAME}"
-    log_info "Using API subdomain: $VITE_BACKEND_URL"
-else
-    # Don't set VITE_BACKEND_URL - let it default to window.location.origin
-    log_info "Backend URL will default to same origin (calls /api/* paths)"
-fi
 
 log_info "Building frontend with production config..."
 log_info "  Frontend URL: $FRONTEND_URL"

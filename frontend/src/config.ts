@@ -12,11 +12,9 @@ const SUPABASE_URL =
 const SUPABASE_ANON_KEY =
   import.meta.env.VITE_SUPABASE_ANON_KEY ||
   'sb_publishable_jcR4C-0t6ibdL5010_bLMg_-0xxL61F';
-// Backend URL can be:
-// - Development: window.location.origin (Vite proxies /api/* to localhost:4000)
-// - Production: window.location.origin (CloudFront proxies /api/* to ALB)
-const BACKEND_BASE_URL =
-  import.meta.env.VITE_BACKEND_URL || window.location.origin;
+// Always use same-origin requests — both Vite (dev) and CloudFront (prod)
+// proxy /api/* to the backend, so relative paths work from any domain.
+const BACKEND_BASE_URL = window.location.origin;
 const APP_URL = import.meta.env.VITE_APP_URL || window.location.origin;
 
 export const config = {
