@@ -100,7 +100,7 @@ BEGIN
       )
       SELECT
         ea."id", ea."host", ea."port",
-        ea."accountType"::"enum_imap_account_settings_accountType",
+        ea."accountType"::TEXT::"enum_imap_account_settings_accountType",
         ea."useSsl", ea."lastSyncedAt",
         ea."historicalSyncId", ea."historicalSyncProgress",
         ea."historicalSyncStatus", ea."historicalSyncComplete", ea."historicalSyncExpiresAt",
