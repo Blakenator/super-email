@@ -89,11 +89,13 @@ function addRefreshSubscriber(cb: (token: string) => void) {
   pendingRefreshSubscribers.push(cb);
 }
 
-function isAuthError(code: string | undefined, message: string): boolean {
+export function isAuthError(code: string | undefined, message: string): boolean {
+  const msg = message.toLowerCase();
   return (
     code === 'UNAUTHENTICATED' ||
-    message.includes('Not authenticated') ||
-    message.includes('jwt expired')
+    msg.includes('not authenticated') ||
+    msg.includes('authentication required') ||
+    msg.includes('jwt expired')
   );
 }
 
@@ -480,14 +482,7 @@ export function startMailboxSubscription(): void {
       console.error('[Subscription] Error:', err);
       subscriptionHandle = null;
 
-      const errMsg = err?.message || String(err);
-      const isAuth =
-        errMsg.includes('Authentication required') ||
-        errMsg.includes('Not authenticated') ||
-        errMsg.includes('jwt expired') ||
-        errMsg.includes('UNAUTHENTICATED');
-
-      if (isAuth) {
+      if (isAuthError(undefined, err?.message || String(err))) {
         console.log('[Subscription] Auth error, refreshing token and reconnecting...');
         refreshSession()
           .then(async (session) => {

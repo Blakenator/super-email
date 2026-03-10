@@ -90,6 +90,7 @@ function formatStatus(status: string, isValid: boolean): string {
 interface SettingsScreenProps {
   onNavigateToAccounts: () => void;
   onNavigateToSendProfiles: () => void;
+  onNavigateToDomains: () => void;
   onNavigateToTags: () => void;
   onNavigateToRules: () => void;
   onNavigateToNotifications: () => void;
@@ -99,6 +100,7 @@ interface SettingsScreenProps {
 export function SettingsScreen({
   onNavigateToAccounts,
   onNavigateToSendProfiles,
+  onNavigateToDomains,
   onNavigateToTags,
   onNavigateToRules,
   onNavigateToNotifications,
@@ -230,6 +232,12 @@ export function SettingsScreen({
           title="Send Profiles"
           subtitle="Outgoing email settings"
           onPress={onNavigateToSendProfiles}
+        />
+        <ListItem
+          icon="globe"
+          title="Custom Domains"
+          subtitle="Manage custom email domains"
+          onPress={onNavigateToDomains}
         />
         <ListItem
           icon="tag"

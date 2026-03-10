@@ -14,6 +14,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, sharedStyles, SPACING, FONT_SIZE, RADIUS } from '../../theme';
@@ -195,7 +196,7 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
         ? `${bodyHtml}${quotedEmail}` 
         : `<p>${bodyText.replace(/\n/g, '<br/>')}</p>${quotedEmail}`;
       
-      await apolloClient.mutate({
+      const result = await apolloClient.mutate({
         mutation: SEND_EMAIL_MUTATION,
         variables: {
           input: {
@@ -211,12 +212,14 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
         },
       });
 
-      Alert.alert('Success', 'Email sent successfully', [
-        { text: 'OK', onPress: onClose },
-      ]);
-    } catch (error) {
+      if (result.errors && result.errors.length > 0) {
+        throw new Error(result.errors[0].message);
+      }
+
+      onClose();
+    } catch (error: any) {
       console.error('Error sending email:', error);
-      Alert.alert('Error', 'Failed to send email. Please try again.');
+      Alert.alert('Error', error.message || 'Failed to send email. Please try again.');
     } finally {
       setIsSending(false);
     }
@@ -334,9 +337,18 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
       </ScrollView>
 
       {/* From Picker Modal */}
-      {showFromPicker && (
-        <View style={[styles.pickerOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-          <View style={[styles.pickerModal, { backgroundColor: theme.colors.surface }]}>
+      <Modal
+        visible={showFromPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowFromPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.pickerOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFromPicker(false)}
+        >
+          <View style={[styles.pickerModal, { backgroundColor: theme.colors.surface, paddingBottom: insets.bottom }]}>
             <View style={[styles.pickerHeader, { borderBottomColor: theme.colors.border }]}>
               <Text style={[styles.pickerTitle, { color: theme.colors.text }]}>Select From</Text>
               <TouchableOpacity onPress={() => setShowFromPicker(false)}>
@@ -368,8 +380,8 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-      )}
+        </TouchableOpacity>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -449,8 +461,9 @@ const styles = StyleSheet.create({
     minHeight: 250,
   },
   pickerOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
     justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   pickerModal: {
     borderTopLeftRadius: RADIUS.xl,

@@ -2,6 +2,7 @@ import { makeMutation } from '../../types.js';
 import { Email, EmailAccount, SendProfile, SmtpAccountSettings, EmailFolder } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { sendEmail } from '../../helpers/email.js';
+import { publishMailboxUpdate } from '../../helpers/pubsub.js';
 
 export const forwardEmail = makeMutation(
   'forwardEmail',
@@ -103,6 +104,11 @@ To: ${originalEmail.toAddresses.join(', ')}
       isDraft: false,
       inReplyTo: null,
       references: originalEmail.messageId ? [originalEmail.messageId] : null,
+    });
+
+    publishMailboxUpdate(userId, {
+      type: 'NEW_EMAILS',
+      emailAccountId: input.emailAccountId,
     });
 
     return sentEmail;

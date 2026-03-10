@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { Icon } from '../../components/ui';
-import { apolloClient } from '../../services/apollo';
+import { apolloClient, isAuthError } from '../../services/apollo';
 import { gql } from '@apollo/client';
 import { DateTime } from 'luxon';
 import { wrapEmailHtml } from '../../../../common/src/emailHtmlStyles';
@@ -425,14 +425,7 @@ export function EmailDetailScreen({
       }
     } catch (err: any) {
       console.error('Error loading email:', err);
-      const errMsg = err.message || '';
-      const isAuthError =
-        errMsg.includes('Not authenticated') ||
-        errMsg.includes('jwt expired') ||
-        errMsg.includes('UNAUTHENTICATED') ||
-        errMsg.includes('Authentication required');
-
-      if (isAuthError) {
+      if (isAuthError(undefined, err.message || '')) {
         try {
           const session = await refreshSession();
           if (session?.access_token) {

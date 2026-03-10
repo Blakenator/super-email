@@ -22,6 +22,7 @@ import {
   SettingsScreen,
   AccountsSettingsScreen,
   SendProfileSettingsScreen,
+  DomainsSettingsScreen,
   TagsSettingsScreen,
   RulesSettingsScreen,
   NotificationsSettingsScreen,
@@ -77,6 +78,7 @@ export type RootStackParamList = {
   // Settings sub-screens
   AccountSettings: undefined;
   SendProfileSettings: undefined;
+  DomainSettings: undefined;
   TagSettings: undefined;
   RuleSettings: undefined;
   NotificationSettings: undefined;
@@ -156,6 +158,7 @@ function SettingsScreenWrapper() {
     <SettingsScreen
       onNavigateToAccounts={() => navigation.navigate('AccountSettings')}
       onNavigateToSendProfiles={() => navigation.navigate('SendProfileSettings')}
+      onNavigateToDomains={() => navigation.navigate('DomainSettings')}
       onNavigateToTags={() => navigation.navigate('TagSettings')}
       onNavigateToRules={() => navigation.navigate('RuleSettings')}
       onNavigateToNotifications={() => navigation.navigate('NotificationSettings')}
@@ -316,7 +319,16 @@ function RulesSettingsScreenWrapper() {
 function EditAccountScreenWrapper() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { EditAccountScreen: EditAccountScreenComponent } = require('../screens/settings');
-  return <EditAccountScreenComponent onClose={() => navigation.goBack()} />;
+  const { fetchEmailAccounts } = require('../stores/emailStore').useEmailStore();
+  return (
+    <EditAccountScreenComponent
+      onClose={() => navigation.goBack()}
+      onAccountCreated={(accountId: string) => {
+        fetchEmailAccounts();
+        navigation.replace('EditAccount', { accountId });
+      }}
+    />
+  );
 }
 
 // Wrapper for Edit Send Profile screen
@@ -414,6 +426,11 @@ export function AppNavigator() {
               name="SendProfileSettings"
               component={SendProfileSettingsScreenWrapper}
               options={{ title: 'Send Profiles' }}
+            />
+            <RootStack.Screen
+              name="DomainSettings"
+              component={DomainsSettingsScreen}
+              options={{ title: 'Custom Domains' }}
             />
             <RootStack.Screen
               name="TagSettings"

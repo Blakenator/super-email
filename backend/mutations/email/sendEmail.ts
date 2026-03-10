@@ -16,6 +16,7 @@ import { uploadAttachment } from '../../helpers/attachment-storage.js';
 import { Readable } from 'stream';
 import { AttachmentType } from '../../db/models/attachment.model.js';
 import { logger } from '../../helpers/logger.js';
+import { publishMailboxUpdate } from '../../helpers/pubsub.js';
 
 export const sendEmail = makeMutation(
   'sendEmail',
@@ -174,6 +175,11 @@ export const sendEmail = makeMutation(
         await Attachment.bulkCreate(attachmentsToCreate);
       }
     }
+
+    publishMailboxUpdate(userId, {
+      type: 'NEW_EMAILS',
+      emailAccountId: emailAccount.id,
+    });
 
     return email;
   },

@@ -10,6 +10,7 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ApolloProvider } from '@apollo/client/react';
+import ToastManager from 'toastify-react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as SystemUI from 'expo-system-ui';
 
@@ -202,6 +203,14 @@ function MainApp() {
         <ApolloProvider client={apolloClient}>
           <StatusBar style={isDark ? 'light' : 'dark'} />
           <AppNavigator />
+          <ToastManager
+            position="top"
+            duration={2500}
+            showProgressBar={false}
+            showCloseIcon={false}
+            useModal={false}
+            theme={isDark ? 'dark' : 'light'}
+          />
         </ApolloProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
