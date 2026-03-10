@@ -1,5 +1,18 @@
 # @main/backend
 
+## 0.1.4
+
+### Patch Changes
+
+### Cleanup and cross-compat
+
+- **7973cc0**
+  - move the account selector to the drawer
+- **f45e163**
+  - Correctly show errors when sending emails
+  - replace success dialog with toast
+  - add support for viewing/editing custom domains from the mobile app
+
 ## 0.1.3
 
 ### Patch Changes
