@@ -22,7 +22,7 @@ import { ContactsScreen, AddContactScreen, ContactDetailScreen } from '../screen
 import {
   SettingsScreen,
   AccountsSettingsScreen,
-  SmtpSettingsScreen,
+  SendProfileSettingsScreen,
   TagsSettingsScreen,
   RulesSettingsScreen,
   NotificationsSettingsScreen,
@@ -77,14 +77,14 @@ export type RootStackParamList = {
   Nuke: undefined;
   // Settings sub-screens
   AccountSettings: undefined;
-  SmtpSettings: undefined;
+  SendProfileSettings: undefined;
   TagSettings: undefined;
   RuleSettings: undefined;
   NotificationSettings: undefined;
   // Create/Edit screens
   AddContact: { email?: string; name?: string } | undefined;
   EditAccount: { accountId?: string } | undefined;
-  EditSmtpProfile: { profileId?: string } | undefined;
+  EditSendProfile: { profileId?: string } | undefined;
   EditTag: { tagId?: string } | undefined;
   EditRule: { ruleId?: string } | undefined;
 };
@@ -155,7 +155,7 @@ function SettingsScreenWrapper() {
   return (
     <SettingsScreen
       onNavigateToAccounts={() => navigation.navigate('AccountSettings')}
-      onNavigateToSmtp={() => navigation.navigate('SmtpSettings')}
+      onNavigateToSendProfiles={() => navigation.navigate('SendProfileSettings')}
       onNavigateToTags={() => navigation.navigate('TagSettings')}
       onNavigateToRules={() => navigation.navigate('RuleSettings')}
       onNavigateToNotifications={() => navigation.navigate('NotificationSettings')}
@@ -318,14 +318,14 @@ function AccountsSettingsScreenWrapper() {
   );
 }
 
-// SMTP Settings Screen wrapper
-function SmtpSettingsScreenWrapper() {
+// Send Profile Settings Screen wrapper
+function SendProfileSettingsScreenWrapper() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  
+
   return (
-    <SmtpSettingsScreen
-      onAddProfile={() => navigation.navigate('EditSmtpProfile')}
-      onEditProfile={(profileId) => navigation.navigate('EditSmtpProfile', { profileId })}
+    <SendProfileSettingsScreen
+      onAddProfile={() => navigation.navigate('EditSendProfile')}
+      onEditProfile={(profileId) => navigation.navigate('EditSendProfile', { profileId })}
     />
   );
 }
@@ -349,11 +349,11 @@ function EditAccountScreenWrapper() {
   return <EditAccountScreenComponent onClose={() => navigation.goBack()} />;
 }
 
-// Wrapper for Edit SMTP Profile screen
-function EditSmtpProfileScreenWrapper() {
+// Wrapper for Edit Send Profile screen
+function EditSendProfileScreenWrapper() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { EditSmtpProfileScreen: EditSmtpProfileScreenComponent } = require('../screens/settings');
-  return <EditSmtpProfileScreenComponent onClose={() => navigation.goBack()} />;
+  const { EditSendProfileScreen: EditSendProfileScreenComponent } = require('../screens/settings');
+  return <EditSendProfileScreenComponent onClose={() => navigation.goBack()} />;
 }
 
 // Wrapper for Edit Rule screen
@@ -441,9 +441,9 @@ export function AppNavigator() {
               options={{ title: 'Email Accounts' }}
             />
             <RootStack.Screen
-              name="SmtpSettings"
-              component={SmtpSettingsScreenWrapper}
-              options={{ title: 'SMTP Profiles' }}
+              name="SendProfileSettings"
+              component={SendProfileSettingsScreenWrapper}
+              options={{ title: 'Send Profiles' }}
             />
             <RootStack.Screen
               name="TagSettings"
@@ -476,8 +476,8 @@ export function AppNavigator() {
               options={{ headerShown: false, presentation: 'modal' }}
             />
             <RootStack.Screen
-              name="EditSmtpProfile"
-              component={EditSmtpProfileScreenWrapper}
+              name="EditSendProfile"
+              component={EditSendProfileScreenWrapper}
               options={{ headerShown: false, presentation: 'modal' }}
             />
             <RootStack.Screen

@@ -1,5 +1,5 @@
 import { makeMutation } from '../../types.js';
-import { Email, EmailAccount, SmtpProfile } from '../../db/models/index.js';
+import { Email, EmailAccount, SendProfile, SmtpAccountSettings } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { sendEmail } from '../../helpers/email.js';
 import { logger } from '../../helpers/logger.js';
@@ -17,12 +17,10 @@ export const unsubscribe = makeMutation(
       throw new Error('Email not found');
     }
 
-    // Verify user owns this email account
     if (email.emailAccount?.userId !== userId) {
       throw new Error('Unauthorized');
     }
 
-    // Check if unsubscribe is available
     if (!email.unsubscribeUrl && !email.unsubscribeEmail) {
       throw new Error('No unsubscribe option available for this email');
     }
@@ -30,7 +28,6 @@ export const unsubscribe = makeMutation(
     let unsubscribeSuccess = false;
     let unsubscribeError: string | null = null;
 
-    // Try HTTP unsubscribe first (RFC 8058 one-click unsubscribe)
     if (email.unsubscribeUrl) {
       try {
         logger.info('Unsubscribe', `Sending POST request to: ${email.unsubscribeUrl}`);
@@ -42,15 +39,12 @@ export const unsubscribe = makeMutation(
             'User-Agent': 'SuperMail/1.0 (Unsubscribe)',
           },
           body: 'List-Unsubscribe=One-Click',
-          // Some servers require just a POST with no body
-          // Try with the RFC 8058 standard body first
         });
 
         if (response.ok || response.status === 200 || response.status === 202) {
           logger.info('Unsubscribe', `HTTP unsubscribe successful for: ${email.unsubscribeUrl}`);
           unsubscribeSuccess = true;
         } else {
-          // Some unsubscribe endpoints return 3xx redirects, try GET as fallback
           logger.info('Unsubscribe', `POST returned ${response.status}, trying GET for: ${email.unsubscribeUrl}`);
           const getResponse = await fetch(email.unsubscribeUrl, {
             method: 'GET',
@@ -73,19 +67,18 @@ export const unsubscribe = makeMutation(
       }
     }
 
-    // If HTTP didn't work and we have an email address, try mailto unsubscribe
     if (!unsubscribeSuccess && email.unsubscribeEmail) {
       try {
         logger.info('Unsubscribe', `Sending unsubscribe email to: ${email.unsubscribeEmail}`);
 
-        // Find a default SMTP profile for the user
-        const smtpProfile = await SmtpProfile.findOne({
+        const sendProfile = await SendProfile.findOne({
           where: { userId },
+          include: [{ model: SmtpAccountSettings, as: 'smtpSettings' }],
           order: [['isDefault', 'DESC']],
         });
 
-        if (smtpProfile) {
-          await sendEmail(smtpProfile, {
+        if (sendProfile) {
+          await sendEmail(sendProfile, {
             to: [email.unsubscribeEmail],
             subject: 'Unsubscribe',
             text: 'Please unsubscribe this email address from your mailing list.',
@@ -95,7 +88,7 @@ export const unsubscribe = makeMutation(
           unsubscribeSuccess = true;
         } else {
           unsubscribeError =
-            'No SMTP profile configured to send unsubscribe email';
+            'No send profile configured to send unsubscribe email';
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
@@ -104,8 +97,6 @@ export const unsubscribe = makeMutation(
       }
     }
 
-    // Mark as unsubscribed in the database regardless of success
-    // This prevents repeated attempts and lets the user know they tried
     await email.update({
       isUnsubscribed: true,
     });

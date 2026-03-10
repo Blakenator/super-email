@@ -1,5 +1,5 @@
 /**
- * SMTP Profiles Settings Screen
+ * Send Profiles Settings Screen
  * Manage outgoing email server profiles
  */
 
@@ -17,37 +17,40 @@ import { Icon } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
 
-const GET_SMTP_PROFILES_QUERY = gql`
-  query GetSmtpProfiles {
-    getSmtpProfiles {
+const GET_SEND_PROFILES_QUERY = gql`
+  query GetSendProfiles {
+    getSendProfiles {
       id
       name
       email
-      host
-      port
+      type
       isDefault
+      smtpSettings {
+        host
+        port
+      }
     }
   }
 `;
 
-interface SmtpProfile {
+interface SendProfile {
   id: string;
   name: string;
   email: string;
-  host: string;
-  port: number;
+  type: string;
   isDefault: boolean;
+  smtpSettings?: { host: string; port: number } | null;
 }
 
-interface SmtpSettingsScreenProps {
+interface SendProfileSettingsScreenProps {
   onEditProfile?: (profileId: string) => void;
   onAddProfile?: () => void;
 }
 
-export function SmtpSettingsScreen({ onEditProfile, onAddProfile }: SmtpSettingsScreenProps) {
+export function SendProfileSettingsScreen({ onEditProfile, onAddProfile }: SendProfileSettingsScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [profiles, setProfiles] = useState<SmtpProfile[]>([]);
+  const [profiles, setProfiles] = useState<SendProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -57,18 +60,18 @@ export function SmtpSettingsScreen({ onEditProfile, onAddProfile }: SmtpSettings
   const loadProfiles = async () => {
     try {
       const { data } = await apolloClient.query({
-        query: GET_SMTP_PROFILES_QUERY,
+        query: GET_SEND_PROFILES_QUERY,
         fetchPolicy: 'network-only',
       });
-      setProfiles(data?.getSmtpProfiles ?? []);
+      setProfiles(data?.getSendProfiles ?? []);
     } catch (error) {
-      console.error('Error loading SMTP profiles:', error);
+      console.error('Error loading send profiles:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const renderProfile = (profile: SmtpProfile) => (
+  const renderProfile = (profile: SendProfile) => (
     <TouchableOpacity
       key={profile.id}
       style={[
@@ -85,7 +88,9 @@ export function SmtpSettingsScreen({ onEditProfile, onAddProfile }: SmtpSettings
           {profile.name}
         </Text>
         <Text style={[styles.profileHost, { color: theme.colors.textMuted }]}>
-          {profile.host}:{profile.port}
+          {profile.smtpSettings
+            ? `${profile.smtpSettings.host}:${profile.smtpSettings.port}`
+            : profile.type === 'CUSTOM_DOMAIN' ? 'Custom Domain (SES)' : profile.email}
         </Text>
         <View style={styles.profileMeta}>
           <Text style={[styles.profileUsername, { color: theme.colors.textMuted }]}>
@@ -109,7 +114,7 @@ export function SmtpSettingsScreen({ onEditProfile, onAddProfile }: SmtpSettings
     >
       <View style={[sharedStyles.sectionHeader]}>
         <Text style={[sharedStyles.sectionTitle, { color: theme.colors.textMuted }]}>
-          SMTP PROFILES
+          SEND PROFILES
         </Text>
       </View>
 
@@ -118,10 +123,10 @@ export function SmtpSettingsScreen({ onEditProfile, onAddProfile }: SmtpSettings
           <View style={[styles.emptyState, { backgroundColor: theme.colors.surface }]}>
             <Icon name="send" size="xl" color={theme.colors.textMuted} />
             <Text style={[styles.emptyTitle, { color: theme.colors.text }]}>
-              No SMTP profiles
+              No send profiles
             </Text>
             <Text style={[styles.emptySubtitle, { color: theme.colors.textMuted }]}>
-              Add an SMTP profile to send emails.
+              Add a send profile to send emails.
             </Text>
           </View>
         ) : (
@@ -134,7 +139,7 @@ export function SmtpSettingsScreen({ onEditProfile, onAddProfile }: SmtpSettings
         onPress={onAddProfile}
       >
         <Icon name="plus" size="md" color={theme.colors.textInverse} />
-        <Text style={[styles.addButtonText, { color: theme.colors.textInverse }]}>Add SMTP Profile</Text>
+        <Text style={[styles.addButtonText, { color: theme.colors.textInverse }]}>Add Send Profile</Text>
       </TouchableOpacity>
     </ScrollView>
   );

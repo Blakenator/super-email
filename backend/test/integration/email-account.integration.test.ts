@@ -1,6 +1,6 @@
 /**
  * EmailAccount Integration Tests
- * 
+ *
  * Tests the EmailAccount GraphQL queries and mutations against the actual server.
  */
 
@@ -14,14 +14,18 @@ import {
 } from './server-setup.js';
 import { sequelize } from '../../db/database.js';
 
-// Helper to create a valid email account (omit id to let DB auto-generate UUID)
 const createEmailAccountData = (overrides: Record<string, any> = {}) => ({
   name: 'Test Account',
   email: 'test@example.com',
+  type: 'IMAP',
+  isDefault: false,
+  ...overrides,
+});
+
+const createImapSettingsData = (emailAccountId: string, overrides: Record<string, any> = {}) => ({
+  emailAccountId,
   host: 'imap.example.com',
   port: 993,
-  username: 'test@example.com',
-  password: 'test-password',
   accountType: 'IMAP',
   useSsl: true,
   ...overrides,
@@ -31,13 +35,12 @@ describe('EmailAccount Integration Tests', function () {
   this.timeout(30000);
 
   before(async () => {
-    // Create test user once for all tests
     await cleanupTestData();
     await createTestUser();
   });
 
   beforeEach(async () => {
-    // Only clean up email accounts between tests
+    await sequelize.models.ImapAccountSettings?.destroy({ where: {}, force: true });
     await sequelize.models.EmailAccount?.destroy({ where: {}, force: true });
   });
 
@@ -55,27 +58,28 @@ describe('EmailAccount Integration Tests', function () {
 
       expect(result.body.kind).to.equal('single');
       const singleResult = (result.body as any).singleResult;
-      
-      // Check for errors first
+
       if (singleResult.errors) {
         console.log('GraphQL errors:', JSON.stringify(singleResult.errors, null, 2));
       }
-      
+
       expect(singleResult.data.getEmailAccounts).to.be.an('array').that.is.empty;
     });
 
-    it('should return created email accounts', async () => {
-      // Create an email account directly in the database (let DB generate UUID)
+    it('should return created email accounts with imapSettings', async () => {
       const EmailAccount = sequelize.models.EmailAccount;
+      const ImapAccountSettings = sequelize.models.ImapAccountSettings;
       const account = await EmailAccount.create(createEmailAccountData({
         userId: TEST_USER_ID,
         name: 'Work Gmail',
         email: 'work@example.com',
-        host: 'imap.gmail.com',
-        port: 993,
         providerId: 'google',
       }));
       const accountId = (account as any).id;
+      await ImapAccountSettings.create(createImapSettingsData(accountId, {
+        host: 'imap.gmail.com',
+        port: 993,
+      }));
 
       const result = await executeAuthenticatedOperation(`
         query GetEmailAccounts {
@@ -83,9 +87,12 @@ describe('EmailAccount Integration Tests', function () {
             id
             email
             name
-            host
-            port
+            type
             providerId
+            imapSettings {
+              host
+              port
+            }
           }
         }
       `);
@@ -96,22 +103,21 @@ describe('EmailAccount Integration Tests', function () {
       expect(data.getEmailAccounts[0].id).to.equal(accountId);
       expect(data.getEmailAccounts[0].email).to.equal('work@example.com');
       expect(data.getEmailAccounts[0].name).to.equal('Work Gmail');
-      expect(data.getEmailAccounts[0].host).to.equal('imap.gmail.com');
-      expect(data.getEmailAccounts[0].port).to.equal(993);
+      expect(data.getEmailAccounts[0].type).to.equal('IMAP');
+      expect(data.getEmailAccounts[0].imapSettings.host).to.equal('imap.gmail.com');
+      expect(data.getEmailAccounts[0].imapSettings.port).to.equal(993);
     });
 
     it('should only return accounts for the authenticated user', async () => {
       const EmailAccount = sequelize.models.EmailAccount;
       const User = sequelize.models.User;
-      
-      // Create account for test user
+
       await EmailAccount.create(createEmailAccountData({
         userId: TEST_USER_ID,
         email: 'user1@example.com',
         name: 'User 1 Account',
       }));
 
-      // Create a different user and their account
       const otherUserId = '00000000-0000-0000-0000-000000000099';
       await User.findOrCreate({
         where: { id: otherUserId },
@@ -121,10 +127,8 @@ describe('EmailAccount Integration Tests', function () {
         userId: otherUserId,
         email: 'user2@example.com',
         name: 'User 2 Account',
-        host: 'imap.outlook.com',
       }));
 
-      // Query as original test user - should only see their account
       const result = await executeAuthenticatedOperation(`
         query GetEmailAccounts {
           getEmailAccounts {
@@ -153,8 +157,7 @@ describe('EmailAccount Integration Tests', function () {
       expect(result.body.kind).to.equal('single');
       const errors = (result.body as any).singleResult.errors;
       expect(errors).to.be.an('array').that.is.not.empty;
-      // Check for any auth-related error message
-      expect(errors[0].message.toLowerCase()).to.satisfy((msg: string) => 
+      expect(errors[0].message.toLowerCase()).to.satisfy((msg: string) =>
         msg.includes('authenticated') || msg.includes('authentication')
       );
     });
@@ -167,7 +170,6 @@ describe('EmailAccount Integration Tests', function () {
         userId: TEST_USER_ID,
         email: 'specific@example.com',
         name: 'Specific Account',
-        host: 'imap.example.com',
       }));
       const accountId = (account as any).id;
 
@@ -177,6 +179,7 @@ describe('EmailAccount Integration Tests', function () {
             id
             email
             name
+            type
           }
         }
       `, { id: accountId });
@@ -188,7 +191,6 @@ describe('EmailAccount Integration Tests', function () {
     });
 
     it('should return null for non-existent account', async () => {
-      // Use a valid UUID format for non-existent
       const result = await executeAuthenticatedOperation(`
         query GetEmailAccount($id: String!) {
           getEmailAccount(id: $id) {
@@ -206,8 +208,7 @@ describe('EmailAccount Integration Tests', function () {
     it('should not return accounts belonging to other users', async () => {
       const EmailAccount = sequelize.models.EmailAccount;
       const User = sequelize.models.User;
-      
-      // Create account for another user
+
       const otherUserId = '00000000-0000-0000-0000-000000000098';
       await User.findOrCreate({
         where: { id: otherUserId },
@@ -220,7 +221,6 @@ describe('EmailAccount Integration Tests', function () {
       }));
       const accountId = (account as any).id;
 
-      // Try to fetch as different user (authenticated as TEST_USER_ID)
       const result = await executeAuthenticatedOperation(`
         query GetEmailAccount($id: String!) {
           getEmailAccount(id: $id) {
@@ -256,7 +256,6 @@ describe('EmailAccount Integration Tests', function () {
       const data = (result.body as any).singleResult.data;
       expect(data.deleteEmailAccount).to.be.true;
 
-      // Verify it's deleted
       const deletedAccount = await EmailAccount.findByPk(accountId);
       expect(deletedAccount).to.be.null;
     });

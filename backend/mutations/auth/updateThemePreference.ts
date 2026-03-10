@@ -1,4 +1,4 @@
-import { ThemePreference } from '../../db/models/index.js';
+import { ThemePreference, User } from '../../db/models/index.js';
 import { makeMutation } from '../../types.js';
 import { requireAuth } from '../../helpers/auth.js';
 
@@ -7,12 +7,11 @@ export const updateThemePreference = makeMutation(
   async (_parent, { themePreference }, context) => {
     requireAuth(context);
 
-    const user = context.user;
+    const user = await User.findByPk(context.userId);
     if (!user) {
       throw new Error('User not found');
     }
 
-    // Validate the theme preference value
     if (!Object.values(ThemePreference).includes(themePreference as ThemePreference)) {
       throw new Error('Invalid theme preference');
     }

@@ -118,13 +118,13 @@ type User implements BaseEntityProps {
   """
   blockExternalImages: Boolean!
   """
-  List of email accounts configured for this user (IMAP/POP3)
+  List of email accounts configured for this user
   """
   emailAccounts: [EmailAccount!]!
   """
-  List of SMTP profiles configured for sending emails
+  List of send profiles configured for sending emails
   """
-  smtpProfiles: [SmtpProfile!]!
+  sendProfiles: [SendProfile!]!
   """
   List of authentication methods linked to this account (OAuth, email/password)
   """
@@ -230,12 +230,26 @@ type AuthenticationMethod implements BaseEntityProps {
   lastUsedAt: Date
 }
 
-# ============ Email Accounts (IMAP/POP) ============
+# ============ Email Accounts ============
 
 """
-Type of email receiving protocol.
+Type of email account.
 """
 enum EmailAccountType {
+  """
+  IMAP-based account - connects to an external IMAP/POP3 server
+  """
+  IMAP
+  """
+  Custom domain account - receives email via SES
+  """
+  CUSTOM_DOMAIN
+}
+
+"""
+Type of IMAP receiving protocol.
+"""
+enum ImapAccountType {
   """
   IMAP protocol - supports folder sync and IDLE for real-time updates
   """
@@ -247,34 +261,20 @@ enum EmailAccountType {
 }
 
 """
-An email account configured for receiving emails via IMAP or POP3.
-Each user can have multiple email accounts from different providers.
+IMAP/POP3 specific settings for an email account.
+Only present when the parent EmailAccount has type IMAP.
 """
-type EmailAccount implements BaseEntityProps {
+type ImapAccountSettings implements BaseEntityProps {
   """
-  Unique identifier for this email account
+  Unique identifier
   """
   id: String!
-  """
-  Timestamp when the account was added
-  """
   createdAt: Date
-  """
-  Timestamp when the account was last modified
-  """
   updatedAt: Date
   """
-  ID of the user who owns this account
+  ID of the parent email account
   """
-  userId: String!
-  """
-  Display name for this account (e.g., "Work Gmail")
-  """
-  name: String!
-  """
-  Email address for this account
-  """
-  email: String!
+  emailAccountId: String!
   """
   IMAP/POP3 server hostname (e.g., "imap.gmail.com")
   """
@@ -286,7 +286,7 @@ type EmailAccount implements BaseEntityProps {
   """
   Protocol type (IMAP or POP3)
   """
-  accountType: EmailAccountType!
+  accountType: ImapAccountType!
   """
   Whether to use SSL/TLS encryption
   """
@@ -323,14 +323,49 @@ type EmailAccount implements BaseEntityProps {
   Human-readable status message during update sync
   """
   updateSyncStatus: String
+}
+
+"""
+An email account configured for receiving emails.
+Can be IMAP-based (external server) or custom domain (SES-based).
+"""
+type EmailAccount implements BaseEntityProps {
   """
-  ID of the default SMTP profile for sending from this account
+  Unique identifier for this email account
   """
-  defaultSmtpProfileId: String
+  id: String!
   """
-  The default SMTP profile object for sending emails
+  Timestamp when the account was added
   """
-  defaultSmtpProfile: SmtpProfile
+  createdAt: Date
+  """
+  Timestamp when the account was last modified
+  """
+  updatedAt: Date
+  """
+  ID of the user who owns this account
+  """
+  userId: String!
+  """
+  Display name for this account (e.g., "Work Gmail")
+  """
+  name: String!
+  """
+  Email address for this account
+  """
+  email: String!
+  """
+  Account type (IMAP or CUSTOM_DOMAIN)
+  """
+  type: EmailAccountType!
+  """
+  ID of the default send profile for sending from this account
+  """
+  defaultSendProfileId: String
+  """
+  The default send profile object for sending emails
+  """
+  defaultSendProfile: SendProfile
   """
   External provider ID (for OAuth-linked accounts like Google Workspace)
   """
@@ -339,10 +374,16 @@ type EmailAccount implements BaseEntityProps {
   Whether this is the user's default/primary email account
   """
   isDefault: Boolean!
+  """
+  IMAP-specific settings (null for custom domain accounts)
+  """
+  imapSettings: ImapAccountSettings
 }
 
 """
-Input for creating a new email account. Requires all connection details.
+Input for creating a new email account.
+For IMAP accounts, provide imapHost/imapPort/etc. fields.
+For CUSTOM_DOMAIN accounts, provide customDomainId and localPart.
 """
 input CreateEmailAccountInput {
   """
@@ -354,33 +395,13 @@ input CreateEmailAccountInput {
   """
   email: String!
   """
-  IMAP/POP3 server hostname
+  Account type (IMAP or CUSTOM_DOMAIN)
   """
-  host: String!
+  type: EmailAccountType!
   """
-  Server port number
+  ID of the default send profile for sending
   """
-  port: Int!
-  """
-  Username for authentication (often the email address)
-  """
-  username: String!
-  """
-  Password or app-specific password for authentication
-  """
-  password: String!
-  """
-  Protocol type (IMAP or POP3)
-  """
-  accountType: EmailAccountType!
-  """
-  Whether to use SSL/TLS
-  """
-  useSsl: Boolean!
-  """
-  ID of the default SMTP profile for sending
-  """
-  defaultSmtpProfileId: String
+  defaultSendProfileId: String
   """
   External provider ID for OAuth-linked accounts
   """
@@ -389,6 +410,42 @@ input CreateEmailAccountInput {
   Whether to set this as the default account
   """
   isDefault: Boolean
+
+  # IMAP-specific fields (required when type = IMAP)
+  """
+  IMAP/POP3 server hostname (required for IMAP type)
+  """
+  imapHost: String
+  """
+  Server port number (required for IMAP type)
+  """
+  imapPort: Int
+  """
+  Username for authentication (required for IMAP type)
+  """
+  imapUsername: String
+  """
+  Password for authentication (required for IMAP type)
+  """
+  imapPassword: String
+  """
+  Protocol type - IMAP or POP3 (required for IMAP type)
+  """
+  imapAccountType: ImapAccountType
+  """
+  Whether to use SSL/TLS (required for IMAP type)
+  """
+  imapUseSsl: Boolean
+
+  # Custom domain fields (required when type = CUSTOM_DOMAIN)
+  """
+  ID of the custom domain (required for CUSTOM_DOMAIN type)
+  """
+  customDomainId: String
+  """
+  Local part of the email address, e.g. "blake" for blake@example.com (required for CUSTOM_DOMAIN type)
+  """
+  localPart: String
 }
 
 """
@@ -404,29 +461,9 @@ input UpdateEmailAccountInput {
   """
   name: String
   """
-  New server hostname
+  New default send profile ID
   """
-  host: String
-  """
-  New server port
-  """
-  port: Int
-  """
-  New username
-  """
-  username: String
-  """
-  New password
-  """
-  password: String
-  """
-  Whether to use SSL/TLS
-  """
-  useSsl: Boolean
-  """
-  New default SMTP profile ID
-  """
-  defaultSmtpProfileId: String
+  defaultSendProfileId: String
   """
   New provider ID
   """
@@ -435,17 +472,83 @@ input UpdateEmailAccountInput {
   Whether this should be the default account
   """
   isDefault: Boolean
+
+  # IMAP-specific fields (only applicable for IMAP type accounts)
+  """
+  New IMAP server hostname
+  """
+  imapHost: String
+  """
+  New IMAP server port
+  """
+  imapPort: Int
+  """
+  New IMAP username
+  """
+  imapUsername: String
+  """
+  New IMAP password
+  """
+  imapPassword: String
+  """
+  Whether to use SSL/TLS
+  """
+  imapUseSsl: Boolean
 }
 
-# ============ SMTP Profiles ============
+# ============ Send Profiles ============
 
 """
-An SMTP profile for sending emails. Each email account can have a default SMTP profile,
-or users can select a different profile when composing.
+Type of send profile.
 """
-type SmtpProfile implements BaseEntityProps {
+enum SendProfileType {
   """
-  Unique identifier for this SMTP profile
+  SMTP-based profile - sends via an external SMTP server
+  """
+  SMTP
+  """
+  Custom domain profile - sends via SES
+  """
+  CUSTOM_DOMAIN
+}
+
+"""
+SMTP-specific settings for a send profile.
+Only present when the parent SendProfile has type SMTP.
+"""
+type SmtpAccountSettings implements BaseEntityProps {
+  """
+  Unique identifier
+  """
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  """
+  ID of the parent send profile
+  """
+  sendProfileId: String!
+  """
+  SMTP server hostname (e.g., "smtp.gmail.com")
+  """
+  host: String!
+  """
+  SMTP server port (e.g., 587 for TLS, 465 for SSL)
+  """
+  port: Int!
+  """
+  Whether to use SSL/TLS encryption
+  """
+  useSsl: Boolean!
+}
+
+"""
+A send profile for sending emails. Each email account can have a default send profile,
+or users can select a different profile when composing.
+Can be SMTP-based (external server) or custom domain (SES-based).
+"""
+type SendProfile implements BaseEntityProps {
+  """
+  Unique identifier for this send profile
   """
   id: String!
   """
@@ -461,7 +564,7 @@ type SmtpProfile implements BaseEntityProps {
   """
   userId: String!
   """
-  Display name for this profile (e.g., "Personal Gmail SMTP")
+  Display name for this profile (e.g., "Personal Gmail")
   """
   name: String!
   """
@@ -473,31 +576,29 @@ type SmtpProfile implements BaseEntityProps {
   """
   alias: String
   """
-  SMTP server hostname (e.g., "smtp.gmail.com")
+  Profile type (SMTP or CUSTOM_DOMAIN)
   """
-  host: String!
+  type: SendProfileType!
   """
-  SMTP server port (e.g., 587 for TLS, 465 for SSL)
-  """
-  port: Int!
-  """
-  Whether to use SSL/TLS encryption
-  """
-  useSsl: Boolean!
-  """
-  Whether this is the user's default SMTP profile
+  Whether this is the user's default send profile
   """
   isDefault: Boolean!
   """
   External provider ID for OAuth-linked profiles
   """
   providerId: String
+  """
+  SMTP-specific settings (null for custom domain profiles)
+  """
+  smtpSettings: SmtpAccountSettings
 }
 
 """
-Input for creating a new SMTP profile.
+Input for creating a new send profile.
+For SMTP profiles, provide smtpHost/smtpPort/etc. fields.
+For CUSTOM_DOMAIN profiles, provide customDomainId and localPart.
 """
-input CreateSmtpProfileInput {
+input CreateSendProfileInput {
   """
   Display name for the profile
   """
@@ -511,25 +612,9 @@ input CreateSmtpProfileInput {
   """
   alias: String
   """
-  SMTP server hostname
+  Profile type (SMTP or CUSTOM_DOMAIN)
   """
-  host: String!
-  """
-  SMTP server port
-  """
-  port: Int!
-  """
-  Username for SMTP authentication
-  """
-  username: String!
-  """
-  Password for SMTP authentication
-  """
-  password: String!
-  """
-  Whether to use SSL/TLS
-  """
-  useSsl: Boolean!
+  type: SendProfileType!
   """
   Whether to set as default profile
   """
@@ -538,14 +623,46 @@ input CreateSmtpProfileInput {
   External provider ID
   """
   providerId: String
+
+  # SMTP-specific fields (required when type = SMTP)
+  """
+  SMTP server hostname (required for SMTP type)
+  """
+  smtpHost: String
+  """
+  SMTP server port (required for SMTP type)
+  """
+  smtpPort: Int
+  """
+  Username for SMTP authentication (required for SMTP type)
+  """
+  smtpUsername: String
+  """
+  Password for SMTP authentication (required for SMTP type)
+  """
+  smtpPassword: String
+  """
+  Whether to use SSL/TLS (required for SMTP type)
+  """
+  smtpUseSsl: Boolean
+
+  # Custom domain fields (required when type = CUSTOM_DOMAIN)
+  """
+  ID of the custom domain (required for CUSTOM_DOMAIN type)
+  """
+  customDomainId: String
+  """
+  Local part of the email, e.g. "blake" (required for CUSTOM_DOMAIN type)
+  """
+  localPart: String
 }
 
 """
-Input for updating an existing SMTP profile. Only provided fields will be updated.
+Input for updating an existing send profile. Only provided fields will be updated.
 """
-input UpdateSmtpProfileInput {
+input UpdateSendProfileInput {
   """
-  ID of the SMTP profile to update
+  ID of the send profile to update
   """
   id: String!
   """
@@ -557,26 +674,6 @@ input UpdateSmtpProfileInput {
   """
   alias: String
   """
-  New server hostname
-  """
-  host: String
-  """
-  New server port
-  """
-  port: Int
-  """
-  New username
-  """
-  username: String
-  """
-  New password
-  """
-  password: String
-  """
-  Whether to use SSL/TLS
-  """
-  useSsl: Boolean
-  """
   Whether this should be the default profile
   """
   isDefault: Boolean
@@ -584,6 +681,28 @@ input UpdateSmtpProfileInput {
   New provider ID
   """
   providerId: String
+
+  # SMTP-specific fields (only applicable for SMTP type profiles)
+  """
+  New SMTP server hostname
+  """
+  smtpHost: String
+  """
+  New SMTP server port
+  """
+  smtpPort: Int
+  """
+  New SMTP username
+  """
+  smtpUsername: String
+  """
+  New SMTP password
+  """
+  smtpPassword: String
+  """
+  Whether to use SSL/TLS
+  """
+  smtpUseSsl: Boolean
 }
 
 # ============ Contacts ============
@@ -922,13 +1041,13 @@ type Email implements BaseEntityProps {
   """
   emailAccount: EmailAccount
   """
-  ID of the SMTP profile used to send (for sent emails)
+  ID of the send profile used to send (for sent emails)
   """
-  smtpProfileId: String
+  sendProfileId: String
   """
-  The SMTP profile used to send this email
+  The send profile used to send this email
   """
-  smtpProfile: SmtpProfile
+  sendProfile: SendProfile
   """
   Unique message ID from the email headers (RFC 5322 Message-ID)
   """
@@ -1534,9 +1653,9 @@ input ComposeEmailInput {
   """
   emailAccountId: String!
   """
-  ID of the SMTP profile to use for sending
+  ID of the send profile to use for sending
   """
-  smtpProfileId: String!
+  sendProfileId: String!
   """
   List of To recipient email addresses
   """
@@ -1588,9 +1707,9 @@ input SaveDraftInput {
   """
   emailAccountId: String!
   """
-  SMTP profile for sending (optional for drafts)
+  Send profile for sending (optional for drafts)
   """
-  smtpProfileId: String
+  sendProfileId: String
   """
   To recipient addresses
   """
@@ -1665,9 +1784,9 @@ input ForwardEmailInput {
   """
   emailAccountId: String!
   """
-  SMTP profile to use for sending
+  Send profile to use for sending
   """
-  smtpProfileId: String!
+  sendProfileId: String!
   """
   To recipient addresses
   """
@@ -1729,7 +1848,7 @@ type TestConnectionResult {
 """
 Input for testing an IMAP/POP3 connection before saving.
 """
-input TestEmailAccountConnectionInput {
+input TestImapConnectionInput {
   """
   Server hostname
   """
@@ -1749,7 +1868,7 @@ input TestEmailAccountConnectionInput {
   """
   Protocol type (IMAP or POP3)
   """
-  accountType: EmailAccountType!
+  accountType: ImapAccountType!
   """
   Whether to use SSL/TLS
   """
@@ -1849,23 +1968,40 @@ type Query {
     id: String!
   ): EmailAccount
 
-  # SMTP Profiles
+  # Send Profiles
   """
-  Get all SMTP profiles configured for the current user.
+  Get all send profiles configured for the current user.
   Ordered by creation date, newest first.
   """
-  getSmtpProfiles: [SmtpProfile!]!
+  getSendProfiles: [SendProfile!]!
 
   """
-  Get a specific SMTP profile by ID.
+  Get a specific send profile by ID.
   Returns null if not found or not owned by the current user.
   """
-  getSmtpProfile(
+  getSendProfile(
     """
-    ID of the SMTP profile to fetch
+    ID of the send profile to fetch
     """
     id: String!
-  ): SmtpProfile
+  ): SendProfile
+
+  # Custom Domains
+  """
+  Get all custom domains configured for the current user.
+  """
+  getCustomDomains: [CustomDomain!]!
+
+  """
+  Get a specific custom domain by ID.
+  Returns null if not found or not owned by the current user.
+  """
+  getCustomDomain(
+    """
+    ID of the custom domain to fetch
+    """
+    id: String!
+  ): CustomDomain
 
   # Emails
   """
@@ -2136,32 +2272,32 @@ type Mutation {
     input: SyncEmailAccountInput!
   ): Boolean!
 
-  # SMTP Profiles
+  # Send Profiles
   """
-  Create a new SMTP profile for sending emails.
+  Create a new send profile for sending emails.
   """
-  createSmtpProfile(
+  createSendProfile(
     """
     Profile details and credentials
     """
-    input: CreateSmtpProfileInput!
-  ): SmtpProfile!
+    input: CreateSendProfileInput!
+  ): SendProfile!
 
   """
-  Update an existing SMTP profile.
+  Update an existing send profile.
   """
-  updateSmtpProfile(
+  updateSendProfile(
     """
     Fields to update
     """
-    input: UpdateSmtpProfileInput!
-  ): SmtpProfile!
+    input: UpdateSendProfileInput!
+  ): SendProfile!
 
   """
-  Delete an SMTP profile.
+  Delete a send profile.
   Cannot delete a profile that is set as default for an email account.
   """
-  deleteSmtpProfile(
+  deleteSendProfile(
     """
     ID of the profile to delete
     """
@@ -2173,11 +2309,11 @@ type Mutation {
   Test an IMAP/POP3 connection before saving.
   Returns success/failure with an error message if applicable.
   """
-  testEmailAccountConnection(
+  testImapConnection(
     """
     Connection details to test
     """
-    input: TestEmailAccountConnectionInput!
+    input: TestImapConnectionInput!
   ): TestConnectionResult!
 
   """
@@ -2193,7 +2329,7 @@ type Mutation {
 
   # Emails
   """
-  Send an email via SMTP.
+  Send an email via the specified send profile.
   Stores a copy in the Sent folder and handles attachments.
   """
   sendEmail(
@@ -2427,6 +2563,61 @@ type Mutation {
   ): RunRuleResult!
 
   # Billing
+  # Custom Domains
+  """
+  Add a new custom domain and initiate SES verification.
+  Returns the domain with DNS records to configure.
+  """
+  addCustomDomain(
+    """
+    Domain configuration
+    """
+    input: AddCustomDomainInput!
+  ): CustomDomain!
+
+  """
+  Verify the DNS records for a custom domain.
+  Checks if the user has configured the required DNS records.
+  """
+  verifyCustomDomain(
+    """
+    ID of the custom domain to verify
+    """
+    id: String!
+  ): CustomDomain!
+
+  """
+  Delete a custom domain and all associated accounts.
+  """
+  deleteCustomDomain(
+    """
+    ID of the custom domain to delete
+    """
+    id: String!
+  ): Boolean!
+
+  """
+  Create an email account for a custom domain address.
+  Also creates a matching send profile automatically.
+  """
+  createCustomDomainAccount(
+    """
+    Custom domain account configuration
+    """
+    input: CreateCustomDomainAccountInput!
+  ): CustomDomainAccount!
+
+  """
+  Delete a custom domain account.
+  """
+  deleteCustomDomainAccount(
+    """
+    ID of the custom domain account to delete
+    """
+    id: String!
+  ): Boolean!
+
+  # Billing
   """
   Create a Stripe Checkout session to upgrade subscription.
   Returns the URL to redirect the user to.
@@ -2441,6 +2632,10 @@ type Mutation {
     Account tier to subscribe to
     """
     accountTier: AccountTier!
+    """
+    Domain tier to subscribe to
+    """
+    domainTier: DomainTier!
   ): String!
 
   """
@@ -2590,6 +2785,201 @@ input NukeOldEmailsInput {
   olderThan: Date
 }
 
+# ============ Custom Domains ============
+
+"""
+Verification status of a custom domain.
+"""
+enum CustomDomainStatus {
+  """
+  DNS records have been created but not yet verified
+  """
+  PENDING_VERIFICATION
+  """
+  All DNS records verified and domain is active
+  """
+  VERIFIED
+  """
+  Verification failed or domain was deactivated
+  """
+  FAILED
+}
+
+"""
+Type of DNS record required for domain verification.
+"""
+enum DnsRecordType {
+  CNAME
+  TXT
+  MX
+}
+
+"""
+Purpose of a DNS record in the verification process.
+"""
+enum DnsRecordPurpose {
+  """
+  DKIM signing key
+  """
+  DKIM
+  """
+  SPF sender policy
+  """
+  SPF
+  """
+  DMARC policy
+  """
+  DMARC
+  """
+  MX record for inbound email routing
+  """
+  MX_INBOUND
+}
+
+"""
+A custom domain configured for sending and receiving email.
+"""
+type CustomDomain implements BaseEntityProps {
+  """
+  Unique identifier for this custom domain
+  """
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  """
+  ID of the user who owns this domain
+  """
+  userId: String!
+  """
+  The domain name (e.g., "example.com")
+  """
+  domain: String!
+  """
+  Current verification status
+  """
+  status: CustomDomainStatus!
+  """
+  ARN of the SES identity (set after verification)
+  """
+  sesIdentityArn: String
+  """
+  DNS records required for verification
+  """
+  dnsRecords: [CustomDomainDnsRecord!]!
+  """
+  Email accounts configured under this domain
+  """
+  accounts: [CustomDomainAccount!]!
+}
+
+"""
+A DNS record that must be configured for domain verification.
+"""
+type CustomDomainDnsRecord implements BaseEntityProps {
+  """
+  Unique identifier
+  """
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  """
+  ID of the parent custom domain
+  """
+  customDomainId: String!
+  """
+  DNS record type (CNAME, TXT, MX)
+  """
+  recordType: DnsRecordType!
+  """
+  Purpose of this record (DKIM, SPF, DMARC, MX_INBOUND)
+  """
+  purpose: DnsRecordPurpose!
+  """
+  DNS record name/host
+  """
+  name: String!
+  """
+  DNS record value
+  """
+  value: String!
+  """
+  Whether this specific record has been verified
+  """
+  isVerified: Boolean!
+  """
+  When this record was last checked
+  """
+  lastCheckedAt: Date
+}
+
+"""
+An email account linked to a custom domain (e.g., blake@example.com).
+"""
+type CustomDomainAccount implements BaseEntityProps {
+  """
+  Unique identifier
+  """
+  id: String!
+  createdAt: Date
+  updatedAt: Date
+  """
+  ID of the parent custom domain
+  """
+  customDomainId: String!
+  """
+  The custom domain this account belongs to
+  """
+  customDomain: CustomDomain
+  """
+  Local part of the email address (e.g., "blake")
+  """
+  localPart: String!
+  """
+  The associated email account (for receiving)
+  """
+  emailAccount: EmailAccount
+  """
+  ID of the associated email account
+  """
+  emailAccountId: String
+  """
+  The associated send profile (for sending)
+  """
+  sendProfile: SendProfile
+  """
+  ID of the associated send profile
+  """
+  sendProfileId: String
+}
+
+"""
+Input for adding a new custom domain.
+"""
+input AddCustomDomainInput {
+  """
+  The domain name to add (e.g., "example.com")
+  """
+  domain: String!
+}
+
+"""
+Input for creating a custom domain email account.
+"""
+input CreateCustomDomainAccountInput {
+  """
+  ID of the custom domain
+  """
+  customDomainId: String!
+  """
+  Local part of the email address (e.g., "blake" for blake@example.com)
+  """
+  localPart: String!
+  """
+  Display name for the account
+  """
+  name: String!
+}
+
 # ============ Billing ============
 
 """
@@ -2632,6 +3022,28 @@ enum AccountTier {
   PRO
   """
   Enterprise tier - unlimited accounts
+  """
+  ENTERPRISE
+}
+
+"""
+Domain tier for billing. Each tier has a custom domain limit.
+"""
+enum DomainTier {
+  """
+  Free tier - 0 custom domains
+  """
+  FREE
+  """
+  Basic tier - 1 custom domain ($5/mo)
+  """
+  BASIC
+  """
+  Pro tier - 2 custom domains ($7/mo)
+  """
+  PRO
+  """
+  Enterprise tier - 5 custom domains ($10/mo)
   """
   ENTERPRISE
 }
@@ -2707,6 +3119,10 @@ type BillingSubscription implements BaseEntityProps {
   """
   accountTier: AccountTier!
   """
+  Current domain tier
+  """
+  domainTier: DomainTier!
+  """
   Storage limit in bytes for the current tier
   """
   storageLimitBytes: Float!
@@ -2714,6 +3130,10 @@ type BillingSubscription implements BaseEntityProps {
   Maximum number of email accounts allowed (-1 for unlimited)
   """
   accountLimit: Int!
+  """
+  Maximum number of custom domains allowed
+  """
+  domainLimit: Int!
   """
   Whether the subscription is valid for syncing emails
   """
@@ -2740,6 +3160,10 @@ type StorageUsage {
   Number of email accounts
   """
   accountCount: Int!
+  """
+  Number of custom domains
+  """
+  domainCount: Int!
   """
   Total size of email bodies in bytes
   """
@@ -2795,6 +3219,10 @@ type BillingInfo {
   """
   accountUsagePercent: Float!
   """
+  Domain usage as a percentage (0-100)
+  """
+  domainUsagePercent: Float!
+  """
   Whether the user has exceeded their storage limit
   """
   isStorageLimitExceeded: Boolean!
@@ -2802,6 +3230,10 @@ type BillingInfo {
   Whether the user has exceeded their account limit
   """
   isAccountLimitExceeded: Boolean!
+  """
+  Whether the user has exceeded their domain limit
+  """
+  isDomainLimitExceeded: Boolean!
   """
   Whether Stripe billing is configured on the server
   """

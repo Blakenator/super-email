@@ -11,7 +11,7 @@ React Native mobile application for SuperMail, built with Expo for iOS and Andro
 - 🎨 **Dark/Light Mode** - Automatic theme based on system preference
 - 👥 **Contacts** - Manage your address book
 - 💣 **Inbox Zero** - Bulk archive old emails with Nuke feature
-- ⚙️ **Full Settings** - Configure email accounts, SMTP, tags, and rules
+- ⚙️ **Full Settings** - Configure email accounts, send profiles, tags, and rules
 
 ## Prerequisites
 

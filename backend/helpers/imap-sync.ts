@@ -1,6 +1,7 @@
 import type { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { EmailAccount } from '../db/models/email-account.model.js';
+import { ImapAccountSettings } from '../db/models/imap-account-settings.model.js';
 import { Email, EmailFolder } from '../db/models/email.model.js';
 import { v4 as uuidv4 } from 'uuid';
 import { Op } from 'sequelize';
@@ -58,8 +59,9 @@ interface FolderSyncConfig {
  */
 export async function startAsyncSync(
   emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
 ): Promise<boolean> {
-  await emailAccount.reload();
+  await imapSettings.reload();
 
   const billingCheck = await checkBillingLimits(emailAccount.userId);
   if (!billingCheck.canSync) {
@@ -73,17 +75,17 @@ export async function startAsyncSync(
   }
 
   const needsHistoricalSync =
-    !emailAccount.historicalSyncLastAt && !emailAccount.historicalSyncComplete;
+    !imapSettings.historicalSyncLastAt && !imapSettings.historicalSyncComplete;
   const syncType: SyncType = needsHistoricalSync ? 'historical' : 'update';
   const fields = getSyncFields(syncType);
 
-  const existingSyncId = emailAccount[fields.syncIdField];
-  const existingExpiresAt = emailAccount[fields.expiresAtField];
+  const existingSyncId = imapSettings[fields.syncIdField];
+  const existingExpiresAt = imapSettings[fields.expiresAtField];
 
   if (existingSyncId) {
     if (isSyncExpired(existingExpiresAt)) {
       logger.info('IMAP', `${syncType} sync for ${emailAccount.email} has expired (syncId: ${existingSyncId}), starting new sync`);
-      await clearExpiredSync(emailAccount, syncType);
+      await clearExpiredSync(imapSettings, syncType);
     } else {
       logger.debug('IMAP', `${syncType} sync already in progress for ${emailAccount.email} (syncId: ${existingSyncId}), skipping`);
       return false;
@@ -92,7 +94,7 @@ export async function startAsyncSync(
 
   const syncId = uuidv4();
 
-  const started = await markSyncStarted(emailAccount, syncType, syncId);
+  const started = await markSyncStarted(imapSettings, syncType, syncId);
   if (!started) {
     logger.debug('IMAP', `${syncType} sync lost race for ${emailAccount.email}, another sync started first`);
     return false;
@@ -108,9 +110,9 @@ export async function startAsyncSync(
   });
 
   // Run sync in background (fire-and-forget)
-  syncEmailsFromImapAccount(emailAccount, syncId, syncType)
+  syncEmailsFromImapAccount(emailAccount, imapSettings, syncId, syncType)
     .then(async (result) => {
-      const updated = await markSyncCompleted(emailAccount, syncType, syncId, result);
+      const updated = await markSyncCompleted(imapSettings, syncType, syncId, result);
       if (!updated) {
         logger.info('IMAP', `${syncType} sync ${syncId} was superseded, not updating status`);
         return;
@@ -153,9 +155,9 @@ export async function startAsyncSync(
       // Clear status after a short delay
       setTimeout(async () => {
         try {
-          await emailAccount.reload();
-          if (!emailAccount[fields.syncIdField]) {
-            await emailAccount.update({
+          await imapSettings.reload();
+          if (!imapSettings[fields.syncIdField]) {
+            await imapSettings.update({
               [fields.progressField]: null,
               [fields.statusField]: null,
             });
@@ -168,7 +170,7 @@ export async function startAsyncSync(
     .catch(async (err) => {
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
 
-      await markSyncFailed(emailAccount, syncType, syncId, errorMsg);
+      await markSyncFailed(imapSettings, syncType, syncId, errorMsg);
       logger.error('IMAP', `${syncType} sync failed for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
 
       publishMailboxUpdate(emailAccount.userId, {
@@ -179,9 +181,9 @@ export async function startAsyncSync(
 
       setTimeout(async () => {
         try {
-          await emailAccount.reload();
-          if (!emailAccount[fields.syncIdField]) {
-            await emailAccount.update({
+          await imapSettings.reload();
+          if (!imapSettings[fields.syncIdField]) {
+            await imapSettings.update({
               [fields.statusField]: null,
             });
           }
@@ -200,6 +202,7 @@ export async function startAsyncSync(
 
 export async function syncEmailsFromImapAccount(
   emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncId: string,
   syncType: SyncType = 'update',
 ): Promise<SyncResult> {
@@ -210,25 +213,23 @@ export async function syncEmailsFromImapAccount(
     cancelled: false,
   };
 
-  const client = await createImapClient(emailAccount);
+  const client = await createImapClient(imapSettings);
   const expirationTracker = { lastUpdate: Date.now() };
   const fields = getSyncFields(syncType);
 
   try {
-    await emailAccount.update({
-      syncStatus: 'Connecting to server...',
+    await imapSettings.update({
       [fields.statusField]: 'Connecting to server...',
     });
-    await updateSyncExpiration(emailAccount, syncId, syncType);
+    await updateSyncExpiration(imapSettings, syncId, syncType);
 
-    await withRetry(() => client.connect(), `Connect to ${emailAccount.host}`);
-    logger.info('IMAP', `Connected to ${emailAccount.host}`);
+    await withRetry(() => client.connect(), `Connect to ${imapSettings.host}`);
+    logger.info('IMAP', `Connected to ${imapSettings.host}`);
 
-    await emailAccount.update({
-      syncStatus: 'Opening mailbox...',
+    await imapSettings.update({
       [fields.statusField]: 'Opening mailbox...',
     });
-    await updateSyncExpiration(emailAccount, syncId, syncType);
+    await updateSyncExpiration(imapSettings, syncId, syncType);
 
     const mailbox = await withRetry(
       () => client.mailboxOpen('INBOX'),
@@ -241,18 +242,17 @@ export async function syncEmailsFromImapAccount(
       return result;
     }
 
-    const isFullSync = syncType === 'historical' || !emailAccount.lastSyncedAt;
+    const isFullSync = syncType === 'historical' || !imapSettings.lastSyncedAt;
     const statusMsg = isFullSync
       ? 'Fetching message list (first sync)...'
       : 'Searching for new messages...';
 
-    await emailAccount.update({
-      syncStatus: statusMsg,
+    await imapSettings.update({
       [fields.statusField]: statusMsg,
     });
 
     // Sync INBOX
-    await syncFolderMessages(client, emailAccount, syncId, syncType, {
+    await syncFolderMessages(client, emailAccount, imapSettings, syncId, syncType, {
       folder: EmailFolder.INBOX,
       folderLabel: 'INBOX',
       resumeUidField: 'historicalSyncLastUidInbox',
@@ -294,6 +294,7 @@ export async function syncEmailsFromImapAccount(
 async function syncFolderMessages(
   client: ImapFlow,
   emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncId: string,
   syncType: SyncType,
   config: FolderSyncConfig,
@@ -301,16 +302,16 @@ async function syncFolderMessages(
   expirationTracker: { lastUpdate: number },
 ): Promise<void> {
   const fields = getSyncFields(syncType);
-  const isFullSync = syncType === 'historical' || !emailAccount.lastSyncedAt;
+  const isFullSync = syncType === 'historical' || !imapSettings.lastSyncedAt;
 
   if (isFullSync) {
-    await emailAccount.reload();
+    await imapSettings.reload();
     const isResuming =
       syncType === 'historical' &&
-      emailAccount[config.resumeUidField] !== null;
+      imapSettings[config.resumeUidField] !== null;
 
     const lastProcessedUid = isResuming
-      ? (emailAccount[config.resumeUidField] as number)
+      ? (imapSettings[config.resumeUidField] as number)
       : null;
 
     if (isResuming) {
@@ -342,11 +343,11 @@ async function syncFolderMessages(
     const totalRemaining = uidsToProcess.length;
 
     if (syncType === 'historical' && !isResuming) {
-      await emailAccount.update({ [config.totalField]: totalUids });
+      await imapSettings.update({ [config.totalField]: totalUids });
     }
 
     const savedTotal =
-      (emailAccount[config.totalField] as number | null) || totalUids;
+      (imapSettings[config.totalField] as number | null) || totalUids;
 
     logger.info('IMAP', `${emailAccount.email} ${config.folderLabel}: ${totalRemaining} messages to process`);
 
@@ -354,7 +355,7 @@ async function syncFolderMessages(
     let processedInSession = 0;
 
     for (let i = 0; i < uidsToProcess.length; i += BATCH_SIZE) {
-      if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
+      if (!(await shouldContinueSync(imapSettings, syncId, syncType))) {
         logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
         result.cancelled = true;
         break;
@@ -371,9 +372,7 @@ async function syncFolderMessages(
           Math.round((totalProcessed / Math.max(1, savedTotal)) * 100),
         );
         const progressMsg = `Processing batch ${batchNumber} (${result.synced + result.skipped} processed, ${result.synced} new)...`;
-        await emailAccount.update({
-          syncProgress: progress,
-          syncStatus: progressMsg,
+        await imapSettings.update({
           [fields.progressField]: progress,
           [fields.statusField]: progressMsg,
         });
@@ -381,7 +380,7 @@ async function syncFolderMessages(
 
       const now = Date.now();
       if (now - expirationTracker.lastUpdate > SYNC_EXPIRATION_UPDATE_INTERVAL * 1000) {
-        await updateSyncExpiration(emailAccount, syncId, syncType);
+        await updateSyncExpiration(imapSettings, syncId, syncType);
         expirationTracker.lastUpdate = now;
       }
 
@@ -399,7 +398,7 @@ async function syncFolderMessages(
       processedInSession += batchResult.synced + batchResult.skipped;
 
       if (syncType === 'historical') {
-        await emailAccount.update({
+        await imapSettings.update({
           [config.resumeUidField]: lowestUidInBatch,
         });
       }
@@ -408,20 +407,20 @@ async function syncFolderMessages(
     }
 
     if (syncType === 'historical' && !result.cancelled) {
-      await emailAccount.update({
+      await imapSettings.update({
         [config.resumeUidField]: null,
         [config.totalField]: null,
       });
       // Store uidNext so the first incremental sync can use UID-based search
-      await storeUidNext(client, emailAccount, config);
+      await storeUidNext(client, imapSettings, config);
       logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} historical sync completed, cleared resume point`);
     }
   } else {
     // Incremental sync — prefer UID-based search over date-based IMAP SINCE,
     // which is unreliable on some servers (date-only comparison, search index lag).
-    const sinceDate = new Date(emailAccount.lastSyncedAt!);
+    const sinceDate = new Date(imapSettings.lastSyncedAt!);
 
-    const storedUidNext = emailAccount[config.uidNextField];
+    const storedUidNext = imapSettings[config.uidNextField];
     let messageUids: number[];
 
     if (storedUidNext) {
@@ -445,14 +444,14 @@ async function syncFolderMessages(
 
     if (messageUids.length === 0) {
       // Still store uidNext even when nothing new so future syncs use UID path
-      await storeUidNext(client, emailAccount, config);
+      await storeUidNext(client, imapSettings, config);
       return;
     }
 
     const totalToProcess = messageUids.length;
 
     for (let i = 0; i < messageUids.length; i += BATCH_SIZE) {
-      if (!(await shouldContinueSync(emailAccount, syncId, syncType))) {
+      if (!(await shouldContinueSync(imapSettings, syncId, syncType))) {
         logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
         result.cancelled = true;
         break;
@@ -463,9 +462,7 @@ async function syncFolderMessages(
       if (config.reportProgress) {
         const progress = Math.round((i / totalToProcess) * 100);
         const progressMsg = `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`;
-        await emailAccount.update({
-          syncProgress: Math.min(99, progress),
-          syncStatus: progressMsg,
+        await imapSettings.update({
           [fields.progressField]: Math.min(99, progress),
           [fields.statusField]: progressMsg,
         });
@@ -473,7 +470,7 @@ async function syncFolderMessages(
 
       const now = Date.now();
       if (now - expirationTracker.lastUpdate > SYNC_EXPIRATION_UPDATE_INTERVAL * 1000) {
-        await updateSyncExpiration(emailAccount, syncId, syncType);
+        await updateSyncExpiration(imapSettings, syncId, syncType);
         expirationTracker.lastUpdate = now;
       }
 
@@ -493,7 +490,7 @@ async function syncFolderMessages(
     }
 
     if (!result.cancelled) {
-      await storeUidNext(client, emailAccount, config);
+      await storeUidNext(client, imapSettings, config);
     }
   }
 
@@ -548,14 +545,13 @@ async function syncSentFolder(
   }
 
   const sentStatusMsg = 'Syncing sent mail...';
-  await emailAccount.update({
-    syncStatus: sentStatusMsg,
+  await imapSettings.update({
     [fields.statusField]: sentStatusMsg,
   });
 
-  await updateSyncExpiration(emailAccount, syncId, syncType);
+  await updateSyncExpiration(imapSettings, syncId, syncType);
 
-  await syncFolderMessages(client, emailAccount, syncId, syncType, {
+  await syncFolderMessages(client, emailAccount, imapSettings, syncId, syncType, {
     folder: EmailFolder.SENT,
     folderLabel: 'SENT',
     resumeUidField: 'historicalSyncLastUidSent',
@@ -606,7 +602,7 @@ async function fetchRecentMessageUids(
  */
 async function storeUidNext(
   client: ImapFlow,
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   config: FolderSyncConfig,
 ): Promise<void> {
   const mailboxInfo = client.mailbox;
@@ -614,7 +610,7 @@ async function storeUidNext(
     ? (mailboxInfo as any).uidNext as number | undefined
     : undefined;
   if (uidNext) {
-    await emailAccount.update({ [config.uidNextField]: uidNext });
+    await imapSettings.update({ [config.uidNextField]: uidNext });
   }
 }
 

@@ -8,7 +8,8 @@
 
 import { Op } from 'sequelize';
 import { config } from '../config/env.js';
-import { EmailAccount } from '../db/models/email-account.model.js';
+import { EmailAccount, EmailAccountType } from '../db/models/email-account.model.js';
+import { ImapAccountSettings } from '../db/models/imap-account-settings.model.js';
 import { startAsyncSync } from './imap-sync.js';
 import { logger } from './logger.js';
 import { DateTime } from 'luxon';
@@ -23,23 +24,32 @@ let syncIntervalId: ReturnType<typeof setInterval> | null = null;
 async function findStaleEmailAccounts(): Promise<EmailAccount[]> {
   const { staleThresholdMinutes } = config.backgroundSync;
 
-  // Calculate the cutoff time - accounts synced before this are stale
   const cutoffTime = DateTime.now().minus({ minutes: staleThresholdMinutes });
 
   logger.info('BackgroundSync', `Cutoff time: ${cutoffTime.toISO()}`);
 
-  // Use lastSyncedAt (wall-clock time of last sync) for staleness checks.
+  // Only IMAP accounts use polling sync; custom domain accounts receive via SES/SQS.
+  // Staleness is determined by ImapAccountSettings.lastSyncedAt.
   return EmailAccount.findAll({
     where: {
-      historicalSyncComplete: true,
-      [Op.or]: [
-        { lastSyncedAt: null }, // Never synced
-        { lastSyncedAt: { [Op.lt]: cutoffTime.toJSDate() } }, // Synced before cutoff
-      ],
+      type: EmailAccountType.IMAP,
     },
+    include: [
+      {
+        model: ImapAccountSettings,
+        as: 'imapSettings',
+        required: true,
+        where: {
+          historicalSyncComplete: true,
+          [Op.or]: [
+            { lastSyncedAt: null },
+            { lastSyncedAt: { [Op.lt]: cutoffTime.toJSDate() } },
+          ],
+        },
+      },
+    ],
     order: [
-      // Prioritize accounts that have never been synced
-      ['lastSyncedAt', 'ASC NULLS FIRST'],
+      [{ model: ImapAccountSettings, as: 'imapSettings' }, 'lastSyncedAt', 'ASC NULLS FIRST'],
     ],
   });
 }
@@ -66,25 +76,32 @@ export async function runBackgroundSyncCycle(): Promise<{
     result.checked = staleAccounts.length;
 
     if (staleAccounts.length === 0) {
-      // Log diagnostic info to help debug why no accounts are eligible
       const allAccounts = await EmailAccount.findAll({
-        attributes: ['id', 'email', 'historicalSyncComplete', 'lastSyncedAt', 'historicalSyncLastAt'],
+        where: { type: EmailAccountType.IMAP },
+        include: [{
+          model: ImapAccountSettings,
+          as: 'imapSettings',
+          attributes: ['historicalSyncComplete', 'lastSyncedAt', 'historicalSyncLastAt'],
+        }],
+        attributes: ['id', 'email'],
       });
       if (allAccounts.length > 0) {
         const summary = allAccounts.map((a) => {
           const reasons: string[] = [];
-          if (!a.historicalSyncComplete) reasons.push('historicalSyncComplete=false');
-          if (a.lastSyncedAt) {
-            const ageMin = Math.round((Date.now() - new Date(a.lastSyncedAt).getTime()) / 60000);
+          const imap = a.imapSettings;
+          if (!imap) { reasons.push('no imapSettings'); return `${a.email}: ${reasons.join(', ')}`; }
+          if (!imap.historicalSyncComplete) reasons.push('historicalSyncComplete=false');
+          if (imap.lastSyncedAt) {
+            const ageMin = Math.round((Date.now() - new Date(imap.lastSyncedAt).getTime()) / 60000);
             reasons.push(`lastSyncedAt=${ageMin}m ago`);
           } else {
             reasons.push('lastSyncedAt=null');
           }
           return `${a.email}: ${reasons.join(', ')}`;
         });
-        logger.info('BackgroundSync', `No stale accounts found. ${allAccounts.length} account(s) in system: ${summary.join('; ')}`);
+        logger.info('BackgroundSync', `No stale accounts found. ${allAccounts.length} IMAP account(s) in system: ${summary.join('; ')}`);
       } else {
-        logger.info('BackgroundSync', 'No stale accounts found (0 accounts in system)');
+        logger.info('BackgroundSync', 'No stale accounts found (0 IMAP accounts in system)');
       }
       return result;
     }
@@ -98,7 +115,7 @@ export async function runBackgroundSyncCycle(): Promise<{
     // We don't await all of them - startAsyncSync runs in background
     for (const account of staleAccounts) {
       try {
-        const started = await startAsyncSync(account);
+        const started = await startAsyncSync(account, account.imapSettings!);
         if (started) {
           result.syncsStarted++;
           logger.info(
@@ -152,7 +169,7 @@ export async function runBackgroundSyncCycle(): Promise<{
  */
 async function repairHistoricalSyncFlags(): Promise<void> {
   try {
-    const [affectedCount] = await EmailAccount.update(
+    const [affectedCount] = await ImapAccountSettings.update(
       { historicalSyncComplete: true },
       {
         where: {
@@ -167,7 +184,7 @@ async function repairHistoricalSyncFlags(): Promise<void> {
     if (affectedCount > 0) {
       logger.info(
         'BackgroundSync',
-        `Repaired historicalSyncComplete flag for ${affectedCount} account(s)`,
+        `Repaired historicalSyncComplete flag for ${affectedCount} IMAP account(s)`,
       );
     }
   } catch (err) {

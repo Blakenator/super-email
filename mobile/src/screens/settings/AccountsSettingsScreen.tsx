@@ -52,7 +52,8 @@ export function AccountsSettingsScreen({ onAddAccount, onEditAccount }: Accounts
         </Text>
         <View style={styles.accountMeta}>
           <Text style={[styles.accountType, { color: theme.colors.textMuted }]}>
-            {account.accountType} • {account.host}
+            {account.type === 'CUSTOM_DOMAIN' ? 'Custom Domain' : account.imapSettings?.accountType ?? 'IMAP'}
+            {account.imapSettings?.host ? ` • ${account.imapSettings.host}` : ''}
           </Text>
           {account.isDefault && (
             <View style={[styles.defaultBadge, { backgroundColor: theme.colors.primary + '20' }]}>
@@ -62,7 +63,7 @@ export function AccountsSettingsScreen({ onAddAccount, onEditAccount }: Accounts
         </View>
       </View>
       <View style={styles.accountStatus}>
-        {(account.isHistoricalSyncing || account.isUpdateSyncing) ? (
+        {(account.imapSettings?.isHistoricalSyncing || account.imapSettings?.isUpdateSyncing) ? (
           <ActivityIndicator size="small" color={theme.colors.primary} />
         ) : (
           <Icon name="chevron-right" size="md" color={theme.colors.textMuted} />

@@ -1,5 +1,5 @@
 /**
- * Tests for createSmtpProfile mutation
+ * Tests for createSendProfile mutation
  *
  * Tests the REAL resolver by importing it via esmock to mock
  * helper module dependencies while keeping model stubs via sinon.
@@ -8,25 +8,43 @@
 import { expect } from 'chai';
 import sinon from 'sinon';
 import esmock from 'esmock';
-import { SmtpProfile } from '../../../db/models/index.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
 
-describe('createSmtpProfile mutation', () => {
-  let createSmtpProfile: any;
+describe('createSendProfile mutation', () => {
+  let createSendProfile: any;
   let storeSmtpCredentialsStub: sinon.SinonStub;
+  let sendProfileMock: Record<string, sinon.SinonStub>;
+  let smtpSettingsMock: Record<string, sinon.SinonStub>;
 
   beforeEach(async () => {
     storeSmtpCredentialsStub = sinon.stub().resolves();
 
+    sendProfileMock = {
+      update: sinon.stub().resolves([0]),
+      create: sinon.stub().resolves({ id: 'sp-default', userId: 'user-123' }),
+      findByPk: sinon.stub().resolves({ id: 'sp-default', userId: 'user-123' }),
+    };
+
+    smtpSettingsMock = {
+      create: sinon.stub().resolves({}),
+    };
+
     const mod = await esmock(
-      '../../../mutations/smtp-profile/createSmtpProfile.js',
+      '../../../mutations/send-profile/createSendProfile.js',
       {
+        '../../../db/models/index.js': {
+          SendProfile: sendProfileMock,
+          SmtpAccountSettings: smtpSettingsMock,
+        },
+        '../../../db/models/send-profile.model.js': {
+          SendProfileType: { SMTP: 'SMTP', CUSTOM_DOMAIN: 'CUSTOM_DOMAIN' },
+        },
         '../../../helpers/secrets.js': {
           storeSmtpCredentials: storeSmtpCredentialsStub,
         },
       },
     );
-    createSmtpProfile = mod.createSmtpProfile;
+    createSendProfile = mod.createSendProfile;
   });
 
   afterEach(() => {
@@ -34,13 +52,14 @@ describe('createSmtpProfile mutation', () => {
   });
 
   const validInput = {
+    type: 'SMTP',
     name: 'Test SMTP',
     email: 'test@gmail.com',
-    host: 'smtp.gmail.com',
-    port: 587,
-    username: 'test@gmail.com',
-    password: 'app-password-123',
-    useSsl: true,
+    smtpHost: 'smtp.gmail.com',
+    smtpPort: 587,
+    smtpUsername: 'test@gmail.com',
+    smtpPassword: 'app-password-123',
+    smtpUseSsl: true,
     isDefault: false,
   };
 
@@ -48,46 +67,51 @@ describe('createSmtpProfile mutation', () => {
     const context = createUnauthenticatedContext();
 
     try {
-      await createSmtpProfile(null, { input: validInput }, context);
+      await createSendProfile(null, { input: validInput }, context);
       expect.fail('Should have thrown');
     } catch (err: any) {
       expect(err.message).to.equal('Authentication required');
     }
   });
 
-  it('should create SMTP profile with valid input', async () => {
+  it('should create send profile and SMTP settings with valid input', async () => {
     const context = createMockContext({ userId: 'user-123' });
-    const mockProfile = { id: 'smtp-1', ...validInput, userId: 'user-123' };
+    const mockProfile = { id: 'sp-1', ...validInput, userId: 'user-123' };
 
-    const createStub = sinon.stub(SmtpProfile, 'create').resolves(mockProfile as any);
+    sendProfileMock.create.resolves(mockProfile);
+    sendProfileMock.findByPk.resolves(mockProfile);
 
-    const result = await createSmtpProfile(null, { input: validInput }, context);
+    const result = await createSendProfile(null, { input: validInput }, context);
 
-    expect(createStub.calledOnce).to.be.true;
-    const createArgs = createStub.firstCall.args[0] as any;
-    expect(createArgs.userId).to.equal('user-123');
-    expect(createArgs.name).to.equal('Test SMTP');
-    expect(createArgs.email).to.equal('test@gmail.com');
-    expect(createArgs.host).to.equal('smtp.gmail.com');
-    expect(createArgs.port).to.equal(587);
-    expect(createArgs.useSsl).to.equal(true);
-    expect(createArgs.isDefault).to.equal(false);
+    expect(sendProfileMock.create.calledOnce).to.be.true;
+    const profileArgs = sendProfileMock.create.firstCall.args[0] as any;
+    expect(profileArgs.userId).to.equal('user-123');
+    expect(profileArgs.name).to.equal('Test SMTP');
+    expect(profileArgs.email).to.equal('test@gmail.com');
+    expect(profileArgs.type).to.equal('SMTP');
+
+    expect(smtpSettingsMock.create.calledOnce).to.be.true;
+    const settingsArgs = smtpSettingsMock.create.firstCall.args[0] as any;
+    expect(settingsArgs.sendProfileId).to.equal('sp-1');
+    expect(settingsArgs.host).to.equal('smtp.gmail.com');
+    expect(settingsArgs.port).to.equal(587);
+
     expect(result).to.equal(mockProfile);
   });
 
   it('should unset previous defaults when isDefault is true', async () => {
     const context = createMockContext({ userId: 'user-123' });
     const input = { ...validInput, isDefault: true };
-    const mockProfile = { id: 'smtp-2', ...input, userId: 'user-123' };
+    const mockProfile = { id: 'sp-2', ...input, userId: 'user-123' };
 
-    const updateStub = sinon.stub(SmtpProfile, 'update').resolves([1] as any);
-    sinon.stub(SmtpProfile, 'create').resolves(mockProfile as any);
+    sendProfileMock.create.resolves(mockProfile);
+    sendProfileMock.findByPk.resolves(mockProfile);
 
-    await createSmtpProfile(null, { input }, context);
+    await createSendProfile(null, { input }, context);
 
-    expect(updateStub.calledOnce).to.be.true;
-    expect(updateStub.firstCall.args[0]).to.deep.equal({ isDefault: false });
-    expect(updateStub.firstCall.args[1]).to.deep.include({
+    expect(sendProfileMock.update.calledOnce).to.be.true;
+    expect(sendProfileMock.update.firstCall.args[0]).to.deep.equal({ isDefault: false });
+    expect(sendProfileMock.update.firstCall.args[1]).to.deep.include({
       where: { userId: 'user-123', isDefault: true },
     });
   });
@@ -95,42 +119,61 @@ describe('createSmtpProfile mutation', () => {
   it('should NOT unset defaults when isDefault is false', async () => {
     const context = createMockContext({ userId: 'user-123' });
     const input = { ...validInput, isDefault: false };
-    const mockProfile = { id: 'smtp-3', ...input, userId: 'user-123' };
+    const mockProfile = { id: 'sp-3', ...input, userId: 'user-123' };
 
-    const updateStub = sinon.stub(SmtpProfile, 'update').resolves([0] as any);
-    sinon.stub(SmtpProfile, 'create').resolves(mockProfile as any);
+    sendProfileMock.create.resolves(mockProfile);
+    sendProfileMock.findByPk.resolves(mockProfile);
 
-    await createSmtpProfile(null, { input }, context);
+    await createSendProfile(null, { input }, context);
 
-    expect(updateStub.called).to.be.false;
+    expect(sendProfileMock.update.called).to.be.false;
   });
 
   it('should store credentials in secrets manager', async () => {
     const context = createMockContext({ userId: 'user-123' });
-    const mockProfile = { id: 'smtp-4', ...validInput, userId: 'user-123' };
+    const mockProfile = { id: 'sp-4', ...validInput, userId: 'user-123' };
 
-    sinon.stub(SmtpProfile, 'create').resolves(mockProfile as any);
+    sendProfileMock.create.resolves(mockProfile);
+    sendProfileMock.findByPk.resolves(mockProfile);
 
-    await createSmtpProfile(null, { input: validInput }, context);
+    await createSendProfile(null, { input: validInput }, context);
 
     expect(storeSmtpCredentialsStub.calledOnce).to.be.true;
-    expect(storeSmtpCredentialsStub.firstCall.args[0]).to.equal('smtp-4');
+    expect(storeSmtpCredentialsStub.firstCall.args[0]).to.equal('sp-4');
     expect(storeSmtpCredentialsStub.firstCall.args[1]).to.deep.equal({
       username: 'test@gmail.com',
       password: 'app-password-123',
     });
   });
 
+  it('should throw when SMTP fields are missing for SMTP type', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    const input = {
+      type: 'SMTP',
+      name: 'Missing SMTP Fields',
+      email: 'test@gmail.com',
+      isDefault: false,
+    };
+
+    try {
+      await createSendProfile(null, { input }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.include('required for SMTP');
+    }
+  });
+
   it('should default isDefault to false via nullish coalescing', async () => {
     const context = createMockContext({ userId: 'user-123' });
     const input = { ...validInput, isDefault: undefined };
-    const mockProfile = { id: 'smtp-5', userId: 'user-123' };
+    const mockProfile = { id: 'sp-5', userId: 'user-123' };
 
-    const createStub = sinon.stub(SmtpProfile, 'create').resolves(mockProfile as any);
+    sendProfileMock.create.resolves(mockProfile);
+    sendProfileMock.findByPk.resolves(mockProfile);
 
-    await createSmtpProfile(null, { input }, context);
+    await createSendProfile(null, { input }, context);
 
-    const createArgs = createStub.firstCall.args[0] as any;
+    const createArgs = sendProfileMock.create.firstCall.args[0] as any;
     expect(createArgs.isDefault).to.equal(false);
   });
 });

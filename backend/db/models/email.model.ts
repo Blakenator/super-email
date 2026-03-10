@@ -14,8 +14,8 @@ import {
 // - Type-only import for type annotations (avoids __metadata circular ref)
 import { EmailAccount } from './email-account.model.js';
 import type { EmailAccount as EmailAccountType } from './email-account.model.js';
-import { SmtpProfile } from './smtp-profile.model.js';
-import type { SmtpProfile as SmtpProfileType } from './smtp-profile.model.js';
+import { SendProfile } from './send-profile.model.js';
+import type { SendProfile as SendProfileType } from './send-profile.model.js';
 import { Tag } from './tag.model.js';
 import type { Tag as TagType } from './tag.model.js';
 import { EmailTag } from './email-tag.model.js';
@@ -71,12 +71,12 @@ export class Email extends Model {
   @BelongsTo(() => EmailAccount, { onDelete: 'CASCADE' })
   declare emailAccount?: EmailAccountType;
 
-  @ForeignKey(() => SmtpProfile)
+  @ForeignKey(() => SendProfile)
   @Column({ type: DataType.UUID, allowNull: true })
-  declare smtpProfileId: string | null;
+  declare sendProfileId: string | null;
 
-  @BelongsTo(() => SmtpProfile)
-  declare smtpProfile?: SmtpProfileType | null;
+  @BelongsTo(() => SendProfile)
+  declare sendProfile?: SendProfileType | null;
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare messageId: string;

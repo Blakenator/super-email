@@ -61,3 +61,24 @@ export const ACCOUNT_LIMITS: Record<AccountTier, number> = {
   [AccountTier.PRO]: 5,
   [AccountTier.ENTERPRISE]: -1, // -1 means unlimited
 };
+
+/**
+ * Domain tier for billing
+ * Each tier has a custom domain limit
+ */
+export enum DomainTier {
+  FREE = 'free', // 0 domains
+  BASIC = 'basic', // 1 domain ($5/mo)
+  PRO = 'pro', // 2 domains ($7/mo)
+  ENTERPRISE = 'enterprise', // 5 domains ($10/mo)
+}
+
+/**
+ * Domain limits for each tier
+ */
+export const DOMAIN_LIMITS: Record<DomainTier, number> = {
+  [DomainTier.FREE]: 0,
+  [DomainTier.BASIC]: 1,
+  [DomainTier.PRO]: 2,
+  [DomainTier.ENTERPRISE]: 5,
+};

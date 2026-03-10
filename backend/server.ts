@@ -27,7 +27,7 @@ import { QueryResolvers } from './queries/index.js';
 import { MutationResolvers } from './mutations/index.js';
 import { logger } from './helpers/logger.js';
 import { verifyToken } from './helpers/auth.js';
-import { pubSub, MAILBOX_UPDATES } from './helpers/pubsub.js';
+import { pubSub, MAILBOX_UPDATES, publishMailboxUpdate } from './helpers/pubsub.js';
 import {
   startIdleForUser,
   stopIdleForUser,
@@ -40,6 +40,9 @@ import {
 } from './helpers/background-sync.js';
 import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
+import { parseAndStoreCustomEmail } from './helpers/custom-email-parser.js';
+import { sendNewEmailNotifications } from './helpers/push-notifications.js';
+import { EmailAccountType } from './db/models/email-account.model.js';
 import { setupBillingDatabase } from './db/setup-billing.js';
 import { runMigrations } from './db/migrations/migrator.js';
 import { API_ROUTES } from '@main/common';
@@ -48,7 +51,7 @@ import { API_ROUTES } from '@main/common';
 import {
   Email as DefaultEmail,
   EmailAccount as DefaultEmailAccount,
-  SmtpProfile as DefaultSmtpProfile,
+  SendProfile as DefaultSendProfile,
   AuthenticationMethod as DefaultAuthMethod,
   Tag as DefaultTag,
   EmailTag as DefaultEmailTag,
@@ -67,7 +70,7 @@ export interface ServerDependencies {
   models: {
     Email: ModelStatic<Model>;
     EmailAccount: ModelStatic<Model>;
-    SmtpProfile: ModelStatic<Model>;
+    SendProfile: ModelStatic<Model>;
     AuthenticationMethod: ModelStatic<Model>;
     Tag: ModelStatic<Model>;
     EmailTag: ModelStatic<Model>;
@@ -100,7 +103,7 @@ export function getDefaultDependencies(): ServerDependencies {
     models: {
       Email: DefaultEmail,
       EmailAccount: DefaultEmailAccount,
-      SmtpProfile: DefaultSmtpProfile,
+      SendProfile: DefaultSendProfile,
       AuthenticationMethod: DefaultAuthMethod,
       Tag: DefaultTag,
       EmailTag: DefaultEmailTag,
@@ -245,8 +248,8 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
         });
         return accounts.map((a) => a.get({ plain: true })) as any;
       },
-      smtpProfiles: async (parent) => {
-        const profiles = await models.SmtpProfile.findAll({
+      sendProfiles: async (parent) => {
+        const profiles = await models.SendProfile.findAll({
           where: { userId: parent.id },
           order: [['createdAt', 'DESC']],
         });
@@ -260,7 +263,7 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
         return methods.map((m) => m.get({ plain: true })) as any;
       },
     },
-    EmailAccount: {
+    ImapAccountSettings: {
       isHistoricalSyncing: (parent: any) => !!parent.historicalSyncId,
       isUpdateSyncing: (parent: any) => !!parent.updateSyncId,
     },
@@ -570,16 +573,17 @@ export async function createServer(
     logger.info('Server', 'Apollo Server started');
   }
 
-  // Sync database (optional)
+  // Database setup (optional)
   if (!deps.skipDbSync) {
-    // Clean up old materialized view if it exists (we now use a table)
     await setupBillingDatabase();
 
+    // Disabled in favour of explicit SQL migrations for production.
+    // Still used for local dev and integration tests to bootstrap tables:
     await deps.sequelize.sync({ alter: true });
     if (deps.enableLogging) {
       logger.info('Database', 'Database synchronized');
     }
-    
+
     // Run any pending SQL migrations
     try {
       await runMigrations(deps.sequelize);
@@ -588,8 +592,6 @@ export async function createServer(
       }
     } catch (migrationError) {
       logger.error('Database', 'Migration failed', migrationError);
-      // Don't throw - allow server to continue if migrations fail
-      // Critical migrations should be verified separately
     }
   }
 
@@ -655,6 +657,72 @@ export async function createServer(
       });
     } catch (error: any) {
       logger.error('Internal API', `Trigger sync failed: ${error.message}`);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Internal endpoint for Lambda callback when a new custom domain email arrives
+  app.post('/api/internal/new-custom-email', express.json({ limit: '25mb' }), async (req, res) => {
+    const internalToken = req.headers['x-internal-token'];
+    const expectedToken = config.internalApiToken;
+
+    if (!expectedToken) {
+      return res.status(503).json({ error: 'Internal API not configured' });
+    }
+    if (internalToken !== expectedToken) {
+      return res.status(401).json({ error: 'Invalid internal token' });
+    }
+
+    const {
+      rawEmail,
+      emailAccountId: providedAccountId,
+      recipientAddress,
+      userId: providedUserId,
+    } = req.body;
+
+    if (!rawEmail || !recipientAddress) {
+      return res.status(400).json({
+        error: 'Missing required fields: rawEmail (base64), recipientAddress',
+      });
+    }
+
+    try {
+      let emailAccountId = providedAccountId as string | undefined;
+      let userId = providedUserId as string | undefined;
+
+      // Look up the account by recipient address if not explicitly provided
+      if (!emailAccountId || !userId) {
+        const account = await DefaultEmailAccount.findOne({
+          where: { email: recipientAddress, type: EmailAccountType.CUSTOM_DOMAIN },
+        });
+        if (!account) {
+          return res.status(404).json({
+            error: `No custom domain account found for ${recipientAddress}`,
+          });
+        }
+        emailAccountId = (account as any).id;
+        userId = (account as any).userId;
+      }
+
+      const rawBuffer = Buffer.from(rawEmail, 'base64');
+      const result = await parseAndStoreCustomEmail(rawBuffer, emailAccountId!, recipientAddress);
+
+      const savedEmail = await deps.models.Email.findByPk(result.emailId);
+      if (savedEmail) {
+        await sendNewEmailNotifications(userId!, [savedEmail], recipientAddress);
+
+        publishMailboxUpdate(userId!, {
+          type: 'NEW_EMAILS',
+          emailAccountId: emailAccountId!,
+          emails: [savedEmail],
+          message: `New email from ${result.fromAddress}`,
+        });
+      }
+
+      logger.info('Internal API', `Custom email processed: ${result.emailId} for ${recipientAddress}`);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      logger.error('Internal API', `Custom email processing failed: ${error.message}`);
       res.status(500).json({ error: error.message });
     }
   });

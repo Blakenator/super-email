@@ -3,7 +3,8 @@ import {
   EmailFolder,
   MailRule,
   EmailTag,
-  SmtpProfile,
+  SendProfile,
+  SmtpAccountSettings,
   Tag,
 } from '../db/models/index.js';
 import { Op, literal } from 'sequelize';
@@ -198,22 +199,22 @@ export async function applyRuleActions(
   // Forward email
   if (actions.forwardTo) {
     try {
-      // Get a default SMTP profile
-      const smtpProfile = await SmtpProfile.findOne({
+      const sendProfile = await SendProfile.findOne({
         where: { userId, isDefault: true },
+        include: [{ model: SmtpAccountSettings, as: 'smtpSettings' }],
       });
 
-      if (smtpProfile) {
+      if (sendProfile) {
         const forwardText = `---------- Forwarded message ----------\nFrom: ${email.fromName || email.fromAddress} <${email.fromAddress}>\nDate: ${email.receivedAt}\nSubject: ${email.subject}\nTo: ${email.toAddresses.join(', ')}\n\n${email.textBody || ''}`;
 
-        await sendEmail(smtpProfile, {
+        await sendEmail(sendProfile, {
           to: actions.forwardTo.split(',').map((e) => e.trim()),
           subject: `Fwd: ${email.subject}`,
           text: forwardText,
           html: email.htmlBody || undefined,
         });
       } else {
-        logger.warn('RuleMatcher', `Cannot forward email ${email.id}: no default SMTP profile found for user ${userId}`);
+        logger.warn('RuleMatcher', `Cannot forward email ${email.id}: no default send profile found for user ${userId}`);
       }
     } catch (err) {
       logger.error('RuleMatcher', `Failed to forward email ${email.id}`, { forwardTo: actions.forwardTo, error: err instanceof Error ? err.message : err });

@@ -33,6 +33,12 @@ export enum AccountTier {
   Pro = 'PRO'
 }
 
+/** Input for adding a new custom domain. */
+export type AddCustomDomainInput = {
+  /** The domain name to add (e.g., "example.com") */
+  domain: Scalars['String']['input'];
+};
+
 /** Input for adding an email address to an existing contact. */
 export type AddEmailToContactInput = {
   /** ID of the contact to add the email to */
@@ -162,10 +168,14 @@ export type BillingInfo = {
   __typename?: 'BillingInfo';
   /** Account usage as a percentage (0-100, 0 for unlimited) */
   accountUsagePercent: Scalars['Float']['output'];
+  /** Domain usage as a percentage (0-100) */
+  domainUsagePercent: Scalars['Float']['output'];
   /** Whether the user has a Stripe customer ID (required for paid plans) */
   hasStripeCustomer: Scalars['Boolean']['output'];
   /** Whether the user has exceeded their account limit */
   isAccountLimitExceeded: Scalars['Boolean']['output'];
+  /** Whether the user has exceeded their domain limit */
+  isDomainLimitExceeded: Scalars['Boolean']['output'];
   /** Whether the user has exceeded their storage limit */
   isStorageLimitExceeded: Scalars['Boolean']['output'];
   /** Whether Stripe billing is configured on the server */
@@ -193,6 +203,10 @@ export type BillingSubscription = BaseEntityProps & {
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** When the current billing period ends */
   currentPeriodEnd?: Maybe<Scalars['Date']['output']>;
+  /** Maximum number of custom domains allowed */
+  domainLimit: Scalars['Int']['output'];
+  /** Current domain tier */
+  domainTier: DomainTier;
   /** Unique identifier for this subscription */
   id: Scalars['String']['output'];
   /** Whether the subscription is valid for syncing emails */
@@ -262,8 +276,8 @@ export type ComposeEmailInput = {
   htmlBody?: InputMaybe<Scalars['String']['input']>;
   /** Message-ID of email being replied to (for threading) */
   inReplyTo?: InputMaybe<Scalars['String']['input']>;
-  /** ID of the SMTP profile to use for sending */
-  smtpProfileId: Scalars['String']['input'];
+  /** ID of the send profile to use for sending */
+  sendProfileId: Scalars['String']['input'];
   /** Email subject line */
   subject: Scalars['String']['input'];
   /** Plain text body content */
@@ -353,30 +367,50 @@ export type CreateContactInput = {
   phone?: InputMaybe<Scalars['String']['input']>;
 };
 
-/** Input for creating a new email account. Requires all connection details. */
-export type CreateEmailAccountInput = {
-  /** Protocol type (IMAP or POP3) */
-  accountType: EmailAccountType;
-  /** ID of the default SMTP profile for sending */
-  defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
-  /** Email address */
-  email: Scalars['String']['input'];
-  /** IMAP/POP3 server hostname */
-  host: Scalars['String']['input'];
-  /** Whether to set this as the default account */
-  isDefault?: InputMaybe<Scalars['Boolean']['input']>;
+/** Input for creating a custom domain email account. */
+export type CreateCustomDomainAccountInput = {
+  /** ID of the custom domain */
+  customDomainId: Scalars['String']['input'];
+  /** Local part of the email address (e.g., "blake" for blake@example.com) */
+  localPart: Scalars['String']['input'];
   /** Display name for the account */
   name: Scalars['String']['input'];
-  /** Password or app-specific password for authentication */
-  password: Scalars['String']['input'];
-  /** Server port number */
-  port: Scalars['Int']['input'];
+};
+
+/**
+ * Input for creating a new email account.
+ * For IMAP accounts, provide imapHost/imapPort/etc. fields.
+ * For CUSTOM_DOMAIN accounts, provide customDomainId and localPart.
+ */
+export type CreateEmailAccountInput = {
+  /** ID of the custom domain (required for CUSTOM_DOMAIN type) */
+  customDomainId?: InputMaybe<Scalars['String']['input']>;
+  /** ID of the default send profile for sending */
+  defaultSendProfileId?: InputMaybe<Scalars['String']['input']>;
+  /** Email address */
+  email: Scalars['String']['input'];
+  /** Protocol type - IMAP or POP3 (required for IMAP type) */
+  imapAccountType?: InputMaybe<ImapAccountType>;
+  /** IMAP/POP3 server hostname (required for IMAP type) */
+  imapHost?: InputMaybe<Scalars['String']['input']>;
+  /** Password for authentication (required for IMAP type) */
+  imapPassword?: InputMaybe<Scalars['String']['input']>;
+  /** Server port number (required for IMAP type) */
+  imapPort?: InputMaybe<Scalars['Int']['input']>;
+  /** Whether to use SSL/TLS (required for IMAP type) */
+  imapUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Username for authentication (required for IMAP type) */
+  imapUsername?: InputMaybe<Scalars['String']['input']>;
+  /** Whether to set this as the default account */
+  isDefault?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Local part of the email address, e.g. "blake" for blake@example.com (required for CUSTOM_DOMAIN type) */
+  localPart?: InputMaybe<Scalars['String']['input']>;
+  /** Display name for the account */
+  name: Scalars['String']['input'];
   /** External provider ID for OAuth-linked accounts */
   providerId?: InputMaybe<Scalars['String']['input']>;
-  /** Whether to use SSL/TLS */
-  useSsl: Scalars['Boolean']['input'];
-  /** Username for authentication (often the email address) */
-  username: Scalars['String']['input'];
+  /** Account type (IMAP or CUSTOM_DOMAIN) */
+  type: EmailAccountType;
 };
 
 /** Input for creating a new mail rule. */
@@ -399,28 +433,38 @@ export type CreateMailRuleInput = {
   stopProcessing?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
-/** Input for creating a new SMTP profile. */
-export type CreateSmtpProfileInput = {
+/**
+ * Input for creating a new send profile.
+ * For SMTP profiles, provide smtpHost/smtpPort/etc. fields.
+ * For CUSTOM_DOMAIN profiles, provide customDomainId and localPart.
+ */
+export type CreateSendProfileInput = {
   /** Optional display name alias */
   alias?: InputMaybe<Scalars['String']['input']>;
+  /** ID of the custom domain (required for CUSTOM_DOMAIN type) */
+  customDomainId?: InputMaybe<Scalars['String']['input']>;
   /** The "from" email address */
   email: Scalars['String']['input'];
-  /** SMTP server hostname */
-  host: Scalars['String']['input'];
   /** Whether to set as default profile */
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Local part of the email, e.g. "blake" (required for CUSTOM_DOMAIN type) */
+  localPart?: InputMaybe<Scalars['String']['input']>;
   /** Display name for the profile */
   name: Scalars['String']['input'];
-  /** Password for SMTP authentication */
-  password: Scalars['String']['input'];
-  /** SMTP server port */
-  port: Scalars['Int']['input'];
   /** External provider ID */
   providerId?: InputMaybe<Scalars['String']['input']>;
-  /** Whether to use SSL/TLS */
-  useSsl: Scalars['Boolean']['input'];
-  /** Username for SMTP authentication */
-  username: Scalars['String']['input'];
+  /** SMTP server hostname (required for SMTP type) */
+  smtpHost?: InputMaybe<Scalars['String']['input']>;
+  /** Password for SMTP authentication (required for SMTP type) */
+  smtpPassword?: InputMaybe<Scalars['String']['input']>;
+  /** SMTP server port (required for SMTP type) */
+  smtpPort?: InputMaybe<Scalars['Int']['input']>;
+  /** Whether to use SSL/TLS (required for SMTP type) */
+  smtpUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Username for SMTP authentication (required for SMTP type) */
+  smtpUsername?: InputMaybe<Scalars['String']['input']>;
+  /** Profile type (SMTP or CUSTOM_DOMAIN) */
+  type: SendProfileType;
 };
 
 /** Input for creating a new tag. */
@@ -432,6 +476,114 @@ export type CreateTagInput = {
   /** Display name for the tag */
   name: Scalars['String']['input'];
 };
+
+/** A custom domain configured for sending and receiving email. */
+export type CustomDomain = BaseEntityProps & {
+  __typename?: 'CustomDomain';
+  /** Email accounts configured under this domain */
+  accounts: Array<CustomDomainAccount>;
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** DNS records required for verification */
+  dnsRecords: Array<CustomDomainDnsRecord>;
+  /** The domain name (e.g., "example.com") */
+  domain: Scalars['String']['output'];
+  /** Unique identifier for this custom domain */
+  id: Scalars['String']['output'];
+  /** ARN of the SES identity (set after verification) */
+  sesIdentityArn?: Maybe<Scalars['String']['output']>;
+  /** Current verification status */
+  status: CustomDomainStatus;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the user who owns this domain */
+  userId: Scalars['String']['output'];
+};
+
+/** An email account linked to a custom domain (e.g., blake@example.com). */
+export type CustomDomainAccount = BaseEntityProps & {
+  __typename?: 'CustomDomainAccount';
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** The custom domain this account belongs to */
+  customDomain?: Maybe<CustomDomain>;
+  /** ID of the parent custom domain */
+  customDomainId: Scalars['String']['output'];
+  /** The associated email account (for receiving) */
+  emailAccount?: Maybe<EmailAccount>;
+  /** ID of the associated email account */
+  emailAccountId?: Maybe<Scalars['String']['output']>;
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** Local part of the email address (e.g., "blake") */
+  localPart: Scalars['String']['output'];
+  /** The associated send profile (for sending) */
+  sendProfile?: Maybe<SendProfile>;
+  /** ID of the associated send profile */
+  sendProfileId?: Maybe<Scalars['String']['output']>;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+};
+
+/** A DNS record that must be configured for domain verification. */
+export type CustomDomainDnsRecord = BaseEntityProps & {
+  __typename?: 'CustomDomainDnsRecord';
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the parent custom domain */
+  customDomainId: Scalars['String']['output'];
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** Whether this specific record has been verified */
+  isVerified: Scalars['Boolean']['output'];
+  /** When this record was last checked */
+  lastCheckedAt?: Maybe<Scalars['Date']['output']>;
+  /** DNS record name/host */
+  name: Scalars['String']['output'];
+  /** Purpose of this record (DKIM, SPF, DMARC, MX_INBOUND) */
+  purpose: DnsRecordPurpose;
+  /** DNS record type (CNAME, TXT, MX) */
+  recordType: DnsRecordType;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** DNS record value */
+  value: Scalars['String']['output'];
+};
+
+/** Verification status of a custom domain. */
+export enum CustomDomainStatus {
+  /** Verification failed or domain was deactivated */
+  Failed = 'FAILED',
+  /** DNS records have been created but not yet verified */
+  PendingVerification = 'PENDING_VERIFICATION',
+  /** All DNS records verified and domain is active */
+  Verified = 'VERIFIED'
+}
+
+/** Purpose of a DNS record in the verification process. */
+export enum DnsRecordPurpose {
+  /** DKIM signing key */
+  Dkim = 'DKIM',
+  /** DMARC policy */
+  Dmarc = 'DMARC',
+  /** MX record for inbound email routing */
+  MxInbound = 'MX_INBOUND',
+  /** SPF sender policy */
+  Spf = 'SPF'
+}
+
+/** Type of DNS record required for domain verification. */
+export enum DnsRecordType {
+  Cname = 'CNAME',
+  Mx = 'MX',
+  Txt = 'TXT'
+}
+
+/** Domain tier for billing. Each tier has a custom domain limit. */
+export enum DomainTier {
+  /** Basic tier - 1 custom domain ($5/mo) */
+  Basic = 'BASIC',
+  /** Enterprise tier - 5 custom domains ($10/mo) */
+  Enterprise = 'ENTERPRISE',
+  /** Free tier - 0 custom domains */
+  Free = 'FREE',
+  /** Pro tier - 2 custom domains ($7/mo) */
+  Pro = 'PRO'
+}
 
 /** An email message. Can be received, sent, or a draft. */
 export type Email = BaseEntityProps & {
@@ -480,10 +632,10 @@ export type Email = BaseEntityProps & {
   receivedAt: Scalars['Date']['output'];
   /** List of Message-IDs in the email thread */
   references?: Maybe<Array<Scalars['String']['output']>>;
-  /** The SMTP profile used to send this email */
-  smtpProfile?: Maybe<SmtpProfile>;
-  /** ID of the SMTP profile used to send (for sent emails) */
-  smtpProfileId?: Maybe<Scalars['String']['output']>;
+  /** The send profile used to send this email */
+  sendProfile?: Maybe<SendProfile>;
+  /** ID of the send profile used to send (for sent emails) */
+  sendProfileId?: Maybe<Scalars['String']['output']>;
   /** Email subject line */
   subject: Scalars['String']['output'];
   /** Tags/labels applied to this email */
@@ -505,63 +657,43 @@ export type Email = BaseEntityProps & {
 };
 
 /**
- * An email account configured for receiving emails via IMAP or POP3.
- * Each user can have multiple email accounts from different providers.
+ * An email account configured for receiving emails.
+ * Can be IMAP-based (external server) or custom domain (SES-based).
  */
 export type EmailAccount = BaseEntityProps & {
   __typename?: 'EmailAccount';
-  /** Protocol type (IMAP or POP3) */
-  accountType: EmailAccountType;
   /** Timestamp when the account was added */
   createdAt?: Maybe<Scalars['Date']['output']>;
-  /** The default SMTP profile object for sending emails */
-  defaultSmtpProfile?: Maybe<SmtpProfile>;
-  /** ID of the default SMTP profile for sending from this account */
-  defaultSmtpProfileId?: Maybe<Scalars['String']['output']>;
+  /** The default send profile object for sending emails */
+  defaultSendProfile?: Maybe<SendProfile>;
+  /** ID of the default send profile for sending from this account */
+  defaultSendProfileId?: Maybe<Scalars['String']['output']>;
   /** Email address for this account */
   email: Scalars['String']['output'];
-  /** Timestamp of the last historical sync */
-  historicalSyncLastAt?: Maybe<Scalars['Date']['output']>;
-  /** Progress percentage (0-100) during historical sync */
-  historicalSyncProgress?: Maybe<Scalars['Int']['output']>;
-  /** Human-readable status message during historical sync */
-  historicalSyncStatus?: Maybe<Scalars['String']['output']>;
-  /** IMAP/POP3 server hostname (e.g., "imap.gmail.com") */
-  host: Scalars['String']['output'];
   /** Unique identifier for this email account */
   id: Scalars['String']['output'];
+  /** IMAP-specific settings (null for custom domain accounts) */
+  imapSettings?: Maybe<ImapAccountSettings>;
   /** Whether this is the user's default/primary email account */
   isDefault: Scalars['Boolean']['output'];
-  /** Whether a historical sync (initial import) is in progress */
-  isHistoricalSyncing: Scalars['Boolean']['output'];
-  /** Whether an update sync (new emails) is in progress */
-  isUpdateSyncing: Scalars['Boolean']['output'];
-  /** Timestamp of the last successful sync */
-  lastSyncedAt?: Maybe<Scalars['Date']['output']>;
   /** Display name for this account (e.g., "Work Gmail") */
   name: Scalars['String']['output'];
-  /** Server port number (e.g., 993 for IMAP with SSL) */
-  port: Scalars['Int']['output'];
   /** External provider ID (for OAuth-linked accounts like Google Workspace) */
   providerId?: Maybe<Scalars['String']['output']>;
-  /** Progress percentage (0-100) during update sync */
-  updateSyncProgress?: Maybe<Scalars['Int']['output']>;
-  /** Human-readable status message during update sync */
-  updateSyncStatus?: Maybe<Scalars['String']['output']>;
+  /** Account type (IMAP or CUSTOM_DOMAIN) */
+  type: EmailAccountType;
   /** Timestamp when the account was last modified */
   updatedAt?: Maybe<Scalars['Date']['output']>;
-  /** Whether to use SSL/TLS encryption */
-  useSsl: Scalars['Boolean']['output'];
   /** ID of the user who owns this account */
   userId: Scalars['String']['output'];
 };
 
-/** Type of email receiving protocol. */
+/** Type of email account. */
 export enum EmailAccountType {
-  /** IMAP protocol - supports folder sync and IDLE for real-time updates */
-  Imap = 'IMAP',
-  /** POP3 protocol - download-and-delete model */
-  Pop3 = 'POP3'
+  /** Custom domain account - receives email via SES */
+  CustomDomain = 'CUSTOM_DOMAIN',
+  /** IMAP-based account - connects to an external IMAP/POP3 server */
+  Imap = 'IMAP'
 }
 
 /** Email folder categories. Maps to standard IMAP folder semantics. */
@@ -608,8 +740,8 @@ export type ForwardEmailInput = {
   emailId: Scalars['String']['input'];
   /** Whether to include original attachments (default: true) */
   includeAttachments?: InputMaybe<Scalars['Boolean']['input']>;
-  /** SMTP profile to use for sending */
-  smtpProfileId: Scalars['String']['input'];
+  /** Send profile to use for sending */
+  sendProfileId: Scalars['String']['input'];
   /** To recipient addresses */
   toAddresses: Array<Scalars['String']['input']>;
 };
@@ -655,6 +787,52 @@ export type GetEmailsInput = {
   /** Advanced filter: To address contains */
   toContains?: InputMaybe<Scalars['String']['input']>;
 };
+
+/**
+ * IMAP/POP3 specific settings for an email account.
+ * Only present when the parent EmailAccount has type IMAP.
+ */
+export type ImapAccountSettings = BaseEntityProps & {
+  __typename?: 'ImapAccountSettings';
+  /** Protocol type (IMAP or POP3) */
+  accountType: ImapAccountType;
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the parent email account */
+  emailAccountId: Scalars['String']['output'];
+  /** Timestamp of the last historical sync */
+  historicalSyncLastAt?: Maybe<Scalars['Date']['output']>;
+  /** Progress percentage (0-100) during historical sync */
+  historicalSyncProgress?: Maybe<Scalars['Int']['output']>;
+  /** Human-readable status message during historical sync */
+  historicalSyncStatus?: Maybe<Scalars['String']['output']>;
+  /** IMAP/POP3 server hostname (e.g., "imap.gmail.com") */
+  host: Scalars['String']['output'];
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** Whether a historical sync (initial import) is in progress */
+  isHistoricalSyncing: Scalars['Boolean']['output'];
+  /** Whether an update sync (new emails) is in progress */
+  isUpdateSyncing: Scalars['Boolean']['output'];
+  /** Timestamp of the last successful sync */
+  lastSyncedAt?: Maybe<Scalars['Date']['output']>;
+  /** Server port number (e.g., 993 for IMAP with SSL) */
+  port: Scalars['Int']['output'];
+  /** Progress percentage (0-100) during update sync */
+  updateSyncProgress?: Maybe<Scalars['Int']['output']>;
+  /** Human-readable status message during update sync */
+  updateSyncStatus?: Maybe<Scalars['String']['output']>;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** Whether to use SSL/TLS encryption */
+  useSsl: Scalars['Boolean']['output'];
+};
+
+/** Type of IMAP receiving protocol. */
+export enum ImapAccountType {
+  /** IMAP protocol - supports folder sync and IDLE for real-time updates */
+  Imap = 'IMAP',
+  /** POP3 protocol - download-and-delete model */
+  Pop3 = 'POP3'
+}
 
 /**
  * An automated mail rule that applies actions to matching emails.
@@ -726,6 +904,11 @@ export enum MailboxUpdateType {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type Mutation = {
   __typename?: 'Mutation';
+  /**
+   * Add a new custom domain and initiate SES verification.
+   * Returns the domain with DNS records to configure.
+   */
+  addCustomDomain: CustomDomain;
   /** Add an email address to an existing contact. */
   addEmailToContact: Contact;
   /**
@@ -763,6 +946,11 @@ export type Mutation = {
    */
   createContactFromEmail: Contact;
   /**
+   * Create an email account for a custom domain address.
+   * Also creates a matching send profile automatically.
+   */
+  createCustomDomainAccount: CustomDomainAccount;
+  /**
    * Create a new email account (IMAP/POP3).
    * Credentials are securely stored in AWS Secrets Manager (production)
    * or a local file (development).
@@ -770,8 +958,8 @@ export type Mutation = {
   createEmailAccount: EmailAccount;
   /** Create a new mail rule. */
   createMailRule: MailRule;
-  /** Create a new SMTP profile for sending emails. */
-  createSmtpProfile: SmtpProfile;
+  /** Create a new send profile for sending emails. */
+  createSendProfile: SendProfile;
   /** Create a new tag. */
   createTag: Tag;
   /**
@@ -781,6 +969,10 @@ export type Mutation = {
   deleteAuthenticationMethod: Scalars['Boolean']['output'];
   /** Delete a contact. */
   deleteContact: Scalars['Boolean']['output'];
+  /** Delete a custom domain and all associated accounts. */
+  deleteCustomDomain: Scalars['Boolean']['output'];
+  /** Delete a custom domain account. */
+  deleteCustomDomainAccount: Scalars['Boolean']['output'];
   /**
    * Delete an email account and all associated emails.
    * This is a permanent, irreversible operation.
@@ -789,10 +981,10 @@ export type Mutation = {
   /** Delete a mail rule. */
   deleteMailRule: Scalars['Boolean']['output'];
   /**
-   * Delete an SMTP profile.
+   * Delete a send profile.
    * Cannot delete a profile that is set as default for an email account.
    */
-  deleteSmtpProfile: Scalars['Boolean']['output'];
+  deleteSendProfile: Scalars['Boolean']['output'];
   /**
    * Delete a tag.
    * Removes the tag from all emails but does not delete the emails.
@@ -838,7 +1030,7 @@ export type Mutation = {
    */
   saveDraft: Email;
   /**
-   * Send an email via SMTP.
+   * Send an email via the specified send profile.
    * Stores a copy in the Sent folder and handles attachments.
    */
   sendEmail: Email;
@@ -856,7 +1048,7 @@ export type Mutation = {
    * Test an IMAP/POP3 connection before saving.
    * Returns success/failure with an error message if applicable.
    */
-  testEmailAccountConnection: TestConnectionResult;
+  testImapConnection: TestConnectionResult;
   /**
    * Test an SMTP connection before saving.
    * Returns success/failure with an error message if applicable.
@@ -881,8 +1073,8 @@ export type Mutation = {
   updateEmailAccount: EmailAccount;
   /** Update an existing mail rule. */
   updateMailRule: MailRule;
-  /** Update an existing SMTP profile. */
-  updateSmtpProfile: SmtpProfile;
+  /** Update an existing send profile. */
+  updateSendProfile: SendProfile;
   /** Update an existing tag. */
   updateTag: Tag;
   /** Update the user's theme preference (LIGHT, DARK, or AUTO). */
@@ -892,6 +1084,17 @@ export type Mutation = {
    * Only provided fields will be updated.
    */
   updateUserPreferences: User;
+  /**
+   * Verify the DNS records for a custom domain.
+   * Checks if the user has configured the required DNS records.
+   */
+  verifyCustomDomain: CustomDomain;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationAddCustomDomainArgs = {
+  input: AddCustomDomainInput;
 };
 
 
@@ -922,6 +1125,7 @@ export type MutationBulkUpdateEmailsArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationCreateCheckoutSessionArgs = {
   accountTier: AccountTier;
+  domainTier: DomainTier;
   storageTier: StorageTier;
 };
 
@@ -939,6 +1143,12 @@ export type MutationCreateContactFromEmailArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationCreateCustomDomainAccountArgs = {
+  input: CreateCustomDomainAccountInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationCreateEmailAccountArgs = {
   input: CreateEmailAccountInput;
 };
@@ -951,8 +1161,8 @@ export type MutationCreateMailRuleArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationCreateSmtpProfileArgs = {
-  input: CreateSmtpProfileInput;
+export type MutationCreateSendProfileArgs = {
+  input: CreateSendProfileInput;
 };
 
 
@@ -975,6 +1185,18 @@ export type MutationDeleteContactArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationDeleteCustomDomainArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationDeleteCustomDomainAccountArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationDeleteEmailAccountArgs = {
   id: Scalars['String']['input'];
 };
@@ -987,7 +1209,7 @@ export type MutationDeleteMailRuleArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationDeleteSmtpProfileArgs = {
+export type MutationDeleteSendProfileArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -1047,8 +1269,8 @@ export type MutationSyncEmailAccountArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationTestEmailAccountConnectionArgs = {
-  input: TestEmailAccountConnectionInput;
+export type MutationTestImapConnectionArgs = {
+  input: TestImapConnectionInput;
 };
 
 
@@ -1089,8 +1311,8 @@ export type MutationUpdateMailRuleArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationUpdateSmtpProfileArgs = {
-  input: UpdateSmtpProfileInput;
+export type MutationUpdateSendProfileArgs = {
+  input: UpdateSendProfileInput;
 };
 
 
@@ -1109,6 +1331,12 @@ export type MutationUpdateThemePreferenceArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationUpdateUserPreferencesArgs = {
   input: UpdateUserPreferencesInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationVerifyCustomDomainArgs = {
+  id: Scalars['String']['input'];
 };
 
 /** Level of detail shown in email notification previews. */
@@ -1214,6 +1442,13 @@ export type Query = {
    */
   getContacts: Array<Contact>;
   /**
+   * Get a specific custom domain by ID.
+   * Returns null if not found or not owned by the current user.
+   */
+  getCustomDomain?: Maybe<CustomDomain>;
+  /** Get all custom domains configured for the current user. */
+  getCustomDomains: Array<CustomDomain>;
+  /**
    * Get a single email by ID.
    * Returns null if not found or not accessible by the current user.
    */
@@ -1254,15 +1489,15 @@ export type Query = {
    */
   getMailRules: Array<MailRule>;
   /**
-   * Get a specific SMTP profile by ID.
+   * Get a specific send profile by ID.
    * Returns null if not found or not owned by the current user.
    */
-  getSmtpProfile?: Maybe<SmtpProfile>;
+  getSendProfile?: Maybe<SendProfile>;
   /**
-   * Get all SMTP profiles configured for the current user.
+   * Get all send profiles configured for the current user.
    * Ordered by creation date, newest first.
    */
-  getSmtpProfiles: Array<SmtpProfile>;
+  getSendProfiles: Array<SendProfile>;
   /**
    * Get only the current user's storage usage (cached from materialized view).
    * Returns null if usage hasn't been calculated yet.
@@ -1341,6 +1576,15 @@ export type QueryGetContactArgs = {
  * GraphQL queries for fetching data. All queries require authentication
  * unless otherwise noted.
  */
+export type QueryGetCustomDomainArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+/**
+ * GraphQL queries for fetching data. All queries require authentication
+ * unless otherwise noted.
+ */
 export type QueryGetEmailArgs = {
   input: GetEmailInput;
 };
@@ -1395,7 +1639,7 @@ export type QueryGetMailRuleArgs = {
  * GraphQL queries for fetching data. All queries require authentication
  * unless otherwise noted.
  */
-export type QueryGetSmtpProfileArgs = {
+export type QueryGetSendProfileArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -1551,8 +1795,8 @@ export type SaveDraftInput = {
   id?: InputMaybe<Scalars['String']['input']>;
   /** Message-ID of email being replied to */
   inReplyTo?: InputMaybe<Scalars['String']['input']>;
-  /** SMTP profile for sending (optional for drafts) */
-  smtpProfileId?: InputMaybe<Scalars['String']['input']>;
+  /** Send profile for sending (optional for drafts) */
+  sendProfileId?: InputMaybe<Scalars['String']['input']>;
   /** Email subject */
   subject?: InputMaybe<Scalars['String']['input']>;
   /** Plain text body */
@@ -1562,35 +1806,62 @@ export type SaveDraftInput = {
 };
 
 /**
- * An SMTP profile for sending emails. Each email account can have a default SMTP profile,
+ * A send profile for sending emails. Each email account can have a default send profile,
  * or users can select a different profile when composing.
+ * Can be SMTP-based (external server) or custom domain (SES-based).
  */
-export type SmtpProfile = BaseEntityProps & {
-  __typename?: 'SmtpProfile';
+export type SendProfile = BaseEntityProps & {
+  __typename?: 'SendProfile';
   /** Optional display name alias (e.g., "John Doe" instead of just the email) */
   alias?: Maybe<Scalars['String']['output']>;
   /** Timestamp when the profile was created */
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** The "from" email address for sent emails */
   email: Scalars['String']['output'];
-  /** SMTP server hostname (e.g., "smtp.gmail.com") */
-  host: Scalars['String']['output'];
-  /** Unique identifier for this SMTP profile */
+  /** Unique identifier for this send profile */
   id: Scalars['String']['output'];
-  /** Whether this is the user's default SMTP profile */
+  /** Whether this is the user's default send profile */
   isDefault: Scalars['Boolean']['output'];
-  /** Display name for this profile (e.g., "Personal Gmail SMTP") */
+  /** Display name for this profile (e.g., "Personal Gmail") */
   name: Scalars['String']['output'];
-  /** SMTP server port (e.g., 587 for TLS, 465 for SSL) */
-  port: Scalars['Int']['output'];
   /** External provider ID for OAuth-linked profiles */
   providerId?: Maybe<Scalars['String']['output']>;
+  /** SMTP-specific settings (null for custom domain profiles) */
+  smtpSettings?: Maybe<SmtpAccountSettings>;
+  /** Profile type (SMTP or CUSTOM_DOMAIN) */
+  type: SendProfileType;
   /** Timestamp when the profile was last updated */
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the user who owns this profile */
+  userId: Scalars['String']['output'];
+};
+
+/** Type of send profile. */
+export enum SendProfileType {
+  /** Custom domain profile - sends via SES */
+  CustomDomain = 'CUSTOM_DOMAIN',
+  /** SMTP-based profile - sends via an external SMTP server */
+  Smtp = 'SMTP'
+}
+
+/**
+ * SMTP-specific settings for a send profile.
+ * Only present when the parent SendProfile has type SMTP.
+ */
+export type SmtpAccountSettings = BaseEntityProps & {
+  __typename?: 'SmtpAccountSettings';
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** SMTP server hostname (e.g., "smtp.gmail.com") */
+  host: Scalars['String']['output'];
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** SMTP server port (e.g., 587 for TLS, 465 for SSL) */
+  port: Scalars['Int']['output'];
+  /** ID of the parent send profile */
+  sendProfileId: Scalars['String']['output'];
   updatedAt?: Maybe<Scalars['Date']['output']>;
   /** Whether to use SSL/TLS encryption */
   useSsl: Scalars['Boolean']['output'];
-  /** ID of the user who owns this profile */
-  userId: Scalars['String']['output'];
 };
 
 /** Storage tier for billing. Each tier has a storage limit. */
@@ -1612,6 +1883,8 @@ export type StorageUsage = {
   accountCount: Scalars['Int']['output'];
   /** Total number of attachments */
   attachmentCount: Scalars['Int']['output'];
+  /** Number of custom domains */
+  domainCount: Scalars['Int']['output'];
   /** Total number of emails */
   emailCount: Scalars['Int']['output'];
   /** When the usage was last calculated */
@@ -1711,11 +1984,11 @@ export type TestConnectionResult = {
 };
 
 /** Input for testing an IMAP/POP3 connection before saving. */
-export type TestEmailAccountConnectionInput = {
+export type TestImapConnectionInput = {
   /** Optional: ID of existing account to use saved password from */
   accountId?: InputMaybe<Scalars['String']['input']>;
   /** Protocol type (IMAP or POP3) */
-  accountType: EmailAccountType;
+  accountType: ImapAccountType;
   /** Server hostname */
   host: Scalars['String']['input'];
   /** Password for authentication. Optional when editing - if not provided and accountId is set, uses saved password. */
@@ -1782,26 +2055,26 @@ export type UpdateContactInput = {
 
 /** Input for updating an existing email account. Only provided fields will be updated. */
 export type UpdateEmailAccountInput = {
-  /** New default SMTP profile ID */
-  defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
-  /** New server hostname */
-  host?: InputMaybe<Scalars['String']['input']>;
+  /** New default send profile ID */
+  defaultSendProfileId?: InputMaybe<Scalars['String']['input']>;
   /** ID of the email account to update */
   id: Scalars['String']['input'];
+  /** New IMAP server hostname */
+  imapHost?: InputMaybe<Scalars['String']['input']>;
+  /** New IMAP password */
+  imapPassword?: InputMaybe<Scalars['String']['input']>;
+  /** New IMAP server port */
+  imapPort?: InputMaybe<Scalars['Int']['input']>;
+  /** Whether to use SSL/TLS */
+  imapUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** New IMAP username */
+  imapUsername?: InputMaybe<Scalars['String']['input']>;
   /** Whether this should be the default account */
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
   /** New display name */
   name?: InputMaybe<Scalars['String']['input']>;
-  /** New password */
-  password?: InputMaybe<Scalars['String']['input']>;
-  /** New server port */
-  port?: InputMaybe<Scalars['Int']['input']>;
   /** New provider ID */
   providerId?: InputMaybe<Scalars['String']['input']>;
-  /** Whether to use SSL/TLS */
-  useSsl?: InputMaybe<Scalars['Boolean']['input']>;
-  /** New username */
-  username?: InputMaybe<Scalars['String']['input']>;
 };
 
 /** Input for updating an existing mail rule. Only provided fields will be updated. */
@@ -1826,28 +2099,28 @@ export type UpdateMailRuleInput = {
   stopProcessing?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
-/** Input for updating an existing SMTP profile. Only provided fields will be updated. */
-export type UpdateSmtpProfileInput = {
+/** Input for updating an existing send profile. Only provided fields will be updated. */
+export type UpdateSendProfileInput = {
   /** New display name alias */
   alias?: InputMaybe<Scalars['String']['input']>;
-  /** New server hostname */
-  host?: InputMaybe<Scalars['String']['input']>;
-  /** ID of the SMTP profile to update */
+  /** ID of the send profile to update */
   id: Scalars['String']['input'];
   /** Whether this should be the default profile */
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
   /** New display name */
   name?: InputMaybe<Scalars['String']['input']>;
-  /** New password */
-  password?: InputMaybe<Scalars['String']['input']>;
-  /** New server port */
-  port?: InputMaybe<Scalars['Int']['input']>;
   /** New provider ID */
   providerId?: InputMaybe<Scalars['String']['input']>;
+  /** New SMTP server hostname */
+  smtpHost?: InputMaybe<Scalars['String']['input']>;
+  /** New SMTP password */
+  smtpPassword?: InputMaybe<Scalars['String']['input']>;
+  /** New SMTP server port */
+  smtpPort?: InputMaybe<Scalars['Int']['input']>;
   /** Whether to use SSL/TLS */
-  useSsl?: InputMaybe<Scalars['Boolean']['input']>;
-  /** New username */
-  username?: InputMaybe<Scalars['String']['input']>;
+  smtpUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** New SMTP username */
+  smtpUsername?: InputMaybe<Scalars['String']['input']>;
 };
 
 /** Input for updating an existing tag. Only provided fields will be updated. */
@@ -1892,7 +2165,7 @@ export type User = BaseEntityProps & {
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** User's primary email address (used for login) */
   email: Scalars['String']['output'];
-  /** List of email accounts configured for this user (IMAP/POP3) */
+  /** List of email accounts configured for this user */
   emailAccounts: Array<EmailAccount>;
   /** User's first name */
   firstName: Scalars['String']['output'];
@@ -1908,8 +2181,8 @@ export type User = BaseEntityProps & {
   navbarCollapsed: Scalars['Boolean']['output'];
   /** Level of detail in notification previews */
   notificationDetailLevel: NotificationDetailLevel;
-  /** List of SMTP profiles configured for sending emails */
-  smtpProfiles: Array<SmtpProfile>;
+  /** List of send profiles configured for sending emails */
+  sendProfiles: Array<SendProfile>;
   /** User's preferred color scheme (LIGHT, DARK, or AUTO) */
   themePreference: ThemePreference;
   /** Timestamp when the user account was last updated */
@@ -1995,11 +2268,16 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
     | ( BillingSubscription )
     | ( Contact )
     | ( ContactEmail )
+    | ( CustomDomain )
+    | ( CustomDomainAccount )
+    | ( CustomDomainDnsRecord )
     | ( Email )
     | ( EmailAccount )
+    | ( ImapAccountSettings )
     | ( MailRule )
     | ( PushToken )
-    | ( SmtpProfile )
+    | ( SendProfile )
+    | ( SmtpAccountSettings )
     | ( Tag )
     | ( User )
   ;
@@ -2008,6 +2286,7 @@ export type ResolversInterfaceTypes<_RefType extends Record<string, unknown>> = 
 /** Mapping between all available schema types and the resolvers types */
 export type ResolversTypes = ResolversObject<{
   AccountTier: AccountTier;
+  AddCustomDomainInput: AddCustomDomainInput;
   AddEmailToContactInput: AddEmailToContactInput;
   AddTagsToEmailsInput: AddTagsToEmailsInput;
   Attachment: ResolverTypeWrapper<Attachment>;
@@ -2026,11 +2305,19 @@ export type ResolversTypes = ResolversObject<{
   ContactEmail: ResolverTypeWrapper<ContactEmail>;
   ContactEmailInput: ContactEmailInput;
   CreateContactInput: CreateContactInput;
+  CreateCustomDomainAccountInput: CreateCustomDomainAccountInput;
   CreateEmailAccountInput: CreateEmailAccountInput;
   CreateMailRuleInput: CreateMailRuleInput;
-  CreateSmtpProfileInput: CreateSmtpProfileInput;
+  CreateSendProfileInput: CreateSendProfileInput;
   CreateTagInput: CreateTagInput;
+  CustomDomain: ResolverTypeWrapper<CustomDomain>;
+  CustomDomainAccount: ResolverTypeWrapper<CustomDomainAccount>;
+  CustomDomainDnsRecord: ResolverTypeWrapper<CustomDomainDnsRecord>;
+  CustomDomainStatus: CustomDomainStatus;
   Date: ResolverTypeWrapper<Scalars['Date']['output']>;
+  DnsRecordPurpose: DnsRecordPurpose;
+  DnsRecordType: DnsRecordType;
+  DomainTier: DomainTier;
   Email: ResolverTypeWrapper<Email>;
   EmailAccount: ResolverTypeWrapper<EmailAccount>;
   EmailAccountType: EmailAccountType;
@@ -2040,6 +2327,8 @@ export type ResolversTypes = ResolversObject<{
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
+  ImapAccountSettings: ResolverTypeWrapper<ImapAccountSettings>;
+  ImapAccountType: ImapAccountType;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   JSON: ResolverTypeWrapper<Scalars['JSON']['output']>;
   MailRule: ResolverTypeWrapper<MailRule>;
@@ -2060,7 +2349,9 @@ export type ResolversTypes = ResolversObject<{
   RuleConditionsInput: RuleConditionsInput;
   RunRuleResult: ResolverTypeWrapper<RunRuleResult>;
   SaveDraftInput: SaveDraftInput;
-  SmtpProfile: ResolverTypeWrapper<SmtpProfile>;
+  SendProfile: ResolverTypeWrapper<SendProfile>;
+  SendProfileType: SendProfileType;
+  SmtpAccountSettings: ResolverTypeWrapper<SmtpAccountSettings>;
   StorageTier: StorageTier;
   StorageUsage: ResolverTypeWrapper<StorageUsage>;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
@@ -2069,14 +2360,14 @@ export type ResolversTypes = ResolversObject<{
   SyncEmailAccountInput: SyncEmailAccountInput;
   Tag: ResolverTypeWrapper<Tag>;
   TestConnectionResult: ResolverTypeWrapper<TestConnectionResult>;
-  TestEmailAccountConnectionInput: TestEmailAccountConnectionInput;
+  TestImapConnectionInput: TestImapConnectionInput;
   TestSmtpConnectionInput: TestSmtpConnectionInput;
   ThemePreference: ThemePreference;
   UnsubscribeInput: UnsubscribeInput;
   UpdateContactInput: UpdateContactInput;
   UpdateEmailAccountInput: UpdateEmailAccountInput;
   UpdateMailRuleInput: UpdateMailRuleInput;
-  UpdateSmtpProfileInput: UpdateSmtpProfileInput;
+  UpdateSendProfileInput: UpdateSendProfileInput;
   UpdateTagInput: UpdateTagInput;
   UpdateUserPreferencesInput: UpdateUserPreferencesInput;
   User: ResolverTypeWrapper<User>;
@@ -2084,6 +2375,7 @@ export type ResolversTypes = ResolversObject<{
 
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = ResolversObject<{
+  AddCustomDomainInput: AddCustomDomainInput;
   AddEmailToContactInput: AddEmailToContactInput;
   AddTagsToEmailsInput: AddTagsToEmailsInput;
   Attachment: Attachment;
@@ -2099,10 +2391,14 @@ export type ResolversParentTypes = ResolversObject<{
   ContactEmail: ContactEmail;
   ContactEmailInput: ContactEmailInput;
   CreateContactInput: CreateContactInput;
+  CreateCustomDomainAccountInput: CreateCustomDomainAccountInput;
   CreateEmailAccountInput: CreateEmailAccountInput;
   CreateMailRuleInput: CreateMailRuleInput;
-  CreateSmtpProfileInput: CreateSmtpProfileInput;
+  CreateSendProfileInput: CreateSendProfileInput;
   CreateTagInput: CreateTagInput;
+  CustomDomain: CustomDomain;
+  CustomDomainAccount: CustomDomainAccount;
+  CustomDomainDnsRecord: CustomDomainDnsRecord;
   Date: Scalars['Date']['output'];
   Email: Email;
   EmailAccount: EmailAccount;
@@ -2111,6 +2407,7 @@ export type ResolversParentTypes = ResolversObject<{
   ForwardEmailInput: ForwardEmailInput;
   GetEmailInput: GetEmailInput;
   GetEmailsInput: GetEmailsInput;
+  ImapAccountSettings: ImapAccountSettings;
   Int: Scalars['Int']['output'];
   JSON: Scalars['JSON']['output'];
   MailRule: MailRule;
@@ -2128,7 +2425,8 @@ export type ResolversParentTypes = ResolversObject<{
   RuleConditionsInput: RuleConditionsInput;
   RunRuleResult: RunRuleResult;
   SaveDraftInput: SaveDraftInput;
-  SmtpProfile: SmtpProfile;
+  SendProfile: SendProfile;
+  SmtpAccountSettings: SmtpAccountSettings;
   StorageUsage: StorageUsage;
   String: Scalars['String']['output'];
   StripePrice: StripePrice;
@@ -2136,13 +2434,13 @@ export type ResolversParentTypes = ResolversObject<{
   SyncEmailAccountInput: SyncEmailAccountInput;
   Tag: Tag;
   TestConnectionResult: TestConnectionResult;
-  TestEmailAccountConnectionInput: TestEmailAccountConnectionInput;
+  TestImapConnectionInput: TestImapConnectionInput;
   TestSmtpConnectionInput: TestSmtpConnectionInput;
   UnsubscribeInput: UnsubscribeInput;
   UpdateContactInput: UpdateContactInput;
   UpdateEmailAccountInput: UpdateEmailAccountInput;
   UpdateMailRuleInput: UpdateMailRuleInput;
-  UpdateSmtpProfileInput: UpdateSmtpProfileInput;
+  UpdateSendProfileInput: UpdateSendProfileInput;
   UpdateTagInput: UpdateTagInput;
   UpdateUserPreferencesInput: UpdateUserPreferencesInput;
   User: User;
@@ -2179,13 +2477,15 @@ export type AuthenticationMethodResolvers<ContextType = MyContext, ParentType ex
 }>;
 
 export type BaseEntityPropsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BaseEntityProps'] = ResolversParentTypes['BaseEntityProps']> = ResolversObject<{
-  __resolveType: TypeResolveFn<'Attachment' | 'AuthenticationMethod' | 'BillingSubscription' | 'Contact' | 'ContactEmail' | 'Email' | 'EmailAccount' | 'MailRule' | 'PushToken' | 'SmtpProfile' | 'Tag' | 'User', ParentType, ContextType>;
+  __resolveType: TypeResolveFn<'Attachment' | 'AuthenticationMethod' | 'BillingSubscription' | 'Contact' | 'ContactEmail' | 'CustomDomain' | 'CustomDomainAccount' | 'CustomDomainDnsRecord' | 'Email' | 'EmailAccount' | 'ImapAccountSettings' | 'MailRule' | 'PushToken' | 'SendProfile' | 'SmtpAccountSettings' | 'Tag' | 'User', ParentType, ContextType>;
 }>;
 
 export type BillingInfoResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['BillingInfo'] = ResolversParentTypes['BillingInfo']> = ResolversObject<{
   accountUsagePercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
+  domainUsagePercent?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
   hasStripeCustomer?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isAccountLimitExceeded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  isDomainLimitExceeded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isStorageLimitExceeded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   isStripeConfigured?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   prices?: Resolver<Array<ResolversTypes['StripePrice']>, ParentType, ContextType>;
@@ -2200,6 +2500,8 @@ export type BillingSubscriptionResolvers<ContextType = MyContext, ParentType ext
   cancelAtPeriodEnd?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   currentPeriodEnd?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  domainLimit?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  domainTier?: Resolver<ResolversTypes['DomainTier'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   isValid?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['BillingSubscriptionStatus'], ParentType, ContextType>;
@@ -2238,6 +2540,47 @@ export type ContactEmailResolvers<ContextType = MyContext, ParentType extends Re
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
+export type CustomDomainResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['CustomDomain'] = ResolversParentTypes['CustomDomain']> = ResolversObject<{
+  accounts?: Resolver<Array<ResolversTypes['CustomDomainAccount']>, ParentType, ContextType>;
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  dnsRecords?: Resolver<Array<ResolversTypes['CustomDomainDnsRecord']>, ParentType, ContextType>;
+  domain?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  sesIdentityArn?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  status?: Resolver<ResolversTypes['CustomDomainStatus'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type CustomDomainAccountResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['CustomDomainAccount'] = ResolversParentTypes['CustomDomainAccount']> = ResolversObject<{
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  customDomain?: Resolver<Maybe<ResolversTypes['CustomDomain']>, ParentType, ContextType>;
+  customDomainId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  emailAccount?: Resolver<Maybe<ResolversTypes['EmailAccount']>, ParentType, ContextType>;
+  emailAccountId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  localPart?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  sendProfile?: Resolver<Maybe<ResolversTypes['SendProfile']>, ParentType, ContextType>;
+  sendProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type CustomDomainDnsRecordResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['CustomDomainDnsRecord'] = ResolversParentTypes['CustomDomainDnsRecord']> = ResolversObject<{
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  customDomainId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isVerified?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  lastCheckedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  purpose?: Resolver<ResolversTypes['DnsRecordPurpose'], ParentType, ContextType>;
+  recordType?: Resolver<ResolversTypes['DnsRecordType'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  value?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
 export interface DateScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['Date'], any> {
   name: 'Date';
 }
@@ -2265,8 +2608,8 @@ export type EmailResolvers<ContextType = MyContext, ParentType extends Resolvers
   messageId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   receivedAt?: Resolver<ResolversTypes['Date'], ParentType, ContextType>;
   references?: Resolver<Maybe<Array<ResolversTypes['String']>>, ParentType, ContextType>;
-  smtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
-  smtpProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  sendProfile?: Resolver<Maybe<ResolversTypes['SendProfile']>, ParentType, ContextType>;
+  sendProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   subject?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   tags?: Resolver<Array<ResolversTypes['Tag']>, ParentType, ContextType>;
   textBody?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2280,27 +2623,17 @@ export type EmailResolvers<ContextType = MyContext, ParentType extends Resolvers
 }>;
 
 export type EmailAccountResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['EmailAccount'] = ResolversParentTypes['EmailAccount']> = ResolversObject<{
-  accountType?: Resolver<ResolversTypes['EmailAccountType'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
-  defaultSmtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
-  defaultSmtpProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  defaultSendProfile?: Resolver<Maybe<ResolversTypes['SendProfile']>, ParentType, ContextType>;
+  defaultSendProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  historicalSyncLastAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
-  historicalSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
-  historicalSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  imapSettings?: Resolver<Maybe<ResolversTypes['ImapAccountSettings']>, ParentType, ContextType>;
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  isHistoricalSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  isUpdateSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  lastSyncedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
-  updateSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
-  updateSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['EmailAccountType'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
-  useSsl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
@@ -2309,6 +2642,26 @@ export type EmailSourceResolvers<ContextType = MyContext, ParentType extends Res
   count?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   fromAddress?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   fromName?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+}>;
+
+export type ImapAccountSettingsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['ImapAccountSettings'] = ResolversParentTypes['ImapAccountSettings']> = ResolversObject<{
+  accountType?: Resolver<ResolversTypes['ImapAccountType'], ParentType, ContextType>;
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  emailAccountId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  historicalSyncLastAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  historicalSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  historicalSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  isHistoricalSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  isUpdateSyncing?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  lastSyncedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  updateSyncProgress?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+  updateSyncStatus?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  useSsl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
 export interface JsonScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['JSON'], any> {
@@ -2340,23 +2693,27 @@ export type MailboxUpdateResolvers<ContextType = MyContext, ParentType extends R
 }>;
 
 export type MutationResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
+  addCustomDomain?: Resolver<ResolversTypes['CustomDomain'], ParentType, ContextType, RequireFields<MutationAddCustomDomainArgs, 'input'>>;
   addEmailToContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationAddEmailToContactArgs, 'input'>>;
   addTagsToEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationAddTagsToEmailsArgs, 'input'>>;
   bulkDeleteEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationBulkDeleteEmailsArgs, 'ids'>>;
   bulkUpdateEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationBulkUpdateEmailsArgs, 'input'>>;
   createBillingPortalSession?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  createCheckoutSession?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<MutationCreateCheckoutSessionArgs, 'accountTier' | 'storageTier'>>;
+  createCheckoutSession?: Resolver<ResolversTypes['String'], ParentType, ContextType, RequireFields<MutationCreateCheckoutSessionArgs, 'accountTier' | 'domainTier' | 'storageTier'>>;
   createContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactArgs, 'input'>>;
   createContactFromEmail?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactFromEmailArgs, 'emailId'>>;
+  createCustomDomainAccount?: Resolver<ResolversTypes['CustomDomainAccount'], ParentType, ContextType, RequireFields<MutationCreateCustomDomainAccountArgs, 'input'>>;
   createEmailAccount?: Resolver<ResolversTypes['EmailAccount'], ParentType, ContextType, RequireFields<MutationCreateEmailAccountArgs, 'input'>>;
   createMailRule?: Resolver<ResolversTypes['MailRule'], ParentType, ContextType, RequireFields<MutationCreateMailRuleArgs, 'input'>>;
-  createSmtpProfile?: Resolver<ResolversTypes['SmtpProfile'], ParentType, ContextType, RequireFields<MutationCreateSmtpProfileArgs, 'input'>>;
+  createSendProfile?: Resolver<ResolversTypes['SendProfile'], ParentType, ContextType, RequireFields<MutationCreateSendProfileArgs, 'input'>>;
   createTag?: Resolver<ResolversTypes['Tag'], ParentType, ContextType, RequireFields<MutationCreateTagArgs, 'input'>>;
   deleteAuthenticationMethod?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteAuthenticationMethodArgs, 'id'>>;
   deleteContact?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteContactArgs, 'id'>>;
+  deleteCustomDomain?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteCustomDomainArgs, 'id'>>;
+  deleteCustomDomainAccount?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteCustomDomainAccountArgs, 'id'>>;
   deleteEmailAccount?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteEmailAccountArgs, 'id'>>;
   deleteMailRule?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteMailRuleArgs, 'id'>>;
-  deleteSmtpProfile?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSmtpProfileArgs, 'id'>>;
+  deleteSendProfile?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteSendProfileArgs, 'id'>>;
   deleteTag?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationDeleteTagArgs, 'id'>>;
   forwardEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationForwardEmailArgs, 'input'>>;
   getPushTokens?: Resolver<Array<ResolversTypes['PushToken']>, ParentType, ContextType>;
@@ -2369,17 +2726,18 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   sendEmail?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationSendEmailArgs, 'input'>>;
   syncAllAccounts?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   syncEmailAccount?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationSyncEmailAccountArgs, 'input'>>;
-  testEmailAccountConnection?: Resolver<ResolversTypes['TestConnectionResult'], ParentType, ContextType, RequireFields<MutationTestEmailAccountConnectionArgs, 'input'>>;
+  testImapConnection?: Resolver<ResolversTypes['TestConnectionResult'], ParentType, ContextType, RequireFields<MutationTestImapConnectionArgs, 'input'>>;
   testSmtpConnection?: Resolver<ResolversTypes['TestConnectionResult'], ParentType, ContextType, RequireFields<MutationTestSmtpConnectionArgs, 'input'>>;
   unregisterPushToken?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType, RequireFields<MutationUnregisterPushTokenArgs, 'token'>>;
   unsubscribe?: Resolver<ResolversTypes['Email'], ParentType, ContextType, RequireFields<MutationUnsubscribeArgs, 'input'>>;
   updateContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationUpdateContactArgs, 'input'>>;
   updateEmailAccount?: Resolver<ResolversTypes['EmailAccount'], ParentType, ContextType, RequireFields<MutationUpdateEmailAccountArgs, 'input'>>;
   updateMailRule?: Resolver<ResolversTypes['MailRule'], ParentType, ContextType, RequireFields<MutationUpdateMailRuleArgs, 'input'>>;
-  updateSmtpProfile?: Resolver<ResolversTypes['SmtpProfile'], ParentType, ContextType, RequireFields<MutationUpdateSmtpProfileArgs, 'input'>>;
+  updateSendProfile?: Resolver<ResolversTypes['SendProfile'], ParentType, ContextType, RequireFields<MutationUpdateSendProfileArgs, 'input'>>;
   updateTag?: Resolver<ResolversTypes['Tag'], ParentType, ContextType, RequireFields<MutationUpdateTagArgs, 'input'>>;
   updateThemePreference?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateThemePreferenceArgs, 'themePreference'>>;
   updateUserPreferences?: Resolver<ResolversTypes['User'], ParentType, ContextType, RequireFields<MutationUpdateUserPreferencesArgs, 'input'>>;
+  verifyCustomDomain?: Resolver<ResolversTypes['CustomDomain'], ParentType, ContextType, RequireFields<MutationVerifyCustomDomainArgs, 'id'>>;
 }>;
 
 export type PushTokenResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['PushToken'] = ResolversParentTypes['PushToken']> = ResolversObject<{
@@ -2408,6 +2766,8 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getBillingInfo?: Resolver<ResolversTypes['BillingInfo'], ParentType, ContextType, Partial<QueryGetBillingInfoArgs>>;
   getContact?: Resolver<Maybe<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QueryGetContactArgs, 'id'>>;
   getContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType>;
+  getCustomDomain?: Resolver<Maybe<ResolversTypes['CustomDomain']>, ParentType, ContextType, RequireFields<QueryGetCustomDomainArgs, 'id'>>;
+  getCustomDomains?: Resolver<Array<ResolversTypes['CustomDomain']>, ParentType, ContextType>;
   getEmail?: Resolver<Maybe<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<QueryGetEmailArgs, 'input'>>;
   getEmailAccount?: Resolver<Maybe<ResolversTypes['EmailAccount']>, ParentType, ContextType, RequireFields<QueryGetEmailAccountArgs, 'id'>>;
   getEmailAccounts?: Resolver<Array<ResolversTypes['EmailAccount']>, ParentType, ContextType>;
@@ -2416,8 +2776,8 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   getEmailsByThread?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<QueryGetEmailsByThreadArgs, 'threadId'>>;
   getMailRule?: Resolver<Maybe<ResolversTypes['MailRule']>, ParentType, ContextType, RequireFields<QueryGetMailRuleArgs, 'id'>>;
   getMailRules?: Resolver<Array<ResolversTypes['MailRule']>, ParentType, ContextType>;
-  getSmtpProfile?: Resolver<Maybe<ResolversTypes['SmtpProfile']>, ParentType, ContextType, RequireFields<QueryGetSmtpProfileArgs, 'id'>>;
-  getSmtpProfiles?: Resolver<Array<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
+  getSendProfile?: Resolver<Maybe<ResolversTypes['SendProfile']>, ParentType, ContextType, RequireFields<QueryGetSendProfileArgs, 'id'>>;
+  getSendProfiles?: Resolver<Array<ResolversTypes['SendProfile']>, ParentType, ContextType>;
   getStorageUsage?: Resolver<Maybe<ResolversTypes['StorageUsage']>, ParentType, ContextType>;
   getStorageUsageRealtime?: Resolver<Maybe<ResolversTypes['StorageUsage']>, ParentType, ContextType>;
   getTag?: Resolver<Maybe<ResolversTypes['Tag']>, ParentType, ContextType, RequireFields<QueryGetTagArgs, 'id'>>;
@@ -2450,25 +2810,36 @@ export type RunRuleResultResolvers<ContextType = MyContext, ParentType extends R
   processedCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
 }>;
 
-export type SmtpProfileResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['SmtpProfile'] = ResolversParentTypes['SmtpProfile']> = ResolversObject<{
+export type SendProfileResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['SendProfile'] = ResolversParentTypes['SendProfile']> = ResolversObject<{
   alias?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
-  port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  smtpSettings?: Resolver<Maybe<ResolversTypes['SmtpAccountSettings']>, ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['SendProfileType'], ParentType, ContextType>;
+  updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type SmtpAccountSettingsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['SmtpAccountSettings'] = ResolversParentTypes['SmtpAccountSettings']> = ResolversObject<{
+  createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
+  host?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  port?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  sendProfileId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   useSsl?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
-  userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
 }>;
 
 export type StorageUsageResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['StorageUsage'] = ResolversParentTypes['StorageUsage']> = ResolversObject<{
   accountCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   attachmentCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  domainCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   emailCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   lastRefreshedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   totalAttachmentSizeBytes?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
@@ -2522,7 +2893,7 @@ export type UserResolvers<ContextType = MyContext, ParentType extends ResolversP
   lastName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   navbarCollapsed?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   notificationDetailLevel?: Resolver<ResolversTypes['NotificationDetailLevel'], ParentType, ContextType>;
-  smtpProfiles?: Resolver<Array<ResolversTypes['SmtpProfile']>, ParentType, ContextType>;
+  sendProfiles?: Resolver<Array<ResolversTypes['SendProfile']>, ParentType, ContextType>;
   themePreference?: Resolver<ResolversTypes['ThemePreference'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
@@ -2536,10 +2907,14 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   BillingSubscription?: BillingSubscriptionResolvers<ContextType>;
   Contact?: ContactResolvers<ContextType>;
   ContactEmail?: ContactEmailResolvers<ContextType>;
+  CustomDomain?: CustomDomainResolvers<ContextType>;
+  CustomDomainAccount?: CustomDomainAccountResolvers<ContextType>;
+  CustomDomainDnsRecord?: CustomDomainDnsRecordResolvers<ContextType>;
   Date?: GraphQLScalarType;
   Email?: EmailResolvers<ContextType>;
   EmailAccount?: EmailAccountResolvers<ContextType>;
   EmailSource?: EmailSourceResolvers<ContextType>;
+  ImapAccountSettings?: ImapAccountSettingsResolvers<ContextType>;
   JSON?: GraphQLScalarType;
   MailRule?: MailRuleResolvers<ContextType>;
   MailboxUpdate?: MailboxUpdateResolvers<ContextType>;
@@ -2550,7 +2925,8 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   RuleActions?: RuleActionsResolvers<ContextType>;
   RuleConditions?: RuleConditionsResolvers<ContextType>;
   RunRuleResult?: RunRuleResultResolvers<ContextType>;
-  SmtpProfile?: SmtpProfileResolvers<ContextType>;
+  SendProfile?: SendProfileResolvers<ContextType>;
+  SmtpAccountSettings?: SmtpAccountSettingsResolvers<ContextType>;
   StorageUsage?: StorageUsageResolvers<ContextType>;
   StripePrice?: StripePriceResolvers<ContextType>;
   Subscription?: SubscriptionResolvers<ContextType>;

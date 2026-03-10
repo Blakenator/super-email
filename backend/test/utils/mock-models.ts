@@ -121,22 +121,8 @@ export interface MockEmailAccountData {
   userId: string;
   name: string;
   email: string;
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  accountType: 'IMAP' | 'POP3';
-  useSsl: boolean;
-  lastSyncedAt: Date | null;
-  historicalSyncId: string | null;
-  historicalSyncProgress: number | null;
-  historicalSyncStatus: string | null;
-  historicalSyncExpiresAt: Date | null;
-  updateSyncId: string | null;
-  updateSyncProgress: number | null;
-  updateSyncStatus: string | null;
-  updateSyncExpiresAt: Date | null;
-  defaultSmtpProfileId: string | null;
+  type: 'IMAP' | 'CUSTOM_DOMAIN';
+  defaultSendProfileId: string | null;
   providerId: string | null;
   isDefault: boolean;
   createdAt: Date;
@@ -149,10 +135,43 @@ export function createMockEmailAccount(overrides: Partial<MockEmailAccountData> 
     userId: 'user-123',
     name: 'Test Gmail',
     email: 'test@gmail.com',
+    type: 'IMAP',
+    defaultSendProfileId: null,
+    providerId: null,
+    isDefault: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+  return createMockInstance(data);
+}
+
+export interface MockImapAccountSettingsData {
+  id: string;
+  emailAccountId: string;
+  host: string;
+  port: number;
+  accountType: 'IMAP' | 'POP3';
+  useSsl: boolean;
+  lastSyncedAt: Date | null;
+  historicalSyncId: string | null;
+  historicalSyncProgress: number | null;
+  historicalSyncStatus: string | null;
+  historicalSyncExpiresAt: Date | null;
+  updateSyncId: string | null;
+  updateSyncProgress: number | null;
+  updateSyncStatus: string | null;
+  updateSyncExpiresAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export function createMockImapSettings(overrides: Partial<MockImapAccountSettingsData> = {}): MockImapAccountSettingsData & MockModelInstance<MockImapAccountSettingsData> {
+  const data: MockImapAccountSettingsData = {
+    id: 'imap-settings-123',
+    emailAccountId: 'email-account-123',
     host: 'imap.gmail.com',
     port: 993,
-    username: 'test@gmail.com',
-    password: 'encrypted-password',
     accountType: 'IMAP',
     useSsl: true,
     lastSyncedAt: null,
@@ -164,9 +183,6 @@ export function createMockEmailAccount(overrides: Partial<MockEmailAccountData> 
     updateSyncProgress: null,
     updateSyncStatus: null,
     updateSyncExpiresAt: null,
-    defaultSmtpProfileId: null,
-    providerId: null,
-    isDefault: true,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -175,40 +191,56 @@ export function createMockEmailAccount(overrides: Partial<MockEmailAccountData> 
 }
 
 // ============================================================================
-// SmtpProfile mocks
+// SendProfile mocks
 // ============================================================================
 
-export interface MockSmtpProfileData {
+export interface MockSendProfileData {
   id: string;
   userId: string;
   name: string;
   email: string;
   alias: string | null;
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  useSsl: boolean;
+  type: 'SMTP' | 'CUSTOM_DOMAIN';
   isDefault: boolean;
   providerId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export function createMockSmtpProfile(overrides: Partial<MockSmtpProfileData> = {}): MockSmtpProfileData & MockModelInstance<MockSmtpProfileData> {
-  const data: MockSmtpProfileData = {
-    id: 'smtp-profile-123',
+export function createMockSendProfile(overrides: Partial<MockSendProfileData> = {}): MockSendProfileData & MockModelInstance<MockSendProfileData> {
+  const data: MockSendProfileData = {
+    id: 'send-profile-123',
     userId: 'user-123',
-    name: 'Test SMTP',
+    name: 'Test Send Profile',
     email: 'test@gmail.com',
     alias: 'Test User',
-    host: 'smtp.gmail.com',
-    port: 587,
-    username: 'test@gmail.com',
-    password: 'encrypted-password',
-    useSsl: true,
+    type: 'SMTP',
     isDefault: true,
     providerId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+  return createMockInstance(data);
+}
+
+export interface MockSmtpAccountSettingsData {
+  id: string;
+  sendProfileId: string;
+  host: string;
+  port: number;
+  useSsl: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export function createMockSmtpSettings(overrides: Partial<MockSmtpAccountSettingsData> = {}): MockSmtpAccountSettingsData & MockModelInstance<MockSmtpAccountSettingsData> {
+  const data: MockSmtpAccountSettingsData = {
+    id: 'smtp-settings-123',
+    sendProfileId: 'send-profile-123',
+    host: 'smtp.gmail.com',
+    port: 587,
+    useSsl: true,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -223,7 +255,7 @@ export function createMockSmtpProfile(overrides: Partial<MockSmtpProfileData> = 
 export interface MockEmailData {
   id: string;
   emailAccountId: string;
-  smtpProfileId: string | null;
+  sendProfileId: string | null;
   messageId: string;
   folder: 'INBOX' | 'SENT' | 'DRAFTS' | 'TRASH' | 'SPAM' | 'ARCHIVE';
   fromAddress: string;
@@ -253,7 +285,7 @@ export function createMockEmail(overrides: Partial<MockEmailData> = {}): MockEma
   const data: MockEmailData = {
     id: 'email-123',
     emailAccountId: 'email-account-123',
-    smtpProfileId: null,
+    sendProfileId: null,
     messageId: '<test-123@example.com>',
     folder: 'INBOX',
     fromAddress: 'sender@example.com',

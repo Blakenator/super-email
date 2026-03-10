@@ -44,6 +44,22 @@ export const config = {
     localDir: process.env.ATTACHMENTS_LOCAL_DIR || 'data/attachments',
   },
 
+  // S3 Raw Emails Storage (for custom domain inbound, not counting towards storage budget)
+  rawEmails: {
+    s3Bucket: process.env.RAW_EMAILS_S3_BUCKET || 'email-raw-emails',
+    localDir: process.env.RAW_EMAILS_LOCAL_DIR || 'data/raw-emails',
+  },
+
+  // SES Configuration (for custom domain email)
+  ses: {
+    region: process.env.SES_REGION || process.env.AWS_REGION || 'us-east-1',
+  },
+
+  // SQS Configuration (for custom domain inbound email processing)
+  sqs: {
+    customEmailQueueUrl: process.env.SQS_CUSTOM_EMAIL_QUEUE_URL || '',
+  },
+
   // Supabase Authentication
   supabase: {
     url: process.env.SUPABASE_URL || 'https://ivqyyttllhpwbducgpih.supabase.co',
@@ -110,6 +126,12 @@ export const config = {
       pro: process.env.STRIPE_PRICE_ACCOUNTS_PRO || '',
       enterprise: process.env.STRIPE_PRICE_ACCOUNTS_ENTERPRISE || '',
     },
+    // Price IDs for domain tiers (set in Stripe Dashboard)
+    domainPriceIds: {
+      basic: process.env.STRIPE_PRICE_DOMAINS_BASIC || '',
+      pro: process.env.STRIPE_PRICE_DOMAINS_PRO || '',
+      enterprise: process.env.STRIPE_PRICE_DOMAINS_ENTERPRISE || '',
+    },
   },
 
   // Firebase Configuration (for web push notifications)
@@ -174,6 +196,14 @@ export const envVarDefinitions = {
       'Firebase Admin SDK service account JSON (stringified) for web push notifications',
     FIREBASE_SERVICE_ACCOUNT_PATH:
       'Path to Firebase service account JSON file (alternative to JSON string)',
+    RAW_EMAILS_S3_BUCKET:
+      'S3 bucket name for raw inbound emails (custom domains)',
+    RAW_EMAILS_LOCAL_DIR:
+      'Local directory for raw emails in development',
+    SES_REGION:
+      'AWS SES region (defaults to AWS_REGION)',
+    SQS_CUSTOM_EMAIL_QUEUE_URL:
+      'SQS queue URL for custom domain inbound email processing',
   },
 } as const;
 

@@ -58,16 +58,21 @@ const GET_EMAIL_ACCOUNTS_QUERY = gql`
       id
       name
       email
-      host
-      accountType
-      lastSyncedAt
-      isHistoricalSyncing
-      historicalSyncProgress
-      historicalSyncStatus
-      isUpdateSyncing
-      updateSyncProgress
-      updateSyncStatus
+      type
       isDefault
+      defaultSendProfileId
+      imapSettings {
+        host
+        port
+        accountType
+        lastSyncedAt
+        isHistoricalSyncing
+        historicalSyncProgress
+        historicalSyncStatus
+        isUpdateSyncing
+        updateSyncProgress
+        updateSyncStatus
+      }
     }
   }
 `;
@@ -118,16 +123,21 @@ export interface EmailAccount {
   id: string;
   name: string;
   email: string;
-  host: string;
-  accountType: string;
-  lastSyncedAt?: string | null;
-  isHistoricalSyncing: boolean;
-  historicalSyncProgress?: number | null;
-  historicalSyncStatus?: string | null;
-  isUpdateSyncing: boolean;
-  updateSyncProgress?: number | null;
-  updateSyncStatus?: string | null;
+  type: string;
   isDefault: boolean;
+  defaultSendProfileId?: string | null;
+  imapSettings?: {
+    host: string;
+    port: number;
+    accountType: string;
+    lastSyncedAt?: string | null;
+    isHistoricalSyncing: boolean;
+    historicalSyncProgress?: number | null;
+    historicalSyncStatus?: string | null;
+    isUpdateSyncing: boolean;
+    updateSyncProgress?: number | null;
+    updateSyncStatus?: string | null;
+  } | null;
 }
 
 interface EmailState {

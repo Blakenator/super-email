@@ -7,10 +7,10 @@ import { updateEmailAccount } from './email-account/updateEmailAccount.js';
 import { deleteEmailAccount } from './email-account/deleteEmailAccount.js';
 import { syncEmailAccount } from './email-account/syncEmailAccount.js';
 import { testEmailAccountConnection } from './email-account/testEmailAccountConnection.js';
-import { createSmtpProfile } from './smtp-profile/createSmtpProfile.js';
-import { updateSmtpProfile } from './smtp-profile/updateSmtpProfile.js';
-import { deleteSmtpProfile } from './smtp-profile/deleteSmtpProfile.js';
-import { testSmtpConnection } from './smtp-profile/testSmtpConnection.js';
+import { createSendProfile } from './send-profile/createSendProfile.js';
+import { updateSendProfile } from './send-profile/updateSendProfile.js';
+import { deleteSendProfile } from './send-profile/deleteSendProfile.js';
+import { testSmtpConnection } from './send-profile/testSmtpConnection.js';
 import { sendEmail } from './email/sendEmail.js';
 import { saveDraft } from './email/saveDraft.js';
 import { bulkUpdateEmails } from './email/bulkUpdateEmails.js';
@@ -33,6 +33,11 @@ import { createMailRule } from './mail-rule/createMailRule.js';
 import { updateMailRule } from './mail-rule/updateMailRule.js';
 import { deleteMailRule } from './mail-rule/deleteMailRule.js';
 import { runMailRule } from './mail-rule/runMailRule.js';
+import { addCustomDomain } from './custom-domain/addCustomDomain.js';
+import { verifyCustomDomain } from './custom-domain/verifyCustomDomain.js';
+import { deleteCustomDomain } from './custom-domain/deleteCustomDomain.js';
+import { createCustomDomainAccount } from './custom-domain/createCustomDomainAccount.js';
+import { deleteCustomDomainAccount } from './custom-domain/deleteCustomDomainAccount.js';
 import { createCheckoutSession } from './billing/createCheckoutSession.js';
 import { createBillingPortalSession } from './billing/createBillingPortalSession.js';
 import { refreshStorageUsage } from './billing/refreshStorageUsage.js';
@@ -48,10 +53,10 @@ export const MutationResolvers: AllMutations = {
   updateEmailAccount,
   deleteEmailAccount,
   syncEmailAccount,
-  testEmailAccountConnection,
-  createSmtpProfile,
-  updateSmtpProfile,
-  deleteSmtpProfile,
+  testImapConnection: testEmailAccountConnection,
+  createSendProfile,
+  updateSendProfile,
+  deleteSendProfile,
   testSmtpConnection,
   sendEmail,
   saveDraft,
@@ -75,6 +80,11 @@ export const MutationResolvers: AllMutations = {
   updateMailRule,
   deleteMailRule,
   runMailRule,
+  addCustomDomain,
+  verifyCustomDomain,
+  deleteCustomDomain,
+  createCustomDomainAccount,
+  deleteCustomDomainAccount,
   createCheckoutSession,
   createBillingPortalSession,
   refreshStorageUsage,

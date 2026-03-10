@@ -14,24 +14,16 @@ import {
   STORAGE_LIMITS,
   ACCOUNT_LIMITS,
 } from '../../db/models/subscription.model.js';
+import { DOMAIN_LIMITS } from '../../db/models/subscription.constants.js';
 import { requireAuth } from '../../helpers/auth.js';
 
-/**
- * Get the current user's billing information including subscription and usage.
- * Creates a free tier subscription if one doesn't exist.
- * Syncs subscription status from Stripe if the user has an active subscription.
- * Also fetches current prices from Stripe for display in the UI.
- */
 export const getBillingInfo = makeQuery(
   'getBillingInfo',
   async (_parent, args, context) => {
     const userId = requireAuth(context);
 
-    // Get or create subscription
     let subscription = await getOrCreateSubscription(userId);
 
-    // If a checkout session ID was provided (redirect from Stripe checkout),
-    // resolve it first to set stripeSubscriptionId before the webhook arrives
     if (args.sessionId) {
       subscription = await resolveCheckoutSession(
         subscription,
@@ -39,20 +31,16 @@ export const getBillingInfo = makeQuery(
       );
     }
 
-    // Sync subscription status from Stripe (if they have a Stripe subscription)
     subscription = await syncSubscriptionFromStripe(subscription);
 
-    // Fetch prices from Stripe
     const prices = await getStripePrices();
 
-    // Get usage from cache table (or calculate if not exists)
     const usage = await getOrCreateUserUsage(userId);
 
-    // Build usage object (default to zeros if not calculated yet)
     const storageUsage = {
       userId: userId,
       accountCount: usage?.accountCount ?? 0,
-      totalBodySizeBytes: usage?.totalBodySizeBytes ?? 0,
+      totalBodySizeBytes: usage?.totalStorageBytes ?? 0,
       totalAttachmentSizeBytes: usage?.totalAttachmentSizeBytes ?? 0,
       totalStorageBytes: usage?.totalStorageBytes ?? 0,
       totalStorageGB: bytesToGB(usage?.totalStorageBytes ?? 0),
@@ -61,11 +49,11 @@ export const getBillingInfo = makeQuery(
       lastRefreshedAt: usage?.lastRefreshedAt ?? null,
     };
 
-    // Calculate limits
     const storageLimitBytes = STORAGE_LIMITS[subscription.storageTier];
     const accountLimit = ACCOUNT_LIMITS[subscription.accountTier];
+    const domainLimit = DOMAIN_LIMITS[subscription.domainTier];
+    const domainCount = usage?.domainCount ?? 0;
 
-    // Calculate percentages
     const storageUsagePercent =
       storageLimitBytes > 0
         ? Math.min(
@@ -77,13 +65,19 @@ export const getBillingInfo = makeQuery(
     const accountUsagePercent =
       accountLimit > 0
         ? Math.min(100, (storageUsage.accountCount / accountLimit) * 100)
-        : 0; // 0 for unlimited
+        : 0;
 
-    // Check if limits exceeded
+    const domainUsagePercent =
+      domainLimit > 0
+        ? Math.min(100, (domainCount / domainLimit) * 100)
+        : 0;
+
     const isStorageLimitExceeded =
       storageUsage.totalStorageBytes > storageLimitBytes;
     const isAccountLimitExceeded =
       accountLimit > 0 && storageUsage.accountCount > accountLimit;
+    const isDomainLimitExceeded =
+      domainLimit >= 0 && domainCount > domainLimit;
 
     return {
       subscription: {
@@ -94,20 +88,23 @@ export const getBillingInfo = makeQuery(
         status: subscription.status.toUpperCase(),
         storageTier: subscription.storageTier.toUpperCase(),
         accountTier: subscription.accountTier.toUpperCase(),
+        domainTier: subscription.domainTier.toUpperCase(),
         storageLimitBytes,
         accountLimit,
+        domainLimit,
         isValid: subscription.isValid,
         currentPeriodEnd: subscription.currentPeriodEnd,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       },
-      // Only consider them as having a Stripe subscription if they completed checkout
-      // (have a stripeSubscriptionId, not just a stripeCustomerId from a cancelled checkout)
       hasStripeCustomer: !!subscription.stripeSubscriptionId,
       usage: storageUsage,
       storageUsagePercent,
       accountUsagePercent,
+      domainCount,
+      domainUsagePercent,
       isStorageLimitExceeded,
       isAccountLimitExceeded,
+      isDomainLimitExceeded,
       isStripeConfigured: isStripeConfigured(),
       prices,
     };

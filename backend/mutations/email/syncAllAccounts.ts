@@ -1,5 +1,5 @@
 import { makeMutation } from '../../types.js';
-import { EmailAccount } from '../../db/models/index.js';
+import { EmailAccount, ImapAccountSettings } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { startAsyncEmailSync } from '../../helpers/email.js';
 import { logger } from '../../helpers/logger.js';
@@ -11,16 +11,16 @@ export const syncAllAccounts = makeMutation(
 
     const accounts = await EmailAccount.findAll({
       where: { userId },
+      include: [{ model: ImapAccountSettings, as: 'imapSettings' }],
     });
 
     if (accounts.length === 0) {
       return true;
     }
 
-    // Start async syncs for all accounts (don't block)
     for (const account of accounts) {
       logger.info('syncAllAccounts', `Starting sync for account: ${account.email}`);
-      startAsyncEmailSync(account).catch((err) => {
+      startAsyncEmailSync(account, account.imapSettings ?? undefined).catch((err) => {
         logger.error('syncAllAccounts', `Failed to start sync for ${account.email}`, { error: err instanceof Error ? err.message : err });
       });
     }

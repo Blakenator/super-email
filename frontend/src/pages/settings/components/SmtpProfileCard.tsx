@@ -18,10 +18,13 @@ export interface SmtpProfileData {
   name: string;
   email: string;
   alias?: string | null;
-  host: string;
-  port: number;
-  useSsl: boolean;
+  type: string;
   isDefault: boolean;
+  smtpSettings?: {
+    host: string;
+    port: number;
+    useSsl: boolean;
+  } | null;
 }
 
 interface SmtpProfileCardProps {
@@ -53,27 +56,36 @@ export function SmtpProfileCard({
         </SmtpCardSubtitle>
       </SmtpCardHeader>
       <SmtpCardBody className="card-body">
-        <SmtpDetailRow>
-          <SmtpDetailLabel>Server</SmtpDetailLabel>
-          <span>
-            {profile.host}:{profile.port}
-          </span>
-        </SmtpDetailRow>
-        <SmtpDetailRow>
-          <SmtpDetailLabel>Security</SmtpDetailLabel>
-          <span>
-            {profile.useSsl ? (
-              <Badge bg="success">
-                <FontAwesomeIcon icon={faLock} className="me-1" />
-                SSL/TLS
-              </Badge>
-            ) : (
-              <Badge bg="warning" text="dark">
-                No SSL
-              </Badge>
-            )}
-          </span>
-        </SmtpDetailRow>
+        {profile.smtpSettings ? (
+          <>
+            <SmtpDetailRow>
+              <SmtpDetailLabel>Server</SmtpDetailLabel>
+              <span>
+                {profile.smtpSettings.host}:{profile.smtpSettings.port}
+              </span>
+            </SmtpDetailRow>
+            <SmtpDetailRow>
+              <SmtpDetailLabel>Security</SmtpDetailLabel>
+              <span>
+                {profile.smtpSettings.useSsl ? (
+                  <Badge bg="success">
+                    <FontAwesomeIcon icon={faLock} className="me-1" />
+                    SSL/TLS
+                  </Badge>
+                ) : (
+                  <Badge bg="warning" text="dark">
+                    No SSL
+                  </Badge>
+                )}
+              </span>
+            </SmtpDetailRow>
+          </>
+        ) : (
+          <SmtpDetailRow>
+            <SmtpDetailLabel>Type</SmtpDetailLabel>
+            <Badge bg="success">Custom Domain (SES)</Badge>
+          </SmtpDetailRow>
+        )}
         {profile.alias && (
           <SmtpDetailRow>
             <SmtpDetailLabel>Display Name</SmtpDetailLabel>

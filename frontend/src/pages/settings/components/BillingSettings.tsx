@@ -11,6 +11,7 @@ import {
   faTimesCircle,
   faDatabase,
   faEnvelope,
+  faGlobe,
   faSync,
   faCrown,
   faArrowRight,
@@ -23,7 +24,7 @@ import {
   REFRESH_STORAGE_USAGE_MUTATION,
   CREATE_CHECKOUT_SESSION_MUTATION,
 } from '../queries';
-import { StorageTier, AccountTier } from '../../../__generated__/graphql';
+import { StorageTier, AccountTier, DomainTier } from '../../../__generated__/graphql';
 import {
   BillingContainer,
   BillingCard,
@@ -112,6 +113,21 @@ function getAccountLimit(tier: string): string {
   }
 }
 
+function getDomainLimit(tier: string): string {
+  switch (tier) {
+    case 'FREE':
+      return '0 domains';
+    case 'BASIC':
+      return '1 domain';
+    case 'PRO':
+      return '2 domains';
+    case 'ENTERPRISE':
+      return '5 domains';
+    default:
+      return 'Unknown';
+  }
+}
+
 function getProgressVariant(percent: number): 'success' | 'warning' | 'danger' {
   if (percent >= 90) return 'danger';
   if (percent >= 75) return 'warning';
@@ -134,7 +150,25 @@ const ACCOUNT_LIMIT_COUNT: Record<string, number> = {
   ENTERPRISE: -1, // unlimited
 };
 
-// Default tier info (used when Stripe prices not available)
+const DOMAIN_LIMIT_COUNT: Record<string, number> = {
+  FREE: 0,
+  BASIC: 1,
+  PRO: 2,
+  ENTERPRISE: 5,
+};
+
+const DEFAULT_DOMAIN_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
+  { id: DomainTier.Free, name: 'Free', limit: '0 domains', price: '$0' },
+  { id: DomainTier.Basic, name: 'Basic', limit: '1 domain', price: '$5/mo' },
+  { id: DomainTier.Pro, name: 'Pro', limit: '2 domains', price: '$7/mo' },
+  {
+    id: DomainTier.Enterprise,
+    name: 'Enterprise',
+    limit: '5 domains',
+    price: '$10/mo',
+  },
+];
+
 const DEFAULT_STORAGE_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
   { id: StorageTier.Free, name: 'Free', limit: '5 GB', price: '$0' },
   { id: StorageTier.Basic, name: 'Basic', limit: '10 GB', price: '$5/mo' },
@@ -174,7 +208,7 @@ function formatPrice(
 }
 
 interface TierInfo {
-  id: StorageTier | AccountTier;
+  id: StorageTier | AccountTier | DomainTier;
   name: string;
   limit: string;
   price: string;
@@ -256,6 +290,42 @@ function buildAccountTiers(
   });
 }
 
+function buildDomainTiers(
+  prices: Array<{
+    tier: string;
+    type: string;
+    name: string;
+    unitAmount: number;
+    currency: string;
+    interval: string;
+  }>,
+): TierInfo[] {
+  const domainPrices = prices.filter((p) => p.type === 'domain');
+  const priceMap = new Map(domainPrices.map((p) => [p.tier, p]));
+
+  return DEFAULT_DOMAIN_TIERS.map((tier) => {
+    const stripePrice = priceMap.get(tier.id.toUpperCase());
+    const isFree = tier.id === DomainTier.Free;
+    const isConfigured = isFree || !!stripePrice;
+
+    if (stripePrice) {
+      return {
+        ...tier,
+        name: stripePrice.name
+          .replace(' Domains', '')
+          .replace(' domains', ''),
+        price: formatPrice(
+          stripePrice.unitAmount,
+          stripePrice.currency,
+          stripePrice.interval,
+        ),
+        isConfigured,
+      };
+    }
+    return { ...tier, isConfigured };
+  });
+}
+
 export function BillingSettings() {
   // Extract checkout session ID from URL (set by Stripe redirect)
   const [checkoutSessionId] = useState(() => {
@@ -285,6 +355,8 @@ export function BillingSettings() {
     useState<StorageTier | null>(null);
   const [pendingAccountTier, setPendingAccountTier] =
     useState<AccountTier | null>(null);
+  const [pendingDomainTier, setPendingDomainTier] =
+    useState<DomainTier | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalStep, setConfirmModalStep] = useState<1 | 2>(1);
 
@@ -358,6 +430,18 @@ export function BillingSettings() {
     [data?.getBillingInfo?.subscription?.accountTier],
   );
 
+  const handleDomainTierSelect = useCallback(
+    (tier: DomainTier) => {
+      const currentTier = data?.getBillingInfo?.subscription?.domainTier;
+      if (tier === currentTier) {
+        setPendingDomainTier(null);
+      } else {
+        setPendingDomainTier(tier);
+      }
+    },
+    [data?.getBillingInfo?.subscription?.domainTier],
+  );
+
   const handleConfirmChanges = async () => {
     const storageTier =
       pendingStorageTier ||
@@ -365,9 +449,15 @@ export function BillingSettings() {
     const accountTier =
       pendingAccountTier ||
       (data?.getBillingInfo?.subscription?.accountTier as AccountTier);
+    const domainTier =
+      pendingDomainTier ||
+      (data?.getBillingInfo?.subscription?.domainTier as DomainTier);
 
-    // If downgrading to free on both, we can't do that via checkout - they need to cancel in portal
-    if (storageTier === StorageTier.Free && accountTier === AccountTier.Free) {
+    if (
+      storageTier === StorageTier.Free &&
+      accountTier === AccountTier.Free &&
+      domainTier === DomainTier.Free
+    ) {
       toast.error(
         'To cancel your subscription, please use the Manage Billing button',
       );
@@ -380,6 +470,7 @@ export function BillingSettings() {
         variables: {
           storageTier,
           accountTier,
+          domainTier,
         },
       });
       const url = result.data?.createCheckoutSession;
@@ -393,7 +484,9 @@ export function BillingSettings() {
   };
 
   const hasPendingChanges =
-    pendingStorageTier !== null || pendingAccountTier !== null;
+    pendingStorageTier !== null ||
+    pendingAccountTier !== null ||
+    pendingDomainTier !== null;
 
   if (loading) {
     return (
@@ -424,12 +517,14 @@ export function BillingSettings() {
 
   const currentStorageTier = subscription?.storageTier ?? 'FREE';
   const currentAccountTier = subscription?.accountTier ?? 'FREE';
+  const currentDomainTier = subscription?.domainTier ?? 'FREE';
   const effectiveStorageTier = pendingStorageTier || currentStorageTier;
   const effectiveAccountTier = pendingAccountTier || currentAccountTier;
+  const effectiveDomainTier = pendingDomainTier || currentDomainTier;
 
-  // Build tier lists from Stripe prices (if available)
   const storageTiers = buildStorageTiers(billing?.prices ?? []);
   const accountTiers = buildAccountTiers(billing?.prices ?? []);
+  const domainTiers = buildDomainTiers(billing?.prices ?? []);
 
   return (
     <BillingContainer>
@@ -442,6 +537,9 @@ export function BillingSettings() {
             {pendingStorageTier && pendingAccountTier && ', '}
             {pendingAccountTier &&
               `Accounts: ${formatTier(pendingAccountTier)}`}
+            {(pendingStorageTier || pendingAccountTier) && pendingDomainTier && ', '}
+            {pendingDomainTier &&
+              `Domains: ${formatTier(pendingDomainTier)}`}
           </div>
           <div className="d-flex gap-2">
             <Button
@@ -450,6 +548,7 @@ export function BillingSettings() {
               onClick={() => {
                 setPendingStorageTier(null);
                 setPendingAccountTier(null);
+                setPendingDomainTier(null);
               }}
             >
               Cancel
@@ -504,6 +603,12 @@ export function BillingSettings() {
                   <SubscriptionLabel>Account Tier</SubscriptionLabel>
                   <SubscriptionValue>
                     {getAccountLimit(currentAccountTier)}
+                  </SubscriptionValue>
+                </SubscriptionItem>
+                <SubscriptionItem>
+                  <SubscriptionLabel>Domain Tier</SubscriptionLabel>
+                  <SubscriptionValue>
+                    {getDomainLimit(currentDomainTier)}
                   </SubscriptionValue>
                 </SubscriptionItem>
                 {subscription?.currentPeriodEnd && (
@@ -693,11 +798,9 @@ export function BillingSettings() {
                   );
                 })}
               </TierSelectionGrid>
-              {/* Downgrade warning for accounts */}
               {pendingAccountTier && (() => {
                 const pendingLimit = ACCOUNT_LIMIT_COUNT[pendingAccountTier] ?? 0;
                 const currentAccountCount = usage?.accountCount ?? 0;
-                // -1 means unlimited, so never warn for that
                 const wouldExceedLimit = pendingLimit !== -1 && currentAccountCount > pendingLimit;
                 
                 if (wouldExceedLimit) {
@@ -710,6 +813,77 @@ export function BillingSettings() {
                         but the {formatTier(pendingAccountTier)} plan only allows {pendingLimit}.
                         You won't be able to add new email accounts until you remove some or upgrade to a higher tier.
                         Existing accounts will continue to work, but some may be disabled if you don't remove them.
+                      </div>
+                    </DowngradeWarning>
+                  );
+                }
+                return null;
+              })()}
+            </Card.Body>
+          </BillingCard>
+
+          <BillingCard className="card">
+            <Card.Header>
+              <FontAwesomeIcon icon={faGlobe} className="me-2" />
+              Custom Domains Plan
+            </Card.Header>
+            <Card.Body>
+              <TierSelectionGrid>
+                {domainTiers.map((tier) => {
+                  const isCurrent = currentDomainTier === tier.id;
+                  const isSelected = effectiveDomainTier === tier.id;
+                  const isPending = pendingDomainTier === tier.id;
+                  const isDisabled = !tier.isConfigured;
+                  return (
+                    <TierCard
+                      key={tier.id}
+                      $selected={isSelected}
+                      $current={isCurrent}
+                      $disabled={isDisabled}
+                      onClick={() =>
+                        !isDisabled &&
+                        handleDomainTierSelect(tier.id as DomainTier)
+                      }
+                    >
+                      {isCurrent && <CurrentBadge>Current</CurrentBadge>}
+                      {isDisabled && !isCurrent && (
+                        <UnavailableBadge>Coming Soon</UnavailableBadge>
+                      )}
+                      <TierCardHeader>{tier.name}</TierCardHeader>
+                      <TierCardPrice>{tier.price}</TierCardPrice>
+                      <TierCardFeatures>
+                        <TierCardFeature>
+                          <FontAwesomeIcon icon={faCheckCircle} />
+                          {tier.limit}
+                        </TierCardFeature>
+                      </TierCardFeatures>
+                      {isPending && (
+                        <small className="text-warning mt-2 d-block">
+                          <FontAwesomeIcon
+                            icon={faArrowRight}
+                            className="me-1"
+                          />
+                          Selected
+                        </small>
+                      )}
+                    </TierCard>
+                  );
+                })}
+              </TierSelectionGrid>
+              {pendingDomainTier && (() => {
+                const pendingLimit = DOMAIN_LIMIT_COUNT[pendingDomainTier] ?? 0;
+                const currentDomainCount = usage?.domainCount ?? 0;
+                const wouldExceedLimit = currentDomainCount > pendingLimit;
+
+                if (wouldExceedLimit) {
+                  return (
+                    <DowngradeWarning>
+                      <FontAwesomeIcon icon={faExclamationTriangle} />
+                      <div>
+                        <strong>Domain limit will be exceeded</strong>
+                        You currently have {currentDomainCount} custom domain{currentDomainCount !== 1 ? 's' : ''},
+                        but the {formatTier(pendingDomainTier)} plan only allows {pendingLimit}.
+                        You'll need to remove domains before downgrading.
                       </div>
                     </DowngradeWarning>
                   );
@@ -821,7 +995,28 @@ export function BillingSettings() {
               )}
             </UsageItem>
 
-            {/* Stats */}
+            {/* Domain Usage */}
+            <UsageItem>
+              <UsageHeader>
+                <UsageLabel>
+                  <FontAwesomeIcon icon={faGlobe} className="me-2" />
+                  Custom Domains
+                </UsageLabel>
+                <UsageValue>
+                  {usage?.domainCount ?? 0} /{' '}
+                  {subscription?.domainLimit ?? 0}
+                </UsageValue>
+              </UsageHeader>
+              {(subscription?.domainLimit ?? 0) > 0 && (
+                <StyledProgressBar
+                  now={billing?.domainUsagePercent ?? 0}
+                  $variant={getProgressVariant(
+                    billing?.domainUsagePercent ?? 0,
+                  )}
+                />
+              )}
+            </UsageItem>
+
             <SubscriptionGrid>
               <SubscriptionItem>
                 <SubscriptionLabel>Total Emails</SubscriptionLabel>
@@ -855,6 +1050,16 @@ export function BillingSettings() {
               <div>
                 <strong>Account limit exceeded!</strong> Please upgrade your
                 plan or remove some email accounts.
+              </div>
+            </ErrorBox>
+          )}
+
+          {billing?.isDomainLimitExceeded && (
+            <ErrorBox>
+              <FontAwesomeIcon icon={faTimesCircle} />
+              <div>
+                <strong>Domain limit exceeded!</strong> Please upgrade your
+                plan or remove some custom domains.
               </div>
             </ErrorBox>
           )}
@@ -936,6 +1141,12 @@ export function BillingSettings() {
                   <li>
                     Accounts: {formatTier(currentAccountTier)} →{' '}
                     {formatTier(pendingAccountTier)}
+                  </li>
+                )}
+                {pendingDomainTier && (
+                  <li>
+                    Domains: {formatTier(currentDomainTier)} →{' '}
+                    {formatTier(pendingDomainTier)}
                   </li>
                 )}
               </ul>

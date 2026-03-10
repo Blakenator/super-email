@@ -1,12 +1,13 @@
 import { gql } from '../../__generated__/gql';
 
-export const GET_SMTP_PROFILES_QUERY = gql(`
-  query GetSmtpProfiles {
-    getSmtpProfiles {
+export const GET_SEND_PROFILES_QUERY = gql(`
+  query GetSendProfiles {
+    getSendProfiles {
       id
       name
       email
       alias
+      type
       isDefault
     }
   }
@@ -18,7 +19,8 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       id
       name
       email
-      defaultSmtpProfileId
+      type
+      defaultSendProfileId
       isDefault
     }
   }

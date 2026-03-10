@@ -1,10 +1,10 @@
 export { SettingsScreen } from './SettingsScreen';
 export { AccountsSettingsScreen } from './AccountsSettingsScreen';
-export { SmtpSettingsScreen } from './SmtpSettingsScreen';
+export { SendProfileSettingsScreen } from './SmtpSettingsScreen';
 export { TagsSettingsScreen } from './TagsSettingsScreen';
 export { RulesSettingsScreen } from './RulesSettingsScreen';
 export { NotificationsSettingsScreen } from './NotificationsSettingsScreen';
 export { EditTagScreen } from './EditTagScreen';
 export { EditAccountScreen } from './EditAccountScreen';
-export { EditSmtpProfileScreen } from './EditSmtpProfileScreen';
+export { EditSendProfileScreen } from './EditSmtpProfileScreen';
 export { EditRuleScreen } from './EditRuleScreen';

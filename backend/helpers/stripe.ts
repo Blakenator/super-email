@@ -7,6 +7,7 @@ import {
   StorageTier,
   AccountTier,
 } from '../db/models/subscription.model.js';
+import { DomainTier } from '../db/models/subscription.constants.js';
 import type { User } from '../db/models/user.model.js';
 
 // Initialize Stripe client (only if secret key is configured)
@@ -96,15 +97,14 @@ export async function createCheckoutSession(
   accountTier: AccountTier,
   successUrl: string,
   cancelUrl: string,
+  domainTier?: DomainTier,
 ): Promise<string> {
   const stripeClient = getStripeClient();
   const customerId = await getOrCreateStripeCustomer(user);
 
-  // Build line items based on selected tiers
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
   const missingPriceIds: string[] = [];
 
-  // Add storage tier if not free
   if (storageTier !== StorageTier.FREE) {
     const priceId = getPriceIdForStorageTier(storageTier);
     if (priceId) {
@@ -114,7 +114,6 @@ export async function createCheckoutSession(
     }
   }
 
-  // Add account tier if not free
   if (accountTier !== AccountTier.FREE) {
     const priceId = getPriceIdForAccountTier(accountTier);
     if (priceId) {
@@ -124,16 +123,22 @@ export async function createCheckoutSession(
     }
   }
 
-  // If no paid items were added
+  if (domainTier && domainTier !== DomainTier.FREE) {
+    const priceId = getPriceIdForDomainTier(domainTier);
+    if (priceId) {
+      lineItems.push({ price: priceId, quantity: 1 });
+    } else {
+      missingPriceIds.push(`domain ${domainTier}`);
+    }
+  }
+
   if (lineItems.length === 0) {
-    // Check if user selected paid tiers but price IDs aren't configured
     if (missingPriceIds.length > 0) {
       throw new Error(
         `The selected plan(s) are not available: ${missingPriceIds.join(', ')}. ` +
           'Please contact support or try a different plan.',
       );
     }
-    // Both tiers are free - can't checkout for free tier
     throw new Error(
       'Cannot create checkout session for free tier. ' +
         'Please select at least one paid plan to upgrade.',
@@ -218,6 +223,32 @@ function getPriceIdForAccountTier(tier: AccountTier): string | null {
     default:
       return null;
   }
+}
+
+function getPriceIdForDomainTier(tier: DomainTier): string | null {
+  switch (tier) {
+    case DomainTier.BASIC:
+      return config.stripe.domainPriceIds?.basic || null;
+    case DomainTier.PRO:
+      return config.stripe.domainPriceIds?.pro || null;
+    case DomainTier.ENTERPRISE:
+      return config.stripe.domainPriceIds?.enterprise || null;
+    default:
+      return null;
+  }
+}
+
+function getDomainTierFromPriceId(priceId: string): DomainTier | null {
+  if (priceId === config.stripe.domainPriceIds?.basic) {
+    return DomainTier.BASIC;
+  }
+  if (priceId === config.stripe.domainPriceIds?.pro) {
+    return DomainTier.PRO;
+  }
+  if (priceId === config.stripe.domainPriceIds?.enterprise) {
+    return DomainTier.ENTERPRISE;
+  }
+  return null;
 }
 
 /**
@@ -350,9 +381,9 @@ async function handleSubscriptionUpdated(
   // Map Stripe status to our status enum
   const status = mapStripeStatus(stripeSubscription.status);
 
-  // Extract tiers from subscription items
   let storageTier = StorageTier.FREE;
   let accountTier = AccountTier.FREE;
+  let domainTier = DomainTier.FREE;
 
   for (const item of stripeSubscription.items.data) {
     const priceId = item.price.id;
@@ -366,9 +397,13 @@ async function handleSubscriptionUpdated(
     if (account) {
       accountTier = account;
     }
+
+    const domain = getDomainTierFromPriceId(priceId);
+    if (domain) {
+      domainTier = domain;
+    }
   }
 
-  // Safely extract period end and cancel status
   const stripeSub = stripeSubscription as any;
   const periodEnd = stripeSub.current_period_end;
   const cancelAtEnd = stripeSub.cancel_at_period_end ?? false;
@@ -378,6 +413,7 @@ async function handleSubscriptionUpdated(
     status: typeof status;
     storageTier: typeof storageTier;
     accountTier: typeof accountTier;
+    domainTier: typeof domainTier;
     currentPeriodEnd?: Date;
     cancelAtPeriodEnd: boolean;
   } = {
@@ -385,6 +421,7 @@ async function handleSubscriptionUpdated(
     status,
     storageTier,
     accountTier,
+    domainTier,
     cancelAtPeriodEnd: cancelAtEnd,
   };
 
@@ -590,9 +627,9 @@ export async function syncSubscriptionFromStripe(
     // Map Stripe status to our status enum
     const status = mapStripeStatus(stripeSubscription.status);
 
-    // Extract tiers from subscription items
     let storageTier = StorageTier.FREE;
     let accountTier = AccountTier.FREE;
+    let domainTier = DomainTier.FREE;
 
     const items = stripeSubscription.items?.data ?? [];
     for (const item of items) {
@@ -608,6 +645,11 @@ export async function syncSubscriptionFromStripe(
       const account = getAccountTierFromPriceId(priceId);
       if (account) {
         accountTier = account;
+      }
+
+      const domain = getDomainTierFromPriceId(priceId);
+      if (domain) {
+        domainTier = domain;
       }
     }
 
@@ -642,17 +684,18 @@ export async function syncSubscriptionFromStripe(
     
     const cancelAtEnd = stripeSub.cancel_at_period_end ?? false;
 
-    // Build update object, only including period end if it exists
     const updateData: {
       status: typeof status;
       storageTier: typeof storageTier;
       accountTier: typeof accountTier;
+      domainTier: typeof domainTier;
       currentPeriodEnd?: Date;
       cancelAtPeriodEnd: boolean;
     } = {
       status,
       storageTier,
       accountTier,
+      domainTier,
       cancelAtPeriodEnd: cancelAtEnd,
     };
 

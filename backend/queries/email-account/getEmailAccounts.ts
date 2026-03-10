@@ -1,5 +1,5 @@
 import { makeQuery } from '../../types.js';
-import { EmailAccount, SmtpProfile } from '../../db/models/index.js';
+import { EmailAccount, SendProfile, ImapAccountSettings } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const getEmailAccounts = makeQuery(
@@ -12,8 +12,13 @@ export const getEmailAccounts = makeQuery(
       order: [['createdAt', 'DESC']],
       include: [
         {
-          model: SmtpProfile,
-          as: 'defaultSmtpProfile',
+          model: SendProfile,
+          as: 'defaultSendProfile',
+          required: false,
+        },
+        {
+          model: ImapAccountSettings,
+          as: 'imapSettings',
           required: false,
         },
       ],

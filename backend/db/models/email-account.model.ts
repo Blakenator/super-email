@@ -3,18 +3,21 @@ import {
   DataType,
   ForeignKey,
   BelongsTo,
+  HasOne,
   Model,
   Table,
 } from 'sequelize-typescript';
 // Dual import pattern for circular dependencies
 import { User } from './user.model.js';
 import type { User as UserType } from './user.model.js';
-import { SmtpProfile } from './smtp-profile.model.js';
-import type { SmtpProfile as SmtpProfileType } from './smtp-profile.model.js';
+import { SendProfile } from './send-profile.model.js';
+import type { SendProfile as SendProfileType } from './send-profile.model.js';
+import { ImapAccountSettings } from './imap-account-settings.model.js';
+import type { ImapAccountSettings as ImapAccountSettingsType } from './imap-account-settings.model.js';
 
 export enum EmailAccountType {
   IMAP = 'IMAP',
-  POP3 = 'POP3',
+  CUSTOM_DOMAIN = 'CUSTOM_DOMAIN',
 }
 
 @Table({
@@ -47,94 +50,19 @@ export class EmailAccount extends Model {
   @Column({ type: DataType.TEXT, allowNull: false })
   declare email: string;
 
-  @Column({ type: DataType.TEXT, allowNull: false })
-  declare host: string;
-
-  @Column({ type: DataType.INTEGER, allowNull: false })
-  declare port: number;
-
-  @Column({ type: DataType.TEXT, allowNull: false })
-  declare username: string;
-
-  @Column({ type: DataType.TEXT, allowNull: false })
-  declare password: string;
-
   @Column({
     type: DataType.ENUM(...Object.values(EmailAccountType)),
     allowNull: false,
+    defaultValue: EmailAccountType.IMAP,
   })
-  declare accountType: EmailAccountType;
+  declare type: EmailAccountType;
 
-  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: true })
-  declare useSsl: boolean;
-
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare lastSyncedAt: Date | null;
-
-  // ===== HISTORICAL SYNC FIELDS (initial sync of old emails) =====
-  // Historical sync fetches emails from newest to oldest on first sync
-  @Column({ type: DataType.TEXT, allowNull: true })
-  declare historicalSyncId: string | null;
-
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare historicalSyncProgress: number | null;
-
-  @Column({ type: DataType.TEXT, allowNull: true })
-  declare historicalSyncStatus: string | null;
-
-  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
-  declare historicalSyncComplete: boolean;
-
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare historicalSyncExpiresAt: Date | null;
-
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare historicalSyncLastAt: Date | null;
-
-  // UID-based resume point for INBOX during historical sync
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare historicalSyncLastUidInbox: number | null;
-
-  // UID-based resume point for SENT folder
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare historicalSyncLastUidSent: number | null;
-
-  // Total UIDs to process for progress calculation during resume
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare historicalSyncTotalInbox: number | null;
-
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare historicalSyncTotalSent: number | null;
-
-  // ===== UPDATE SYNC FIELDS (sync of new emails) =====
-  // Update sync fetches only new emails since last sync
-  @Column({ type: DataType.TEXT, allowNull: true })
-  declare updateSyncId: string | null;
-
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare updateSyncProgress: number | null;
-
-  @Column({ type: DataType.TEXT, allowNull: true })
-  declare updateSyncStatus: string | null;
-
-  @Column({ type: DataType.DATE, allowNull: true })
-  declare updateSyncExpiresAt: Date | null;
-
-  // ===== UID-BASED INCREMENTAL SYNC =====
-  // Stores the IMAP UIDNEXT value after each sync so the next incremental
-  // sync can search by UID range instead of the less reliable SINCE date.
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare lastSyncUidNextInbox: number | null;
-
-  @Column({ type: DataType.INTEGER, allowNull: true })
-  declare lastSyncUidNextSent: number | null;
-
-  @ForeignKey(() => SmtpProfile)
+  @ForeignKey(() => SendProfile)
   @Column({ type: DataType.UUID, allowNull: true })
-  declare defaultSmtpProfileId: string | null;
+  declare defaultSendProfileId: string | null;
 
-  @BelongsTo(() => SmtpProfile)
-  declare defaultSmtpProfile?: SmtpProfileType | null;
+  @BelongsTo(() => SendProfile)
+  declare defaultSendProfile?: SendProfileType | null;
 
   // Provider ID for icon display (gmail, outlook, yahoo, etc.)
   @Column({ type: DataType.TEXT, allowNull: true })
@@ -142,4 +70,7 @@ export class EmailAccount extends Model {
 
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare isDefault: boolean;
+
+  @HasOne(() => ImapAccountSettings)
+  declare imapSettings?: ImapAccountSettingsType | null;
 }

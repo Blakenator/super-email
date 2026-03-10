@@ -8,26 +8,30 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       id
       name
       email
-      host
-      port
-      accountType
-      useSsl
-      lastSyncedAt
-      isHistoricalSyncing
-      historicalSyncProgress
-      historicalSyncStatus
-      historicalSyncLastAt
-      isUpdateSyncing
-      updateSyncProgress
-      updateSyncStatus
-      defaultSmtpProfileId
-      defaultSmtpProfile {
+      type
+      defaultSendProfileId
+      defaultSendProfile {
         id
         name
         email
       }
       providerId
       isDefault
+      imapSettings {
+        id
+        host
+        port
+        accountType
+        useSsl
+        lastSyncedAt
+        isHistoricalSyncing
+        historicalSyncProgress
+        historicalSyncStatus
+        historicalSyncLastAt
+        isUpdateSyncing
+        updateSyncProgress
+        updateSyncStatus
+      }
     }
   }
 `);
@@ -66,69 +70,82 @@ export const UPDATE_EMAIL_ACCOUNT_MUTATION = gql(`
       id
       name
       email
-      host
-      port
-      useSsl
-      defaultSmtpProfileId
+      type
+      defaultSendProfileId
       isDefault
+      imapSettings {
+        id
+        host
+        port
+        useSsl
+      }
     }
   }
 `);
 
-export const TEST_EMAIL_ACCOUNT_CONNECTION_MUTATION = gql(`
-  mutation TestEmailAccountConnection($input: TestEmailAccountConnectionInput!) {
-    testEmailAccountConnection(input: $input) {
+export const TEST_IMAP_CONNECTION_MUTATION = gql(`
+  mutation TestImapConnection($input: TestImapConnectionInput!) {
+    testImapConnection(input: $input) {
       success
       message
     }
   }
 `);
 
-// ============ SMTP Profiles ============
+// ============ Send Profiles ============
 
-export const GET_SMTP_PROFILES_FULL_QUERY = gql(`
-  query GetSmtpProfilesFull {
-    getSmtpProfiles {
+export const GET_SEND_PROFILES_FULL_QUERY = gql(`
+  query GetSendProfilesFull {
+    getSendProfiles {
       id
       name
       email
       alias
-      host
-      port
-      useSsl
+      type
       isDefault
       providerId
+      smtpSettings {
+        id
+        host
+        port
+        useSsl
+      }
     }
   }
 `);
 
-export const CREATE_SMTP_PROFILE_MUTATION = gql(`
-  mutation CreateSmtpProfile($input: CreateSmtpProfileInput!) {
-    createSmtpProfile(input: $input) {
+export const CREATE_SEND_PROFILE_MUTATION = gql(`
+  mutation CreateSendProfile($input: CreateSendProfileInput!) {
+    createSendProfile(input: $input) {
       id
       name
       email
+      type
     }
   }
 `);
 
-export const DELETE_SMTP_PROFILE_MUTATION = gql(`
-  mutation DeleteSmtpProfile($id: String!) {
-    deleteSmtpProfile(id: $id)
+export const DELETE_SEND_PROFILE_MUTATION = gql(`
+  mutation DeleteSendProfile($id: String!) {
+    deleteSendProfile(id: $id)
   }
 `);
 
-export const UPDATE_SMTP_PROFILE_MUTATION = gql(`
-  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {
-    updateSmtpProfile(input: $input) {
+export const UPDATE_SEND_PROFILE_MUTATION = gql(`
+  mutation UpdateSendProfile($input: UpdateSendProfileInput!) {
+    updateSendProfile(input: $input) {
       id
       name
       email
       alias
-      host
-      port
-      useSsl
+      type
       isDefault
+      smtpSettings {
+        id
+        host
+        port
+        useSsl
+      }
     }
   }
 `);
@@ -323,6 +340,86 @@ export const RUN_MAIL_RULE_MUTATION = gql(`
   }
 `);
 
+// ============ Custom Domains ============
+
+export const GET_CUSTOM_DOMAINS_QUERY = gql(`
+  query GetCustomDomains {
+    getCustomDomains {
+      id
+      domain
+      status
+      createdAt
+      dnsRecords {
+        id
+        recordType
+        purpose
+        name
+        value
+        isVerified
+      }
+      accounts {
+        id
+        localPart
+        emailAccount {
+          id
+          name
+          email
+        }
+        sendProfile {
+          id
+          name
+          email
+        }
+      }
+    }
+  }
+`);
+
+export const ADD_CUSTOM_DOMAIN_MUTATION = gql(`
+  mutation AddCustomDomain($input: AddCustomDomainInput!) {
+    addCustomDomain(input: $input) {
+      id
+      domain
+      status
+    }
+  }
+`);
+
+export const VERIFY_CUSTOM_DOMAIN_MUTATION = gql(`
+  mutation VerifyCustomDomain($id: String!) {
+    verifyCustomDomain(id: $id) {
+      id
+      domain
+      status
+    }
+  }
+`);
+
+export const DELETE_CUSTOM_DOMAIN_MUTATION = gql(`
+  mutation DeleteCustomDomain($id: String!) {
+    deleteCustomDomain(id: $id)
+  }
+`);
+
+export const CREATE_CUSTOM_DOMAIN_ACCOUNT_MUTATION = gql(`
+  mutation CreateCustomDomainAccount($input: CreateCustomDomainAccountInput!) {
+    createCustomDomainAccount(input: $input) {
+      id
+      localPart
+      emailAccount {
+        id
+        email
+      }
+    }
+  }
+`);
+
+export const DELETE_CUSTOM_DOMAIN_ACCOUNT_MUTATION = gql(`
+  mutation DeleteCustomDomainAccount($id: String!) {
+    deleteCustomDomainAccount(id: $id)
+  }
+`);
+
 // ============ Billing ============
 
 export const GET_BILLING_INFO_QUERY = gql(`
@@ -333,8 +430,10 @@ export const GET_BILLING_INFO_QUERY = gql(`
         status
         storageTier
         accountTier
+        domainTier
         storageLimitBytes
         accountLimit
+        domainLimit
         isValid
         currentPeriodEnd
         cancelAtPeriodEnd
@@ -343,6 +442,7 @@ export const GET_BILLING_INFO_QUERY = gql(`
       usage {
         userId
         accountCount
+        domainCount
         totalBodySizeBytes
         totalAttachmentSizeBytes
         totalStorageBytes
@@ -353,8 +453,10 @@ export const GET_BILLING_INFO_QUERY = gql(`
       }
       storageUsagePercent
       accountUsagePercent
+      domainUsagePercent
       isStorageLimitExceeded
       isAccountLimitExceeded
+      isDomainLimitExceeded
       isStripeConfigured
       prices {
         id
@@ -382,7 +484,7 @@ export const REFRESH_STORAGE_USAGE_MUTATION = gql(`
 `);
 
 export const CREATE_CHECKOUT_SESSION_MUTATION = gql(`
-  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!) {
-    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier)
+  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {
+    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier)
   }
 `);

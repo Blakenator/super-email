@@ -1,6 +1,6 @@
 /**
- * Edit SMTP Profile Screen
- * Create or edit SMTP profiles for sending emails
+ * Edit Send Profile Screen
+ * Create or edit send profiles for sending emails
  */
 
 import React, { useState, useEffect } from 'react';
@@ -21,24 +21,27 @@ import { Icon, SafeHeader } from '../../components/ui';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
 
-const GET_SMTP_PROFILE_QUERY = gql`
-  query GetSmtpProfile($id: String!) {
-    getSmtpProfile(id: $id) {
+const GET_SEND_PROFILE_QUERY = gql`
+  query GetSendProfile($id: String!) {
+    getSendProfile(id: $id) {
       id
       name
       email
       alias
-      host
-      port
-      useSsl
+      type
       isDefault
+      smtpSettings {
+        host
+        port
+        useSsl
+      }
     }
   }
 `;
 
-const CREATE_SMTP_PROFILE_MUTATION = gql`
-  mutation CreateSmtpProfile($input: CreateSmtpProfileInput!) {
-    createSmtpProfile(input: $input) {
+const CREATE_SEND_PROFILE_MUTATION = gql`
+  mutation CreateSendProfile($input: CreateSendProfileInput!) {
+    createSendProfile(input: $input) {
       id
       name
       email
@@ -46,9 +49,9 @@ const CREATE_SMTP_PROFILE_MUTATION = gql`
   }
 `;
 
-const UPDATE_SMTP_PROFILE_MUTATION = gql`
-  mutation UpdateSmtpProfile($input: UpdateSmtpProfileInput!) {
-    updateSmtpProfile(input: $input) {
+const UPDATE_SEND_PROFILE_MUTATION = gql`
+  mutation UpdateSendProfile($input: UpdateSendProfileInput!) {
+    updateSendProfile(input: $input) {
       id
       name
       email
@@ -56,17 +59,17 @@ const UPDATE_SMTP_PROFILE_MUTATION = gql`
   }
 `;
 
-const DELETE_SMTP_PROFILE_MUTATION = gql`
-  mutation DeleteSmtpProfile($id: String!) {
-    deleteSmtpProfile(id: $id)
+const DELETE_SEND_PROFILE_MUTATION = gql`
+  mutation DeleteSendProfile($id: String!) {
+    deleteSendProfile(id: $id)
   }
 `;
 
-interface EditSmtpProfileScreenProps {
+interface EditSendProfileScreenProps {
   onClose: () => void;
 }
 
-export function EditSmtpProfileScreen({ onClose }: EditSmtpProfileScreenProps) {
+export function EditSendProfileScreen({ onClose }: EditSendProfileScreenProps) {
   const theme = useTheme();
   const route = useRoute();
   const params = route.params as { profileId?: string } | undefined;
@@ -96,22 +99,24 @@ export function EditSmtpProfileScreen({ onClose }: EditSmtpProfileScreenProps) {
     setIsLoading(true);
     try {
       const { data } = await apolloClient.query({
-        query: GET_SMTP_PROFILE_QUERY,
+        query: GET_SEND_PROFILE_QUERY,
         variables: { id: profileId },
         fetchPolicy: 'network-only',
       });
-      if (data?.getSmtpProfile) {
-        const profile = data.getSmtpProfile;
+      if (data?.getSendProfile) {
+        const profile = data.getSendProfile;
         setName(profile.name);
         setEmail(profile.email);
         setAlias(profile.alias || '');
-        setHost(profile.host);
-        setPort(String(profile.port));
-        setUseSsl(profile.useSsl);
+        if (profile.smtpSettings) {
+          setHost(profile.smtpSettings.host);
+          setPort(String(profile.smtpSettings.port));
+          setUseSsl(profile.smtpSettings.useSsl);
+        }
         setIsDefault(profile.isDefault);
       }
     } catch (error) {
-      console.error('Error loading SMTP profile:', error);
+      console.error('Error loading send profile:', error);
       Alert.alert('Error', 'Failed to load profile');
     } finally {
       setIsLoading(false);
@@ -133,39 +138,40 @@ export function EditSmtpProfileScreen({ onClose }: EditSmtpProfileScreenProps) {
     try {
       if (isEditing) {
         await apolloClient.mutate({
-          mutation: UPDATE_SMTP_PROFILE_MUTATION,
+          mutation: UPDATE_SEND_PROFILE_MUTATION,
           variables: {
             input: {
               id: profileId,
               name: name.trim(),
               alias: alias.trim() || undefined,
-              host: host.trim(),
-              port: parseInt(port, 10),
-              useSsl,
+              smtpHost: host.trim(),
+              smtpPort: parseInt(port, 10),
+              smtpUseSsl: useSsl,
               isDefault,
-              ...(password.trim() ? { password: password.trim() } : {}),
+              ...(password.trim() ? { smtpPassword: password.trim() } : {}),
             },
           },
-          refetchQueries: ['GetSmtpProfiles'],
+          refetchQueries: ['GetSendProfiles'],
         });
         Alert.alert('Success', 'Profile updated', [{ text: 'OK', onPress: onClose }]);
       } else {
         await apolloClient.mutate({
-          mutation: CREATE_SMTP_PROFILE_MUTATION,
+          mutation: CREATE_SEND_PROFILE_MUTATION,
           variables: {
             input: {
+              type: 'SMTP',
               name: name.trim(),
               email: email.trim(),
               alias: alias.trim() || undefined,
-              host: host.trim(),
-              port: parseInt(port, 10),
-              username: username.trim() || email.trim(),
-              password: password.trim(),
-              useSsl,
+              smtpHost: host.trim(),
+              smtpPort: parseInt(port, 10),
+              smtpUsername: username.trim() || email.trim(),
+              smtpPassword: password.trim(),
+              smtpUseSsl: useSsl,
               isDefault,
             },
           },
-          refetchQueries: ['GetSmtpProfiles'],
+          refetchQueries: ['GetSendProfiles'],
         });
         Alert.alert('Success', 'Profile created', [{ text: 'OK', onPress: onClose }]);
       }
@@ -180,7 +186,7 @@ export function EditSmtpProfileScreen({ onClose }: EditSmtpProfileScreenProps) {
   const handleDelete = () => {
     Alert.alert(
       'Delete Profile',
-      'Are you sure you want to delete this SMTP profile?',
+      'Are you sure you want to delete this send profile?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -190,9 +196,9 @@ export function EditSmtpProfileScreen({ onClose }: EditSmtpProfileScreenProps) {
             setIsSaving(true);
             try {
               await apolloClient.mutate({
-                mutation: DELETE_SMTP_PROFILE_MUTATION,
+                mutation: DELETE_SEND_PROFILE_MUTATION,
                 variables: { id: profileId },
-                refetchQueries: ['GetSmtpProfiles'],
+                refetchQueries: ['GetSendProfiles'],
               });
               Alert.alert('Success', 'Profile deleted', [{ text: 'OK', onPress: onClose }]);
             } catch (error: any) {
@@ -222,7 +228,7 @@ export function EditSmtpProfileScreen({ onClose }: EditSmtpProfileScreenProps) {
           <Icon name="x" size="md" color={theme.colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.text }]}>
-          {isEditing ? 'Edit SMTP Profile' : 'New SMTP Profile'}
+          {isEditing ? 'Edit Send Profile' : 'New Send Profile'}
         </Text>
         <TouchableOpacity
           onPress={handleSave}

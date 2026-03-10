@@ -28,17 +28,22 @@ export interface EmailAccountData {
   id: string;
   name: string;
   email: string;
-  host: string;
-  port: number;
-  accountType: string;
-  isHistoricalSyncing: boolean;
-  historicalSyncProgress?: number | null;
-  historicalSyncStatus?: string | null;
-  isUpdateSyncing: boolean;
-  updateSyncProgress?: number | null;
-  updateSyncStatus?: string | null;
-  lastSyncedAt?: string | null;
-  defaultSmtpProfile?: { name: string } | null;
+  type: string;
+  imapSettings?: {
+    host: string;
+    port: number;
+    accountType: string;
+    useSsl: boolean;
+    lastSyncedAt?: string | null;
+    isHistoricalSyncing: boolean;
+    historicalSyncProgress?: number | null;
+    historicalSyncStatus?: string | null;
+    isUpdateSyncing: boolean;
+    updateSyncProgress?: number | null;
+    updateSyncStatus?: string | null;
+  } | null;
+  defaultSendProfile?: { id: string; name: string } | null;
+  defaultSendProfileId?: string | null;
   isDefault?: boolean;
 }
 
@@ -55,14 +60,15 @@ export function EmailAccountCard({
   onSync,
   onDelete,
 }: EmailAccountCardProps) {
-  // Derive syncing state from historical or update sync
-  const isSyncing = account.isHistoricalSyncing || account.isUpdateSyncing;
-  const syncProgress = account.isHistoricalSyncing
-    ? account.historicalSyncProgress
-    : account.updateSyncProgress;
-  const syncStatus = account.isHistoricalSyncing
-    ? account.historicalSyncStatus
-    : account.updateSyncStatus;
+  const imap = account.imapSettings;
+  const isSyncing = imap?.isHistoricalSyncing || imap?.isUpdateSyncing || false;
+  const syncProgress = imap?.isHistoricalSyncing
+    ? imap?.historicalSyncProgress
+    : imap?.updateSyncProgress;
+  const syncStatus = imap?.isHistoricalSyncing
+    ? imap?.historicalSyncStatus
+    : imap?.updateSyncStatus;
+  const isCustomDomain = account.type === 'CUSTOM_DOMAIN';
 
   return (
     <AccountCardStyled $isSyncing={isSyncing} className="card">
@@ -79,41 +85,45 @@ export function EmailAccountCard({
         <AccountCardSubtitle>{account.email}</AccountCardSubtitle>
       </AccountCardHeader>
       <AccountCardBody className="card-body">
-        <AccountDetailRow>
-          <AccountDetailLabel>Server</AccountDetailLabel>
-          <span>
-            {account.host}:{account.port}
-          </span>
-        </AccountDetailRow>
+        {imap && (
+          <AccountDetailRow>
+            <AccountDetailLabel>Server</AccountDetailLabel>
+            <span>
+              {imap.host}:{imap.port}
+            </span>
+          </AccountDetailRow>
+        )}
         <AccountDetailRow>
           <AccountDetailLabel>Type</AccountDetailLabel>
-          <Badge bg={account.accountType === 'IMAP' ? 'info' : 'secondary'}>
-            {account.accountType}
+          <Badge bg={isCustomDomain ? 'success' : 'info'}>
+            {isCustomDomain ? 'Custom Domain' : imap?.accountType || account.type}
           </Badge>
         </AccountDetailRow>
         <AccountDetailRow>
-          <AccountDetailLabel>Default SMTP</AccountDetailLabel>
-          {account.defaultSmtpProfile ? (
-            <Badge bg="primary">{account.defaultSmtpProfile.name}</Badge>
+          <AccountDetailLabel>Default Send Profile</AccountDetailLabel>
+          {account.defaultSendProfile ? (
+            <Badge bg="primary">{account.defaultSendProfile.name}</Badge>
           ) : (
             <span className="text-muted">—</span>
           )}
         </AccountDetailRow>
-        <AccountDetailRow>
-          <AccountDetailLabel>Last Sync</AccountDetailLabel>
-          {account.lastSyncedAt ? (
-            <span>
-              {new Date(account.lastSyncedAt).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
-            </span>
-          ) : (
-            <span className="text-muted">Never synced</span>
-          )}
-        </AccountDetailRow>
+        {imap && (
+          <AccountDetailRow>
+            <AccountDetailLabel>Last Sync</AccountDetailLabel>
+            {imap.lastSyncedAt ? (
+              <span>
+                {new Date(imap.lastSyncedAt).toLocaleString([], {
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            ) : (
+              <span className="text-muted">Never synced</span>
+            )}
+          </AccountDetailRow>
+        )}
       </AccountCardBody>
       {isSyncing && (
         <AccountCardFooter className="card-footer">

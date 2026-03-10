@@ -41,6 +41,10 @@ export class UserUsage extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare accountCount: number;
 
+  // Number of custom domains
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare domainCount: number;
+
   // Total email body size in bytes (textBody + htmlBody)
   @Column({ type: DataType.BIGINT, allowNull: false, defaultValue: 0 })
   declare totalBodySizeBytes: number;

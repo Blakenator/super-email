@@ -1,4 +1,4 @@
-import { EmailAccount } from '../db/models/email-account.model.js';
+import { ImapAccountSettings } from '../db/models/imap-account-settings.model.js';
 import { logger } from './logger.js';
 
 // ---------------------------------------------------------------------------
@@ -64,11 +64,11 @@ export function isSyncExpired(expiresAt: Date | null): boolean {
 // ---------------------------------------------------------------------------
 
 export async function clearExpiredSync(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncType: SyncType,
 ): Promise<void> {
   const fields = getSyncFields(syncType);
-  await emailAccount.update({
+  await imapSettings.update({
     [fields.syncIdField]: null,
     [fields.progressField]: null,
     [fields.statusField]: null,
@@ -82,12 +82,12 @@ export async function clearExpiredSync(
  * concurrent calls from overwriting each other's syncId.
  */
 export async function markSyncStarted(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncType: SyncType,
   syncId: string,
 ): Promise<boolean> {
   const fields = getSyncFields(syncType);
-  const [affectedRows] = await EmailAccount.update(
+  const [affectedRows] = await ImapAccountSettings.update(
     {
       [fields.syncIdField]: syncId,
       [fields.progressField]: 0,
@@ -99,32 +99,32 @@ export async function markSyncStarted(
     },
     {
       where: {
-        id: emailAccount.id,
+        id: imapSettings.id,
         [fields.syncIdField]: null,
       },
     },
   );
   if (affectedRows > 0) {
-    await emailAccount.reload();
+    await imapSettings.reload();
   }
   return affectedRows > 0;
 }
 
 export async function updateSyncProgress(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncType: SyncType,
   syncId: string,
   progress: number,
   status: string,
 ): Promise<boolean> {
-  await emailAccount.reload();
+  await imapSettings.reload();
   const fields = getSyncFields(syncType);
 
-  if (emailAccount[fields.syncIdField] !== syncId) {
+  if (imapSettings[fields.syncIdField] !== syncId) {
     return false;
   }
 
-  await emailAccount.update({
+  await imapSettings.update({
     [fields.progressField]: progress,
     [fields.statusField]: status,
     [fields.expiresAtField]: getSyncExpirationTime(),
@@ -133,20 +133,19 @@ export async function updateSyncProgress(
 }
 
 export async function markSyncCompleted(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncType: SyncType,
   syncId: string,
   result: SyncResult,
 ): Promise<boolean> {
-  await emailAccount.reload();
+  await imapSettings.reload();
   const fields = getSyncFields(syncType);
   const isHistoricalSync = syncType === 'historical';
 
-  if (emailAccount[fields.syncIdField] !== syncId) {
-    // Even if superseded, historicalSyncComplete is a monotonic flag (false→true).
-    if (isHistoricalSync && !emailAccount.historicalSyncComplete) {
-      await emailAccount.update({ historicalSyncComplete: true });
-      logger.info('IMAP', `historicalSyncComplete set for ${emailAccount.email} (sync ${syncId} was superseded but completed)`);
+  if (imapSettings[fields.syncIdField] !== syncId) {
+    if (isHistoricalSync && !imapSettings.historicalSyncComplete) {
+      await imapSettings.update({ historicalSyncComplete: true });
+      logger.info('IMAP', `historicalSyncComplete set for settings ${imapSettings.id} (sync ${syncId} was superseded but completed)`);
     }
     return false;
   }
@@ -171,24 +170,24 @@ export async function markSyncCompleted(
     updateData.historicalSyncTotalSent = null;
   }
 
-  await emailAccount.update(updateData);
+  await imapSettings.update(updateData);
   return true;
 }
 
 export async function markSyncFailed(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncType: SyncType,
   syncId: string,
   errorMsg: string,
 ): Promise<void> {
-  await emailAccount.reload();
+  await imapSettings.reload();
   const fields = getSyncFields(syncType);
 
-  if (emailAccount[fields.syncIdField] !== syncId) {
+  if (imapSettings[fields.syncIdField] !== syncId) {
     return;
   }
 
-  await emailAccount.update({
+  await imapSettings.update({
     [fields.syncIdField]: null,
     [fields.progressField]: null,
     [fields.statusField]: `Sync failed: ${errorMsg}`,
@@ -197,25 +196,25 @@ export async function markSyncFailed(
 }
 
 export async function shouldContinueSync(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncId: string,
   syncType: SyncType,
 ): Promise<boolean> {
-  await emailAccount.reload();
+  await imapSettings.reload();
   const fields = getSyncFields(syncType);
-  return emailAccount[fields.syncIdField] === syncId;
+  return imapSettings[fields.syncIdField] === syncId;
 }
 
 export async function updateSyncExpiration(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
   syncId: string,
   syncType: SyncType,
 ): Promise<void> {
-  await emailAccount.reload();
+  await imapSettings.reload();
 
   const fields = getSyncFields(syncType);
-  if (emailAccount[fields.syncIdField] === syncId) {
-    await emailAccount.update({
+  if (imapSettings[fields.syncIdField] === syncId) {
+    await imapSettings.update({
       [fields.expiresAtField]: getSyncExpirationTime(),
     });
   }

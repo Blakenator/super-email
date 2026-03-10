@@ -4,13 +4,17 @@ import { logger } from '../helpers/logger.js';
 import { User } from './models/user.model.js';
 import { AuthenticationMethod } from './models/authentication-method.model.js';
 import { EmailAccount } from './models/email-account.model.js';
-import { SmtpProfile } from './models/smtp-profile.model.js';
+import { ImapAccountSettings } from './models/imap-account-settings.model.js';
+import { SendProfile } from './models/send-profile.model.js';
+import { SmtpAccountSettings } from './models/smtp-account-settings.model.js';
+import { CustomDomain } from './models/custom-domain.model.js';
+import { CustomDomainDnsRecord } from './models/custom-domain-dns-record.model.js';
+import { CustomDomainAccount } from './models/custom-domain-account.model.js';
 import { ContactEmail } from './models/contact-email.model.js';
 import { Contact } from './models/contact.model.js';
 import { Tag } from './models/tag.model.js';
 import { EmailTag } from './models/email-tag.model.js';
 import { MailRule } from './models/mail-rule.model.js';
-// Import Email before Attachment to avoid circular dependency
 import { Email } from './models/email.model.js';
 import { Attachment } from './models/attachment.model.js';
 import { Subscription } from './models/subscription.model.js';
@@ -38,7 +42,12 @@ export const sequelize = new Sequelize({
     User,
     AuthenticationMethod,
     EmailAccount,
-    SmtpProfile,
+    ImapAccountSettings,
+    SendProfile,
+    SmtpAccountSettings,
+    CustomDomain,
+    CustomDomainDnsRecord,
+    CustomDomainAccount,
     Email,
     ContactEmail,
     Contact,
@@ -57,12 +66,11 @@ export const sequelize = new Sequelize({
     acquire: 30000,
     idle: 10000,
   },
-  // Enable SSL for production (required by AWS RDS)
   dialectOptions: config.isProduction
     ? {
         ssl: {
           require: true,
-          rejectUnauthorized: false, // AWS RDS uses self-signed certs
+          rejectUnauthorized: false,
         },
       }
     : undefined,

@@ -145,9 +145,12 @@ export const GET_EMAIL_ACCOUNTS_FOR_INBOX_QUERY = gql(`
       id
       name
       email
-      host
-      lastSyncedAt
+      type
       providerId
+      imapSettings {
+        host
+        lastSyncedAt
+      }
     }
   }
 `);

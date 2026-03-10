@@ -1,23 +1,20 @@
 import { makeMutation } from '../../types.js';
 import { testImapConnection } from '../../helpers/imap-client.js';
-import { EmailAccountType } from '../../__generated__/resolvers-types.js';
 import { getImapCredentials } from '../../helpers/secrets.js';
 import { EmailAccount } from '../../db/models/email-account.model.js';
 import { logger } from '../../helpers/logger.js';
 
 export const testEmailAccountConnection = makeMutation(
-  'testEmailAccountConnection',
+  'testImapConnection',
   async (_parent, { input }, context) => {
     const { host, port, username, accountType, useSsl, accountId } = input;
     let { password } = input;
 
-    // If no password provided but accountId is, retrieve saved credentials
     if (!password && accountId) {
-      // Verify user owns this account
       const account = await EmailAccount.findOne({
         where: { id: accountId, userId: context.userId },
       });
-      
+
       if (!account) {
         return {
           success: false,
@@ -25,13 +22,9 @@ export const testEmailAccountConnection = makeMutation(
         };
       }
 
-      // Get saved credentials
       const credentials = await getImapCredentials(accountId);
       if (credentials?.password) {
         password = credentials.password;
-      } else if (account.password) {
-        // Fallback to DB password during migration
-        password = account.password;
       }
     }
 
@@ -42,7 +35,7 @@ export const testEmailAccountConnection = makeMutation(
       };
     }
 
-    if (accountType === EmailAccountType.Imap) {
+    if (accountType === 'IMAP') {
       const result = await testImapConnection(
         host,
         port,
@@ -51,7 +44,7 @@ export const testEmailAccountConnection = makeMutation(
         useSsl,
       );
       if (!result.success) {
-        logger.warn('testEmailAccountConnection', `IMAP connection failed for ${host}:${port}`, { username, useSsl, error: result.error });
+        logger.warn('testImapConnection', `IMAP connection failed for ${host}:${port}`, { username, useSsl, error: result.error });
       }
       return {
         success: result.success,
@@ -59,8 +52,7 @@ export const testEmailAccountConnection = makeMutation(
           ? 'IMAP connection successful'
           : `IMAP connection failed: ${result.error}`,
       };
-    } else if (accountType === EmailAccountType.Pop3) {
-      // POP3 not yet implemented
+    } else if (accountType === 'POP3') {
       return {
         success: false,
         message: 'POP3 connection testing is not yet implemented',

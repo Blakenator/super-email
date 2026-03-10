@@ -20,6 +20,8 @@ describe('createEmailAccount mutation', () => {
   let getOrCreateSubscriptionStub: sinon.SinonStub;
   let recalculateUserUsageStub: sinon.SinonStub;
   let emailAccountMock: Record<string, sinon.SinonStub>;
+  let imapAccountSettingsMock: Record<string, sinon.SinonStub>;
+  let sendProfileMock: Record<string, sinon.SinonStub>;
 
   beforeEach(async () => {
     storeImapCredentialsStub = sinon.stub().resolves();
@@ -30,13 +32,22 @@ describe('createEmailAccount mutation', () => {
       count: sinon.stub().resolves(0),
       update: sinon.stub().resolves([0]),
       create: sinon.stub().resolves({ id: 'acc-default', userId: 'user-123' }),
+      findByPk: sinon.stub().resolves({ id: 'acc-default', userId: 'user-123' }),
     };
+
+    imapAccountSettingsMock = {
+      create: sinon.stub().resolves({}),
+    };
+
+    sendProfileMock = {};
 
     const mod = await esmock(
       '../../../mutations/email-account/createEmailAccount.js',
       {
         '../../../db/models/index.js': {
           EmailAccount: emailAccountMock,
+          ImapAccountSettings: imapAccountSettingsMock,
+          SendProfile: sendProfileMock,
         },
         '../../../helpers/secrets.js': {
           storeImapCredentials: storeImapCredentialsStub,
@@ -57,14 +68,15 @@ describe('createEmailAccount mutation', () => {
   });
 
   const validInput = {
+    type: 'IMAP',
     name: 'Test Gmail',
     email: 'test@gmail.com',
-    host: 'imap.gmail.com',
-    port: 993,
-    username: 'test@gmail.com',
-    password: 'app-password-123',
-    accountType: 'IMAP',
-    useSsl: true,
+    imapHost: 'imap.gmail.com',
+    imapPort: 993,
+    imapUsername: 'test@gmail.com',
+    imapPassword: 'app-password-123',
+    imapAccountType: 'IMAP',
+    imapUseSsl: true,
   };
 
   it('should throw when not authenticated', async () => {
@@ -78,12 +90,13 @@ describe('createEmailAccount mutation', () => {
     }
   });
 
-  it('should create email account with valid input', async () => {
+  it('should create email account and IMAP settings with valid input', async () => {
     const context = createMockContext({ userId: 'user-123' });
-    const mockAccount = { id: 'acc-1', ...validInput, userId: 'user-123' };
+    const mockAccount = { id: 'acc-1', userId: 'user-123' };
 
     emailAccountMock.count.resolves(0);
     emailAccountMock.create.resolves(mockAccount);
+    emailAccountMock.findByPk.resolves(mockAccount);
 
     const result = await createEmailAccount(null, { input: validInput }, context);
 
@@ -92,8 +105,13 @@ describe('createEmailAccount mutation', () => {
     expect(createArgs.userId).to.equal('user-123');
     expect(createArgs.name).to.equal('Test Gmail');
     expect(createArgs.email).to.equal('test@gmail.com');
-    expect(createArgs.accountType).to.equal('IMAP');
-    expect(result).to.equal(mockAccount);
+    expect(createArgs.type).to.equal('IMAP');
+
+    expect(imapAccountSettingsMock.create.calledOnce).to.be.true;
+    const settingsArgs = imapAccountSettingsMock.create.firstCall.args[0] as any;
+    expect(settingsArgs.emailAccountId).to.equal('acc-1');
+    expect(settingsArgs.host).to.equal('imap.gmail.com');
+    expect(settingsArgs.port).to.equal(993);
   });
 
   it('should set first account as default automatically', async () => {
@@ -102,13 +120,13 @@ describe('createEmailAccount mutation', () => {
 
     emailAccountMock.count.resolves(0);
     emailAccountMock.create.resolves(mockAccount);
+    emailAccountMock.findByPk.resolves(mockAccount);
 
     await createEmailAccount(null, { input: validInput }, context);
 
     const createArgs = emailAccountMock.create.firstCall.args[0] as any;
     expect(createArgs.isDefault).to.be.true;
 
-    // Should unset existing defaults
     expect(emailAccountMock.update.calledOnce).to.be.true;
   });
 
@@ -118,7 +136,8 @@ describe('createEmailAccount mutation', () => {
 
     emailAccountMock.count.resolves(1);
     emailAccountMock.create.resolves(mockAccount);
-    getOrCreateSubscriptionStub.resolves({ accountTier: 'pro' }); // Higher tier to allow >1 account
+    emailAccountMock.findByPk.resolves(mockAccount);
+    getOrCreateSubscriptionStub.resolves({ accountTier: 'pro' });
 
     const input = { ...validInput, isDefault: false };
     await createEmailAccount(null, { input }, context);
@@ -131,7 +150,7 @@ describe('createEmailAccount mutation', () => {
   it('should enforce account limits', async () => {
     const context = createMockContext({ userId: 'user-123' });
 
-    emailAccountMock.count.resolves(3); // Over the FREE limit of 1
+    emailAccountMock.count.resolves(3);
 
     try {
       await createEmailAccount(null, { input: validInput }, context);
@@ -147,6 +166,7 @@ describe('createEmailAccount mutation', () => {
 
     emailAccountMock.count.resolves(0);
     emailAccountMock.create.resolves(mockAccount);
+    emailAccountMock.findByPk.resolves(mockAccount);
 
     await createEmailAccount(null, { input: validInput }, context);
 
@@ -164,6 +184,7 @@ describe('createEmailAccount mutation', () => {
 
     emailAccountMock.count.resolves(0);
     emailAccountMock.create.resolves(mockAccount);
+    emailAccountMock.findByPk.resolves(mockAccount);
 
     await createEmailAccount(null, { input: validInput }, context);
 
@@ -171,17 +192,36 @@ describe('createEmailAccount mutation', () => {
     expect(recalculateUserUsageStub.firstCall.args[0]).to.equal('user-123');
   });
 
-  it('should set defaultSmtpProfileId when provided', async () => {
+  it('should set defaultSendProfileId when provided', async () => {
     const context = createMockContext({ userId: 'user-123' });
     const mockAccount = { id: 'acc-6', userId: 'user-123' };
 
     emailAccountMock.count.resolves(0);
     emailAccountMock.create.resolves(mockAccount);
+    emailAccountMock.findByPk.resolves(mockAccount);
 
-    const input = { ...validInput, defaultSmtpProfileId: 'smtp-123' };
+    const input = { ...validInput, defaultSendProfileId: 'sp-123' };
     await createEmailAccount(null, { input }, context);
 
     const createArgs = emailAccountMock.create.firstCall.args[0] as any;
-    expect(createArgs.defaultSmtpProfileId).to.equal('smtp-123');
+    expect(createArgs.defaultSendProfileId).to.equal('sp-123');
+  });
+
+  it('should throw when IMAP fields are missing for IMAP type', async () => {
+    const context = createMockContext({ userId: 'user-123' });
+    emailAccountMock.count.resolves(0);
+
+    const input = {
+      type: 'IMAP',
+      name: 'Missing IMAP Fields',
+      email: 'test@gmail.com',
+    };
+
+    try {
+      await createEmailAccount(null, { input }, context);
+      expect.fail('Should have thrown');
+    } catch (err: any) {
+      expect(err.message).to.include('required for IMAP');
+    }
   });
 });

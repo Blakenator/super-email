@@ -24,7 +24,7 @@ import { gql } from '@apollo/client';
 import { wrapReplyContent } from '../../../../common/src/emailHtmlStyles';
 
 const SEND_EMAIL_MUTATION = gql`
-  mutation SendEmail($input: SendEmailInput!) {
+  mutation SendEmail($input: ComposeEmailInput!) {
     sendEmail(input: $input) {
       id
       messageId
@@ -32,9 +32,9 @@ const SEND_EMAIL_MUTATION = gql`
   }
 `;
 
-const GET_SMTP_PROFILES_QUERY = gql`
-  query GetSmtpProfiles {
-    getSmtpProfiles {
+const GET_SEND_PROFILES_QUERY = gql`
+  query GetSendProfiles {
+    getSendProfiles {
       id
       name
       email
@@ -43,7 +43,7 @@ const GET_SMTP_PROFILES_QUERY = gql`
   }
 `;
 
-interface SmtpProfile {
+interface SendProfile {
   id: string;
   name: string;
   email: string;
@@ -85,7 +85,7 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
   const insets = useSafeAreaInsets();
   const { emailAccounts, fetchEmailAccounts } = useEmailStore();
   
-  const [smtpProfiles, setSmtpProfiles] = useState<SmtpProfile[]>([]);
+  const [sendProfiles, setSendProfiles] = useState<SendProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [showFromPicker, setShowFromPicker] = useState(false);
   
@@ -146,28 +146,28 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
   };
 
   useEffect(() => {
-    loadSmtpProfiles();
+    loadSendProfiles();
     fetchEmailAccounts();
   }, []);
 
-  const loadSmtpProfiles = async () => {
+  const loadSendProfiles = async () => {
     try {
       const { data } = await apolloClient.query({
-        query: GET_SMTP_PROFILES_QUERY,
+        query: GET_SEND_PROFILES_QUERY,
         fetchPolicy: 'network-only',
       });
-      const profiles = data?.getSmtpProfiles ?? [];
-      setSmtpProfiles(profiles);
-      
+      const profiles = data?.getSendProfiles ?? [];
+      setSendProfiles(profiles);
+
       // Select default profile
-      const defaultProfile = profiles.find((p: SmtpProfile) => p.isDefault);
+      const defaultProfile = profiles.find((p: SendProfile) => p.isDefault);
       if (defaultProfile) {
         setSelectedProfileId(defaultProfile.id);
       } else if (profiles.length > 0) {
         setSelectedProfileId(profiles[0].id);
       }
     } catch (error) {
-      console.error('Error loading SMTP profiles:', error);
+      console.error('Error loading send profiles:', error);
     }
   };
 
@@ -181,7 +181,7 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
       return;
     }
     if (!selectedProfileId) {
-      Alert.alert('Error', 'Please select an SMTP profile');
+      Alert.alert('Error', 'Please select a send profile');
       return;
     }
 
@@ -199,10 +199,11 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
         mutation: SEND_EMAIL_MUTATION,
         variables: {
           input: {
-            smtpProfileId: selectedProfileId,
-            to: to.split(',').map(e => e.trim()),
-            cc: cc ? cc.split(',').map(e => e.trim()) : [],
-            bcc: bcc ? bcc.split(',').map(e => e.trim()) : [],
+            emailAccountId: emailAccounts[0]?.id,
+            sendProfileId: selectedProfileId,
+            toAddresses: to.split(',').map(e => e.trim()),
+            ccAddresses: cc ? cc.split(',').map(e => e.trim()) : [],
+            bccAddresses: bcc ? bcc.split(',').map(e => e.trim()) : [],
             subject: subject.trim(),
             textBody: bodyText,
             htmlBody: fullHtmlBody,
@@ -221,7 +222,7 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
     }
   };
 
-  const selectedProfile = smtpProfiles.find(p => p.id === selectedProfileId);
+  const selectedProfile = sendProfiles.find(p => p.id === selectedProfileId);
 
   return (
     <KeyboardAvoidingView
@@ -342,7 +343,7 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
                 <Icon name="x" size="md" color={theme.colors.text} />
               </TouchableOpacity>
             </View>
-            {smtpProfiles.map(profile => (
+            {sendProfiles.map(profile => (
               <TouchableOpacity
                 key={profile.id}
                 style={[

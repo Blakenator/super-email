@@ -5,13 +5,10 @@ import {
 } from '../../helpers/stripe.js';
 import { User } from '../../db/models/user.model.js';
 import { StorageTier, AccountTier } from '../../db/models/subscription.model.js';
+import { DomainTier } from '../../db/models/subscription.constants.js';
 import { config } from '../../config/env.js';
 import { requireAuth } from '../../helpers/auth.js';
 
-/**
- * Create a Stripe Checkout session to upgrade subscription.
- * Returns the URL to redirect the user to.
- */
 export const createCheckoutSession = makeMutation(
   'createCheckoutSession',
   async (_parent, args, context) => {
@@ -26,11 +23,10 @@ export const createCheckoutSession = makeMutation(
       throw new Error('User not found');
     }
 
-    // Map GraphQL enums to model enums (case normalization)
     const storageTier = args.storageTier.toLowerCase() as StorageTier;
     const accountTier = args.accountTier.toLowerCase() as AccountTier;
+    const domainTier = args.domainTier.toLowerCase() as DomainTier;
 
-    // Determine success/cancel URLs from config
     const baseUrl = config.frontendUrl;
     if (!baseUrl) {
       throw new Error('FRONTEND_URL environment variable is not configured');
@@ -45,6 +41,7 @@ export const createCheckoutSession = makeMutation(
       accountTier,
       successUrl,
       cancelUrl,
+      domainTier,
     );
 
     return checkoutUrl;

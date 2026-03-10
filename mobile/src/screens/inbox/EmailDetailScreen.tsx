@@ -1634,7 +1634,7 @@ export function EmailDetailScreen({
                   {email.unsubscribeUrl ? 'Alternative: ' : ''}Email-Based Unsubscribe
                 </Text>
                 <Text style={[styles.unsubscribeOptionDesc, { color: theme.colors.textMuted }]}>
-                  Sends an unsubscribe email from your configured SMTP profile to:
+                  Sends an unsubscribe email from your configured send profile to:
                 </Text>
                 <Text style={[styles.unsubscribeOptionUrl, { color: theme.colors.textMuted }]}>
                   {email.unsubscribeEmail}

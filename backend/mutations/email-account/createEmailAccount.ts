@@ -1,5 +1,6 @@
 import { makeMutation } from '../../types.js';
-import { EmailAccount } from '../../db/models/index.js';
+import { EmailAccount, ImapAccountSettings, SendProfile } from '../../db/models/index.js';
+import { EmailAccountType } from '../../db/models/email-account.model.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { storeImapCredentials } from '../../helpers/secrets.js';
 import { getOrCreateSubscription } from '../../helpers/stripe.js';
@@ -12,23 +13,19 @@ export const createEmailAccount = makeMutation(
   async (_parent, { input }, context) => {
     const userId = requireAuth(context);
 
-    // Check if this is the first email account for the user
     const existingAccountsCount = await EmailAccount.count({
       where: { userId },
     });
     const isFirstAccount = existingAccountsCount === 0;
 
-    // Check account limit before creating
     const subscription = await getOrCreateSubscription(userId);
     const accountLimit = ACCOUNT_LIMITS[subscription.accountTier];
-    // accountLimit of -1 means unlimited
     if (accountLimit > 0 && existingAccountsCount >= accountLimit) {
       throw new Error(
         `Account limit reached (${accountLimit} accounts). Please upgrade your plan to add more email accounts.`,
       );
     }
 
-    // If setting as default or this is the first account, unset any existing default
     const shouldBeDefault = input.isDefault || isFirstAccount;
     if (shouldBeDefault) {
       await EmailAccount.update(
@@ -37,30 +34,49 @@ export const createEmailAccount = makeMutation(
       );
     }
 
+    const accountType = input.type as EmailAccountType;
+
+    if (accountType === EmailAccountType.IMAP) {
+      if (!input.imapHost || !input.imapPort || !input.imapUsername || !input.imapPassword) {
+        throw new Error('IMAP host, port, username, and password are required for IMAP accounts');
+      }
+    }
+
     const emailAccount = await EmailAccount.create({
       userId,
       name: input.name,
       email: input.email,
-      host: input.host,
-      port: input.port,
-      username: input.username,
-      password: input.password, // Keep in DB for backwards compatibility during migration
-      accountType: input.accountType,
-      useSsl: input.useSsl,
-      defaultSmtpProfileId: input.defaultSmtpProfileId || null,
+      type: accountType,
+      defaultSendProfileId: input.defaultSendProfileId || null,
+      providerId: input.providerId || null,
       isDefault: shouldBeDefault,
     });
 
-    // Store credentials in secure secrets store
-    await storeImapCredentials(emailAccount.id, {
-      username: input.username,
-      password: input.password,
+    if (accountType === EmailAccountType.IMAP) {
+      await ImapAccountSettings.create({
+        emailAccountId: emailAccount.id,
+        host: input.imapHost!,
+        port: input.imapPort!,
+        accountType: input.imapAccountType || 'IMAP',
+        useSsl: input.imapUseSsl ?? true,
+      });
+
+      await storeImapCredentials(emailAccount.id, {
+        username: input.imapUsername!,
+        password: input.imapPassword!,
+      });
+    }
+
+    const result = await EmailAccount.findByPk(emailAccount.id, {
+      include: [
+        { model: ImapAccountSettings, as: 'imapSettings' },
+        { model: SendProfile, as: 'defaultSendProfile', required: false },
+      ],
     });
 
-    // Recalculate usage after adding account
     await recalculateUserUsage(userId);
 
-    logger.info('createEmailAccount', `Created email account ${emailAccount.email} (${emailAccount.id}) for user ${userId}`);
-    return emailAccount;
+    logger.info('createEmailAccount', `Created email account ${emailAccount.email} (${emailAccount.id}) type=${accountType} for user ${userId}`);
+    return result;
   },
 );

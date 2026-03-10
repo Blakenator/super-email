@@ -2,8 +2,10 @@ import { Column, DataType, Model, Table, HasMany } from 'sequelize-typescript';
 // Dual import pattern for circular dependencies
 import { EmailAccount } from './email-account.model.js';
 import type { EmailAccount as EmailAccountType } from './email-account.model.js';
-import { SmtpProfile } from './smtp-profile.model.js';
-import type { SmtpProfile as SmtpProfileType } from './smtp-profile.model.js';
+import { SendProfile } from './send-profile.model.js';
+import type { SendProfile as SendProfileType } from './send-profile.model.js';
+import { CustomDomain } from './custom-domain.model.js';
+import type { CustomDomain as CustomDomainType } from './custom-domain.model.js';
 import { Contact } from './contact.model.js';
 import type { Contact as ContactType } from './contact.model.js';
 import { AuthenticationMethod } from './authentication-method.model.js';
@@ -90,8 +92,11 @@ export class User extends Model {
   @HasMany(() => EmailAccount)
   declare emailAccounts?: EmailAccountType[];
 
-  @HasMany(() => SmtpProfile)
-  declare smtpProfiles?: SmtpProfileType[];
+  @HasMany(() => SendProfile)
+  declare sendProfiles?: SendProfileType[];
+
+  @HasMany(() => CustomDomain)
+  declare customDomains?: CustomDomainType[];
 
   @HasMany(() => Contact)
   declare contacts?: ContactType[];

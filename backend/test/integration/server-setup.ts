@@ -145,7 +145,12 @@ export async function cleanupTestData(): Promise<void> {
       'emails',
       'tags',
       'mail_rules',
-      'smtp_profiles',
+      'custom_domain_accounts',
+      'custom_domain_dns_records',
+      'custom_domains',
+      'smtp_account_settings',
+      'send_profiles',
+      'imap_account_settings',
       'contact_emails',
       'contacts',
       'email_accounts',
@@ -175,7 +180,9 @@ export async function cleanupTestData(): Promise<void> {
     // Fallback to sequential deletes if truncate fails
     const models = [
       'EmailTag', 'Attachment', 'Email', 'Tag', 'MailRule',
-      'SmtpProfile', 'ContactEmail', 'Contact', 'EmailAccount',
+      'CustomDomainAccount', 'CustomDomainDnsRecord', 'CustomDomain',
+      'SmtpAccountSettings', 'SendProfile', 'ImapAccountSettings',
+      'ContactEmail', 'Contact', 'EmailAccount',
       'AuthenticationMethod', 'User',
     ];
     for (const model of models) {

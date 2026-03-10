@@ -1,6 +1,7 @@
 import { makeMutation } from '../../types.js';
 import {
-  SmtpProfile,
+  SendProfile,
+  SmtpAccountSettings,
   Email,
   EmailAccount,
   Attachment,
@@ -21,7 +22,6 @@ export const sendEmail = makeMutation(
   async (_parent, { input }, context) => {
     const userId = requireAuth(context);
 
-    // Validate email account
     const emailAccount = await EmailAccount.findOne({
       where: { id: input.emailAccountId, userId },
     });
@@ -30,16 +30,15 @@ export const sendEmail = makeMutation(
       throw new Error('Email account not found');
     }
 
-    // Validate SMTP profile
-    const smtpProfile = await SmtpProfile.findOne({
-      where: { id: input.smtpProfileId, userId },
+    const sendProfile = await SendProfile.findOne({
+      where: { id: input.sendProfileId, userId },
+      include: [{ model: SmtpAccountSettings, as: 'smtpSettings' }],
     });
 
-    if (!smtpProfile) {
-      throw new Error('SMTP profile not found');
+    if (!sendProfile) {
+      throw new Error('Send profile not found');
     }
 
-    // Process attachments if provided
     const emailAttachments: EmailAttachment[] = [];
     const attachmentMetadata: Array<{
       filename: string;
@@ -50,13 +49,12 @@ export const sendEmail = makeMutation(
     }> = [];
 
     if (input.attachments && input.attachments.length > 0) {
-      const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024; // 25MB per attachment
-      const MAX_TOTAL_SIZE = 50 * 1024 * 1024; // 50MB total
+      const MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024;
+      const MAX_TOTAL_SIZE = 50 * 1024 * 1024;
 
       let totalSize = 0;
 
       for (const attachment of input.attachments) {
-        // Decode base64 attachment data
         const buffer = Buffer.from(attachment.data, 'base64');
         const size = buffer.length;
 
@@ -77,20 +75,18 @@ export const sendEmail = makeMutation(
           contentType: attachment.mimeType,
         });
 
-        // We'll upload to storage after creating the email record
         attachmentMetadata.push({
           filename: attachment.filename,
           mimeType: attachment.mimeType,
           size,
-          storageKey: '', // Will be set after upload
+          storageKey: '',
           extension:
             attachment.filename.split('.').pop()?.toLowerCase() || null,
         });
       }
     }
 
-    // Send the email
-    const { messageId } = await sendEmailHelper(smtpProfile, {
+    const { messageId } = await sendEmailHelper(sendProfile, {
       to: input.toAddresses,
       cc: input.ccAddresses ?? undefined,
       bcc: input.bccAddresses ?? undefined,
@@ -101,7 +97,6 @@ export const sendEmail = makeMutation(
       attachments: emailAttachments.length > 0 ? emailAttachments : undefined,
     });
 
-    // If sending from a draft, delete the draft
     if (input.draftId) {
       await Email.destroy({
         where: {
@@ -112,14 +107,13 @@ export const sendEmail = makeMutation(
       });
     }
 
-    // Store the sent email in the database
     const email = await Email.create({
       emailAccountId: emailAccount.id,
-      smtpProfileId: smtpProfile.id,
+      sendProfileId: sendProfile.id,
       messageId,
       folder: EmailFolder.SENT,
-      fromAddress: smtpProfile.email,
-      fromName: smtpProfile.name,
+      fromAddress: sendProfile.email,
+      fromName: sendProfile.alias || sendProfile.name,
       toAddresses: input.toAddresses,
       ccAddresses: input.ccAddresses ?? null,
       bccAddresses: input.bccAddresses ?? null,
@@ -133,20 +127,15 @@ export const sendEmail = makeMutation(
       inReplyTo: input.inReplyTo ?? null,
     });
 
-    // Upload attachments to storage and save metadata in parallel
     if (emailAttachments.length > 0) {
-      // Upload all attachments in parallel with concurrency control
-      const CONCURRENCY_LIMIT = 5; // Upload max 5 attachments simultaneously
+      const CONCURRENCY_LIMIT = 5;
 
       const uploadPromises = emailAttachments.map(
         async (emailAttachment, i) => {
           const metadata = attachmentMetadata[i];
 
           try {
-            // Generate a UUID for this attachment (used as storage key)
             const attachmentId = crypto.randomUUID();
-
-            // Upload to storage using the attachment UUID
             const stream = Readable.from(emailAttachment.content);
             const uploadResult = await uploadAttachment({
               attachmentId,
@@ -169,12 +158,11 @@ export const sendEmail = makeMutation(
             };
           } catch (error) {
             logger.error('sendEmail', `Failed to upload attachment: ${emailAttachment.filename}`, { error: error instanceof Error ? error.message : error });
-            return null; // Return null for failed uploads
+            return null;
           }
         },
       );
 
-      // Process uploads with concurrency control
       const attachmentsToCreate: Array<Partial<Attachment>> = [];
       for (let i = 0; i < uploadPromises.length; i += CONCURRENCY_LIMIT) {
         const batch = uploadPromises.slice(i, i + CONCURRENCY_LIMIT);
@@ -182,7 +170,6 @@ export const sendEmail = makeMutation(
         attachmentsToCreate.push(...results.filter((r) => r !== null));
       }
 
-      // Bulk create successfully uploaded attachments
       if (attachmentsToCreate.length > 0) {
         await Attachment.bulkCreate(attachmentsToCreate);
       }

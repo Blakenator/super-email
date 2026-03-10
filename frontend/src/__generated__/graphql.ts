@@ -32,6 +32,12 @@ export enum AccountTier {
   Pro = 'PRO'
 }
 
+/** Input for adding a new custom domain. */
+export type AddCustomDomainInput = {
+  /** The domain name to add (e.g., "example.com") */
+  domain: Scalars['String']['input'];
+};
+
 /** Input for adding an email address to an existing contact. */
 export type AddEmailToContactInput = {
   /** ID of the contact to add the email to */
@@ -161,10 +167,14 @@ export type BillingInfo = {
   __typename?: 'BillingInfo';
   /** Account usage as a percentage (0-100, 0 for unlimited) */
   accountUsagePercent: Scalars['Float']['output'];
+  /** Domain usage as a percentage (0-100) */
+  domainUsagePercent: Scalars['Float']['output'];
   /** Whether the user has a Stripe customer ID (required for paid plans) */
   hasStripeCustomer: Scalars['Boolean']['output'];
   /** Whether the user has exceeded their account limit */
   isAccountLimitExceeded: Scalars['Boolean']['output'];
+  /** Whether the user has exceeded their domain limit */
+  isDomainLimitExceeded: Scalars['Boolean']['output'];
   /** Whether the user has exceeded their storage limit */
   isStorageLimitExceeded: Scalars['Boolean']['output'];
   /** Whether Stripe billing is configured on the server */
@@ -192,6 +202,10 @@ export type BillingSubscription = BaseEntityProps & {
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** When the current billing period ends */
   currentPeriodEnd?: Maybe<Scalars['Date']['output']>;
+  /** Maximum number of custom domains allowed */
+  domainLimit: Scalars['Int']['output'];
+  /** Current domain tier */
+  domainTier: DomainTier;
   /** Unique identifier for this subscription */
   id: Scalars['String']['output'];
   /** Whether the subscription is valid for syncing emails */
@@ -261,8 +275,8 @@ export type ComposeEmailInput = {
   htmlBody?: InputMaybe<Scalars['String']['input']>;
   /** Message-ID of email being replied to (for threading) */
   inReplyTo?: InputMaybe<Scalars['String']['input']>;
-  /** ID of the SMTP profile to use for sending */
-  smtpProfileId: Scalars['String']['input'];
+  /** ID of the send profile to use for sending */
+  sendProfileId: Scalars['String']['input'];
   /** Email subject line */
   subject: Scalars['String']['input'];
   /** Plain text body content */
@@ -352,30 +366,50 @@ export type CreateContactInput = {
   phone?: InputMaybe<Scalars['String']['input']>;
 };
 
-/** Input for creating a new email account. Requires all connection details. */
-export type CreateEmailAccountInput = {
-  /** Protocol type (IMAP or POP3) */
-  accountType: EmailAccountType;
-  /** ID of the default SMTP profile for sending */
-  defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
-  /** Email address */
-  email: Scalars['String']['input'];
-  /** IMAP/POP3 server hostname */
-  host: Scalars['String']['input'];
-  /** Whether to set this as the default account */
-  isDefault?: InputMaybe<Scalars['Boolean']['input']>;
+/** Input for creating a custom domain email account. */
+export type CreateCustomDomainAccountInput = {
+  /** ID of the custom domain */
+  customDomainId: Scalars['String']['input'];
+  /** Local part of the email address (e.g., "blake" for blake@example.com) */
+  localPart: Scalars['String']['input'];
   /** Display name for the account */
   name: Scalars['String']['input'];
-  /** Password or app-specific password for authentication */
-  password: Scalars['String']['input'];
-  /** Server port number */
-  port: Scalars['Int']['input'];
+};
+
+/**
+ * Input for creating a new email account.
+ * For IMAP accounts, provide imapHost/imapPort/etc. fields.
+ * For CUSTOM_DOMAIN accounts, provide customDomainId and localPart.
+ */
+export type CreateEmailAccountInput = {
+  /** ID of the custom domain (required for CUSTOM_DOMAIN type) */
+  customDomainId?: InputMaybe<Scalars['String']['input']>;
+  /** ID of the default send profile for sending */
+  defaultSendProfileId?: InputMaybe<Scalars['String']['input']>;
+  /** Email address */
+  email: Scalars['String']['input'];
+  /** Protocol type - IMAP or POP3 (required for IMAP type) */
+  imapAccountType?: InputMaybe<ImapAccountType>;
+  /** IMAP/POP3 server hostname (required for IMAP type) */
+  imapHost?: InputMaybe<Scalars['String']['input']>;
+  /** Password for authentication (required for IMAP type) */
+  imapPassword?: InputMaybe<Scalars['String']['input']>;
+  /** Server port number (required for IMAP type) */
+  imapPort?: InputMaybe<Scalars['Int']['input']>;
+  /** Whether to use SSL/TLS (required for IMAP type) */
+  imapUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Username for authentication (required for IMAP type) */
+  imapUsername?: InputMaybe<Scalars['String']['input']>;
+  /** Whether to set this as the default account */
+  isDefault?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Local part of the email address, e.g. "blake" for blake@example.com (required for CUSTOM_DOMAIN type) */
+  localPart?: InputMaybe<Scalars['String']['input']>;
+  /** Display name for the account */
+  name: Scalars['String']['input'];
   /** External provider ID for OAuth-linked accounts */
   providerId?: InputMaybe<Scalars['String']['input']>;
-  /** Whether to use SSL/TLS */
-  useSsl: Scalars['Boolean']['input'];
-  /** Username for authentication (often the email address) */
-  username: Scalars['String']['input'];
+  /** Account type (IMAP or CUSTOM_DOMAIN) */
+  type: EmailAccountType;
 };
 
 /** Input for creating a new mail rule. */
@@ -398,28 +432,38 @@ export type CreateMailRuleInput = {
   stopProcessing?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
-/** Input for creating a new SMTP profile. */
-export type CreateSmtpProfileInput = {
+/**
+ * Input for creating a new send profile.
+ * For SMTP profiles, provide smtpHost/smtpPort/etc. fields.
+ * For CUSTOM_DOMAIN profiles, provide customDomainId and localPart.
+ */
+export type CreateSendProfileInput = {
   /** Optional display name alias */
   alias?: InputMaybe<Scalars['String']['input']>;
+  /** ID of the custom domain (required for CUSTOM_DOMAIN type) */
+  customDomainId?: InputMaybe<Scalars['String']['input']>;
   /** The "from" email address */
   email: Scalars['String']['input'];
-  /** SMTP server hostname */
-  host: Scalars['String']['input'];
   /** Whether to set as default profile */
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Local part of the email, e.g. "blake" (required for CUSTOM_DOMAIN type) */
+  localPart?: InputMaybe<Scalars['String']['input']>;
   /** Display name for the profile */
   name: Scalars['String']['input'];
-  /** Password for SMTP authentication */
-  password: Scalars['String']['input'];
-  /** SMTP server port */
-  port: Scalars['Int']['input'];
   /** External provider ID */
   providerId?: InputMaybe<Scalars['String']['input']>;
-  /** Whether to use SSL/TLS */
-  useSsl: Scalars['Boolean']['input'];
-  /** Username for SMTP authentication */
-  username: Scalars['String']['input'];
+  /** SMTP server hostname (required for SMTP type) */
+  smtpHost?: InputMaybe<Scalars['String']['input']>;
+  /** Password for SMTP authentication (required for SMTP type) */
+  smtpPassword?: InputMaybe<Scalars['String']['input']>;
+  /** SMTP server port (required for SMTP type) */
+  smtpPort?: InputMaybe<Scalars['Int']['input']>;
+  /** Whether to use SSL/TLS (required for SMTP type) */
+  smtpUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** Username for SMTP authentication (required for SMTP type) */
+  smtpUsername?: InputMaybe<Scalars['String']['input']>;
+  /** Profile type (SMTP or CUSTOM_DOMAIN) */
+  type: SendProfileType;
 };
 
 /** Input for creating a new tag. */
@@ -431,6 +475,114 @@ export type CreateTagInput = {
   /** Display name for the tag */
   name: Scalars['String']['input'];
 };
+
+/** A custom domain configured for sending and receiving email. */
+export type CustomDomain = BaseEntityProps & {
+  __typename?: 'CustomDomain';
+  /** Email accounts configured under this domain */
+  accounts: Array<CustomDomainAccount>;
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** DNS records required for verification */
+  dnsRecords: Array<CustomDomainDnsRecord>;
+  /** The domain name (e.g., "example.com") */
+  domain: Scalars['String']['output'];
+  /** Unique identifier for this custom domain */
+  id: Scalars['String']['output'];
+  /** ARN of the SES identity (set after verification) */
+  sesIdentityArn?: Maybe<Scalars['String']['output']>;
+  /** Current verification status */
+  status: CustomDomainStatus;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the user who owns this domain */
+  userId: Scalars['String']['output'];
+};
+
+/** An email account linked to a custom domain (e.g., blake@example.com). */
+export type CustomDomainAccount = BaseEntityProps & {
+  __typename?: 'CustomDomainAccount';
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** The custom domain this account belongs to */
+  customDomain?: Maybe<CustomDomain>;
+  /** ID of the parent custom domain */
+  customDomainId: Scalars['String']['output'];
+  /** The associated email account (for receiving) */
+  emailAccount?: Maybe<EmailAccount>;
+  /** ID of the associated email account */
+  emailAccountId?: Maybe<Scalars['String']['output']>;
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** Local part of the email address (e.g., "blake") */
+  localPart: Scalars['String']['output'];
+  /** The associated send profile (for sending) */
+  sendProfile?: Maybe<SendProfile>;
+  /** ID of the associated send profile */
+  sendProfileId?: Maybe<Scalars['String']['output']>;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+};
+
+/** A DNS record that must be configured for domain verification. */
+export type CustomDomainDnsRecord = BaseEntityProps & {
+  __typename?: 'CustomDomainDnsRecord';
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the parent custom domain */
+  customDomainId: Scalars['String']['output'];
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** Whether this specific record has been verified */
+  isVerified: Scalars['Boolean']['output'];
+  /** When this record was last checked */
+  lastCheckedAt?: Maybe<Scalars['Date']['output']>;
+  /** DNS record name/host */
+  name: Scalars['String']['output'];
+  /** Purpose of this record (DKIM, SPF, DMARC, MX_INBOUND) */
+  purpose: DnsRecordPurpose;
+  /** DNS record type (CNAME, TXT, MX) */
+  recordType: DnsRecordType;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** DNS record value */
+  value: Scalars['String']['output'];
+};
+
+/** Verification status of a custom domain. */
+export enum CustomDomainStatus {
+  /** Verification failed or domain was deactivated */
+  Failed = 'FAILED',
+  /** DNS records have been created but not yet verified */
+  PendingVerification = 'PENDING_VERIFICATION',
+  /** All DNS records verified and domain is active */
+  Verified = 'VERIFIED'
+}
+
+/** Purpose of a DNS record in the verification process. */
+export enum DnsRecordPurpose {
+  /** DKIM signing key */
+  Dkim = 'DKIM',
+  /** DMARC policy */
+  Dmarc = 'DMARC',
+  /** MX record for inbound email routing */
+  MxInbound = 'MX_INBOUND',
+  /** SPF sender policy */
+  Spf = 'SPF'
+}
+
+/** Type of DNS record required for domain verification. */
+export enum DnsRecordType {
+  Cname = 'CNAME',
+  Mx = 'MX',
+  Txt = 'TXT'
+}
+
+/** Domain tier for billing. Each tier has a custom domain limit. */
+export enum DomainTier {
+  /** Basic tier - 1 custom domain ($5/mo) */
+  Basic = 'BASIC',
+  /** Enterprise tier - 5 custom domains ($10/mo) */
+  Enterprise = 'ENTERPRISE',
+  /** Free tier - 0 custom domains */
+  Free = 'FREE',
+  /** Pro tier - 2 custom domains ($7/mo) */
+  Pro = 'PRO'
+}
 
 /** An email message. Can be received, sent, or a draft. */
 export type Email = BaseEntityProps & {
@@ -479,10 +631,10 @@ export type Email = BaseEntityProps & {
   receivedAt: Scalars['Date']['output'];
   /** List of Message-IDs in the email thread */
   references?: Maybe<Array<Scalars['String']['output']>>;
-  /** The SMTP profile used to send this email */
-  smtpProfile?: Maybe<SmtpProfile>;
-  /** ID of the SMTP profile used to send (for sent emails) */
-  smtpProfileId?: Maybe<Scalars['String']['output']>;
+  /** The send profile used to send this email */
+  sendProfile?: Maybe<SendProfile>;
+  /** ID of the send profile used to send (for sent emails) */
+  sendProfileId?: Maybe<Scalars['String']['output']>;
   /** Email subject line */
   subject: Scalars['String']['output'];
   /** Tags/labels applied to this email */
@@ -504,63 +656,43 @@ export type Email = BaseEntityProps & {
 };
 
 /**
- * An email account configured for receiving emails via IMAP or POP3.
- * Each user can have multiple email accounts from different providers.
+ * An email account configured for receiving emails.
+ * Can be IMAP-based (external server) or custom domain (SES-based).
  */
 export type EmailAccount = BaseEntityProps & {
   __typename?: 'EmailAccount';
-  /** Protocol type (IMAP or POP3) */
-  accountType: EmailAccountType;
   /** Timestamp when the account was added */
   createdAt?: Maybe<Scalars['Date']['output']>;
-  /** The default SMTP profile object for sending emails */
-  defaultSmtpProfile?: Maybe<SmtpProfile>;
-  /** ID of the default SMTP profile for sending from this account */
-  defaultSmtpProfileId?: Maybe<Scalars['String']['output']>;
+  /** The default send profile object for sending emails */
+  defaultSendProfile?: Maybe<SendProfile>;
+  /** ID of the default send profile for sending from this account */
+  defaultSendProfileId?: Maybe<Scalars['String']['output']>;
   /** Email address for this account */
   email: Scalars['String']['output'];
-  /** Timestamp of the last historical sync */
-  historicalSyncLastAt?: Maybe<Scalars['Date']['output']>;
-  /** Progress percentage (0-100) during historical sync */
-  historicalSyncProgress?: Maybe<Scalars['Int']['output']>;
-  /** Human-readable status message during historical sync */
-  historicalSyncStatus?: Maybe<Scalars['String']['output']>;
-  /** IMAP/POP3 server hostname (e.g., "imap.gmail.com") */
-  host: Scalars['String']['output'];
   /** Unique identifier for this email account */
   id: Scalars['String']['output'];
+  /** IMAP-specific settings (null for custom domain accounts) */
+  imapSettings?: Maybe<ImapAccountSettings>;
   /** Whether this is the user's default/primary email account */
   isDefault: Scalars['Boolean']['output'];
-  /** Whether a historical sync (initial import) is in progress */
-  isHistoricalSyncing: Scalars['Boolean']['output'];
-  /** Whether an update sync (new emails) is in progress */
-  isUpdateSyncing: Scalars['Boolean']['output'];
-  /** Timestamp of the last successful sync */
-  lastSyncedAt?: Maybe<Scalars['Date']['output']>;
   /** Display name for this account (e.g., "Work Gmail") */
   name: Scalars['String']['output'];
-  /** Server port number (e.g., 993 for IMAP with SSL) */
-  port: Scalars['Int']['output'];
   /** External provider ID (for OAuth-linked accounts like Google Workspace) */
   providerId?: Maybe<Scalars['String']['output']>;
-  /** Progress percentage (0-100) during update sync */
-  updateSyncProgress?: Maybe<Scalars['Int']['output']>;
-  /** Human-readable status message during update sync */
-  updateSyncStatus?: Maybe<Scalars['String']['output']>;
+  /** Account type (IMAP or CUSTOM_DOMAIN) */
+  type: EmailAccountType;
   /** Timestamp when the account was last modified */
   updatedAt?: Maybe<Scalars['Date']['output']>;
-  /** Whether to use SSL/TLS encryption */
-  useSsl: Scalars['Boolean']['output'];
   /** ID of the user who owns this account */
   userId: Scalars['String']['output'];
 };
 
-/** Type of email receiving protocol. */
+/** Type of email account. */
 export enum EmailAccountType {
-  /** IMAP protocol - supports folder sync and IDLE for real-time updates */
-  Imap = 'IMAP',
-  /** POP3 protocol - download-and-delete model */
-  Pop3 = 'POP3'
+  /** Custom domain account - receives email via SES */
+  CustomDomain = 'CUSTOM_DOMAIN',
+  /** IMAP-based account - connects to an external IMAP/POP3 server */
+  Imap = 'IMAP'
 }
 
 /** Email folder categories. Maps to standard IMAP folder semantics. */
@@ -607,8 +739,8 @@ export type ForwardEmailInput = {
   emailId: Scalars['String']['input'];
   /** Whether to include original attachments (default: true) */
   includeAttachments?: InputMaybe<Scalars['Boolean']['input']>;
-  /** SMTP profile to use for sending */
-  smtpProfileId: Scalars['String']['input'];
+  /** Send profile to use for sending */
+  sendProfileId: Scalars['String']['input'];
   /** To recipient addresses */
   toAddresses: Array<Scalars['String']['input']>;
 };
@@ -654,6 +786,52 @@ export type GetEmailsInput = {
   /** Advanced filter: To address contains */
   toContains?: InputMaybe<Scalars['String']['input']>;
 };
+
+/**
+ * IMAP/POP3 specific settings for an email account.
+ * Only present when the parent EmailAccount has type IMAP.
+ */
+export type ImapAccountSettings = BaseEntityProps & {
+  __typename?: 'ImapAccountSettings';
+  /** Protocol type (IMAP or POP3) */
+  accountType: ImapAccountType;
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the parent email account */
+  emailAccountId: Scalars['String']['output'];
+  /** Timestamp of the last historical sync */
+  historicalSyncLastAt?: Maybe<Scalars['Date']['output']>;
+  /** Progress percentage (0-100) during historical sync */
+  historicalSyncProgress?: Maybe<Scalars['Int']['output']>;
+  /** Human-readable status message during historical sync */
+  historicalSyncStatus?: Maybe<Scalars['String']['output']>;
+  /** IMAP/POP3 server hostname (e.g., "imap.gmail.com") */
+  host: Scalars['String']['output'];
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** Whether a historical sync (initial import) is in progress */
+  isHistoricalSyncing: Scalars['Boolean']['output'];
+  /** Whether an update sync (new emails) is in progress */
+  isUpdateSyncing: Scalars['Boolean']['output'];
+  /** Timestamp of the last successful sync */
+  lastSyncedAt?: Maybe<Scalars['Date']['output']>;
+  /** Server port number (e.g., 993 for IMAP with SSL) */
+  port: Scalars['Int']['output'];
+  /** Progress percentage (0-100) during update sync */
+  updateSyncProgress?: Maybe<Scalars['Int']['output']>;
+  /** Human-readable status message during update sync */
+  updateSyncStatus?: Maybe<Scalars['String']['output']>;
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** Whether to use SSL/TLS encryption */
+  useSsl: Scalars['Boolean']['output'];
+};
+
+/** Type of IMAP receiving protocol. */
+export enum ImapAccountType {
+  /** IMAP protocol - supports folder sync and IDLE for real-time updates */
+  Imap = 'IMAP',
+  /** POP3 protocol - download-and-delete model */
+  Pop3 = 'POP3'
+}
 
 /**
  * An automated mail rule that applies actions to matching emails.
@@ -725,6 +903,11 @@ export enum MailboxUpdateType {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type Mutation = {
   __typename?: 'Mutation';
+  /**
+   * Add a new custom domain and initiate SES verification.
+   * Returns the domain with DNS records to configure.
+   */
+  addCustomDomain: CustomDomain;
   /** Add an email address to an existing contact. */
   addEmailToContact: Contact;
   /**
@@ -762,6 +945,11 @@ export type Mutation = {
    */
   createContactFromEmail: Contact;
   /**
+   * Create an email account for a custom domain address.
+   * Also creates a matching send profile automatically.
+   */
+  createCustomDomainAccount: CustomDomainAccount;
+  /**
    * Create a new email account (IMAP/POP3).
    * Credentials are securely stored in AWS Secrets Manager (production)
    * or a local file (development).
@@ -769,8 +957,8 @@ export type Mutation = {
   createEmailAccount: EmailAccount;
   /** Create a new mail rule. */
   createMailRule: MailRule;
-  /** Create a new SMTP profile for sending emails. */
-  createSmtpProfile: SmtpProfile;
+  /** Create a new send profile for sending emails. */
+  createSendProfile: SendProfile;
   /** Create a new tag. */
   createTag: Tag;
   /**
@@ -780,6 +968,10 @@ export type Mutation = {
   deleteAuthenticationMethod: Scalars['Boolean']['output'];
   /** Delete a contact. */
   deleteContact: Scalars['Boolean']['output'];
+  /** Delete a custom domain and all associated accounts. */
+  deleteCustomDomain: Scalars['Boolean']['output'];
+  /** Delete a custom domain account. */
+  deleteCustomDomainAccount: Scalars['Boolean']['output'];
   /**
    * Delete an email account and all associated emails.
    * This is a permanent, irreversible operation.
@@ -788,10 +980,10 @@ export type Mutation = {
   /** Delete a mail rule. */
   deleteMailRule: Scalars['Boolean']['output'];
   /**
-   * Delete an SMTP profile.
+   * Delete a send profile.
    * Cannot delete a profile that is set as default for an email account.
    */
-  deleteSmtpProfile: Scalars['Boolean']['output'];
+  deleteSendProfile: Scalars['Boolean']['output'];
   /**
    * Delete a tag.
    * Removes the tag from all emails but does not delete the emails.
@@ -837,7 +1029,7 @@ export type Mutation = {
    */
   saveDraft: Email;
   /**
-   * Send an email via SMTP.
+   * Send an email via the specified send profile.
    * Stores a copy in the Sent folder and handles attachments.
    */
   sendEmail: Email;
@@ -855,7 +1047,7 @@ export type Mutation = {
    * Test an IMAP/POP3 connection before saving.
    * Returns success/failure with an error message if applicable.
    */
-  testEmailAccountConnection: TestConnectionResult;
+  testImapConnection: TestConnectionResult;
   /**
    * Test an SMTP connection before saving.
    * Returns success/failure with an error message if applicable.
@@ -880,8 +1072,8 @@ export type Mutation = {
   updateEmailAccount: EmailAccount;
   /** Update an existing mail rule. */
   updateMailRule: MailRule;
-  /** Update an existing SMTP profile. */
-  updateSmtpProfile: SmtpProfile;
+  /** Update an existing send profile. */
+  updateSendProfile: SendProfile;
   /** Update an existing tag. */
   updateTag: Tag;
   /** Update the user's theme preference (LIGHT, DARK, or AUTO). */
@@ -891,6 +1083,17 @@ export type Mutation = {
    * Only provided fields will be updated.
    */
   updateUserPreferences: User;
+  /**
+   * Verify the DNS records for a custom domain.
+   * Checks if the user has configured the required DNS records.
+   */
+  verifyCustomDomain: CustomDomain;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationAddCustomDomainArgs = {
+  input: AddCustomDomainInput;
 };
 
 
@@ -921,6 +1124,7 @@ export type MutationBulkUpdateEmailsArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationCreateCheckoutSessionArgs = {
   accountTier: AccountTier;
+  domainTier: DomainTier;
   storageTier: StorageTier;
 };
 
@@ -938,6 +1142,12 @@ export type MutationCreateContactFromEmailArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationCreateCustomDomainAccountArgs = {
+  input: CreateCustomDomainAccountInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationCreateEmailAccountArgs = {
   input: CreateEmailAccountInput;
 };
@@ -950,8 +1160,8 @@ export type MutationCreateMailRuleArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationCreateSmtpProfileArgs = {
-  input: CreateSmtpProfileInput;
+export type MutationCreateSendProfileArgs = {
+  input: CreateSendProfileInput;
 };
 
 
@@ -974,6 +1184,18 @@ export type MutationDeleteContactArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationDeleteCustomDomainArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationDeleteCustomDomainAccountArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationDeleteEmailAccountArgs = {
   id: Scalars['String']['input'];
 };
@@ -986,7 +1208,7 @@ export type MutationDeleteMailRuleArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationDeleteSmtpProfileArgs = {
+export type MutationDeleteSendProfileArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -1046,8 +1268,8 @@ export type MutationSyncEmailAccountArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationTestEmailAccountConnectionArgs = {
-  input: TestEmailAccountConnectionInput;
+export type MutationTestImapConnectionArgs = {
+  input: TestImapConnectionInput;
 };
 
 
@@ -1088,8 +1310,8 @@ export type MutationUpdateMailRuleArgs = {
 
 
 /** GraphQL mutations for modifying data. All mutations require authentication. */
-export type MutationUpdateSmtpProfileArgs = {
-  input: UpdateSmtpProfileInput;
+export type MutationUpdateSendProfileArgs = {
+  input: UpdateSendProfileInput;
 };
 
 
@@ -1108,6 +1330,12 @@ export type MutationUpdateThemePreferenceArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationUpdateUserPreferencesArgs = {
   input: UpdateUserPreferencesInput;
+};
+
+
+/** GraphQL mutations for modifying data. All mutations require authentication. */
+export type MutationVerifyCustomDomainArgs = {
+  id: Scalars['String']['input'];
 };
 
 /** Level of detail shown in email notification previews. */
@@ -1213,6 +1441,13 @@ export type Query = {
    */
   getContacts: Array<Contact>;
   /**
+   * Get a specific custom domain by ID.
+   * Returns null if not found or not owned by the current user.
+   */
+  getCustomDomain?: Maybe<CustomDomain>;
+  /** Get all custom domains configured for the current user. */
+  getCustomDomains: Array<CustomDomain>;
+  /**
    * Get a single email by ID.
    * Returns null if not found or not accessible by the current user.
    */
@@ -1253,15 +1488,15 @@ export type Query = {
    */
   getMailRules: Array<MailRule>;
   /**
-   * Get a specific SMTP profile by ID.
+   * Get a specific send profile by ID.
    * Returns null if not found or not owned by the current user.
    */
-  getSmtpProfile?: Maybe<SmtpProfile>;
+  getSendProfile?: Maybe<SendProfile>;
   /**
-   * Get all SMTP profiles configured for the current user.
+   * Get all send profiles configured for the current user.
    * Ordered by creation date, newest first.
    */
-  getSmtpProfiles: Array<SmtpProfile>;
+  getSendProfiles: Array<SendProfile>;
   /**
    * Get only the current user's storage usage (cached from materialized view).
    * Returns null if usage hasn't been calculated yet.
@@ -1340,6 +1575,15 @@ export type QueryGetContactArgs = {
  * GraphQL queries for fetching data. All queries require authentication
  * unless otherwise noted.
  */
+export type QueryGetCustomDomainArgs = {
+  id: Scalars['String']['input'];
+};
+
+
+/**
+ * GraphQL queries for fetching data. All queries require authentication
+ * unless otherwise noted.
+ */
 export type QueryGetEmailArgs = {
   input: GetEmailInput;
 };
@@ -1394,7 +1638,7 @@ export type QueryGetMailRuleArgs = {
  * GraphQL queries for fetching data. All queries require authentication
  * unless otherwise noted.
  */
-export type QueryGetSmtpProfileArgs = {
+export type QueryGetSendProfileArgs = {
   id: Scalars['String']['input'];
 };
 
@@ -1550,8 +1794,8 @@ export type SaveDraftInput = {
   id?: InputMaybe<Scalars['String']['input']>;
   /** Message-ID of email being replied to */
   inReplyTo?: InputMaybe<Scalars['String']['input']>;
-  /** SMTP profile for sending (optional for drafts) */
-  smtpProfileId?: InputMaybe<Scalars['String']['input']>;
+  /** Send profile for sending (optional for drafts) */
+  sendProfileId?: InputMaybe<Scalars['String']['input']>;
   /** Email subject */
   subject?: InputMaybe<Scalars['String']['input']>;
   /** Plain text body */
@@ -1561,35 +1805,62 @@ export type SaveDraftInput = {
 };
 
 /**
- * An SMTP profile for sending emails. Each email account can have a default SMTP profile,
+ * A send profile for sending emails. Each email account can have a default send profile,
  * or users can select a different profile when composing.
+ * Can be SMTP-based (external server) or custom domain (SES-based).
  */
-export type SmtpProfile = BaseEntityProps & {
-  __typename?: 'SmtpProfile';
+export type SendProfile = BaseEntityProps & {
+  __typename?: 'SendProfile';
   /** Optional display name alias (e.g., "John Doe" instead of just the email) */
   alias?: Maybe<Scalars['String']['output']>;
   /** Timestamp when the profile was created */
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** The "from" email address for sent emails */
   email: Scalars['String']['output'];
-  /** SMTP server hostname (e.g., "smtp.gmail.com") */
-  host: Scalars['String']['output'];
-  /** Unique identifier for this SMTP profile */
+  /** Unique identifier for this send profile */
   id: Scalars['String']['output'];
-  /** Whether this is the user's default SMTP profile */
+  /** Whether this is the user's default send profile */
   isDefault: Scalars['Boolean']['output'];
-  /** Display name for this profile (e.g., "Personal Gmail SMTP") */
+  /** Display name for this profile (e.g., "Personal Gmail") */
   name: Scalars['String']['output'];
-  /** SMTP server port (e.g., 587 for TLS, 465 for SSL) */
-  port: Scalars['Int']['output'];
   /** External provider ID for OAuth-linked profiles */
   providerId?: Maybe<Scalars['String']['output']>;
+  /** SMTP-specific settings (null for custom domain profiles) */
+  smtpSettings?: Maybe<SmtpAccountSettings>;
+  /** Profile type (SMTP or CUSTOM_DOMAIN) */
+  type: SendProfileType;
   /** Timestamp when the profile was last updated */
+  updatedAt?: Maybe<Scalars['Date']['output']>;
+  /** ID of the user who owns this profile */
+  userId: Scalars['String']['output'];
+};
+
+/** Type of send profile. */
+export enum SendProfileType {
+  /** Custom domain profile - sends via SES */
+  CustomDomain = 'CUSTOM_DOMAIN',
+  /** SMTP-based profile - sends via an external SMTP server */
+  Smtp = 'SMTP'
+}
+
+/**
+ * SMTP-specific settings for a send profile.
+ * Only present when the parent SendProfile has type SMTP.
+ */
+export type SmtpAccountSettings = BaseEntityProps & {
+  __typename?: 'SmtpAccountSettings';
+  createdAt?: Maybe<Scalars['Date']['output']>;
+  /** SMTP server hostname (e.g., "smtp.gmail.com") */
+  host: Scalars['String']['output'];
+  /** Unique identifier */
+  id: Scalars['String']['output'];
+  /** SMTP server port (e.g., 587 for TLS, 465 for SSL) */
+  port: Scalars['Int']['output'];
+  /** ID of the parent send profile */
+  sendProfileId: Scalars['String']['output'];
   updatedAt?: Maybe<Scalars['Date']['output']>;
   /** Whether to use SSL/TLS encryption */
   useSsl: Scalars['Boolean']['output'];
-  /** ID of the user who owns this profile */
-  userId: Scalars['String']['output'];
 };
 
 /** Storage tier for billing. Each tier has a storage limit. */
@@ -1611,6 +1882,8 @@ export type StorageUsage = {
   accountCount: Scalars['Int']['output'];
   /** Total number of attachments */
   attachmentCount: Scalars['Int']['output'];
+  /** Number of custom domains */
+  domainCount: Scalars['Int']['output'];
   /** Total number of emails */
   emailCount: Scalars['Int']['output'];
   /** When the usage was last calculated */
@@ -1710,11 +1983,11 @@ export type TestConnectionResult = {
 };
 
 /** Input for testing an IMAP/POP3 connection before saving. */
-export type TestEmailAccountConnectionInput = {
+export type TestImapConnectionInput = {
   /** Optional: ID of existing account to use saved password from */
   accountId?: InputMaybe<Scalars['String']['input']>;
   /** Protocol type (IMAP or POP3) */
-  accountType: EmailAccountType;
+  accountType: ImapAccountType;
   /** Server hostname */
   host: Scalars['String']['input'];
   /** Password for authentication. Optional when editing - if not provided and accountId is set, uses saved password. */
@@ -1781,26 +2054,26 @@ export type UpdateContactInput = {
 
 /** Input for updating an existing email account. Only provided fields will be updated. */
 export type UpdateEmailAccountInput = {
-  /** New default SMTP profile ID */
-  defaultSmtpProfileId?: InputMaybe<Scalars['String']['input']>;
-  /** New server hostname */
-  host?: InputMaybe<Scalars['String']['input']>;
+  /** New default send profile ID */
+  defaultSendProfileId?: InputMaybe<Scalars['String']['input']>;
   /** ID of the email account to update */
   id: Scalars['String']['input'];
+  /** New IMAP server hostname */
+  imapHost?: InputMaybe<Scalars['String']['input']>;
+  /** New IMAP password */
+  imapPassword?: InputMaybe<Scalars['String']['input']>;
+  /** New IMAP server port */
+  imapPort?: InputMaybe<Scalars['Int']['input']>;
+  /** Whether to use SSL/TLS */
+  imapUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** New IMAP username */
+  imapUsername?: InputMaybe<Scalars['String']['input']>;
   /** Whether this should be the default account */
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
   /** New display name */
   name?: InputMaybe<Scalars['String']['input']>;
-  /** New password */
-  password?: InputMaybe<Scalars['String']['input']>;
-  /** New server port */
-  port?: InputMaybe<Scalars['Int']['input']>;
   /** New provider ID */
   providerId?: InputMaybe<Scalars['String']['input']>;
-  /** Whether to use SSL/TLS */
-  useSsl?: InputMaybe<Scalars['Boolean']['input']>;
-  /** New username */
-  username?: InputMaybe<Scalars['String']['input']>;
 };
 
 /** Input for updating an existing mail rule. Only provided fields will be updated. */
@@ -1825,28 +2098,28 @@ export type UpdateMailRuleInput = {
   stopProcessing?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
-/** Input for updating an existing SMTP profile. Only provided fields will be updated. */
-export type UpdateSmtpProfileInput = {
+/** Input for updating an existing send profile. Only provided fields will be updated. */
+export type UpdateSendProfileInput = {
   /** New display name alias */
   alias?: InputMaybe<Scalars['String']['input']>;
-  /** New server hostname */
-  host?: InputMaybe<Scalars['String']['input']>;
-  /** ID of the SMTP profile to update */
+  /** ID of the send profile to update */
   id: Scalars['String']['input'];
   /** Whether this should be the default profile */
   isDefault?: InputMaybe<Scalars['Boolean']['input']>;
   /** New display name */
   name?: InputMaybe<Scalars['String']['input']>;
-  /** New password */
-  password?: InputMaybe<Scalars['String']['input']>;
-  /** New server port */
-  port?: InputMaybe<Scalars['Int']['input']>;
   /** New provider ID */
   providerId?: InputMaybe<Scalars['String']['input']>;
+  /** New SMTP server hostname */
+  smtpHost?: InputMaybe<Scalars['String']['input']>;
+  /** New SMTP password */
+  smtpPassword?: InputMaybe<Scalars['String']['input']>;
+  /** New SMTP server port */
+  smtpPort?: InputMaybe<Scalars['Int']['input']>;
   /** Whether to use SSL/TLS */
-  useSsl?: InputMaybe<Scalars['Boolean']['input']>;
-  /** New username */
-  username?: InputMaybe<Scalars['String']['input']>;
+  smtpUseSsl?: InputMaybe<Scalars['Boolean']['input']>;
+  /** New SMTP username */
+  smtpUsername?: InputMaybe<Scalars['String']['input']>;
 };
 
 /** Input for updating an existing tag. Only provided fields will be updated. */
@@ -1891,7 +2164,7 @@ export type User = BaseEntityProps & {
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** User's primary email address (used for login) */
   email: Scalars['String']['output'];
-  /** List of email accounts configured for this user (IMAP/POP3) */
+  /** List of email accounts configured for this user */
   emailAccounts: Array<EmailAccount>;
   /** User's first name */
   firstName: Scalars['String']['output'];
@@ -1907,8 +2180,8 @@ export type User = BaseEntityProps & {
   navbarCollapsed: Scalars['Boolean']['output'];
   /** Level of detail in notification previews */
   notificationDetailLevel: NotificationDetailLevel;
-  /** List of SMTP profiles configured for sending emails */
-  smtpProfiles: Array<SmtpProfile>;
+  /** List of send profiles configured for sending emails */
+  sendProfiles: Array<SendProfile>;
   /** User's preferred color scheme (LIGHT, DARK, or AUTO) */
   themePreference: ThemePreference;
   /** Timestamp when the user account was last updated */
@@ -1986,15 +2259,15 @@ export type UpdateUserPreferencesMutationVariables = Exact<{
 
 export type UpdateUserPreferencesMutation = { __typename?: 'Mutation', updateUserPreferences: { __typename?: 'User', id: string, themePreference: ThemePreference, navbarCollapsed: boolean, notificationDetailLevel: NotificationDetailLevel, inboxDensity: boolean, inboxGroupByDate: boolean, blockExternalImages: boolean } };
 
-export type GetSmtpProfilesQueryVariables = Exact<{ [key: string]: never; }>;
+export type GetSendProfilesQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetSmtpProfilesQuery = { __typename?: 'Query', getSmtpProfiles: Array<{ __typename?: 'SmtpProfile', id: string, name: string, email: string, alias?: string | null, isDefault: boolean }> };
+export type GetSendProfilesQuery = { __typename?: 'Query', getSendProfiles: Array<{ __typename?: 'SendProfile', id: string, name: string, email: string, alias?: string | null, type: SendProfileType, isDefault: boolean }> };
 
 export type GetEmailAccountsForComposeQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetEmailAccountsForComposeQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, defaultSmtpProfileId?: string | null, isDefault: boolean }> };
+export type GetEmailAccountsForComposeQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, type: EmailAccountType, defaultSendProfileId?: string | null, isDefault: boolean }> };
 
 export type SendEmailMutationVariables = Exact<{
   input: ComposeEmailInput;
@@ -2081,7 +2354,7 @@ export type GetStarredEmailsQuery = { __typename?: 'Query', getEmails: Array<{ _
 export type GetEmailAccountsForInboxQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetEmailAccountsForInboxQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, host: string, lastSyncedAt?: string | null, providerId?: string | null }> };
+export type GetEmailAccountsForInboxQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, type: EmailAccountType, providerId?: string | null, imapSettings?: { __typename?: 'ImapAccountSettings', host: string, lastSyncedAt?: string | null } | null }> };
 
 export type SyncAllAccountsMutationVariables = Exact<{ [key: string]: never; }>;
 
@@ -2171,7 +2444,7 @@ export type UnregisterPushTokenMutation = { __typename?: 'Mutation', unregisterP
 export type GetEmailAccountsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetEmailAccountsQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, host: string, port: number, accountType: EmailAccountType, useSsl: boolean, lastSyncedAt?: string | null, isHistoricalSyncing: boolean, historicalSyncProgress?: number | null, historicalSyncStatus?: string | null, historicalSyncLastAt?: string | null, isUpdateSyncing: boolean, updateSyncProgress?: number | null, updateSyncStatus?: string | null, defaultSmtpProfileId?: string | null, providerId?: string | null, isDefault: boolean, defaultSmtpProfile?: { __typename?: 'SmtpProfile', id: string, name: string, email: string } | null }> };
+export type GetEmailAccountsQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, type: EmailAccountType, defaultSendProfileId?: string | null, providerId?: string | null, isDefault: boolean, defaultSendProfile?: { __typename?: 'SendProfile', id: string, name: string, email: string } | null, imapSettings?: { __typename?: 'ImapAccountSettings', id: string, host: string, port: number, accountType: ImapAccountType, useSsl: boolean, lastSyncedAt?: string | null, isHistoricalSyncing: boolean, historicalSyncProgress?: number | null, historicalSyncStatus?: string | null, historicalSyncLastAt?: string | null, isUpdateSyncing: boolean, updateSyncProgress?: number | null, updateSyncStatus?: string | null } | null }> };
 
 export type CreateEmailAccountMutationVariables = Exact<{
   input: CreateEmailAccountInput;
@@ -2204,40 +2477,40 @@ export type UpdateEmailAccountMutationVariables = Exact<{
 }>;
 
 
-export type UpdateEmailAccountMutation = { __typename?: 'Mutation', updateEmailAccount: { __typename?: 'EmailAccount', id: string, name: string, email: string, host: string, port: number, useSsl: boolean, defaultSmtpProfileId?: string | null, isDefault: boolean } };
+export type UpdateEmailAccountMutation = { __typename?: 'Mutation', updateEmailAccount: { __typename?: 'EmailAccount', id: string, name: string, email: string, type: EmailAccountType, defaultSendProfileId?: string | null, isDefault: boolean, imapSettings?: { __typename?: 'ImapAccountSettings', id: string, host: string, port: number, useSsl: boolean } | null } };
 
-export type TestEmailAccountConnectionMutationVariables = Exact<{
-  input: TestEmailAccountConnectionInput;
+export type TestImapConnectionMutationVariables = Exact<{
+  input: TestImapConnectionInput;
 }>;
 
 
-export type TestEmailAccountConnectionMutation = { __typename?: 'Mutation', testEmailAccountConnection: { __typename?: 'TestConnectionResult', success: boolean, message: string } };
+export type TestImapConnectionMutation = { __typename?: 'Mutation', testImapConnection: { __typename?: 'TestConnectionResult', success: boolean, message: string } };
 
-export type GetSmtpProfilesFullQueryVariables = Exact<{ [key: string]: never; }>;
+export type GetSendProfilesFullQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetSmtpProfilesFullQuery = { __typename?: 'Query', getSmtpProfiles: Array<{ __typename?: 'SmtpProfile', id: string, name: string, email: string, alias?: string | null, host: string, port: number, useSsl: boolean, isDefault: boolean, providerId?: string | null }> };
+export type GetSendProfilesFullQuery = { __typename?: 'Query', getSendProfiles: Array<{ __typename?: 'SendProfile', id: string, name: string, email: string, alias?: string | null, type: SendProfileType, isDefault: boolean, providerId?: string | null, smtpSettings?: { __typename?: 'SmtpAccountSettings', id: string, host: string, port: number, useSsl: boolean } | null }> };
 
-export type CreateSmtpProfileMutationVariables = Exact<{
-  input: CreateSmtpProfileInput;
+export type CreateSendProfileMutationVariables = Exact<{
+  input: CreateSendProfileInput;
 }>;
 
 
-export type CreateSmtpProfileMutation = { __typename?: 'Mutation', createSmtpProfile: { __typename?: 'SmtpProfile', id: string, name: string, email: string } };
+export type CreateSendProfileMutation = { __typename?: 'Mutation', createSendProfile: { __typename?: 'SendProfile', id: string, name: string, email: string, type: SendProfileType } };
 
-export type DeleteSmtpProfileMutationVariables = Exact<{
+export type DeleteSendProfileMutationVariables = Exact<{
   id: Scalars['String']['input'];
 }>;
 
 
-export type DeleteSmtpProfileMutation = { __typename?: 'Mutation', deleteSmtpProfile: boolean };
+export type DeleteSendProfileMutation = { __typename?: 'Mutation', deleteSendProfile: boolean };
 
-export type UpdateSmtpProfileMutationVariables = Exact<{
-  input: UpdateSmtpProfileInput;
+export type UpdateSendProfileMutationVariables = Exact<{
+  input: UpdateSendProfileInput;
 }>;
 
 
-export type UpdateSmtpProfileMutation = { __typename?: 'Mutation', updateSmtpProfile: { __typename?: 'SmtpProfile', id: string, name: string, email: string, alias?: string | null, host: string, port: number, useSsl: boolean, isDefault: boolean } };
+export type UpdateSendProfileMutation = { __typename?: 'Mutation', updateSendProfile: { __typename?: 'SendProfile', id: string, name: string, email: string, alias?: string | null, type: SendProfileType, isDefault: boolean, smtpSettings?: { __typename?: 'SmtpAccountSettings', id: string, host: string, port: number, useSsl: boolean } | null } };
 
 export type TestSmtpConnectionMutationVariables = Exact<{
   input: TestSmtpConnectionInput;
@@ -2338,12 +2611,52 @@ export type RunMailRuleMutationVariables = Exact<{
 
 export type RunMailRuleMutation = { __typename?: 'Mutation', runMailRule: { __typename?: 'RunRuleResult', matchedCount: number, processedCount: number } };
 
+export type GetCustomDomainsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type GetCustomDomainsQuery = { __typename?: 'Query', getCustomDomains: Array<{ __typename?: 'CustomDomain', id: string, domain: string, status: CustomDomainStatus, createdAt?: string | null, dnsRecords: Array<{ __typename?: 'CustomDomainDnsRecord', id: string, recordType: DnsRecordType, purpose: DnsRecordPurpose, name: string, value: string, isVerified: boolean }>, accounts: Array<{ __typename?: 'CustomDomainAccount', id: string, localPart: string, emailAccount?: { __typename?: 'EmailAccount', id: string, name: string, email: string } | null, sendProfile?: { __typename?: 'SendProfile', id: string, name: string, email: string } | null }> }> };
+
+export type AddCustomDomainMutationVariables = Exact<{
+  input: AddCustomDomainInput;
+}>;
+
+
+export type AddCustomDomainMutation = { __typename?: 'Mutation', addCustomDomain: { __typename?: 'CustomDomain', id: string, domain: string, status: CustomDomainStatus } };
+
+export type VerifyCustomDomainMutationVariables = Exact<{
+  id: Scalars['String']['input'];
+}>;
+
+
+export type VerifyCustomDomainMutation = { __typename?: 'Mutation', verifyCustomDomain: { __typename?: 'CustomDomain', id: string, domain: string, status: CustomDomainStatus } };
+
+export type DeleteCustomDomainMutationVariables = Exact<{
+  id: Scalars['String']['input'];
+}>;
+
+
+export type DeleteCustomDomainMutation = { __typename?: 'Mutation', deleteCustomDomain: boolean };
+
+export type CreateCustomDomainAccountMutationVariables = Exact<{
+  input: CreateCustomDomainAccountInput;
+}>;
+
+
+export type CreateCustomDomainAccountMutation = { __typename?: 'Mutation', createCustomDomainAccount: { __typename?: 'CustomDomainAccount', id: string, localPart: string, emailAccount?: { __typename?: 'EmailAccount', id: string, email: string } | null } };
+
+export type DeleteCustomDomainAccountMutationVariables = Exact<{
+  id: Scalars['String']['input'];
+}>;
+
+
+export type DeleteCustomDomainAccountMutation = { __typename?: 'Mutation', deleteCustomDomainAccount: boolean };
+
 export type GetBillingInfoQueryVariables = Exact<{
   sessionId?: InputMaybe<Scalars['String']['input']>;
 }>;
 
 
-export type GetBillingInfoQuery = { __typename?: 'Query', getBillingInfo: { __typename?: 'BillingInfo', hasStripeCustomer: boolean, storageUsagePercent: number, accountUsagePercent: number, isStorageLimitExceeded: boolean, isAccountLimitExceeded: boolean, isStripeConfigured: boolean, subscription: { __typename?: 'BillingSubscription', id: string, status: BillingSubscriptionStatus, storageTier: StorageTier, accountTier: AccountTier, storageLimitBytes: number, accountLimit: number, isValid: boolean, currentPeriodEnd?: string | null, cancelAtPeriodEnd: boolean }, usage: { __typename?: 'StorageUsage', userId: string, accountCount: number, totalBodySizeBytes: number, totalAttachmentSizeBytes: number, totalStorageBytes: number, totalStorageGB: number, emailCount: number, attachmentCount: number, lastRefreshedAt?: string | null }, prices: Array<{ __typename?: 'StripePrice', id: string, tier: string, type: string, name: string, unitAmount: number, currency: string, interval: string }> } };
+export type GetBillingInfoQuery = { __typename?: 'Query', getBillingInfo: { __typename?: 'BillingInfo', hasStripeCustomer: boolean, storageUsagePercent: number, accountUsagePercent: number, domainUsagePercent: number, isStorageLimitExceeded: boolean, isAccountLimitExceeded: boolean, isDomainLimitExceeded: boolean, isStripeConfigured: boolean, subscription: { __typename?: 'BillingSubscription', id: string, status: BillingSubscriptionStatus, storageTier: StorageTier, accountTier: AccountTier, domainTier: DomainTier, storageLimitBytes: number, accountLimit: number, domainLimit: number, isValid: boolean, currentPeriodEnd?: string | null, cancelAtPeriodEnd: boolean }, usage: { __typename?: 'StorageUsage', userId: string, accountCount: number, domainCount: number, totalBodySizeBytes: number, totalAttachmentSizeBytes: number, totalStorageBytes: number, totalStorageGB: number, emailCount: number, attachmentCount: number, lastRefreshedAt?: string | null }, prices: Array<{ __typename?: 'StripePrice', id: string, tier: string, type: string, name: string, unitAmount: number, currency: string, interval: string }> } };
 
 export type CreateBillingPortalSessionMutationVariables = Exact<{ [key: string]: never; }>;
 
@@ -2358,6 +2671,7 @@ export type RefreshStorageUsageMutation = { __typename?: 'Mutation', refreshStor
 export type CreateCheckoutSessionMutationVariables = Exact<{
   storageTier: StorageTier;
   accountTier: AccountTier;
+  domainTier: DomainTier;
 }>;
 
 
@@ -2410,8 +2724,8 @@ export const SearchContactByEmailDocument = {"kind":"Document","definitions":[{"
 export const MailboxUpdatesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"MailboxUpdates"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"mailboxUpdates"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}},{"kind":"Field","name":{"kind":"Name","value":"message"}},{"kind":"Field","name":{"kind":"Name","value":"emails"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageId"}},{"kind":"Field","name":{"kind":"Name","value":"folder"}},{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"textBody"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isRead"}},{"kind":"Field","name":{"kind":"Name","value":"isStarred"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}},{"kind":"Field","name":{"kind":"Name","value":"toAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"ccAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"bccAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"threadId"}},{"kind":"Field","name":{"kind":"Name","value":"threadCount"}},{"kind":"Field","name":{"kind":"Name","value":"tags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}}]}}]}}]}}]}}]} as unknown as DocumentNode<MailboxUpdatesSubscription, MailboxUpdatesSubscriptionVariables>;
 export const FetchProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"FetchProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"fetchProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"firstName"}},{"kind":"Field","name":{"kind":"Name","value":"lastName"}},{"kind":"Field","name":{"kind":"Name","value":"themePreference"}},{"kind":"Field","name":{"kind":"Name","value":"navbarCollapsed"}},{"kind":"Field","name":{"kind":"Name","value":"notificationDetailLevel"}},{"kind":"Field","name":{"kind":"Name","value":"inboxDensity"}},{"kind":"Field","name":{"kind":"Name","value":"inboxGroupByDate"}},{"kind":"Field","name":{"kind":"Name","value":"blockExternalImages"}}]}}]}}]} as unknown as DocumentNode<FetchProfileQuery, FetchProfileQueryVariables>;
 export const UpdateUserPreferencesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateUserPreferences"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateUserPreferencesInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateUserPreferences"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"themePreference"}},{"kind":"Field","name":{"kind":"Name","value":"navbarCollapsed"}},{"kind":"Field","name":{"kind":"Name","value":"notificationDetailLevel"}},{"kind":"Field","name":{"kind":"Name","value":"inboxDensity"}},{"kind":"Field","name":{"kind":"Name","value":"inboxGroupByDate"}},{"kind":"Field","name":{"kind":"Name","value":"blockExternalImages"}}]}}]}}]} as unknown as DocumentNode<UpdateUserPreferencesMutation, UpdateUserPreferencesMutationVariables>;
-export const GetSmtpProfilesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetSmtpProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getSmtpProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<GetSmtpProfilesQuery, GetSmtpProfilesQueryVariables>;
-export const GetEmailAccountsForComposeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccountsForCompose"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSmtpProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsForComposeQuery, GetEmailAccountsForComposeQueryVariables>;
+export const GetSendProfilesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetSendProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getSendProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<GetSendProfilesQuery, GetSendProfilesQueryVariables>;
+export const GetEmailAccountsForComposeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccountsForCompose"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsForComposeQuery, GetEmailAccountsForComposeQueryVariables>;
 export const SendEmailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SendEmail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ComposeEmailInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"sendEmail"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageId"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}}]}}]}}]} as unknown as DocumentNode<SendEmailMutation, SendEmailMutationVariables>;
 export const SaveDraftDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SaveDraft"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SaveDraftInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"saveDraft"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}}]}}]}}]} as unknown as DocumentNode<SaveDraftMutation, SaveDraftMutationVariables>;
 export const GetContactsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetContacts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getContacts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"emails"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"isPrimary"}},{"kind":"Field","name":{"kind":"Name","value":"label"}}]}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"firstName"}},{"kind":"Field","name":{"kind":"Name","value":"lastName"}},{"kind":"Field","name":{"kind":"Name","value":"company"}},{"kind":"Field","name":{"kind":"Name","value":"phone"}},{"kind":"Field","name":{"kind":"Name","value":"notes"}},{"kind":"Field","name":{"kind":"Name","value":"isAutoCreated"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]} as unknown as DocumentNode<GetContactsQuery, GetContactsQueryVariables>;
@@ -2424,7 +2738,7 @@ export const GetEmailsByThreadDocument = {"kind":"Document","definitions":[{"kin
 export const GetEmailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmail"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}},{"kind":"Field","name":{"kind":"Name","value":"messageId"}},{"kind":"Field","name":{"kind":"Name","value":"folder"}},{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"toAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"ccAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"textBody"}},{"kind":"Field","name":{"kind":"Name","value":"htmlBody"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isRead"}},{"kind":"Field","name":{"kind":"Name","value":"isStarred"}},{"kind":"Field","name":{"kind":"Name","value":"inReplyTo"}},{"kind":"Field","name":{"kind":"Name","value":"references"}},{"kind":"Field","name":{"kind":"Name","value":"threadId"}},{"kind":"Field","name":{"kind":"Name","value":"threadCount"}},{"kind":"Field","name":{"kind":"Name","value":"headers"}},{"kind":"Field","name":{"kind":"Name","value":"isUnsubscribed"}},{"kind":"Field","name":{"kind":"Name","value":"unsubscribeUrl"}},{"kind":"Field","name":{"kind":"Name","value":"unsubscribeEmail"}},{"kind":"Field","name":{"kind":"Name","value":"hasAttachments"}},{"kind":"Field","name":{"kind":"Name","value":"attachmentCount"}},{"kind":"Field","name":{"kind":"Name","value":"attachments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"filename"}},{"kind":"Field","name":{"kind":"Name","value":"mimeType"}},{"kind":"Field","name":{"kind":"Name","value":"extension"}},{"kind":"Field","name":{"kind":"Name","value":"size"}},{"kind":"Field","name":{"kind":"Name","value":"attachmentType"}},{"kind":"Field","name":{"kind":"Name","value":"contentId"}},{"kind":"Field","name":{"kind":"Name","value":"isSafe"}}]}},{"kind":"Field","name":{"kind":"Name","value":"tags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailQuery, GetEmailQueryVariables>;
 export const GetEmailCountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailCount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailCount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<GetEmailCountQuery, GetEmailCountQueryVariables>;
 export const GetStarredEmailsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetStarredEmails"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmails"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageId"}},{"kind":"Field","name":{"kind":"Name","value":"folder"}},{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"toAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"textBody"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isRead"}},{"kind":"Field","name":{"kind":"Name","value":"isStarred"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}}]}}]}}]} as unknown as DocumentNode<GetStarredEmailsQuery, GetStarredEmailsQueryVariables>;
-export const GetEmailAccountsForInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccountsForInbox"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"lastSyncedAt"}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsForInboxQuery, GetEmailAccountsForInboxQueryVariables>;
+export const GetEmailAccountsForInboxDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccountsForInbox"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"imapSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"lastSyncedAt"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsForInboxQuery, GetEmailAccountsForInboxQueryVariables>;
 export const SyncAllAccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncAllAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncAllAccounts"}}]}}]} as unknown as DocumentNode<SyncAllAccountsMutation, SyncAllAccountsMutationVariables>;
 export const UnsubscribeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Unsubscribe"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UnsubscribeInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unsubscribe"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"isUnsubscribed"}}]}}]}}]} as unknown as DocumentNode<UnsubscribeMutation, UnsubscribeMutationVariables>;
 export const CreateContactFromEmailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateContactFromEmail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"emailId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createContactFromEmail"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"emailId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"emailId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]} as unknown as DocumentNode<CreateContactFromEmailMutation, CreateContactFromEmailMutationVariables>;
@@ -2438,17 +2752,17 @@ export const RemoveTagsFromEmailsInboxDocument = {"kind":"Document","definitions
 export const GetPushTokensDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"GetPushTokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getPushTokens"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"token"}},{"kind":"Field","name":{"kind":"Name","value":"platform"}},{"kind":"Field","name":{"kind":"Name","value":"deviceName"}},{"kind":"Field","name":{"kind":"Name","value":"isActive"}},{"kind":"Field","name":{"kind":"Name","value":"lastUsedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]} as unknown as DocumentNode<GetPushTokensMutation, GetPushTokensMutationVariables>;
 export const RegisterPushTokenDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RegisterPushToken"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RegisterPushTokenInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"registerPushToken"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<RegisterPushTokenMutation, RegisterPushTokenMutationVariables>;
 export const UnregisterPushTokenDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UnregisterPushToken"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"token"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unregisterPushToken"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"token"},"value":{"kind":"Variable","name":{"kind":"Name","value":"token"}}}]}]}}]} as unknown as DocumentNode<UnregisterPushTokenMutation, UnregisterPushTokenMutationVariables>;
-export const GetEmailAccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"accountType"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"lastSyncedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isHistoricalSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncLastAt"}},{"kind":"Field","name":{"kind":"Name","value":"isUpdateSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSmtpProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSmtpProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsQuery, GetEmailAccountsQueryVariables>;
+export const GetEmailAccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"imapSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"accountType"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"lastSyncedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isHistoricalSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncLastAt"}},{"kind":"Field","name":{"kind":"Name","value":"isUpdateSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncStatus"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsQuery, GetEmailAccountsQueryVariables>;
 export const CreateEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}}]}}]} as unknown as DocumentNode<CreateEmailAccountMutation, CreateEmailAccountMutationVariables>;
 export const DeleteEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteEmailAccountMutation, DeleteEmailAccountMutationVariables>;
 export const SyncEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SyncEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<SyncEmailAccountMutation, SyncEmailAccountMutationVariables>;
 export const SyncAllAccountsSettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncAllAccountsSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncAllAccounts"}}]}}]} as unknown as DocumentNode<SyncAllAccountsSettingsMutation, SyncAllAccountsSettingsMutationVariables>;
-export const UpdateEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSmtpProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<UpdateEmailAccountMutation, UpdateEmailAccountMutationVariables>;
-export const TestEmailAccountConnectionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"TestEmailAccountConnection"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"TestEmailAccountConnectionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"testEmailAccountConnection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<TestEmailAccountConnectionMutation, TestEmailAccountConnectionMutationVariables>;
-export const GetSmtpProfilesFullDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetSmtpProfilesFull"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getSmtpProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}}]}}]}}]} as unknown as DocumentNode<GetSmtpProfilesFullQuery, GetSmtpProfilesFullQueryVariables>;
-export const CreateSmtpProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateSmtpProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateSmtpProfileInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createSmtpProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}}]}}]} as unknown as DocumentNode<CreateSmtpProfileMutation, CreateSmtpProfileMutationVariables>;
-export const DeleteSmtpProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteSmtpProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteSmtpProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteSmtpProfileMutation, DeleteSmtpProfileMutationVariables>;
-export const UpdateSmtpProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateSmtpProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateSmtpProfileInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateSmtpProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}}]}}]}}]} as unknown as DocumentNode<UpdateSmtpProfileMutation, UpdateSmtpProfileMutationVariables>;
+export const UpdateEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"imapSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}}]}}]}}]}}]} as unknown as DocumentNode<UpdateEmailAccountMutation, UpdateEmailAccountMutationVariables>;
+export const TestImapConnectionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"TestImapConnection"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"TestImapConnectionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"testImapConnection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<TestImapConnectionMutation, TestImapConnectionMutationVariables>;
+export const GetSendProfilesFullDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetSendProfilesFull"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getSendProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"smtpSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}}]}}]}}]}}]} as unknown as DocumentNode<GetSendProfilesFullQuery, GetSendProfilesFullQueryVariables>;
+export const CreateSendProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateSendProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateSendProfileInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createSendProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]} as unknown as DocumentNode<CreateSendProfileMutation, CreateSendProfileMutationVariables>;
+export const DeleteSendProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteSendProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteSendProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteSendProfileMutation, DeleteSendProfileMutationVariables>;
+export const UpdateSendProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateSendProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateSendProfileInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateSendProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"smtpSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}}]}}]}}]}}]} as unknown as DocumentNode<UpdateSendProfileMutation, UpdateSendProfileMutationVariables>;
 export const TestSmtpConnectionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"TestSmtpConnection"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"TestSmtpConnectionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"testSmtpConnection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<TestSmtpConnectionMutation, TestSmtpConnectionMutationVariables>;
 export const GetAuthenticationMethodsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetAuthenticationMethods"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getAuthenticationMethods"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"provider"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"displayName"}},{"kind":"Field","name":{"kind":"Name","value":"lastUsedAt"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}}]}}]}}]} as unknown as DocumentNode<GetAuthenticationMethodsQuery, GetAuthenticationMethodsQueryVariables>;
 export const DeleteAuthenticationMethodDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteAuthenticationMethod"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteAuthenticationMethod"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteAuthenticationMethodMutation, DeleteAuthenticationMethodMutationVariables>;
@@ -2464,10 +2778,16 @@ export const UpdateMailRuleDocument = {"kind":"Document","definitions":[{"kind":
 export const DeleteMailRuleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteMailRule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteMailRule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteMailRuleMutation, DeleteMailRuleMutationVariables>;
 export const PreviewMailRuleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"PreviewMailRule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"previewMailRule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<PreviewMailRuleQuery, PreviewMailRuleQueryVariables>;
 export const RunMailRuleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RunMailRule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"runMailRule"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"matchedCount"}},{"kind":"Field","name":{"kind":"Name","value":"processedCount"}}]}}]}}]} as unknown as DocumentNode<RunMailRuleMutation, RunMailRuleMutationVariables>;
-export const GetBillingInfoDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetBillingInfo"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getBillingInfo"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"subscription"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"storageTier"}},{"kind":"Field","name":{"kind":"Name","value":"accountTier"}},{"kind":"Field","name":{"kind":"Name","value":"storageLimitBytes"}},{"kind":"Field","name":{"kind":"Name","value":"accountLimit"}},{"kind":"Field","name":{"kind":"Name","value":"isValid"}},{"kind":"Field","name":{"kind":"Name","value":"currentPeriodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"cancelAtPeriodEnd"}}]}},{"kind":"Field","name":{"kind":"Name","value":"hasStripeCustomer"}},{"kind":"Field","name":{"kind":"Name","value":"usage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userId"}},{"kind":"Field","name":{"kind":"Name","value":"accountCount"}},{"kind":"Field","name":{"kind":"Name","value":"totalBodySizeBytes"}},{"kind":"Field","name":{"kind":"Name","value":"totalAttachmentSizeBytes"}},{"kind":"Field","name":{"kind":"Name","value":"totalStorageBytes"}},{"kind":"Field","name":{"kind":"Name","value":"totalStorageGB"}},{"kind":"Field","name":{"kind":"Name","value":"emailCount"}},{"kind":"Field","name":{"kind":"Name","value":"attachmentCount"}},{"kind":"Field","name":{"kind":"Name","value":"lastRefreshedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"storageUsagePercent"}},{"kind":"Field","name":{"kind":"Name","value":"accountUsagePercent"}},{"kind":"Field","name":{"kind":"Name","value":"isStorageLimitExceeded"}},{"kind":"Field","name":{"kind":"Name","value":"isAccountLimitExceeded"}},{"kind":"Field","name":{"kind":"Name","value":"isStripeConfigured"}},{"kind":"Field","name":{"kind":"Name","value":"prices"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"tier"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"unitAmount"}},{"kind":"Field","name":{"kind":"Name","value":"currency"}},{"kind":"Field","name":{"kind":"Name","value":"interval"}}]}}]}}]}}]} as unknown as DocumentNode<GetBillingInfoQuery, GetBillingInfoQueryVariables>;
+export const GetCustomDomainsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetCustomDomains"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getCustomDomains"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"dnsRecords"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"recordType"}},{"kind":"Field","name":{"kind":"Name","value":"purpose"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"isVerified"}}]}},{"kind":"Field","name":{"kind":"Name","value":"accounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"localPart"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccount"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}},{"kind":"Field","name":{"kind":"Name","value":"sendProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}}]}}]}}]}}]} as unknown as DocumentNode<GetCustomDomainsQuery, GetCustomDomainsQueryVariables>;
+export const AddCustomDomainDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"AddCustomDomain"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AddCustomDomainInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"addCustomDomain"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<AddCustomDomainMutation, AddCustomDomainMutationVariables>;
+export const VerifyCustomDomainDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"VerifyCustomDomain"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"verifyCustomDomain"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"domain"}},{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]} as unknown as DocumentNode<VerifyCustomDomainMutation, VerifyCustomDomainMutationVariables>;
+export const DeleteCustomDomainDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteCustomDomain"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteCustomDomain"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteCustomDomainMutation, DeleteCustomDomainMutationVariables>;
+export const CreateCustomDomainAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateCustomDomainAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateCustomDomainAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createCustomDomainAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"localPart"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccount"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}}]}}]}}]} as unknown as DocumentNode<CreateCustomDomainAccountMutation, CreateCustomDomainAccountMutationVariables>;
+export const DeleteCustomDomainAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteCustomDomainAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteCustomDomainAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteCustomDomainAccountMutation, DeleteCustomDomainAccountMutationVariables>;
+export const GetBillingInfoDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetBillingInfo"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getBillingInfo"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"subscription"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"storageTier"}},{"kind":"Field","name":{"kind":"Name","value":"accountTier"}},{"kind":"Field","name":{"kind":"Name","value":"domainTier"}},{"kind":"Field","name":{"kind":"Name","value":"storageLimitBytes"}},{"kind":"Field","name":{"kind":"Name","value":"accountLimit"}},{"kind":"Field","name":{"kind":"Name","value":"domainLimit"}},{"kind":"Field","name":{"kind":"Name","value":"isValid"}},{"kind":"Field","name":{"kind":"Name","value":"currentPeriodEnd"}},{"kind":"Field","name":{"kind":"Name","value":"cancelAtPeriodEnd"}}]}},{"kind":"Field","name":{"kind":"Name","value":"hasStripeCustomer"}},{"kind":"Field","name":{"kind":"Name","value":"usage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"userId"}},{"kind":"Field","name":{"kind":"Name","value":"accountCount"}},{"kind":"Field","name":{"kind":"Name","value":"domainCount"}},{"kind":"Field","name":{"kind":"Name","value":"totalBodySizeBytes"}},{"kind":"Field","name":{"kind":"Name","value":"totalAttachmentSizeBytes"}},{"kind":"Field","name":{"kind":"Name","value":"totalStorageBytes"}},{"kind":"Field","name":{"kind":"Name","value":"totalStorageGB"}},{"kind":"Field","name":{"kind":"Name","value":"emailCount"}},{"kind":"Field","name":{"kind":"Name","value":"attachmentCount"}},{"kind":"Field","name":{"kind":"Name","value":"lastRefreshedAt"}}]}},{"kind":"Field","name":{"kind":"Name","value":"storageUsagePercent"}},{"kind":"Field","name":{"kind":"Name","value":"accountUsagePercent"}},{"kind":"Field","name":{"kind":"Name","value":"domainUsagePercent"}},{"kind":"Field","name":{"kind":"Name","value":"isStorageLimitExceeded"}},{"kind":"Field","name":{"kind":"Name","value":"isAccountLimitExceeded"}},{"kind":"Field","name":{"kind":"Name","value":"isDomainLimitExceeded"}},{"kind":"Field","name":{"kind":"Name","value":"isStripeConfigured"}},{"kind":"Field","name":{"kind":"Name","value":"prices"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"tier"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"unitAmount"}},{"kind":"Field","name":{"kind":"Name","value":"currency"}},{"kind":"Field","name":{"kind":"Name","value":"interval"}}]}}]}}]}}]} as unknown as DocumentNode<GetBillingInfoQuery, GetBillingInfoQueryVariables>;
 export const CreateBillingPortalSessionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateBillingPortalSession"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createBillingPortalSession"}}]}}]} as unknown as DocumentNode<CreateBillingPortalSessionMutation, CreateBillingPortalSessionMutationVariables>;
 export const RefreshStorageUsageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RefreshStorageUsage"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"refreshStorageUsage"}}]}}]} as unknown as DocumentNode<RefreshStorageUsageMutation, RefreshStorageUsageMutationVariables>;
-export const CreateCheckoutSessionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateCheckoutSession"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"StorageTier"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountTier"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createCheckoutSession"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"storageTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}}},{"kind":"Argument","name":{"kind":"Name","value":"accountTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}}}]}]}}]} as unknown as DocumentNode<CreateCheckoutSessionMutation, CreateCheckoutSessionMutationVariables>;
+export const CreateCheckoutSessionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateCheckoutSession"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"StorageTier"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"AccountTier"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"domainTier"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"DomainTier"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createCheckoutSession"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"storageTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"storageTier"}}},{"kind":"Argument","name":{"kind":"Name","value":"accountTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"accountTier"}}},{"kind":"Argument","name":{"kind":"Name","value":"domainTier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"domainTier"}}}]}]}}]} as unknown as DocumentNode<CreateCheckoutSessionMutation, CreateCheckoutSessionMutationVariables>;
 export const GetTopEmailSourcesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetTopEmailSources"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"limit"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getTopEmailSources"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"Variable","name":{"kind":"Name","value":"limit"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"count"}}]}}]}}]} as unknown as DocumentNode<GetTopEmailSourcesQuery, GetTopEmailSourcesQueryVariables>;
 export const GetEmailsForTriageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailsForTriage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmails"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"messageId"}},{"kind":"Field","name":{"kind":"Name","value":"folder"}},{"kind":"Field","name":{"kind":"Name","value":"fromAddress"}},{"kind":"Field","name":{"kind":"Name","value":"fromName"}},{"kind":"Field","name":{"kind":"Name","value":"toAddresses"}},{"kind":"Field","name":{"kind":"Name","value":"subject"}},{"kind":"Field","name":{"kind":"Name","value":"textBody"}},{"kind":"Field","name":{"kind":"Name","value":"receivedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isRead"}},{"kind":"Field","name":{"kind":"Name","value":"isStarred"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}},{"kind":"Field","name":{"kind":"Name","value":"tags"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"color"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailsForTriageQuery, GetEmailsForTriageQueryVariables>;
 export const GetEmailCountForTriageDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailCountForTriage"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GetEmailsInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailCount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<GetEmailCountForTriageQuery, GetEmailCountForTriageQueryVariables>;

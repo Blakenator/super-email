@@ -7,7 +7,7 @@
 
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { EmailAccount, SmtpProfile } from '../../../db/models/index.js';
+import { EmailAccount, SendProfile, ImapAccountSettings } from '../../../db/models/index.js';
 import { getEmailAccounts } from '../../../queries/email-account/getEmailAccounts.js';
 import { createMockContext, createUnauthenticatedContext } from '../../utils/index.js';
 
@@ -40,7 +40,7 @@ describe('getEmailAccounts query', () => {
     expect(result).to.deep.equal(mockAccounts);
   });
 
-  it('should include defaultSmtpProfile and order by createdAt DESC', async () => {
+  it('should include defaultSendProfile and imapSettings, order by createdAt DESC', async () => {
     const context = createMockContext({ userId: 'user-123' });
     const findAllStub = sinon.stub(EmailAccount, 'findAll').resolves([]);
 
@@ -50,11 +50,15 @@ describe('getEmailAccounts query', () => {
     const queryArgs = findAllStub.firstCall.args[0] as any;
     expect(queryArgs.where).to.deep.include({ userId: 'user-123' });
     expect(queryArgs.order).to.deep.equal([['createdAt', 'DESC']]);
-    // Should include defaultSmtpProfile association
-    expect(queryArgs.include).to.be.an('array').with.lengthOf(1);
+    expect(queryArgs.include).to.be.an('array').with.lengthOf(2);
     expect(queryArgs.include[0]).to.deep.include({
-      model: SmtpProfile,
-      as: 'defaultSmtpProfile',
+      model: SendProfile,
+      as: 'defaultSendProfile',
+      required: false,
+    });
+    expect(queryArgs.include[1]).to.deep.include({
+      model: ImapAccountSettings,
+      as: 'imapSettings',
       required: false,
     });
   });

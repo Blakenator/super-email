@@ -15,7 +15,7 @@ import {
 import { useNavigate, useLocation } from 'react-router';
 import toast from 'react-hot-toast';
 import {
-  GET_SMTP_PROFILES_QUERY,
+  GET_SEND_PROFILES_QUERY,
   GET_EMAIL_ACCOUNTS_QUERY,
   SEND_EMAIL_MUTATION,
   SAVE_DRAFT_MUTATION,
@@ -312,7 +312,7 @@ ${quotedHtml}
     GET_EMAIL_ACCOUNTS_QUERY,
   );
   const { data: profilesData, loading: profilesLoading } = useQuery(
-    GET_SMTP_PROFILES_QUERY,
+    GET_SEND_PROFILES_QUERY,
   );
 
   const [sendEmail, { loading: sending }] = useMutation(SEND_EMAIL_MUTATION, {
@@ -341,7 +341,7 @@ ${quotedHtml}
   );
 
   const accounts = accountsData?.getEmailAccounts ?? [];
-  const profiles = profilesData?.getSmtpProfiles ?? [];
+  const profiles = profilesData?.getSendProfiles ?? [];
 
   // Set default email account - prefer the one marked as default
   useEffect(() => {
@@ -355,8 +355,8 @@ ${quotedHtml}
   useEffect(() => {
     if (!smtpProfileId && emailAccountId) {
       const account = accounts.find((a) => a.id === emailAccountId);
-      if (account?.defaultSmtpProfileId) {
-        setSmtpProfileId(account.defaultSmtpProfileId);
+      if (account?.defaultSendProfileId) {
+        setSmtpProfileId(account.defaultSendProfileId);
       } else if (profiles.length) {
         const defaultProfile = profiles.find((p) => p.isDefault);
         setSmtpProfileId(defaultProfile?.id || profiles[0].id);

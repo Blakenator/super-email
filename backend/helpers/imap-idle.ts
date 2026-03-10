@@ -1,6 +1,8 @@
 import type { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { EmailAccount, Email, EmailFolder } from '../db/models/index.js';
+import { EmailAccountType } from '../db/models/email-account.model.js';
+import { ImapAccountSettings } from '../db/models/imap-account-settings.model.js';
 import { logger } from './logger.js';
 import { applyRulesToEmail } from './rule-matcher.js';
 import { sendNewEmailNotifications } from './push-notifications.js';
@@ -51,7 +53,8 @@ export async function startIdleForUser(
   logger.info('IMAP-IDLE', `Starting IDLE connections for user ${userId}`);
 
   const accounts = await EmailAccount.findAll({
-    where: { userId },
+    where: { userId, type: EmailAccountType.IMAP },
+    include: [{ model: ImapAccountSettings, as: 'imapSettings', required: true }],
   });
 
   if (accounts.length === 0) {
@@ -104,7 +107,7 @@ async function startIdleForAccount(
   const userConnections = userIdleConnections.get(userId);
   if (!userConnections) return;
 
-  const client = await createImapClient(account);
+  const client = await createImapClient(account.imapSettings!);
 
   client.on('mailboxOpen', (mailbox: any) => {
     logger.info('IMAP-IDLE', `[${account.email}] Mailbox opened: ${mailbox.path}, ${mailbox.exists} messages`);

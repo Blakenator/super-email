@@ -16,16 +16,20 @@ export {
   SubscriptionStatus,
   StorageTier,
   AccountTier,
+  DomainTier,
   STORAGE_LIMITS,
   ACCOUNT_LIMITS,
+  DOMAIN_LIMITS,
 } from './subscription.constants.js';
 
 import {
   SubscriptionStatus,
   StorageTier,
   AccountTier,
+  DomainTier,
   STORAGE_LIMITS,
   ACCOUNT_LIMITS,
+  DOMAIN_LIMITS,
 } from './subscription.constants.js';
 
 @Table({
@@ -85,6 +89,14 @@ export class Subscription extends Model {
   })
   declare accountTier: AccountTier;
 
+  // Domain tier (determines number of custom domains allowed)
+  @Column({
+    type: DataType.ENUM(...Object.values(DomainTier)),
+    allowNull: false,
+    defaultValue: DomainTier.FREE,
+  })
+  declare domainTier: DomainTier;
+
   // Current period end (from Stripe)
   @Column({ type: DataType.DATE, allowNull: true })
   declare currentPeriodEnd: Date | null;
@@ -101,6 +113,11 @@ export class Subscription extends Model {
   // Computed account limit
   get accountLimit(): number {
     return ACCOUNT_LIMITS[this.accountTier];
+  }
+
+  // Computed domain limit
+  get domainLimit(): number {
+    return DOMAIN_LIMITS[this.domainTier];
   }
 
   // Helper to check if subscription is valid for syncing

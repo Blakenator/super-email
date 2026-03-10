@@ -28,11 +28,14 @@ const GET_EMAIL_ACCOUNT_QUERY = gql`
       id
       name
       email
-      host
-      port
-      accountType
-      useSsl
+      type
       isDefault
+      imapSettings {
+        host
+        port
+        accountType
+        useSsl
+      }
     }
   }
 `;
@@ -48,8 +51,8 @@ const CREATE_EMAIL_ACCOUNT_MUTATION = gql`
 `;
 
 const UPDATE_EMAIL_ACCOUNT_MUTATION = gql`
-  mutation UpdateEmailAccount($id: String!, $input: UpdateEmailAccountInput!) {
-    updateEmailAccount(id: $id, input: $input) {
+  mutation UpdateEmailAccount($input: UpdateEmailAccountInput!) {
+    updateEmailAccount(input: $input) {
       id
       name
       email
@@ -106,12 +109,14 @@ export function EditAccountScreen({ onClose }: EditAccountScreenProps) {
         const account = data.getEmailAccount;
         setName(account.name);
         setEmail(account.email);
-        setHost(account.host);
-        setPort(String(account.port));
-        setAccountType(account.accountType);
-        setUseSsl(account.useSsl);
         setIsDefault(account.isDefault);
-        setUsername(account.email); // Usually the email is the username
+        if (account.imapSettings) {
+          setHost(account.imapSettings.host);
+          setPort(String(account.imapSettings.port));
+          setAccountType(account.imapSettings.accountType || 'IMAP');
+          setUseSsl(account.imapSettings.useSsl);
+        }
+        setUsername(account.email);
       }
     } catch (error) {
       console.error('Error loading account:', error);
@@ -138,14 +143,14 @@ export function EditAccountScreen({ onClose }: EditAccountScreenProps) {
         await apolloClient.mutate({
           mutation: UPDATE_EMAIL_ACCOUNT_MUTATION,
           variables: {
-            id: accountId,
             input: {
+              id: accountId,
               name: name.trim(),
-              host: host.trim(),
-              port: parseInt(port, 10),
-              useSsl,
+              imapHost: host.trim(),
+              imapPort: parseInt(port, 10),
+              imapUseSsl: useSsl,
               isDefault,
-              ...(password.trim() ? { password: password.trim() } : {}),
+              ...(password.trim() ? { imapPassword: password.trim() } : {}),
             },
           },
           refetchQueries: ['GetEmailAccounts'],
@@ -156,14 +161,15 @@ export function EditAccountScreen({ onClose }: EditAccountScreenProps) {
           mutation: CREATE_EMAIL_ACCOUNT_MUTATION,
           variables: {
             input: {
+              type: 'IMAP',
               name: name.trim(),
               email: email.trim(),
-              host: host.trim(),
-              port: parseInt(port, 10),
-              username: username.trim() || email.trim(),
-              password: password.trim(),
-              accountType,
-              useSsl,
+              imapHost: host.trim(),
+              imapPort: parseInt(port, 10),
+              imapUsername: username.trim() || email.trim(),
+              imapPassword: password.trim(),
+              imapAccountType: accountType,
+              imapUseSsl: useSsl,
               isDefault,
             },
           },

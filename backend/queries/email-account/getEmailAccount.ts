@@ -1,5 +1,5 @@
 import { makeQuery } from '../../types.js';
-import { EmailAccount } from '../../db/models/index.js';
+import { EmailAccount, SendProfile, ImapAccountSettings } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const getEmailAccount = makeQuery(
@@ -9,6 +9,18 @@ export const getEmailAccount = makeQuery(
 
     const account = await EmailAccount.findOne({
       where: { id, userId },
+      include: [
+        {
+          model: SendProfile,
+          as: 'defaultSendProfile',
+          required: false,
+        },
+        {
+          model: ImapAccountSettings,
+          as: 'imapSettings',
+          required: false,
+        },
+      ],
     });
 
     return account;

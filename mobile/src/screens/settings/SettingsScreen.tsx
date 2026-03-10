@@ -33,7 +33,7 @@ import {
 
 interface SettingsScreenProps {
   onNavigateToAccounts: () => void;
-  onNavigateToSmtp: () => void;
+  onNavigateToSendProfiles: () => void;
   onNavigateToTags: () => void;
   onNavigateToRules: () => void;
   onNavigateToNotifications: () => void;
@@ -42,7 +42,7 @@ interface SettingsScreenProps {
 
 export function SettingsScreen({
   onNavigateToAccounts,
-  onNavigateToSmtp,
+  onNavigateToSendProfiles,
   onNavigateToTags,
   onNavigateToRules,
   onNavigateToNotifications,
@@ -141,9 +141,9 @@ export function SettingsScreen({
         />
         <ListItem
           icon="send"
-          title="SMTP Profiles"
+          title="Send Profiles"
           subtitle="Outgoing email settings"
-          onPress={onNavigateToSmtp}
+          onPress={onNavigateToSendProfiles}
         />
         <ListItem
           icon="tag"

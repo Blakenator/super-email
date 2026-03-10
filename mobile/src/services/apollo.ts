@@ -327,7 +327,7 @@ const cache = new InMemoryCache({
     Tag: {
       keyFields: ['id'],
     },
-    SmtpProfile: {
+    SendProfile: {
       keyFields: ['id'],
     },
     MailRule: {

@@ -305,6 +305,44 @@ new aws.s3.BucketPublicAccessBlock(`${stackName}-attachments-pab`, {
 });
 
 // =============================================================================
+// S3 Bucket for Raw Inbound Emails (Custom Domains)
+// =============================================================================
+// Archived for compliance/debugging. NOT counted towards user storage budgets.
+
+const rawEmailsBucket = new aws.s3.Bucket(`${stackName}-raw-emails`, {
+  bucket: `${stackName}-raw-emails`,
+  acl: 'private',
+  versioning: { enabled: false },
+  serverSideEncryptionConfiguration: {
+    rule: {
+      applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' },
+    },
+  },
+  lifecycleRules: [
+    {
+      id: 'archive-raw-emails',
+      enabled: true,
+      transitions: [
+        { days: 30, storageClass: 'STANDARD_IA' },
+        { days: 365, storageClass: 'GLACIER' },
+      ],
+    },
+  ],
+  tags: {
+    Name: `${stackName}-raw-emails`,
+    Environment: environment,
+  },
+});
+
+new aws.s3.BucketPublicAccessBlock(`${stackName}-raw-emails-pab`, {
+  bucket: rawEmailsBucket.id,
+  blockPublicAcls: true,
+  blockPublicPolicy: true,
+  ignorePublicAcls: true,
+  restrictPublicBuckets: true,
+});
+
+// =============================================================================
 // S3 Bucket for Frontend Static Files
 // =============================================================================
 
@@ -565,6 +603,54 @@ new aws.iam.RolePolicyAttachment(`${stackName}-task-ssm-policy`, {
   policyArn: ssmPolicy.arn,
 });
 
+// S3 policy for raw-emails bucket (backend archives inbound raw emails)
+const rawEmailsS3Policy = new aws.iam.Policy(`${stackName}-raw-emails-s3-policy`, {
+  name: `${stackName}-raw-emails-s3-policy`,
+  policy: rawEmailsBucket.arn.apply((arn) =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['s3:PutObject', 's3:GetObject'],
+          Resource: `${arn}/*`,
+        },
+      ],
+    }),
+  ),
+});
+
+new aws.iam.RolePolicyAttachment(`${stackName}-task-raw-emails-s3-policy`, {
+  role: taskRole.name,
+  policyArn: rawEmailsS3Policy.arn,
+});
+
+// SES policy for sending emails from custom domains
+const sesPolicy = new aws.iam.Policy(`${stackName}-ses-policy`, {
+  name: `${stackName}-ses-policy`,
+  policy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Action: [
+          'ses:SendEmail',
+          'ses:SendRawEmail',
+          'ses:CreateEmailIdentity',
+          'ses:DeleteEmailIdentity',
+          'ses:GetEmailIdentity',
+        ],
+        Resource: '*',
+      },
+    ],
+  }),
+});
+
+new aws.iam.RolePolicyAttachment(`${stackName}-task-ses-policy`, {
+  role: taskRole.name,
+  policyArn: sesPolicy.arn,
+});
+
 // =============================================================================
 // CloudWatch Log Group - Cost Optimized
 // =============================================================================
@@ -623,7 +709,9 @@ const stripePriceStorageEnterprise = config.get('stripePriceStorageEnterprise') 
 const stripePriceAccountsBasic = config.get('stripePriceAccountsBasic') || '';
 const stripePriceAccountsPro = config.get('stripePriceAccountsPro') || '';
 const stripePriceAccountsEnterprise = config.get('stripePriceAccountsEnterprise') || '';
-
+const stripePriceDomainBasic = config.get('stripePriceDomainBasic') || '';
+const stripePriceDomainPro = config.get('stripePriceDomainPro') || '';
+const stripePriceDomainEnterprise = config.get('stripePriceDomainEnterprise') || '';
 
 // Stripe secret key
 const stripeKeySecret = new aws.secretsmanager.Secret(
@@ -907,6 +995,124 @@ if (domainName && cloudflareZoneId) {
 }
 
 // =============================================================================
+// Custom Domain Email Infrastructure (SES → S3 → SNS → SQS → Lambda)
+// =============================================================================
+
+// SNS topic - SES notifies here after saving raw email to S3
+const customEmailTopic = new aws.sns.Topic(`${stackName}-custom-email-topic`, {
+  name: `${stackName}-custom-email-topic`,
+  tags: { Name: `${stackName}-custom-email-topic`, Environment: environment },
+});
+
+// SQS Dead Letter Queue for failed email processing
+const customEmailDlq = new aws.sqs.Queue(`${stackName}-custom-email-dlq`, {
+  name: `${stackName}-custom-email-dlq`,
+  messageRetentionSeconds: 14 * 24 * 60 * 60, // 14 days
+  tags: { Name: `${stackName}-custom-email-dlq`, Environment: environment },
+});
+
+// SQS main queue - Lambda consumes from here
+const customEmailQueue = new aws.sqs.Queue(`${stackName}-custom-email-queue`, {
+  name: `${stackName}-custom-email-queue`,
+  visibilityTimeoutSeconds: 300, // 5 min for Lambda processing
+  messageRetentionSeconds: 4 * 24 * 60 * 60, // 4 days
+  receiveWaitTimeSeconds: 20,
+  redrivePolicy: customEmailDlq.arn.apply((arn) =>
+    JSON.stringify({ deadLetterTargetArn: arn, maxReceiveCount: 3 }),
+  ),
+  tags: { Name: `${stackName}-custom-email-queue`, Environment: environment },
+});
+
+// Allow SNS to publish to SQS
+new aws.sqs.QueuePolicy(`${stackName}-custom-email-queue-policy`, {
+  queueUrl: customEmailQueue.url,
+  policy: pulumi
+    .all([customEmailQueue.arn, customEmailTopic.arn])
+    .apply(([queueArn, topicArn]) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AllowSNS',
+            Effect: 'Allow',
+            Principal: { Service: 'sns.amazonaws.com' },
+            Action: 'sqs:SendMessage',
+            Resource: queueArn,
+            Condition: { ArnEquals: { 'aws:SourceArn': topicArn } },
+          },
+        ],
+      }),
+    ),
+});
+
+// SNS → SQS subscription
+new aws.sns.TopicSubscription(`${stackName}-custom-email-sns-sqs`, {
+  topic: customEmailTopic.arn,
+  protocol: 'sqs',
+  endpoint: customEmailQueue.arn,
+  rawMessageDelivery: false,
+});
+
+// Bucket policy allowing SES to write raw emails to S3
+const rawEmailsSesPolicy = new aws.s3.BucketPolicy(
+  `${stackName}-raw-emails-ses-policy`,
+  {
+    bucket: rawEmailsBucket.id,
+    policy: pulumi
+      .all([rawEmailsBucket.arn, aws.getCallerIdentity({})])
+      .apply(([arn, identity]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Sid: 'AllowSESPuts',
+              Effect: 'Allow',
+              Principal: { Service: 'ses.amazonaws.com' },
+              Action: 's3:PutObject',
+              Resource: `${arn}/*`,
+              Condition: {
+                StringEquals: { 'AWS:SourceAccount': identity.accountId },
+              },
+            },
+          ],
+        }),
+      ),
+  },
+);
+
+// SES Receipt Rule Set (container for all receipt rules)
+const sesReceiptRuleSet = new aws.ses.ReceiptRuleSet(
+  `${stackName}-receipt-rule-set`,
+  { ruleSetName: `${stackName}-receipt-rules` },
+);
+
+// Activate the receipt rule set
+new aws.ses.ActiveReceiptRuleSet(`${stackName}-active-receipt-rule-set`, {
+  ruleSetName: sesReceiptRuleSet.ruleSetName,
+});
+
+// Catch-all receipt rule: save inbound email to S3 + notify SNS
+// SES only delivers for verified domain identities, so catch-all is safe.
+new aws.ses.ReceiptRule(
+  `${stackName}-catch-all-rule`,
+  {
+    name: `${stackName}-catch-all`,
+    ruleSetName: sesReceiptRuleSet.ruleSetName,
+    enabled: true,
+    scanEnabled: true,
+    s3Actions: [
+      {
+        bucketName: rawEmailsBucket.bucket,
+        objectKeyPrefix: 'inbound/',
+        position: 1,
+        topicArn: customEmailTopic.arn,
+      },
+    ],
+  },
+  { dependsOn: [rawEmailsSesPolicy] },
+);
+
+// =============================================================================
 // ECS Task Definition
 // =============================================================================
 
@@ -933,6 +1139,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
         stripeWebhookArn: stripeWebhookSecretVersion.arn,
         internalApiTokenArn: internalApiTokenVersion.arn,
         cloudfrontDomain: frontendDistribution.domainName,
+        rawEmailsBucketName: rawEmailsBucket.bucket,
+        customEmailQueueUrl: customEmailQueue.url,
       })
       .apply(
         ({
@@ -947,6 +1155,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
           stripeWebhookArn,
           internalApiTokenArn,
           cloudfrontDomain,
+          rawEmailsBucketName,
+          customEmailQueueUrl,
         }) =>
           JSON.stringify([
             {
@@ -984,6 +1194,12 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'STRIPE_PRICE_ACCOUNTS_BASIC', value: stripePriceAccountsBasic },
                 { name: 'STRIPE_PRICE_ACCOUNTS_PRO', value: stripePriceAccountsPro },
                 { name: 'STRIPE_PRICE_ACCOUNTS_ENTERPRISE', value: stripePriceAccountsEnterprise },
+                { name: 'STRIPE_PRICE_DOMAINS_BASIC', value: stripePriceDomainBasic },
+                { name: 'STRIPE_PRICE_DOMAINS_PRO', value: stripePriceDomainPro },
+                { name: 'STRIPE_PRICE_DOMAINS_ENTERPRISE', value: stripePriceDomainEnterprise },
+                // Custom domain email infrastructure
+                { name: 'RAW_EMAILS_S3_BUCKET', value: rawEmailsBucketName },
+                { name: 'SQS_CUSTOM_EMAIL_QUEUE_URL', value: customEmailQueueUrl },
                 // Disable in-process background sync - Lambda handles this
                 { name: 'BACKGROUND_SYNC_ENABLED', value: 'false' },
               ],
@@ -1212,6 +1428,210 @@ const syncLambdaPermission = new aws.lambda.Permission(
 );
 
 // =============================================================================
+// Lambda for Custom Email Processing (SQS → parse → backend API)
+// =============================================================================
+
+const customEmailLambdaRole = new aws.iam.Role(
+  `${stackName}-custom-email-lambda-role`,
+  {
+    name: `${stackName}-custom-email-lambda-role`,
+    assumeRolePolicy: JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Action: 'sts:AssumeRole',
+          Effect: 'Allow',
+          Principal: { Service: 'lambda.amazonaws.com' },
+        },
+      ],
+    }),
+    tags: {
+      Name: `${stackName}-custom-email-lambda-role`,
+      Environment: environment,
+    },
+  },
+);
+
+new aws.iam.RolePolicyAttachment(`${stackName}-custom-email-lambda-basic`, {
+  role: customEmailLambdaRole.name,
+  policyArn:
+    'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
+});
+
+// SQS consume permissions
+const customEmailSqsPolicy = new aws.iam.Policy(
+  `${stackName}-custom-email-sqs-policy`,
+  {
+    name: `${stackName}-custom-email-sqs-policy`,
+    policy: pulumi
+      .all([customEmailQueue.arn, customEmailDlq.arn])
+      .apply(([queueArn, dlqArn]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'sqs:ReceiveMessage',
+                'sqs:DeleteMessage',
+                'sqs:GetQueueAttributes',
+              ],
+              Resource: [queueArn, dlqArn],
+            },
+          ],
+        }),
+      ),
+  },
+);
+
+new aws.iam.RolePolicyAttachment(`${stackName}-custom-email-lambda-sqs`, {
+  role: customEmailLambdaRole.name,
+  policyArn: customEmailSqsPolicy.arn,
+});
+
+// S3 read permission (download raw emails saved by SES)
+const customEmailLambdaS3Policy = new aws.iam.Policy(
+  `${stackName}-custom-email-lambda-s3-policy`,
+  {
+    name: `${stackName}-custom-email-lambda-s3-policy`,
+    policy: rawEmailsBucket.arn.apply((arn) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['s3:GetObject'],
+            Resource: `${arn}/*`,
+          },
+        ],
+      }),
+    ),
+  },
+);
+
+new aws.iam.RolePolicyAttachment(`${stackName}-custom-email-lambda-s3`, {
+  role: customEmailLambdaRole.name,
+  policyArn: customEmailLambdaS3Policy.arn,
+});
+
+const customEmailLambdaLogGroup = new aws.cloudwatch.LogGroup(
+  `${stackName}-custom-email-lambda-logs`,
+  {
+    name: `/aws/lambda/${stackName}-custom-email-processor`,
+    retentionInDays: 7,
+    tags: {
+      Name: `${stackName}-custom-email-lambda-logs`,
+      Environment: environment,
+    },
+  },
+);
+
+const customEmailLambda = new aws.lambda.Function(
+  `${stackName}-custom-email-processor`,
+  {
+    name: `${stackName}-custom-email-processor`,
+    role: customEmailLambdaRole.arn,
+    runtime: 'nodejs20.x',
+    handler: 'custom-email-processor.handler',
+    timeout: 120,
+    memorySize: 256,
+    // Placeholder – CI/CD replaces with bundled code from backend/lambda/
+    code: new pulumi.asset.AssetArchive({
+      'custom-email-processor.js': new pulumi.asset.StringAsset(`
+        const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+
+        exports.handler = async (event) => {
+          const BACKEND_URL = process.env.BACKEND_URL || '';
+          const INTERNAL_API_TOKEN = process.env.INTERNAL_API_TOKEN || '';
+
+          if (!BACKEND_URL || !INTERNAL_API_TOKEN) {
+            console.error('Missing BACKEND_URL or INTERNAL_API_TOKEN');
+            return { statusCode: 500, body: 'Missing configuration' };
+          }
+
+          const s3 = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
+          const results = [];
+
+          for (const record of event.Records) {
+            try {
+              const snsMessage = JSON.parse(record.body);
+              const sesNotification = JSON.parse(snsMessage.Message);
+
+              const receipt = sesNotification.receipt || {};
+              const action = receipt.action || {};
+              const bucketName = action.bucketName;
+              const objectKey = action.objectKey;
+              const recipients = receipt.recipients || [];
+
+              if (!bucketName || !objectKey) {
+                console.error('Missing S3 location in SES notification');
+                continue;
+              }
+
+              const s3Resp = await s3.send(
+                new GetObjectCommand({ Bucket: bucketName, Key: objectKey }),
+              );
+              const chunks = [];
+              for await (const chunk of s3Resp.Body) { chunks.push(chunk); }
+              const rawEmailBase64 = Buffer.concat(chunks).toString('base64');
+
+              for (const recipientAddress of recipients) {
+                const resp = await fetch(
+                  BACKEND_URL + '/api/internal/new-custom-email',
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-Internal-Token': INTERNAL_API_TOKEN,
+                    },
+                    body: JSON.stringify({ rawEmail: rawEmailBase64, recipientAddress }),
+                  },
+                );
+                const result = await resp.json();
+                console.log('Processed', recipientAddress, result);
+                results.push(result);
+              }
+            } catch (error) {
+              console.error('Error processing record:', error);
+              throw error;
+            }
+          }
+
+          return { statusCode: 200, processed: results.length };
+        };
+      `),
+    }),
+    environment: {
+      variables: {
+        BACKEND_URL: domainName
+          ? `https://${domainName}`
+          : pulumi.interpolate`https://${frontendDistribution.domainName}`,
+        INTERNAL_API_TOKEN: internalApiTokenVersion.secretString.apply(
+          (s) => s || '',
+        ),
+      },
+    },
+    tags: {
+      Name: `${stackName}-custom-email-processor`,
+      Environment: environment,
+    },
+  },
+  { dependsOn: [customEmailLambdaLogGroup] },
+);
+
+// SQS event source mapping → Lambda
+new aws.lambda.EventSourceMapping(
+  `${stackName}-custom-email-event-source`,
+  {
+    eventSourceArn: customEmailQueue.arn,
+    functionName: customEmailLambda.name,
+    batchSize: 5,
+    maximumBatchingWindowInSeconds: 10,
+    functionResponseTypes: ['ReportBatchItemFailures'],
+  },
+);
+
+// =============================================================================
 // Outputs
 // =============================================================================
 
@@ -1235,3 +1655,8 @@ export const backendLogGroupName = backendLogGroup.name;
 export const albDnsName = alb.dnsName;
 export const syncLambdaArn = syncLambda.arn;
 export const syncLambdaName = syncLambda.name;
+export const rawEmailsBucketName = rawEmailsBucket.bucket;
+export const customEmailQueueUrl = customEmailQueue.url;
+export const customEmailLambdaArn = customEmailLambda.arn;
+export const customEmailLambdaName = customEmailLambda.name;
+export const sesReceiptRuleSetName = sesReceiptRuleSet.ruleSetName;

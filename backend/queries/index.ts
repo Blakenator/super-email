@@ -3,8 +3,10 @@ import { fetchProfile } from './auth/fetchProfile.js';
 import { getAuthenticationMethods } from './auth/getAuthenticationMethods.js';
 import { getEmailAccounts } from './email-account/getEmailAccounts.js';
 import { getEmailAccount } from './email-account/getEmailAccount.js';
-import { getSmtpProfiles } from './smtp-profile/getSmtpProfiles.js';
-import { getSmtpProfile } from './smtp-profile/getSmtpProfile.js';
+import { getSendProfiles } from './send-profile/getSendProfiles.js';
+import { getSendProfile } from './send-profile/getSendProfile.js';
+import { getCustomDomains } from './custom-domain/getCustomDomains.js';
+import { getCustomDomain } from './custom-domain/getCustomDomain.js';
 import { getEmails } from './email/getEmails.js';
 import { getEmail } from './email/getEmail.js';
 import { getEmailCount } from './email/getEmailCount.js';
@@ -29,8 +31,10 @@ export const QueryResolvers: AllQueries = {
   getAuthenticationMethods,
   getEmailAccounts,
   getEmailAccount,
-  getSmtpProfiles,
-  getSmtpProfile,
+  getSendProfiles,
+  getSendProfile,
+  getCustomDomains,
+  getCustomDomain,
   getEmails,
   getEmail,
   getEmailCount,

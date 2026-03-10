@@ -1,5 +1,5 @@
 import { makeMutation } from '../../types.js';
-import { Email, EmailAccount, SmtpProfile, EmailFolder } from '../../db/models/index.js';
+import { Email, EmailAccount, SendProfile, SmtpAccountSettings, EmailFolder } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { sendEmail } from '../../helpers/email.js';
 
@@ -8,7 +8,6 @@ export const forwardEmail = makeMutation(
   async (_parent, { input }, context) => {
     const userId = requireAuth(context);
 
-    // Get the original email
     const originalEmail = await Email.findByPk(input.emailId, {
       include: [EmailAccount],
     });
@@ -17,12 +16,10 @@ export const forwardEmail = makeMutation(
       throw new Error('Original email not found');
     }
 
-    // Verify user owns this email account
     if (originalEmail.emailAccount?.userId !== userId) {
       throw new Error('Unauthorized');
     }
 
-    // Get the sending account and SMTP profile
     const emailAccount = await EmailAccount.findOne({
       where: { id: input.emailAccountId, userId },
     });
@@ -31,20 +28,19 @@ export const forwardEmail = makeMutation(
       throw new Error('Email account not found');
     }
 
-    const smtpProfile = await SmtpProfile.findOne({
-      where: { id: input.smtpProfileId, userId },
+    const sendProfile = await SendProfile.findOne({
+      where: { id: input.sendProfileId, userId },
+      include: [{ model: SmtpAccountSettings, as: 'smtpSettings' }],
     });
 
-    if (!smtpProfile) {
-      throw new Error('SMTP profile not found');
+    if (!sendProfile) {
+      throw new Error('Send profile not found');
     }
 
-    // Build the forwarded message
     const forwardSubject = originalEmail.subject.startsWith('Fwd:')
       ? originalEmail.subject
       : `Fwd: ${originalEmail.subject}`;
 
-    // Build forwarded body with original message
     const originalDate = new Date(originalEmail.receivedAt).toLocaleString();
     const forwardedHeader = `
 ---------- Forwarded message ----------
@@ -79,8 +75,7 @@ To: ${originalEmail.toAddresses.join(', ')}
 </div>
 `;
 
-    // Send the email
-    const result = await sendEmail(smtpProfile, {
+    const result = await sendEmail(sendProfile, {
       to: input.toAddresses,
       cc: input.ccAddresses || undefined,
       bcc: input.bccAddresses || undefined,
@@ -89,14 +84,13 @@ To: ${originalEmail.toAddresses.join(', ')}
       html: htmlBody,
     });
 
-    // Store the sent email
     const sentEmail = await Email.create({
       emailAccountId: input.emailAccountId,
-      smtpProfileId: input.smtpProfileId,
+      sendProfileId: input.sendProfileId,
       messageId: result.messageId,
       folder: EmailFolder.SENT,
-      fromAddress: smtpProfile.email,
-      fromName: smtpProfile.alias || smtpProfile.name,
+      fromAddress: sendProfile.email,
+      fromName: sendProfile.alias || sendProfile.name,
       toAddresses: input.toAddresses,
       ccAddresses: input.ccAddresses || null,
       bccAddresses: input.bccAddresses || null,
@@ -107,7 +101,7 @@ To: ${originalEmail.toAddresses.join(', ')}
       isRead: true,
       isStarred: false,
       isDraft: false,
-      inReplyTo: null, // Forwards don't use inReplyTo
+      inReplyTo: null,
       references: originalEmail.messageId ? [originalEmail.messageId] : null,
     });
 

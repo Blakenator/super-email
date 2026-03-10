@@ -1,5 +1,5 @@
 import { ImapFlow } from 'imapflow';
-import { EmailAccount } from '../db/models/email-account.model.js';
+import type { ImapAccountSettings } from '../db/models/imap-account-settings.model.js';
 import { getImapCredentials } from './secrets.js';
 import { logger } from './logger.js';
 
@@ -68,21 +68,24 @@ export function createImapClientFromCredentials(
 }
 
 /**
- * Create an IMAP client for an email account, resolving credentials
- * from the secure store (falling back to DB during migration).
+ * Create an IMAP client for an account, resolving credentials
+ * from the secure store.
  */
 export async function createImapClient(
-  account: EmailAccount,
+  imapSettings: ImapAccountSettings,
 ): Promise<ImapFlow> {
-  const credentials = await getImapCredentials(account.id);
-  const username = credentials?.username || account.username;
-  const password = credentials?.password || account.password;
+  const credentials = await getImapCredentials(imapSettings.emailAccountId);
+  if (!credentials) {
+    throw new Error(
+      `No IMAP credentials found for account ${imapSettings.emailAccountId}`,
+    );
+  }
   return createImapClientFromCredentials(
-    account.host,
-    account.port,
-    username,
-    password,
-    account.useSsl,
+    imapSettings.host,
+    imapSettings.port,
+    credentials.username,
+    credentials.password,
+    imapSettings.useSsl,
   );
 }
 
@@ -111,41 +114,42 @@ export async function testImapConnection(
 }
 
 export async function testImapConnectionForAccount(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
 ): Promise<{ success: boolean; error?: string }> {
-  const credentials = await getImapCredentials(emailAccount.id);
-  const username = credentials?.username || emailAccount.username;
-  const password = credentials?.password || emailAccount.password;
+  const credentials = await getImapCredentials(imapSettings.emailAccountId);
+  if (!credentials) {
+    return { success: false, error: 'No credentials found for this account' };
+  }
 
   return testImapConnection(
-    emailAccount.host,
-    emailAccount.port,
-    username,
-    password,
-    emailAccount.useSsl,
+    imapSettings.host,
+    imapSettings.port,
+    credentials.username,
+    credentials.password,
+    imapSettings.useSsl,
   );
 }
 
 export async function listImapMailboxes(
-  emailAccount: EmailAccount,
+  imapSettings: ImapAccountSettings,
 ): Promise<string[]> {
-  const client = await createImapClient(emailAccount);
+  const client = await createImapClient(imapSettings);
 
   try {
     await withRetry(
       () => client.connect(),
-      `Connect to ${emailAccount.host} for listing`,
+      `Connect to ${imapSettings.host} for listing`,
     );
     const mailboxes = await withRetry(() => client.list(), 'List mailboxes');
     await client.logout();
 
     return mailboxes.map((mb) => mb.path);
   } catch (err) {
-    logger.error('IMAP', `Failed to list mailboxes for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
+    logger.error('IMAP', `Failed to list mailboxes for account ${imapSettings.emailAccountId}`, { error: err instanceof Error ? err.message : err });
     try {
       await client.logout();
     } catch (logoutErr) {
-      logger.debug('IMAP', `Logout failed after listing mailboxes for ${emailAccount.email}`, { error: logoutErr instanceof Error ? logoutErr.message : logoutErr });
+      logger.debug('IMAP', `Logout failed after listing mailboxes`, { error: logoutErr instanceof Error ? logoutErr.message : logoutErr });
     }
     throw err;
   }

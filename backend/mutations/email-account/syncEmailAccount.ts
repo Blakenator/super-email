@@ -1,5 +1,5 @@
 import { makeMutation } from '../../types.js';
-import { EmailAccount } from '../../db/models/index.js';
+import { EmailAccount, ImapAccountSettings } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { startAsyncEmailSync } from '../../helpers/email.js';
 import { logger } from '../../helpers/logger.js';
@@ -11,6 +11,7 @@ export const syncEmailAccount = makeMutation(
 
     const emailAccount = await EmailAccount.findOne({
       where: { id: emailAccountId, userId },
+      include: [{ model: ImapAccountSettings, as: 'imapSettings' }],
     });
 
     if (!emailAccount) {
@@ -19,8 +20,7 @@ export const syncEmailAccount = makeMutation(
 
     logger.info('syncEmailAccount', `Starting async sync for: ${emailAccount.email}`);
 
-    // Start async sync - returns immediately
-    await startAsyncEmailSync(emailAccount);
+    await startAsyncEmailSync(emailAccount, emailAccount.imapSettings ?? undefined);
 
     return true;
   },

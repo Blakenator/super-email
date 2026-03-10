@@ -18,13 +18,13 @@ import {
   DELETE_EMAIL_ACCOUNT_MUTATION,
   SYNC_EMAIL_ACCOUNT_MUTATION,
   SYNC_ALL_ACCOUNTS_MUTATION,
-  GET_SMTP_PROFILES_FULL_QUERY,
-  CREATE_SMTP_PROFILE_MUTATION,
-  DELETE_SMTP_PROFILE_MUTATION,
-  TEST_EMAIL_ACCOUNT_CONNECTION_MUTATION,
+  GET_SEND_PROFILES_FULL_QUERY,
+  CREATE_SEND_PROFILE_MUTATION,
+  DELETE_SEND_PROFILE_MUTATION,
+  TEST_IMAP_CONNECTION_MUTATION,
   TEST_SMTP_CONNECTION_MUTATION,
   UPDATE_EMAIL_ACCOUNT_MUTATION,
-  UPDATE_SMTP_PROFILE_MUTATION,
+  UPDATE_SEND_PROFILE_MUTATION,
   GET_AUTHENTICATION_METHODS_QUERY,
   DELETE_AUTHENTICATION_METHOD_MUTATION,
 } from './queries';
@@ -37,6 +37,7 @@ import {
   type SmtpProfileFormData,
   EmailAccountCard,
   SmtpProfileCard,
+  DomainSettings,
   TagsManager,
   MailRulesManager,
   NotificationSettings,
@@ -59,6 +60,7 @@ import {
   faPalette,
   faSignOutAlt,
   faCreditCard,
+  faGlobe,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   faGoogle,
@@ -88,6 +90,7 @@ import {
 const TAB_MAPPING: Record<string, string> = {
   accounts: 'email-accounts',
   smtp: 'smtp-profiles',
+  domains: 'custom-domains',
   auth: 'auth-methods',
   tags: 'tags',
   rules: 'rules',
@@ -157,10 +160,10 @@ export function Settings() {
     password: '',
     accountType: EmailAccountType.Imap,
     useSsl: true,
-    defaultSmtpProfileId: '' as string | null,
+    defaultSendProfileId: '' as string | null,
   });
 
-  // SMTP Profile form state
+  // Send Profile form state
   const [, setSmtpProfileForm] = useState({
     name: '',
     email: '',
@@ -210,7 +213,7 @@ export function Settings() {
     data: smtpProfilesData,
     loading: smtpProfilesLoading,
     refetch: refetchSmtpProfiles,
-  } = useQuery(GET_SMTP_PROFILES_FULL_QUERY);
+  } = useQuery(GET_SEND_PROFILES_FULL_QUERY);
 
   const {
     data: authMethodsData,
@@ -281,17 +284,17 @@ export function Settings() {
     },
   );
 
-  const [createSmtpProfile, { loading: creatingSmtpProfile }] = useMutation(
-    CREATE_SMTP_PROFILE_MUTATION,
+  const [createSendProfile, { loading: creatingSendProfile }] = useMutation(
+    CREATE_SEND_PROFILE_MUTATION,
   );
 
-  const [deleteSmtpProfile] = useMutation(DELETE_SMTP_PROFILE_MUTATION, {
+  const [deleteSendProfile] = useMutation(DELETE_SEND_PROFILE_MUTATION, {
     onCompleted: () => void refetchSmtpProfiles(),
     onError: (err) => setError(err.message),
   });
 
-  const [testEmailAccountConnection, { loading: testingEmailAccount }] =
-    useMutation(TEST_EMAIL_ACCOUNT_CONNECTION_MUTATION);
+  const [testImapConnection, { loading: testingEmailAccount }] =
+    useMutation(TEST_IMAP_CONNECTION_MUTATION);
 
   const [testSmtpConnection, { loading: testingSmtp }] = useMutation(
     TEST_SMTP_CONNECTION_MUTATION,
@@ -302,7 +305,7 @@ export function Settings() {
     onError: (err) => setError(err.message),
   });
 
-  const [updateSmtpProfile] = useMutation(UPDATE_SMTP_PROFILE_MUTATION, {
+  const [updateSendProfile] = useMutation(UPDATE_SEND_PROFILE_MUTATION, {
     onCompleted: () => void refetchSmtpProfiles(),
     onError: (err) => setError(err.message),
   });
@@ -317,7 +320,7 @@ export function Settings() {
       password: '',
       accountType: EmailAccountType.Imap,
       useSsl: true,
-      defaultSmtpProfileId: null,
+      defaultSendProfileId: null,
     });
     setEditingEmailAccountId(null);
     setTestResult(null);
@@ -347,13 +350,13 @@ export function Settings() {
       setEmailAccountForm({
         name: account.name,
         email: account.email,
-        host: account.host,
-        port: account.port,
-        username: '', // Don't populate - user must re-enter for security
-        password: '', // Don't populate - user must re-enter for security
-        accountType: account.accountType,
-        useSsl: account.useSsl,
-        defaultSmtpProfileId: account.defaultSmtpProfileId || null,
+        host: account.imapSettings?.host || '',
+        port: account.imapSettings?.port || 993,
+        username: '',
+        password: '',
+        accountType: account.imapSettings?.accountType || EmailAccountType.Imap,
+        useSsl: account.imapSettings?.useSsl ?? true,
+        defaultSendProfileId: account.defaultSendProfileId || null,
       });
       setEditingEmailAccountId(accountId);
       setShowEmailAccountModal(true);
@@ -367,11 +370,11 @@ export function Settings() {
         name: profile.name,
         email: profile.email,
         alias: profile.alias || null,
-        host: profile.host,
-        port: profile.port,
-        username: '', // Don't populate - user must re-enter for security
-        password: '', // Don't populate - user must re-enter for security
-        useSsl: profile.useSsl,
+        host: profile.smtpSettings?.host || '',
+        port: profile.smtpSettings?.port || 587,
+        username: '',
+        password: '',
+        useSsl: profile.smtpSettings?.useSsl ?? false,
         isDefault: profile.isDefault,
       });
       setEditingSmtpProfileId(profileId);
@@ -386,7 +389,7 @@ export function Settings() {
     setError(null);
     setTestResult(null);
     try {
-      const result = await testEmailAccountConnection({
+      const result = await testImapConnection({
         variables: {
           input: {
             host: formData.host,
@@ -395,12 +398,11 @@ export function Settings() {
             password: formData.password || null,
             accountType: formData.accountType,
             useSsl: formData.useSsl,
-            // Pass accountId when editing to use saved password
             accountId: editingEmailAccountId || null,
           },
         },
       });
-      const testRes = result.data?.testEmailAccountConnection || {
+      const testRes = result.data?.testImapConnection || {
         success: false,
         message: 'Unknown error',
       };
@@ -427,12 +429,12 @@ export function Settings() {
             input: {
               id: editingEmailAccountId,
               name: formData.name,
-              host: formData.host,
-              port: formData.port,
-              username: formData.username || undefined,
-              password: formData.password || undefined,
-              useSsl: formData.useSsl,
-              defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
+              imapHost: formData.host || undefined,
+              imapPort: formData.port || undefined,
+              imapUsername: formData.username || undefined,
+              imapPassword: formData.password || undefined,
+              imapUseSsl: formData.useSsl,
+              defaultSendProfileId: formData.defaultSendProfileId || undefined,
               providerId: formData.providerId || undefined,
               isDefault: formData.isDefault,
             },
@@ -449,13 +451,14 @@ export function Settings() {
             input: {
               name: formData.name,
               email: formData.email,
-              host: formData.host,
-              port: formData.port,
-              username: formData.username,
-              password: formData.password,
-              accountType: formData.accountType,
-              useSsl: formData.useSsl,
-              defaultSmtpProfileId: formData.defaultSmtpProfileId || undefined,
+              type: formData.accountType,
+              imapHost: formData.host,
+              imapPort: formData.port,
+              imapUsername: formData.username,
+              imapPassword: formData.password,
+              imapAccountType: formData.accountType,
+              imapUseSsl: formData.useSsl,
+              defaultSendProfileId: formData.defaultSendProfileId || undefined,
               providerId: formData.providerId || undefined,
               isDefault: formData.isDefault,
             },
@@ -527,18 +530,17 @@ export function Settings() {
 
     try {
       if (editingSmtpProfileId) {
-        // Update existing profile
-        const result = await updateSmtpProfile({
+        const result = await updateSendProfile({
           variables: {
             input: {
               id: editingSmtpProfileId,
               name: formData.name,
               alias: formData.alias || undefined,
-              host: formData.host,
-              port: formData.port,
-              username: formData.username || undefined,
-              password: formData.password || undefined,
-              useSsl: formData.useSsl,
+              smtpHost: formData.host || undefined,
+              smtpPort: formData.port || undefined,
+              smtpUsername: formData.username || undefined,
+              smtpPassword: formData.password || undefined,
+              smtpUseSsl: formData.useSsl,
               isDefault: formData.isDefault,
               providerId: formData.providerId || undefined,
             },
@@ -547,20 +549,20 @@ export function Settings() {
         if (result.error) {
           throw new Error(result.error.message);
         }
-        toast.success('SMTP profile updated!');
+        toast.success('Send profile updated!');
       } else {
-        // Create new profile
-        const result = await createSmtpProfile({
+        const result = await createSendProfile({
           variables: {
             input: {
               name: formData.name,
               email: formData.email,
               alias: formData.alias || undefined,
-              host: formData.host,
-              port: formData.port,
-              username: formData.username,
-              password: formData.password,
-              useSsl: formData.useSsl,
+              type: 'SMTP' as any,
+              smtpHost: formData.host,
+              smtpPort: formData.port,
+              smtpUsername: formData.username,
+              smtpPassword: formData.password,
+              smtpUseSsl: formData.useSsl,
               isDefault: formData.isDefault,
               providerId: formData.providerId || undefined,
             },
@@ -569,20 +571,20 @@ export function Settings() {
         if (result.error) {
           throw new Error(result.error.message);
         }
-        toast.success('SMTP profile added!');
+        toast.success('Send profile added!');
       }
       setShowSmtpProfileModal(false);
       resetSmtpProfileForm();
       void refetchSmtpProfiles();
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : 'Failed to save SMTP profile';
+        error instanceof Error ? error.message : 'Failed to save send profile';
       toast.error(message);
     }
   };
 
   const emailAccounts = emailAccountsData?.getEmailAccounts ?? [];
-  const smtpProfiles = smtpProfilesData?.getSmtpProfiles ?? [];
+  const smtpProfiles = smtpProfilesData?.getSendProfiles ?? [];
   const deletingAccountData = emailAccounts.find(
     (a) => a.id === deletingAccountId,
   );
@@ -732,7 +734,7 @@ export function Settings() {
               title={
                 <>
                   <FontAwesomeIcon icon={faPaperPlane} className="me-1" />
-                  SMTP Profiles
+                  Send Profiles
                 </>
               }
             >
@@ -761,11 +763,11 @@ export function Settings() {
                         size="3x"
                         className="text-muted mb-3"
                       />
-                      <h5>No SMTP Profiles Yet</h5>
+                      <h5>No Send Profiles Yet</h5>
                       <p className="text-muted mb-3">
-                        Add an SMTP profile to send emails. You'll need your
-                        email server's SMTP settings (host, port) and your
-                        credentials (usually your email and an app password).
+                        Add a send profile to send emails. For SMTP-based
+                        accounts, you'll need your email server's SMTP settings
+                        (host, port) and your credentials.
                       </p>
                       <p className="text-muted small mb-4">
                         <strong>Tip:</strong> Most email providers use the same
@@ -789,7 +791,7 @@ export function Settings() {
                           profile={profile}
                           onEdit={handleEditSmtpProfile}
                           onDelete={(id) =>
-                            void deleteSmtpProfile({ variables: { id } })
+                            void deleteSendProfile({ variables: { id } })
                           }
                         />
                       ))}
@@ -797,6 +799,18 @@ export function Settings() {
                   )}
                 </Card.Body>
               </SectionCard>
+            </Tab>
+
+            <Tab
+              eventKey="custom-domains"
+              title={
+                <>
+                  <FontAwesomeIcon icon={faGlobe} className="me-1" />
+                  Domains
+                </>
+              }
+            >
+              <DomainSettings />
             </Tab>
 
             <Tab
@@ -1025,7 +1039,7 @@ export function Settings() {
               : null
           }
           initialData={pendingSmtpData}
-          isSubmitting={creatingSmtpProfile}
+          isSubmitting={creatingSendProfile}
           isTesting={testingSmtp}
           testResult={testResult}
         />

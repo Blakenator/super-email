@@ -59,11 +59,13 @@ interface SmtpProfileFormProps {
     name: string;
     email: string;
     alias?: string | null;
-    host: string;
-    port: number;
-    useSsl: boolean;
     isDefault: boolean;
     providerId?: string | null;
+    smtpSettings?: {
+      host: string;
+      port: number;
+      useSsl: boolean;
+    } | null;
   } | null;
   /** Initial data for pre-filling the form (e.g., from email account creation) */
   initialData?: {
@@ -99,11 +101,11 @@ export function SmtpProfileForm({
           name: editingProfile.name,
           email: editingProfile.email,
           alias: editingProfile.alias || '',
-          host: editingProfile.host,
-          port: editingProfile.port,
+          host: editingProfile.smtpSettings?.host || '',
+          port: editingProfile.smtpSettings?.port || 587,
           username: editingProfile.email,
           password: '',
-          useSsl: editingProfile.useSsl,
+          useSsl: editingProfile.smtpSettings?.useSsl ?? false,
           isDefault: editingProfile.isDefault,
           providerId: editingProfile.providerId || 'custom',
         });

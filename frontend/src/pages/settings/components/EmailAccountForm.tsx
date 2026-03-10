@@ -31,7 +31,7 @@ export interface EmailAccountFormData {
   password: string;
   accountType: EmailAccountType;
   useSsl: boolean;
-  defaultSmtpProfileId: string;
+  defaultSendProfileId: string;
   providerId: string;
   isDefault: boolean;
   alsoCreateSmtpProfile: boolean;
@@ -46,7 +46,7 @@ const defaultFormData: EmailAccountFormData = {
   password: '',
   accountType: EmailAccountType.Imap,
   useSsl: true,
-  defaultSmtpProfileId: '',
+  defaultSendProfileId: '',
   providerId: 'custom',
   isDefault: false,
   alsoCreateSmtpProfile: false,
@@ -70,10 +70,12 @@ interface EmailAccountFormProps {
     id: string;
     name: string;
     email: string;
-    host: string;
-    port: number;
-    useSsl: boolean;
-    defaultSmtpProfileId?: string | null;
+    imapSettings?: {
+      host: string;
+      port: number;
+      useSsl: boolean;
+    } | null;
+    defaultSendProfileId?: string | null;
     providerId?: string | null;
     isDefault?: boolean;
   } | null;
@@ -104,13 +106,13 @@ export function EmailAccountForm({
         setFormData({
           name: editingAccount.name,
           email: editingAccount.email,
-          host: editingAccount.host,
-          port: editingAccount.port,
+          host: editingAccount.imapSettings?.host || '',
+          port: editingAccount.imapSettings?.port || 993,
           username: editingAccount.email,
           password: '',
           accountType: EmailAccountType.Imap,
-          useSsl: editingAccount.useSsl,
-          defaultSmtpProfileId: editingAccount.defaultSmtpProfileId || '',
+          useSsl: editingAccount.imapSettings?.useSsl ?? true,
+          defaultSendProfileId: editingAccount.defaultSendProfileId || '',
           providerId: editingAccount.providerId || 'custom',
           isDefault: editingAccount.isDefault || false,
           alsoCreateSmtpProfile: false,
@@ -322,13 +324,13 @@ export function EmailAccountForm({
           </Row>
 
           <Form.Group className="mb-3">
-            <Form.Label>Default SMTP Profile (for sending)</Form.Label>
+            <Form.Label>Default Send Profile (for sending)</Form.Label>
             <Form.Select
-              value={formData.defaultSmtpProfileId}
+              value={formData.defaultSendProfileId}
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  defaultSmtpProfileId: e.target.value,
+                  defaultSendProfileId: e.target.value,
                 })
               }
             >
