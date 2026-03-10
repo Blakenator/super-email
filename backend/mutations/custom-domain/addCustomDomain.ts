@@ -6,6 +6,7 @@ import { DOMAIN_LIMITS } from '../../db/models/subscription.constants.js';
 import { createSesIdentity } from '../../helpers/ses-domain.js';
 import { recalculateUserUsage } from '../../helpers/usage-calculator.js';
 import { logger } from '../../helpers/logger.js';
+import { sequelize } from '../../db/database.js';
 
 export const addCustomDomain = makeMutation(
   'addCustomDomain',
@@ -32,33 +33,40 @@ export const addCustomDomain = makeMutation(
 
     const sesResult = await createSesIdentity(domain);
 
-    const customDomain = await CustomDomain.create({
-      userId,
-      domain,
-      status: 'PENDING_VERIFICATION',
-      sesIdentityArn: sesResult.identityArn || null,
-    });
-
-    if (sesResult.dnsRecords && sesResult.dnsRecords.length > 0) {
-      await CustomDomainDnsRecord.bulkCreate(
-        sesResult.dnsRecords.map((record: any) => ({
-          customDomainId: customDomain.id,
-          recordType: record.type,
-          purpose: record.purpose,
-          name: record.name,
-          value: record.value,
-          isVerified: false,
-        })),
+    const result = await sequelize.transaction(async (transaction) => {
+      const customDomain = await CustomDomain.create(
+        {
+          userId,
+          domain,
+          status: 'PENDING_VERIFICATION',
+          sesIdentityArn: sesResult.identityArn || null,
+        },
+        { transaction },
       );
-    }
 
-    const result = await CustomDomain.findByPk(customDomain.id, {
-      include: [{ model: CustomDomainDnsRecord, as: 'dnsRecords' }],
+      if (sesResult.dnsRecords && sesResult.dnsRecords.length > 0) {
+        await CustomDomainDnsRecord.bulkCreate(
+          sesResult.dnsRecords.map((record) => ({
+            customDomainId: customDomain.id,
+            recordType: record.recordType,
+            purpose: record.purpose,
+            name: record.name,
+            value: record.value,
+            isVerified: false,
+          })),
+          { transaction },
+        );
+      }
+
+      return await CustomDomain.findByPk(customDomain.id, {
+        include: [{ model: CustomDomainDnsRecord, as: 'dnsRecords' }],
+        transaction,
+      });
     });
 
     await recalculateUserUsage(userId);
 
-    logger.info('addCustomDomain', `Added custom domain ${domain} (${customDomain.id}) for user ${userId}`);
+    logger.info('addCustomDomain', `Added custom domain ${domain} (${result!.id}) for user ${userId}`);
     return result;
   },
 );
