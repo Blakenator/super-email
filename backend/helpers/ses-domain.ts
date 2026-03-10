@@ -52,12 +52,10 @@ export async function createSesIdentity(domain: string): Promise<SesIdentityResu
   const { CreateEmailIdentityCommand } = await import('@aws-sdk/client-sesv2');
 
   try {
+    logger.info('SES', `Creating domain identity for ${domain} in region ${config.ses.region}`);
     const response = await client.send(
       new CreateEmailIdentityCommand({
         EmailIdentity: domain,
-        DkimSigningAttributes: {
-          DomainSigningAttributesOrigin: 'AWS_SES',
-        },
       }),
     );
 
