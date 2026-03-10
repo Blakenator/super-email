@@ -44,12 +44,21 @@ export function createMigrator(sequelize: Sequelize): Umzug<MigrationContext> {
             }
             const sql = fs.readFileSync(migrationPath, 'utf-8');
             
-            // Split by semicolons but handle the CONCURRENTLY keyword specially
-            // PostgreSQL requires CONCURRENTLY indexes to be run outside of transactions
+            // Split by semicolons at statement boundaries, then strip
+            // leading comment lines from each segment (comments can precede
+            // executable SQL within the same segment).
             const statements = sql
-              .split(/;(?=\s*(?:--|CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|$))/i)
-              .map(s => s.trim())
-              .filter(s => s.length > 0 && !s.startsWith('--'));
+              .split(/;(?=\s*(?:--|CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|DO|$))/i)
+              .map(s => {
+                // Strip leading comment-only lines (-- ...) from each segment
+                const lines = s.split('\n');
+                const firstCodeLine = lines.findIndex(l => {
+                  const trimmed = l.trim();
+                  return trimmed.length > 0 && !trimmed.startsWith('--');
+                });
+                return firstCodeLine === -1 ? '' : lines.slice(firstCodeLine).join('\n').trim();
+              })
+              .filter(s => s.length > 0);
             
             for (const statement of statements) {
               if (statement.length > 0) {

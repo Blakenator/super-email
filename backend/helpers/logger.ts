@@ -15,12 +15,24 @@ function shouldLog(level: LogLevel): boolean {
   return LOG_LEVELS[level] >= currentLogLevel;
 }
 
+function safeStringify(data: unknown): string {
+  try {
+    return JSON.stringify(data);
+  } catch {
+    // Handle circular references or other stringify failures
+    if (data instanceof Error) {
+      return JSON.stringify({ message: data.message, stack: data.stack });
+    }
+    return String(data);
+  }
+}
+
 function formatMessage(level: LogLevel, context: string, message: string, data?: unknown): string {
   const timestamp = new Date().toISOString();
   const prefix = `[${timestamp}] [${level.toUpperCase()}] [${context}]`;
   
   if (data !== undefined) {
-    return `${prefix} ${message} ${JSON.stringify(data)}`;
+    return `${prefix} ${message} ${safeStringify(data)}`;
   }
   return `${prefix} ${message}`;
 }
