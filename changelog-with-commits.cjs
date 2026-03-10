@@ -52,7 +52,8 @@ function getLogSince(range) {
 
     const lines = [`- **${hash}**`];
     for (const line of bodyLines) {
-      lines.push(`  ${line}`);
+      const bullet = /^(\s*)[-*]/.test(line) ? line : `- ${line}`;
+      lines.push(`  ${bullet}`);
     }
     return lines.join('\n');
   });
