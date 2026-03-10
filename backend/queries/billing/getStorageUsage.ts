@@ -24,6 +24,7 @@ export const getStorageUsage = makeQuery(
     return {
       userId: context.user.id,
       accountCount: usage.accountCount,
+      domainCount: usage.domainCount,
       totalBodySizeBytes: usage.totalBodySizeBytes,
       totalAttachmentSizeBytes: usage.totalAttachmentSizeBytes,
       totalStorageBytes: usage.totalStorageBytes,

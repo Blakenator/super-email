@@ -360,7 +360,7 @@ export function EmailAccountForm({
               <Form.Check
                 type="checkbox"
                 id="alsoCreateSmtpProfile"
-                label="Also create an SMTP profile for sending emails from this account"
+                label="Also create a send profile for sending emails from this account"
                 checked={formData.alsoCreateSmtpProfile}
                 onChange={(e) =>
                   setFormData({
@@ -370,7 +370,7 @@ export function EmailAccountForm({
                 }
               />
               <Form.Text className="text-muted">
-                To send emails, you'll need an SMTP profile with the same
+                To send emails, you'll need a send profile with the same
                 credentials.
               </Form.Text>
             </Form.Group>

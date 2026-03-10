@@ -525,6 +525,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       // Clear Apollo cache on logout
       await apolloClient.clearStore();
+      // Clear persisted store data (emails, user cache, etc.)
+      useEmailStore.getState().clearOnLogout();
 
       // If a redirect path is provided, add it as a search param
       if (

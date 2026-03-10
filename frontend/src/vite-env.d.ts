@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+declare const __APP_VERSION__: string;
+
 /** PWA install prompt - non-standard, Chrome/Edge only */
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];

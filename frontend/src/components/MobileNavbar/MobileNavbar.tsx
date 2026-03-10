@@ -185,7 +185,7 @@ export function MobileNavbar({
             </MobileNavItem>
             <MobileNavItem onClick={() => handleNavigate('/settings/smtp')}>
               <FontAwesomeIcon icon={faPaperPlane} />
-              SMTP Profiles
+              Send Profiles
             </MobileNavItem>
             <MobileNavItem onClick={() => handleNavigate('/settings/tags')}>
               <FontAwesomeIcon icon={faTag} />

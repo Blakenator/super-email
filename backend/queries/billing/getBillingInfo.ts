@@ -37,9 +37,12 @@ export const getBillingInfo = makeQuery(
 
     const usage = await getOrCreateUserUsage(userId);
 
+    const domainCount = usage?.domainCount ?? 0;
+
     const storageUsage = {
       userId: userId,
       accountCount: usage?.accountCount ?? 0,
+      domainCount,
       totalBodySizeBytes: usage?.totalStorageBytes ?? 0,
       totalAttachmentSizeBytes: usage?.totalAttachmentSizeBytes ?? 0,
       totalStorageBytes: usage?.totalStorageBytes ?? 0,
@@ -52,7 +55,6 @@ export const getBillingInfo = makeQuery(
     const storageLimitBytes = STORAGE_LIMITS[subscription.storageTier];
     const accountLimit = ACCOUNT_LIMITS[subscription.accountTier];
     const domainLimit = DOMAIN_LIMITS[subscription.domainTier];
-    const domainCount = usage?.domainCount ?? 0;
 
     const storageUsagePercent =
       storageLimitBytes > 0

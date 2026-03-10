@@ -277,7 +277,7 @@ export function Sidebar({
                 </PopoverMenuItem>
                 <PopoverMenuItem onClick={() => navigate('/settings/smtp')}>
                   <FontAwesomeIcon icon={faPaperPlane} />
-                  SMTP Profiles
+                  Send Profiles
                 </PopoverMenuItem>
                 <PopoverMenuItem onClick={() => navigate('/settings/tags')}>
                   <FontAwesomeIcon icon={faTag} />

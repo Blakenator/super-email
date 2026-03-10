@@ -9,6 +9,7 @@ import { UserUsage } from '../db/models/user-usage.model.js';
 export interface UserStorageUsage {
   userId: string;
   accountCount: number;
+  domainCount: number;
   totalBodySizeBytes: number;
   totalAttachmentSizeBytes: number;
   totalStorageBytes: number;
@@ -118,6 +119,7 @@ export async function getUserStorageUsage(
   return {
     userId: usage.userId,
     accountCount: usage.accountCount,
+    domainCount: usage.domainCount,
     totalBodySizeBytes: Number(usage.totalBodySizeBytes),
     totalAttachmentSizeBytes: Number(usage.totalAttachmentSizeBytes),
     totalStorageBytes: Number(usage.totalStorageBytes),
@@ -136,6 +138,7 @@ export async function getUserStorageUsageRealtime(
 ): Promise<UserStorageUsage> {
   const results = await sequelize.query<{
     account_count: string;
+    domain_count: string;
     total_body_size_bytes: string;
     total_attachment_size_bytes: string;
     total_storage_bytes: string;
@@ -145,6 +148,7 @@ export async function getUserStorageUsageRealtime(
     `
     SELECT 
       COALESCE(ea_count.account_count, 0) AS account_count,
+      COALESCE(cd_count.domain_count, 0) AS domain_count,
       COALESCE(email_stats.total_body_size, 0) AS total_body_size_bytes,
       COALESCE(attachment_stats.total_attachment_size, 0) AS total_attachment_size_bytes,
       COALESCE(email_stats.total_body_size, 0) + COALESCE(attachment_stats.total_attachment_size, 0) AS total_storage_bytes,
@@ -156,6 +160,11 @@ export async function getUserStorageUsageRealtime(
       FROM email_accounts
       WHERE "userId" = :userId
     ) ea_count ON true
+    LEFT JOIN (
+      SELECT COUNT(*) AS domain_count
+      FROM custom_domains
+      WHERE "userId" = :userId
+    ) cd_count ON true
     LEFT JOIN (
       SELECT 
         COUNT(e.id) AS email_count,
@@ -184,6 +193,7 @@ export async function getUserStorageUsageRealtime(
   return {
     userId,
     accountCount: parseInt(row.account_count, 10) || 0,
+    domainCount: parseInt(row.domain_count, 10) || 0,
     totalBodySizeBytes: parseInt(row.total_body_size_bytes, 10) || 0,
     totalAttachmentSizeBytes: parseInt(row.total_attachment_size_bytes, 10) || 0,
     totalStorageBytes: parseInt(row.total_storage_bytes, 10) || 0,

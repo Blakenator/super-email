@@ -137,7 +137,7 @@ export async function startAsyncSync(
       if (syncType === 'update' && result.synced > 0 && !result.cancelled) {
         try {
           const recentEmails = await Email.findAll({
-            where: { emailAccountId: emailAccount.id },
+            where: { emailAccountId: emailAccount.id, folder: EmailFolder.INBOX },
             order: [['receivedAt', 'DESC']],
             limit: Math.min(result.synced, 20),
           });

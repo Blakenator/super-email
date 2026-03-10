@@ -68,7 +68,7 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-function formatTier(tier: string): string {
+function formatTier(tier: string, category?: 'storage' | 'account' | 'domain'): string {
   switch (tier) {
     case 'FREE':
       return 'Free';
@@ -77,7 +77,7 @@ function formatTier(tier: string): string {
     case 'PRO':
       return 'Pro';
     case 'ENTERPRISE':
-      return 'Enterprise';
+      return category === 'domain' ? 'Super Domains' : 'Enterprise';
     default:
       return tier;
   }
@@ -163,7 +163,7 @@ const DEFAULT_DOMAIN_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
   { id: DomainTier.Pro, name: 'Pro', limit: '2 domains', price: '$7/mo' },
   {
     id: DomainTier.Enterprise,
-    name: 'Enterprise',
+    name: 'Super Domains',
     limit: '5 domains',
     price: '$10/mo',
   },
@@ -539,7 +539,7 @@ export function BillingSettings() {
               `Accounts: ${formatTier(pendingAccountTier)}`}
             {(pendingStorageTier || pendingAccountTier) && pendingDomainTier && ', '}
             {pendingDomainTier &&
-              `Domains: ${formatTier(pendingDomainTier)}`}
+              `Domains: ${formatTier(pendingDomainTier, 'domain')}`}
           </div>
           <div className="d-flex gap-2">
             <Button
@@ -882,7 +882,7 @@ export function BillingSettings() {
                       <div>
                         <strong>Domain limit will be exceeded</strong>
                         You currently have {currentDomainCount} custom domain{currentDomainCount !== 1 ? 's' : ''},
-                        but the {formatTier(pendingDomainTier)} plan only allows {pendingLimit}.
+                        but the {formatTier(pendingDomainTier, 'domain')} plan only allows {pendingLimit}.
                         You'll need to remove domains before downgrading.
                       </div>
                     </DowngradeWarning>
@@ -1145,8 +1145,8 @@ export function BillingSettings() {
                 )}
                 {pendingDomainTier && (
                   <li>
-                    Domains: {formatTier(currentDomainTier)} →{' '}
-                    {formatTier(pendingDomainTier)}
+                    Domains: {formatTier(currentDomainTier, 'domain')} →{' '}
+                    {formatTier(pendingDomainTier, 'domain')}
                   </li>
                 )}
               </ul>

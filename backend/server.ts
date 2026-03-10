@@ -577,14 +577,8 @@ export async function createServer(
   if (!deps.skipDbSync) {
     await setupBillingDatabase();
 
-    // Disabled in favour of explicit SQL migrations for production.
-    // Still used for local dev and integration tests to bootstrap tables:
-    await deps.sequelize.sync({ alter: true });
-    if (deps.enableLogging) {
-      logger.info('Database', 'Database synchronized');
-    }
-
-    // Run any pending SQL migrations
+    // Run SQL migrations BEFORE sync so they can copy data from old columns
+    // that sync({ alter: true }) would otherwise drop.
     try {
       await runMigrations(deps.sequelize);
       if (deps.enableLogging) {
@@ -593,6 +587,13 @@ export async function createServer(
     } catch (migrationError) {
       logger.error('Database', 'Migration failed', migrationError);
     }
+
+    // Disabled in favour of explicit SQL migrations.
+    // Uncomment for local dev bootstrapping if needed:
+    // await deps.sequelize.sync({ alter: true });
+    // if (deps.enableLogging) {
+    //   logger.info('Database', 'Database synchronized');
+    // }
   }
 
   // Setup Express middleware

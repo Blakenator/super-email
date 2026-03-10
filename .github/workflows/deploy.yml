@@ -22,6 +22,9 @@
 #   - STRIPE_PRICE_ACCOUNTS_BASIC: Stripe price ID for Basic accounts tier
 #   - STRIPE_PRICE_ACCOUNTS_PRO: Stripe price ID for Pro accounts tier
 #   - STRIPE_PRICE_ACCOUNTS_ENTERPRISE: Stripe price ID for Enterprise accounts tier
+#   - STRIPE_PRICE_DOMAINS_BASIC: Stripe price ID for Basic domain tier (1 domain)
+#   - STRIPE_PRICE_DOMAINS_PRO: Stripe price ID for Pro domain tier (2 domains)
+#   - STRIPE_PRICE_DOMAINS_ENTERPRISE: Stripe price ID for Enterprise domain tier (5 domains)
 
 name: Deploy to AWS
 
@@ -116,6 +119,9 @@ jobs:
           STRIPE_PRICE_ACCOUNTS_BASIC: ${{ secrets.STRIPE_PRICE_ACCOUNTS_BASIC }}
           STRIPE_PRICE_ACCOUNTS_PRO: ${{ secrets.STRIPE_PRICE_ACCOUNTS_PRO }}
           STRIPE_PRICE_ACCOUNTS_ENTERPRISE: ${{ secrets.STRIPE_PRICE_ACCOUNTS_ENTERPRISE }}
+          STRIPE_PRICE_DOMAINS_BASIC: ${{ secrets.STRIPE_PRICE_DOMAINS_BASIC }}
+          STRIPE_PRICE_DOMAINS_PRO: ${{ secrets.STRIPE_PRICE_DOMAINS_PRO }}
+          STRIPE_PRICE_DOMAINS_ENTERPRISE: ${{ secrets.STRIPE_PRICE_DOMAINS_ENTERPRISE }}
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
           ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"

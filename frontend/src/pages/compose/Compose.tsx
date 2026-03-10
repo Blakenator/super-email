@@ -621,7 +621,7 @@ ${quotedHtml}
 
           {!noAccounts && noProfiles && (
             <Alert variant="warning">
-              You need to configure an SMTP profile before sending emails.{' '}
+              You need to configure a send profile before sending emails.{' '}
               <Alert.Link onClick={() => navigate('/settings')}>
                 Go to Settings
               </Alert.Link>
@@ -700,7 +700,7 @@ ${quotedHtml}
                           }}
                           disabled={noProfiles}
                         >
-                          <option value="">Select SMTP profile...</option>
+                          <option value="">Select send profile...</option>
                           {profiles.map((profile) => (
                             <option key={profile.id} value={profile.id}>
                               {profile.alias || profile.name} &lt;

@@ -192,6 +192,12 @@ export const envVarDefinitions = {
       'Stripe Price ID for Pro accounts tier (5 accounts)',
     STRIPE_PRICE_ACCOUNTS_ENTERPRISE:
       'Stripe Price ID for Enterprise accounts tier (unlimited)',
+    STRIPE_PRICE_DOMAINS_BASIC:
+      'Stripe Price ID for Basic domain tier (1 custom domain, $5/mo)',
+    STRIPE_PRICE_DOMAINS_PRO:
+      'Stripe Price ID for Pro domain tier (2 custom domains, $7/mo)',
+    STRIPE_PRICE_DOMAINS_ENTERPRISE:
+      'Stripe Price ID for Enterprise domain tier (5 custom domains, $10/mo)',
     FIREBASE_SERVICE_ACCOUNT_JSON:
       'Firebase Admin SDK service account JSON (stringified) for web push notifications',
     FIREBASE_SERVICE_ACCOUNT_PATH:

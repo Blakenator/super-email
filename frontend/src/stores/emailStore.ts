@@ -229,6 +229,9 @@ interface EmailStoreState {
   releaseTabLock: () => void;
   isCurrentTabOwner: () => boolean;
 
+  // Clear all user-specific cached data on logout (preserves savedUsers)
+  clearOnLogout: () => void;
+
   // Computed helpers
   hasCachedData: () => boolean;
   getEmailCount: () => number;
@@ -458,6 +461,20 @@ export const useEmailStore = create<EmailStoreState>()(
           // Ignore errors
         }
         return false;
+      },
+
+      clearOnLogout: () => {
+        const state = get();
+        state.releaseTabLock();
+        set({
+          emails: {},
+          emailAccounts: [],
+          cachedUser: null,
+          isSubscriptionActive: false,
+          subscriptionError: null,
+          lastUpdate: null,
+          connectionStatus: 'disconnected',
+        });
       },
 
       hasCachedData: () => {

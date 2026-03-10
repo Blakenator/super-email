@@ -965,7 +965,7 @@ export function EmailView({
                     </strong>
                     <br />
                     <span className="text-muted">
-                      Sends an unsubscribe email from your configured SMTP
+                      Sends an unsubscribe email from your configured send
                       profile to:
                     </span>
                     <br />

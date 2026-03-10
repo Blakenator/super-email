@@ -160,7 +160,7 @@ export function SmtpProfileForm({
       <Form onSubmit={handleSubmit}>
         <Modal.Header closeButton>
           <Modal.Title>
-            {editingProfile ? 'Edit SMTP Profile' : 'Add SMTP Profile'}
+            {editingProfile ? 'Edit Send Profile' : 'Add Send Profile'}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>

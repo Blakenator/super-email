@@ -13,6 +13,8 @@ interface PasswordInputProps {
   size?: 'sm' | 'lg';
   autoFocus?: boolean;
   className?: string;
+  name?: string;
+  autoComplete?: string;
 }
 
 export function PasswordInput({
@@ -24,6 +26,8 @@ export function PasswordInput({
   size,
   autoFocus = false,
   className,
+  name,
+  autoComplete,
 }: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -43,6 +47,8 @@ export function PasswordInput({
           required={required}
           size={size}
           autoFocus={autoFocus}
+          name={name}
+          autoComplete={autoComplete}
         />
         <ToggleButton
           type="button"

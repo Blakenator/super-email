@@ -164,6 +164,7 @@ export async function createCheckoutSession(
       userId: user.id,
       storageTier,
       accountTier,
+      domainTier: domainTier || DomainTier.FREE,
     },
   });
 
@@ -228,24 +229,24 @@ function getPriceIdForAccountTier(tier: AccountTier): string | null {
 function getPriceIdForDomainTier(tier: DomainTier): string | null {
   switch (tier) {
     case DomainTier.BASIC:
-      return config.stripe.domainPriceIds?.basic || null;
+      return config.stripe.domainPriceIds.basic || null;
     case DomainTier.PRO:
-      return config.stripe.domainPriceIds?.pro || null;
+      return config.stripe.domainPriceIds.pro || null;
     case DomainTier.ENTERPRISE:
-      return config.stripe.domainPriceIds?.enterprise || null;
+      return config.stripe.domainPriceIds.enterprise || null;
     default:
       return null;
   }
 }
 
 function getDomainTierFromPriceId(priceId: string): DomainTier | null {
-  if (priceId === config.stripe.domainPriceIds?.basic) {
+  if (priceId === config.stripe.domainPriceIds.basic) {
     return DomainTier.BASIC;
   }
-  if (priceId === config.stripe.domainPriceIds?.pro) {
+  if (priceId === config.stripe.domainPriceIds.pro) {
     return DomainTier.PRO;
   }
-  if (priceId === config.stripe.domainPriceIds?.enterprise) {
+  if (priceId === config.stripe.domainPriceIds.enterprise) {
     return DomainTier.ENTERPRISE;
   }
   return null;
@@ -434,7 +435,7 @@ async function handleSubscriptionUpdated(
   logger.info(
     'Stripe Webhook',
     `Updated subscription for user ${subscription.userId}: ` +
-      `storage=${storageTier}, accounts=${accountTier}, status=${status}`,
+      `storage=${storageTier}, accounts=${accountTier}, domains=${domainTier}, status=${status}`,
   );
 }
 
@@ -464,6 +465,7 @@ async function handleSubscriptionDeleted(
     status: SubscriptionStatus.CANCELED,
     storageTier: StorageTier.FREE,
     accountTier: AccountTier.FREE,
+    domainTier: DomainTier.FREE,
     cancelAtPeriodEnd: false,
   });
 
@@ -653,7 +655,7 @@ export async function syncSubscriptionFromStripe(
       }
     }
 
-    if (items.length > 0 && storageTier === StorageTier.FREE && accountTier === AccountTier.FREE) {
+    if (items.length > 0 && storageTier === StorageTier.FREE && accountTier === AccountTier.FREE && domainTier === DomainTier.FREE) {
       logger.warn(
         'Stripe',
         `No tier mappings found for subscription ${subscription.stripeSubscriptionId}. ` +
@@ -663,7 +665,10 @@ export async function syncSubscriptionFromStripe(
           `enterprise=${config.stripe.storagePriceIds.enterprise || '(empty)'}. ` +
           `Configured account price IDs: basic=${config.stripe.accountPriceIds.basic || '(empty)'}, ` +
           `pro=${config.stripe.accountPriceIds.pro || '(empty)'}, ` +
-          `enterprise=${config.stripe.accountPriceIds.enterprise || '(empty)'}`,
+          `enterprise=${config.stripe.accountPriceIds.enterprise || '(empty)'}. ` +
+          `Configured domain price IDs: basic=${config.stripe.domainPriceIds.basic || '(empty)'}, ` +
+          `pro=${config.stripe.domainPriceIds.pro || '(empty)'}, ` +
+          `enterprise=${config.stripe.domainPriceIds.enterprise || '(empty)'}`,
       );
     }
 
@@ -711,7 +716,7 @@ export async function syncSubscriptionFromStripe(
     logger.info(
       'Stripe',
       `Synced subscription for user ${subscription.userId}: ` +
-        `status=${status}, storage=${storageTier}, accounts=${accountTier}`,
+        `status=${status}, storage=${storageTier}, accounts=${accountTier}, domains=${domainTier}`,
     );
     return subscription;
   } catch (error: any) {
@@ -731,7 +736,7 @@ export async function syncSubscriptionFromStripe(
 export interface StripePriceInfo {
   id: string;
   tier: string;
-  type: 'storage' | 'account';
+  type: 'storage' | 'account' | 'domain';
   name: string;
   unitAmount: number; // in cents
   currency: string;
@@ -802,6 +807,36 @@ export async function getStripePrices(): Promise<StripePriceInfo[]> {
           tier,
           type: 'account',
           name: product.name || `Accounts ${tier}`,
+          unitAmount: price.unit_amount || 0,
+          currency: price.currency,
+          interval: price.recurring?.interval || 'month',
+        });
+      } catch (e: any) {
+        logger.warn('Stripe', `Failed to fetch price ${id}: ${e.message}`);
+      }
+    }
+
+    // Fetch domain prices
+    const domainPriceIds = [
+      { tier: 'BASIC', id: config.stripe.domainPriceIds.basic },
+      { tier: 'PRO', id: config.stripe.domainPriceIds.pro },
+      { tier: 'ENTERPRISE', id: config.stripe.domainPriceIds.enterprise },
+    ].filter((p) => p.id);
+
+    for (const { tier, id } of domainPriceIds) {
+      if (!id) {
+        continue;
+      }
+      try {
+        const price = await stripeClient.prices.retrieve(id, {
+          expand: ['product'],
+        });
+        const product = price.product as Stripe.Product;
+        prices.push({
+          id: price.id,
+          tier,
+          type: 'domain',
+          name: product.name || `Domains ${tier}`,
           unitAmount: price.unit_amount || 0,
           currency: price.currency,
           interval: price.recurring?.interval || 'month',

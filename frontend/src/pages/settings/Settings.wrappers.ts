@@ -287,3 +287,15 @@ export const AuthMethodMeta = styled.div`
   color: ${({ theme }) => theme.colors.textMuted};
   margin-top: 0.25rem;
 `;
+
+export const AppVersion = styled.div`
+  display: none;
+  text-align: center;
+  padding: 1.5rem 0 1rem;
+  font-size: 0.75rem;
+  color: ${({ theme }) => theme.colors.textMuted};
+
+  @media (max-width: 575px) {
+    display: block;
+  }
+`;

@@ -43,14 +43,20 @@ export function Login() {
   // Get redirect path from URL params (set when session expired)
   const redirectPath = searchParams.get('redirect');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
+    // iOS credential autofill (Face ID / Touch ID) fills DOM inputs directly
+    // without firing React onChange events. Fall back to reading the actual
+    // DOM values via FormData when React state is empty.
+    const formData = new FormData(e.currentTarget);
+    const submittedEmail = email || (formData.get('email') as string) || '';
+    const submittedPassword = password || (formData.get('password') as string) || '';
+
     try {
-      await login(email, password, rememberMe);
-      // Navigate to the redirect path if set, otherwise inbox
+      await login(submittedEmail, submittedPassword, rememberMe);
       void navigate(redirectPath || '/inbox');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
@@ -163,6 +169,8 @@ export function Login() {
         <Form.Label>Email address</Form.Label>
         <Form.Control
           type="email"
+          name="email"
+          autoComplete="username"
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -181,6 +189,8 @@ export function Login() {
         required
         size="lg"
         className="mb-3"
+        name="password"
+        autoComplete="current-password"
       />
       <RememberMeRow>
         <Form.Check

@@ -84,6 +84,7 @@ import {
   AuthMethodEmail,
   AuthMethodMeta,
   ResponsiveTabsWrapper,
+  AppVersion,
 } from './Settings.wrappers';
 
 // Map URL tab slugs to internal tab keys
@@ -696,8 +697,8 @@ export function Settings() {
                       </p>
                       <p className="text-muted small mb-4">
                         <strong>First time setup:</strong> After adding an email
-                        account, you'll also need to add an SMTP profile to send
-                        emails. You can check "Also create an SMTP profile" when
+                        account, you'll also need to add a send profile to send
+                        emails. You can check "Also create a send profile" when
                         adding your account to set this up automatically.
                       </p>
                       <Button
@@ -1096,6 +1097,7 @@ export function Settings() {
             </Button>
           </Modal.Footer>
         </Modal>
+        <AppVersion>v{__APP_VERSION__}</AppVersion>
       </Container>
     </PageWrapper>
   );
