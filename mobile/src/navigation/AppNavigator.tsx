@@ -146,6 +146,7 @@ function ContactsScreenWrapper() {
     <ContactsScreen
       onContactPress={(contactId) => navigation.navigate('ContactDetail', { contactId })}
       onAddContact={() => navigation.navigate('AddContact')}
+      onDrawerOpen={() => navigation.dispatch(DrawerActions.openDrawer())}
     />
   );
 }
@@ -163,6 +164,7 @@ function SettingsScreenWrapper() {
       onNavigateToRules={() => navigation.navigate('RuleSettings')}
       onNavigateToNotifications={() => navigation.navigate('NotificationSettings')}
       onNavigateToNuke={() => navigation.navigate('Nuke')}
+      onDrawerOpen={() => navigation.dispatch(DrawerActions.openDrawer())}
     />
   );
 }

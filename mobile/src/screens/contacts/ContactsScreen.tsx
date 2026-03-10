@@ -66,9 +66,10 @@ interface Contact {
 interface ContactsScreenProps {
   onContactPress: (contactId: string) => void;
   onAddContact: () => void;
+  onDrawerOpen: () => void;
 }
 
-export function ContactsScreen({ onContactPress, onAddContact }: ContactsScreenProps) {
+export function ContactsScreen({ onContactPress, onAddContact, onDrawerOpen }: ContactsScreenProps) {
   const theme = useTheme();
   const { top: topInset, bottom: bottomInset } = useSafeInsets(['top', 'bottom']);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -250,8 +251,30 @@ export function ContactsScreen({ onContactPress, onAddContact }: ContactsScreenP
   
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* Header Bar */}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+            paddingTop: topInset,
+          },
+        ]}
+      >
+        <TouchableOpacity style={styles.headerButton} onPress={onDrawerOpen}>
+          <Icon name="menu" size="md" color={theme.colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerBarTitle, { color: theme.colors.text }]}>
+          Contacts
+        </Text>
+        <TouchableOpacity style={styles.headerButton} onPress={onAddContact}>
+          <Icon name="plus" size="md" color={theme.colors.primary} />
+        </TouchableOpacity>
+      </View>
+
       {/* Search Bar */}
-      <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border, paddingTop: topInset + SPACING.sm }]}>
+      <View style={[styles.searchContainer, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]}>
         <View
           style={[
             styles.searchInput,
@@ -316,6 +339,21 @@ export function ContactsScreen({ onContactPress, onAddContact }: ContactsScreenP
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerButton: {
+    padding: SPACING.sm,
+  },
+  headerBarTitle: {
+    flex: 1,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '600',
   },
   searchContainer: {
     padding: SPACING.sm,

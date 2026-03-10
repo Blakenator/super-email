@@ -22,6 +22,7 @@ import { Icon, Button, RichTextEditor, EmailChipInput } from '../../components/u
 import { useEmailStore, EmailAccount } from '../../stores/emailStore';
 import { apolloClient } from '../../services/apollo';
 import { gql } from '@apollo/client';
+import { Toast } from 'toastify-react-native';
 import { wrapReplyContent } from '../../../../common/src/emailHtmlStyles';
 
 const SEND_EMAIL_MUTATION = gql`
@@ -216,6 +217,7 @@ export function ComposeScreen({ onClose, replyTo, replyAll, forward, mailto }: C
         throw new Error(result.errors[0].message);
       }
 
+      Toast.success('Email sent successfully');
       onClose();
     } catch (error: any) {
       console.error('Error sending email:', error);

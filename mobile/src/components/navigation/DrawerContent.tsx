@@ -1,5 +1,12 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  Pressable,
+} from 'react-native';
 import {
   DrawerContentScrollView,
   DrawerContentComponentProps,
@@ -38,8 +45,19 @@ const SCREENS: ScreenConfig[] = [
 export function DrawerContent(props: DrawerContentComponentProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { currentFolder, setFolder } = useEmailStore();
+  const { currentFolder, setFolder, emailAccounts, currentAccountId, setAccountId } = useEmailStore();
   const activeRoute = props.state.routes[props.state.index]?.name;
+  const [showAccountPicker, setShowAccountPicker] = useState(false);
+
+  const currentAccount = emailAccounts.find((a) => a.id === currentAccountId);
+
+  const handleAccountSelect = useCallback(
+    (accountId: string | null) => {
+      setAccountId(accountId);
+      setShowAccountPicker(false);
+    },
+    [setAccountId],
+  );
 
   const handleFolderPress = (folder: EmailFolder) => {
     setFolder(folder);
@@ -58,6 +76,44 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         {...props}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* Account Switcher */}
+        <TouchableOpacity
+          style={[styles.accountSwitcher, { borderBottomColor: theme.colors.border }]}
+          onPress={() => setShowAccountPicker(true)}
+          activeOpacity={0.7}
+        >
+          <View
+            style={[
+              styles.accountSwitcherAvatar,
+              { backgroundColor: theme.colors.primary },
+            ]}
+          >
+            <Icon
+              name={currentAccountId ? 'mail' : 'inbox'}
+              size="sm"
+              color={theme.colors.textInverse}
+            />
+          </View>
+          <View style={styles.accountSwitcherInfo}>
+            <Text
+              style={[styles.accountSwitcherLabel, { color: theme.colors.textMuted }]}
+            >
+              Account
+            </Text>
+            <Text
+              style={[styles.accountSwitcherText, { color: theme.colors.text }]}
+              numberOfLines={1}
+            >
+              {currentAccount?.name || 'All Accounts'}
+            </Text>
+          </View>
+          <Icon
+            name="chevron-down"
+            size="sm"
+            color={theme.colors.textMuted}
+          />
+        </TouchableOpacity>
+
         <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>
           FOLDERS
         </Text>
@@ -131,6 +187,117 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           })}
         </View>
       </DrawerContentScrollView>
+
+      {/* Account Picker Modal */}
+      <Modal
+        visible={showAccountPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAccountPicker(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowAccountPicker(false)}
+        >
+          <View
+            style={[
+              styles.accountPickerModal,
+              {
+                backgroundColor: theme.colors.surface,
+                paddingBottom: Math.max(insets.bottom, SPACING.md),
+              },
+            ]}
+          >
+            <View
+              style={[
+                styles.pickerHeader,
+                { borderBottomColor: theme.colors.border },
+              ]}
+            >
+              <Text style={[styles.pickerTitle, { color: theme.colors.text }]}>
+                Select Account
+              </Text>
+              <TouchableOpacity onPress={() => setShowAccountPicker(false)}>
+                <Icon name="x" size="md" color={theme.colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.accountOption,
+                { borderBottomColor: theme.colors.border },
+                currentAccountId === null && {
+                  backgroundColor: theme.colors.primary + '10',
+                },
+              ]}
+              onPress={() => handleAccountSelect(null)}
+            >
+              <View
+                style={[
+                  styles.accountAvatar,
+                  { backgroundColor: theme.colors.primary },
+                ]}
+              >
+                <Icon name="inbox" size="sm" color={theme.colors.textInverse} />
+              </View>
+              <View style={styles.accountInfo}>
+                <Text style={[styles.accountName, { color: theme.colors.text }]}>
+                  All Accounts
+                </Text>
+                <Text
+                  style={[styles.accountEmail, { color: theme.colors.textMuted }]}
+                >
+                  View emails from all accounts
+                </Text>
+              </View>
+              {currentAccountId === null && (
+                <Icon name="check" size="md" color={theme.colors.primary} />
+              )}
+            </TouchableOpacity>
+
+            {emailAccounts.map((account) => (
+              <TouchableOpacity
+                key={account.id}
+                style={[
+                  styles.accountOption,
+                  { borderBottomColor: theme.colors.border },
+                  currentAccountId === account.id && {
+                    backgroundColor: theme.colors.primary + '10',
+                  },
+                ]}
+                onPress={() => handleAccountSelect(account.id)}
+              >
+                <View
+                  style={[
+                    styles.accountAvatar,
+                    { backgroundColor: theme.colors.secondary },
+                  ]}
+                >
+                  <Icon name="mail" size="sm" color={theme.colors.textInverse} />
+                </View>
+                <View style={styles.accountInfo}>
+                  <Text
+                    style={[styles.accountName, { color: theme.colors.text }]}
+                  >
+                    {account.name}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.accountEmail,
+                      { color: theme.colors.textMuted },
+                    ]}
+                  >
+                    {account.email}
+                  </Text>
+                </View>
+                {currentAccountId === account.id && (
+                  <Icon name="check" size="md" color={theme.colors.primary} />
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -169,5 +336,78 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     marginHorizontal: SPACING.md,
     marginVertical: SPACING.md,
+  },
+  accountSwitcher: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    marginBottom: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: SPACING.sm,
+  },
+  accountSwitcherAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountSwitcherInfo: {
+    flex: 1,
+  },
+  accountSwitcherLabel: {
+    fontSize: FONT_SIZE.xs,
+    fontWeight: '500',
+  },
+  accountSwitcherText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: SPACING.lg,
+  },
+  accountPickerModal: {
+    borderRadius: RADIUS.lg,
+    maxHeight: '80%',
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerTitle: {
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '600',
+  },
+  accountOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: SPACING.sm,
+  },
+  accountAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountInfo: {
+    flex: 1,
+  },
+  accountName: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '500',
+  },
+  accountEmail: {
+    fontSize: FONT_SIZE.sm,
+    marginTop: 2,
   },
 });

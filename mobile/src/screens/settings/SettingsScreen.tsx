@@ -95,6 +95,7 @@ interface SettingsScreenProps {
   onNavigateToRules: () => void;
   onNavigateToNotifications: () => void;
   onNavigateToNuke: () => void;
+  onDrawerOpen: () => void;
 }
 
 export function SettingsScreen({
@@ -105,6 +106,7 @@ export function SettingsScreen({
   onNavigateToRules,
   onNavigateToNotifications,
   onNavigateToNuke,
+  onDrawerOpen,
 }: SettingsScreenProps) {
   const theme = useTheme();
   const { top: topInset, bottom: bottomInset } = useSafeInsets([
@@ -177,13 +179,34 @@ export function SettingsScreen({
   };
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={[
-        sharedStyles.screenScrollContent,
-        { paddingTop: topInset, paddingBottom: bottomInset },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      {/* Header Bar */}
+      <View
+        style={[
+          styles.headerBar,
+          {
+            backgroundColor: theme.colors.surface,
+            borderBottomColor: theme.colors.border,
+            paddingTop: topInset,
+          },
+        ]}
+      >
+        <TouchableOpacity style={styles.headerButton} onPress={onDrawerOpen}>
+          <Icon name="menu" size="md" color={theme.colors.text} />
+        </TouchableOpacity>
+        <Text style={[styles.headerBarTitle, { color: theme.colors.text }]}>
+          Settings
+        </Text>
+        <View style={styles.headerButton} />
+      </View>
+
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          sharedStyles.screenScrollContent,
+          { paddingBottom: bottomInset },
+        ]}
+      >
       {/* User Info */}
       {user && (
         <View
@@ -628,12 +651,28 @@ export function SettingsScreen({
         </Text>
       </View>
     </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  headerBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerButton: {
+    padding: SPACING.sm,
+  },
+  headerBarTitle: {
+    flex: 1,
+    fontSize: FONT_SIZE.lg,
+    fontWeight: '600',
   },
   userCard: {
     flexDirection: 'row',
