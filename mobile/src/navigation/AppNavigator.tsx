@@ -6,14 +6,13 @@
 import React from 'react';
 import { NavigationContainer, DarkTheme, DefaultTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet, Text, TouchableOpacity, Alert } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { createDrawerNavigator } from '@react-navigation/drawer';
+
+import { useNavigation, useRoute, DrawerActions } from '@react-navigation/native';
 
 import { useTheme, darkTheme } from '../theme';
 import { useAuthStore } from '../stores/authStore';
-import { Icon, TabIcon } from '../components/ui';
+import { DrawerContent } from '../components/navigation/DrawerContent';
 
 // Screens
 import { LoginScreen, SignupScreen } from '../screens/auth';
@@ -94,7 +93,7 @@ export type AuthStackParamList = {
   Signup: undefined;
 };
 
-export type MainTabParamList = {
+export type MainDrawerParamList = {
   Inbox: undefined;
   Contacts: undefined;
   Settings: undefined;
@@ -103,7 +102,7 @@ export type MainTabParamList = {
 // Create navigators
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
-const MainTab = createBottomTabNavigator<MainTabParamList>();
+const MainDrawer = createDrawerNavigator<MainDrawerParamList>();
 
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
@@ -132,6 +131,7 @@ function InboxScreenWrapper() {
       onEmailPress={(emailId) => navigation.navigate('EmailDetail', { emailId })}
       onComposePress={() => navigation.navigate('Compose')}
       onNukePress={() => navigation.navigate('Nuke')}
+      onDrawerOpen={() => navigation.dispatch(DrawerActions.openDrawer())}
     />
   );
 }
@@ -164,58 +164,28 @@ function SettingsScreenWrapper() {
   );
 }
 
-// Main Tab Navigator - Triage moved to more menu in Inbox
-function MainTabNavigator() {
+// Main Drawer Navigator
+function MainDrawerNavigator() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
 
   return (
-    <MainTab.Navigator
+    <MainDrawer.Navigator
+      drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
-        headerShown: false, // Remove headers to save space
-        tabBarStyle: {
+        headerShown: false,
+        drawerType: 'front',
+        swipeEnabled: true,
+        swipeEdgeWidth: 50,
+        drawerStyle: {
           backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
-          paddingBottom: Math.max(insets.bottom, 8),
-          paddingTop: 8,
-          height: 60 + Math.max(insets.bottom, 0),
+          width: 280,
         },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
       }}
     >
-      <MainTab.Screen
-        name="Inbox"
-        component={InboxScreenWrapper}
-        options={{
-          title: 'Inbox',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="inbox" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <MainTab.Screen
-        name="Contacts"
-        component={ContactsScreenWrapper}
-        options={{
-          title: 'Contacts',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="users" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <MainTab.Screen
-        name="Settings"
-        component={SettingsScreenWrapper}
-        options={{
-          title: 'Settings',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="settings" focused={focused} color={color} />
-          ),
-        }}
-      />
-    </MainTab.Navigator>
+      <MainDrawer.Screen name="Inbox" component={InboxScreenWrapper} />
+      <MainDrawer.Screen name="Contacts" component={ContactsScreenWrapper} />
+      <MainDrawer.Screen name="Settings" component={SettingsScreenWrapper} />
+    </MainDrawer.Navigator>
   );
 }
 
@@ -412,7 +382,7 @@ export function AppNavigator() {
           <>
             <RootStack.Screen
               name="Main"
-              component={MainTabNavigator}
+              component={MainDrawerNavigator}
               options={{ headerShown: false }}
             />
             <RootStack.Screen
@@ -491,5 +461,3 @@ export function AppNavigator() {
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({});

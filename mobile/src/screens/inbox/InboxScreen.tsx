@@ -37,7 +37,6 @@ import {
 } from '../../theme';
 import {
   useEmailStore,
-  EmailFolder,
   Email,
   EmailAccount,
 } from '../../stores/emailStore';
@@ -48,30 +47,18 @@ import { Icon } from '../../components/ui';
 type FilterMode = 'all' | 'unread' | 'starred';
 type GroupMode = 'none' | 'date';
 
-interface FolderConfig {
-  key: EmailFolder;
-  label: string;
-  icon: React.ComponentProps<typeof Icon>['name'];
-}
-
-const FOLDERS: FolderConfig[] = [
-  { key: 'INBOX', label: 'Inbox', icon: 'inbox' },
-  { key: 'SENT', label: 'Sent', icon: 'send' },
-  { key: 'DRAFTS', label: 'Drafts', icon: 'file-text' },
-  { key: 'ARCHIVE', label: 'Archive', icon: 'archive' },
-  { key: 'TRASH', label: 'Trash', icon: 'trash-2' },
-];
-
 interface InboxScreenProps {
   onEmailPress: (emailId: string) => void;
   onComposePress: () => void;
   onNukePress: () => void;
+  onDrawerOpen: () => void;
 }
 
 export function InboxScreen({
   onEmailPress,
   onComposePress,
   onNukePress,
+  onDrawerOpen,
 }: InboxScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -89,7 +76,6 @@ export function InboxScreen({
     isSyncing,
     searchQuery,
     selectedIds,
-    setFolder,
     setAccountId,
     setSearchQuery,
     setPage,
@@ -265,41 +251,6 @@ export function InboxScreen({
   );
 
   const currentAccount = emailAccounts.find((a) => a.id === currentAccountId);
-
-  const renderFolderTab = ({ key, label, icon }: FolderConfig) => {
-    const isActive = currentFolder === key;
-
-    return (
-      <TouchableOpacity
-        key={key}
-        onPress={() => setFolder(key)}
-        style={[
-          styles.folderTab,
-          isActive && {
-            borderBottomColor: theme.colors.primary,
-            borderBottomWidth: 2,
-          },
-        ]}
-      >
-        <Icon
-          name={icon}
-          size="sm"
-          color={isActive ? theme.colors.primary : theme.colors.textMuted}
-        />
-        <Text
-          style={[
-            styles.folderLabel,
-            {
-              color: isActive ? theme.colors.primary : theme.colors.textMuted,
-              fontWeight: isActive ? '600' : '400',
-            },
-          ]}
-        >
-          {label}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
 
   const renderEmail = ({ item }: { item: Email }) => (
     <EmailListItem
@@ -557,8 +508,14 @@ export function InboxScreen({
               </TouchableOpacity>
             </View>
           ) : (
-            /* Account Switcher */
+            /* Hamburger + Account Switcher */
             <>
+              <TouchableOpacity
+                style={styles.headerButton}
+                onPress={onDrawerOpen}
+              >
+                <Icon name="menu" size="md" color={theme.colors.text} />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.accountSwitcher}
                 onPress={() => setShowAccountPicker(true)}
@@ -604,9 +561,7 @@ export function InboxScreen({
                   name="filter"
                   size="md"
                   color={
-                    filterMode !== 'all' ||
-                    hasAttachments ||
-                    groupMode !== 'none'
+                    filterMode !== 'all' || hasAttachments
                       ? theme.colors.primary
                       : theme.colors.textMuted
                   }
@@ -651,26 +606,6 @@ export function InboxScreen({
             </TouchableOpacity>
           </View>
         )}
-
-        {/* Folder Tabs */}
-        <View
-          style={[
-            styles.folderTabs,
-            {
-              backgroundColor: theme.colors.surface,
-              borderBottomColor: theme.colors.border,
-            },
-          ]}
-        >
-          <FlatList
-            data={FOLDERS}
-            keyExtractor={(item) => item.key}
-            renderItem={({ item }) => renderFolderTab(item)}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.folderTabsContent}
-          />
-        </View>
 
         {/* Email List - Use SectionList when grouping is enabled */}
         {groupMode === 'date' && groupedEmails ? (
@@ -1342,22 +1277,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FONT_SIZE.md,
     fontWeight: '500',
-  },
-  folderTabs: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  folderTabsContent: {
-    paddingHorizontal: SPACING.sm,
-  },
-  folderTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    gap: SPACING.xs,
-  },
-  folderLabel: {
-    fontSize: FONT_SIZE.sm,
   },
   header: {
     flexDirection: 'row',
