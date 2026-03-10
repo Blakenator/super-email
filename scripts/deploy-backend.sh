@@ -98,6 +98,8 @@ fi
     find "$PROJECT_ROOT/common/dist" -type f \( -name "*.js" -o -name "*.js.map" \) 2>/dev/null
     # GraphQL schema (copied to Docker image)
     find "$PROJECT_ROOT/common" -maxdepth 1 -name "schema.graphql" -type f 2>/dev/null
+    # SQL migration files (run at server startup, must trigger rebuild)
+    find "$PROJECT_ROOT/backend/db/migrations" -type f -name "*.sql" 2>/dev/null
     # Dockerfile and .dockerignore (affect Docker build)
     find "$PROJECT_ROOT/backend" -maxdepth 1 -type f -name "Dockerfile" 2>/dev/null
     find "$PROJECT_ROOT" -maxdepth 1 -type f -name ".dockerignore" 2>/dev/null
