@@ -32,7 +32,7 @@ export const ListContainer = styled.div`
   gap: ${({ theme }) => theme.spacing.sm};
 `;
 
-export const ListItem = styled.div`
+export const ListItem = styled.div<{ $clickable?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -40,6 +40,7 @@ export const ListItem = styled.div`
   background: ${({ theme }) => theme.colors.backgroundGray};
   border-radius: 6px;
   transition: background 0.2s;
+  cursor: ${({ $clickable }) => ($clickable ? 'pointer' : 'default')};
 
   &:hover {
     background: ${({ theme }) => theme.colors.backgroundHover};

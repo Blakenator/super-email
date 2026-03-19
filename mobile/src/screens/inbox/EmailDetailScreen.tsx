@@ -29,8 +29,11 @@ import { wrapEmailHtml } from '../../../../common/src/emailHtmlStyles';
 import { useAuthStore } from '../../stores/authStore';
 import { viewedEmailCache } from '../../services/emailCache';
 import { refreshSession } from '../../services/supabase';
-import { secureSet, STORAGE_KEYS } from '../../services/secureStorage';
+import { secureGet, secureSet, STORAGE_KEYS } from '../../services/secureStorage';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import type { ViewedEmailData } from '../../services/emailCache';
+import type { IconName } from '../../components/ui/Icon';
 
 const GET_EMAIL_QUERY = gql`
   query GetEmail($input: GetEmailInput!) {
@@ -68,6 +71,12 @@ const GET_EMAIL_QUERY = gql`
         size
       }
     }
+  }
+`;
+
+const GET_ATTACHMENT_DOWNLOAD_URL_QUERY = gql`
+  query GetAttachmentDownloadUrl($id: String!) {
+    getAttachmentDownloadUrl(id: $id)
   }
 `;
 
@@ -220,6 +229,17 @@ export function EmailDetailScreen({
   const [threadWebViewHeights, setThreadWebViewHeights] = useState<Record<string, number>>({});
   const [threadActionMenuId, setThreadActionMenuId] = useState<string | null>(null);
   
+
+  // Attachment preview/download state
+  const [previewAttachment, setPreviewAttachment] = useState<{
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  } | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   // Ref for scrolling
   const sectionListRef = useRef<SectionList>(null);
@@ -548,6 +568,116 @@ export function EmailDetailScreen({
     onAddContact(email.fromAddress, email.fromName ?? undefined);
   }, [email, onAddContact]);
 
+  const getAttachmentDownloadUrl = async (attachmentId: string): Promise<string | null> => {
+    try {
+      const { data } = await apolloClient.query({
+        query: GET_ATTACHMENT_DOWNLOAD_URL_QUERY,
+        variables: { id: attachmentId },
+        fetchPolicy: 'network-only',
+      });
+
+      return data?.getAttachmentDownloadUrl ?? null;
+    } catch (err) {
+      console.error('[EmailDetail] Error getting download URL:', err);
+      return null;
+    }
+  };
+
+  const handleDownloadAttachment = useCallback(async (attachment: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  }) => {
+    setDownloading(attachment.id);
+    try {
+      const url = await getAttachmentDownloadUrl(attachment.id);
+      if (!url) {
+        Alert.alert('Error', 'Failed to get download URL');
+        return;
+      }
+
+      const token = await secureGet(STORAGE_KEYS.AUTH_TOKEN);
+      const isS3 = url.includes('X-Amz-Algorithm');
+
+      const fileUri = `${FileSystem.cacheDirectory}${attachment.filename}`;
+      const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
+        headers: isS3 ? {} : { Authorization: `Bearer ${token}` },
+      });
+
+      if (downloadResult.status !== 200) {
+        Alert.alert('Error', 'Failed to download attachment');
+        return;
+      }
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(downloadResult.uri, {
+          mimeType: attachment.mimeType,
+          dialogTitle: attachment.filename,
+        });
+      } else {
+        Alert.alert('Success', 'File downloaded to cache');
+      }
+    } catch (err: any) {
+      console.error('[EmailDetail] Download error:', err);
+      Alert.alert('Error', err.message || 'Failed to download attachment');
+    } finally {
+      setDownloading(null);
+    }
+  }, []);
+
+  const canPreviewAttachment = (mimeType: string): boolean => {
+    return (
+      mimeType.startsWith('image/') ||
+      mimeType.startsWith('video/') ||
+      mimeType.includes('pdf') ||
+      mimeType.startsWith('text/')
+    );
+  };
+
+  const getAttachmentIconName = (mimeType: string): IconName => {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'eye';
+    if (mimeType.includes('pdf')) return 'file-text';
+    return 'file-text';
+  };
+
+  const handlePreviewAttachment = useCallback(async (attachment: {
+    id: string;
+    filename: string;
+    mimeType: string;
+    size: number;
+  }) => {
+    setPreviewAttachment(attachment);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+
+    try {
+      const url = await getAttachmentDownloadUrl(attachment.id);
+      if (!url) {
+        setPreviewLoading(false);
+        return;
+      }
+
+      const token = await secureGet(STORAGE_KEYS.AUTH_TOKEN);
+      const isS3 = url.includes('X-Amz-Algorithm');
+
+      const fileUri = `${FileSystem.cacheDirectory}preview_${attachment.filename}`;
+      const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
+        headers: isS3 ? {} : { Authorization: `Bearer ${token}` },
+      });
+
+      if (downloadResult.status === 200) {
+        setPreviewUrl(downloadResult.uri);
+      }
+    } catch (err) {
+      console.error('[EmailDetail] Preview fetch error:', err);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
+
   const formatDate = (dateString: string) => {
     const date = DateTime.fromISO(dateString);
     return date.toFormat("EEE, MMM d, yyyy 'at' h:mm a");
@@ -867,11 +997,35 @@ export function EmailDetailScreen({
           }, { passive: true });
         })();
 
+        // Collapse blockquotes
+        function setupBlockquoteCollapse() {
+          var blockquotes = document.querySelectorAll('blockquote');
+          for (var i = 0; i < blockquotes.length; i++) {
+            var bq = blockquotes[i];
+            if (bq.previousElementSibling && bq.previousElementSibling.classList.contains('quote-toggle-btn')) continue;
+            var btn = document.createElement('button');
+            btn.className = 'quote-toggle-btn';
+            btn.textContent = '\\u2026';
+            btn.setAttribute('title', 'Show quoted text');
+            bq.classList.add('quote-collapsed');
+            (function(b, q) {
+              b.addEventListener('click', function(e) {
+                e.preventDefault();
+                var collapsed = q.classList.toggle('quote-collapsed');
+                b.textContent = collapsed ? '\\u2026' : '\\u25B4 Hide quoted text';
+                setTimeout(reportHeight, 50);
+              });
+            })(btn, bq);
+            bq.parentNode.insertBefore(btn, bq);
+          }
+        }
+
         // Report height once on load
         var hasReported = false;
         function reportOnce() {
           if (!hasReported) {
             hasReported = true;
+            setupBlockquoteCollapse();
             setTimeout(reportHeight, 100);
           }
         }
@@ -1375,45 +1529,67 @@ export function EmailDetailScreen({
                   {email.attachmentCount} Attachment
                   {email.attachmentCount !== 1 ? 's' : ''}
                 </Text>
-                {email.attachments.map((attachment) => (
-                  <View
-                    key={attachment.id}
-                    style={[
-                      styles.attachmentItem,
-                      { borderColor: theme.colors.border },
-                    ]}
-                  >
-                    <Icon
-                      name="file-text"
-                      size="md"
-                      color={theme.colors.textMuted}
-                    />
-                    <View style={styles.attachmentInfo}>
-                      <Text
-                        style={[
-                          styles.attachmentName,
-                          { color: theme.colors.text },
-                        ]}
-                        numberOfLines={1}
+                {email.attachments.map((attachment) => {
+                  const previewable = canPreviewAttachment(attachment.mimeType);
+                  return (
+                    <TouchableOpacity
+                      key={attachment.id}
+                      style={[
+                        styles.attachmentItem,
+                        { borderColor: theme.colors.border },
+                      ]}
+                      onPress={() => previewable && handlePreviewAttachment(attachment)}
+                      activeOpacity={previewable ? 0.7 : 1}
+                    >
+                      <Icon
+                        name={getAttachmentIconName(attachment.mimeType)}
+                        size="md"
+                        color={theme.colors.textMuted}
+                      />
+                      <View style={styles.attachmentInfo}>
+                        <Text
+                          style={[
+                            styles.attachmentName,
+                            { color: theme.colors.text },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {attachment.filename}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.attachmentSize,
+                            { color: theme.colors.textMuted },
+                          ]}
+                        >
+                          {formatFileSize(attachment.size)}
+                        </Text>
+                      </View>
+                      {previewable && (
+                        <Icon
+                          name="eye"
+                          size="sm"
+                          color={theme.colors.textMuted}
+                        />
+                      )}
+                      <TouchableOpacity
+                        onPress={() => handleDownloadAttachment(attachment)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        disabled={downloading === attachment.id}
                       >
-                        {attachment.filename}
-                      </Text>
-                      <Text
-                        style={[
-                          styles.attachmentSize,
-                          { color: theme.colors.textMuted },
-                        ]}
-                      >
-                        {formatFileSize(attachment.size)}
-                      </Text>
-                    </View>
-                    <Icon
-                      name="download"
-                      size="md"
-                      color={theme.colors.primary}
-                    />
-                  </View>
-                ))}
+                        {downloading === attachment.id ? (
+                          <ActivityIndicator size="small" color={theme.colors.primary} />
+                        ) : (
+                          <Icon
+                            name="download"
+                            size="md"
+                            color={theme.colors.primary}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
 
@@ -1579,6 +1755,113 @@ export function EmailDetailScreen({
             </TouchableOpacity>
           </View>
         </Pressable>
+      </Modal>
+
+      {/* Attachment Preview Modal */}
+      <Modal
+        visible={previewAttachment !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setPreviewAttachment(null);
+          setPreviewUrl(null);
+        }}
+      >
+        <View style={[styles.previewModalContainer, { backgroundColor: 'rgba(0,0,0,0.9)' }]}>
+          <View style={[styles.previewHeader, { paddingTop: Math.max(insets.top, SPACING.md) }]}>
+            <View style={styles.previewHeaderInfo}>
+              <Text style={styles.previewFilename} numberOfLines={1}>
+                {previewAttachment?.filename}
+              </Text>
+              <Text style={styles.previewMeta}>
+                {previewAttachment ? formatFileSize(previewAttachment.size) : ''}
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                setPreviewAttachment(null);
+                setPreviewUrl(null);
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Icon name="x" size="lg" color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.previewBody}>
+            {previewLoading && (
+              <View style={styles.previewLoading}>
+                <ActivityIndicator size="large" color="#ffffff" />
+                <Text style={styles.previewLoadingText}>Loading preview...</Text>
+              </View>
+            )}
+            {!previewLoading && previewUrl && previewAttachment && (
+              <>
+                {previewAttachment.mimeType.startsWith('image/') ? (
+                  <WebView
+                    source={{ html: `<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh"><img src="${previewUrl}" style="max-width:100%;max-height:100%;object-fit:contain" /></body></html>` }}
+                    style={{ flex: 1 }}
+                    scrollEnabled={true}
+                    originWhitelist={['*']}
+                    allowFileAccess={true}
+                    allowFileAccessFromFileURLs={true}
+                  />
+                ) : previewAttachment.mimeType.includes('pdf') ? (
+                  <WebView
+                    source={{ uri: previewUrl }}
+                    style={{ flex: 1 }}
+                    originWhitelist={['*']}
+                    allowFileAccess={true}
+                    allowFileAccessFromFileURLs={true}
+                  />
+                ) : previewAttachment.mimeType.startsWith('text/') ? (
+                  <WebView
+                    source={{ uri: previewUrl }}
+                    style={{ flex: 1, backgroundColor: '#1a1a1a' }}
+                    originWhitelist={['*']}
+                    allowFileAccess={true}
+                    allowFileAccessFromFileURLs={true}
+                  />
+                ) : (
+                  <View style={styles.previewLoading}>
+                    <Text style={styles.previewLoadingText}>Preview not available</Text>
+                  </View>
+                )}
+              </>
+            )}
+            {!previewLoading && !previewUrl && (
+              <View style={styles.previewLoading}>
+                <Text style={styles.previewLoadingText}>Failed to load preview</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={[styles.previewFooter, { paddingBottom: Math.max(insets.bottom, SPACING.md) }]}>
+            <TouchableOpacity
+              style={[styles.previewDownloadBtn, { backgroundColor: theme.colors.primary }]}
+              onPress={() => previewAttachment && handleDownloadAttachment(previewAttachment)}
+              disabled={downloading === previewAttachment?.id}
+            >
+              {downloading === previewAttachment?.id ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <Icon name="download" size="sm" color="#ffffff" />
+                  <Text style={styles.previewDownloadText}>Download</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.previewCloseBtn, { borderColor: 'rgba(255,255,255,0.3)' }]}
+              onPress={() => {
+                setPreviewAttachment(null);
+                setPreviewUrl(null);
+              }}
+            >
+              <Text style={styles.previewCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* Unsubscribe Modal */}
@@ -2088,6 +2371,75 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
   unsubscribeCloseBtnText: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '500',
+  },
+  previewModalContainer: {
+    flex: 1,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.md,
+    paddingBottom: SPACING.sm,
+  },
+  previewHeaderInfo: {
+    flex: 1,
+    marginRight: SPACING.md,
+  },
+  previewFilename: {
+    color: '#ffffff',
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+  },
+  previewMeta: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: FONT_SIZE.xs,
+    marginTop: 2,
+  },
+  previewBody: {
+    flex: 1,
+  },
+  previewLoading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewLoadingText: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: FONT_SIZE.md,
+    marginTop: SPACING.sm,
+  },
+  previewFooter: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.sm,
+  },
+  previewDownloadBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    gap: SPACING.xs,
+  },
+  previewDownloadText: {
+    color: '#ffffff',
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+  },
+  previewCloseBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+  },
+  previewCloseText: {
+    color: '#ffffff',
     fontSize: FONT_SIZE.md,
     fontWeight: '500',
   },

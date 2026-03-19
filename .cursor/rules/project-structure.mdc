@@ -5,6 +5,17 @@ alwaysApply: true
 
 # Project Structure
 
+This is a monorepo with four top-level packages: `backend/`, `frontend/` (React web app), `mobile/` (Expo/React Native app), and `common/` (shared code).
+
+## Workspace Layout
+
+| Package | Framework | Purpose |
+|---------|-----------|---------|
+| `backend/` | Node.js / Express | GraphQL API server |
+| `frontend/` | React / Vite | Web application |
+| `mobile/` | Expo / React Native | iOS & Android app |
+| `common/` | TypeScript | Shared types, styles, utilities |
+
 ## Directory Layout
 
 | Path | Purpose |
@@ -13,12 +24,23 @@ alwaysApply: true
 | `backend/queries/` | GraphQL query resolvers |
 | `backend/helpers/` | Shared utility functions |
 | `backend/db/models/` | Sequelize database models |
+| `backend/test/helpers/` | Unit tests |
+| `backend/test/integration/` | Integration tests |
 | `frontend/src/pages/` | Route components |
 | `frontend/src/components/` | Page-specific components |
 | `frontend/src/core/components/` | Shared/reusable components |
+| `mobile/src/screens/` | Screen components by feature |
+| `mobile/src/components/` | Reusable UI and domain components |
+| `mobile/src/stores/` | Zustand state management |
+| `mobile/src/services/` | Apollo client, auth, storage |
 | `common/schema.graphql` | GraphQL schema (generates types) |
-| `backend/test/helpers/` | Unit tests |
-| `backend/test/integration/` | Integration tests |
+| `common/src/` | Shared utilities (e.g., `emailHtmlStyles.ts`) |
+
+## Shared Code (`common/`)
+
+Code that must stay consistent between web and mobile belongs in `common/src/`. Examples:
+- `emailHtmlStyles.ts` — CSS/HTML generation for email rendering (used by both `HtmlViewer` on web and `WebView` on mobile)
+- `schema.graphql` — GraphQL schema (generates types for backend and frontend)
 
 ## Environment Configuration
 

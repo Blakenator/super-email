@@ -83,39 +83,52 @@ export const AttachmentList: React.FC<AttachmentListProps> = ({
         <div>
           {viewMode === 'list' ? (
             <ListContainer>
-              {attachments.map((attachment) => (
-                <ListItem key={attachment.id}>
-                  <FileInfo>
-                    <FileIcon>
-                      {getFileIcon(attachment.mimeType, attachment.filename)}
-                    </FileIcon>
-                    <FileDetails>
-                      <FileName>{attachment.filename}</FileName>
-                      <FileSize>{formatFileSize(attachment.size)}</FileSize>
-                    </FileDetails>
-                  </FileInfo>
-                  <ActionButtons>
-                    {canPreview(attachment.mimeType) && onPreview && (
-                      <Button
-                        variant="outline-primary"
-                        size="sm"
-                        onClick={() => onPreview(attachment)}
-                        title="Preview"
-                        icon={<Eye size={16} />}
-                      />
-                    )}
-                    {onDownload && (
-                      <Button
-                        variant="outline-secondary"
-                        size="sm"
-                        onClick={() => onDownload(attachment)}
-                        title="Download"
-                        icon={<Download size={16} />}
-                      />
-                    )}
-                  </ActionButtons>
-                </ListItem>
-              ))}
+              {attachments.map((attachment) => {
+                const previewable = canPreview(attachment.mimeType) && !!onPreview;
+                return (
+                  <ListItem
+                    key={attachment.id}
+                    $clickable={previewable}
+                    onClick={() => previewable && onPreview(attachment)}
+                  >
+                    <FileInfo>
+                      <FileIcon>
+                        {getFileIcon(attachment.mimeType, attachment.filename)}
+                      </FileIcon>
+                      <FileDetails>
+                        <FileName>{attachment.filename}</FileName>
+                        <FileSize>{formatFileSize(attachment.size)}</FileSize>
+                      </FileDetails>
+                    </FileInfo>
+                    <ActionButtons>
+                      {previewable && (
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={(e) => {
+                            e?.stopPropagation();
+                            onPreview(attachment);
+                          }}
+                          title="Preview"
+                          icon={<Eye size={16} />}
+                        />
+                      )}
+                      {onDownload && (
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          onClick={(e) => {
+                            e?.stopPropagation();
+                            onDownload(attachment);
+                          }}
+                          title="Download"
+                          icon={<Download size={16} />}
+                        />
+                      )}
+                    </ActionButtons>
+                  </ListItem>
+                );
+              })}
             </ListContainer>
           ) : (
             <GridContainer>

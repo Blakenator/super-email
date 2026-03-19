@@ -431,6 +431,27 @@ export function HtmlViewer({
       color: ${mutedColor};
       background-color: ${effectiveDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
     }
+    blockquote.quote-collapsed {
+      display: none;
+    }
+    .quote-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      margin: 4px 0;
+      border: 1px solid ${borderColor};
+      border-radius: 4px;
+      background: ${effectiveDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};
+      color: ${mutedColor};
+      font-size: 12px;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.4;
+    }
+    .quote-toggle-btn:hover {
+      background: ${effectiveDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'};
+    }
     hr {
       border: none;
       border-top: 1px solid ${borderColor};
@@ -498,19 +519,43 @@ export function HtmlViewer({
     };
   }, [blobUrl]);
 
-  // Set iframe height to match container max-height so it can scroll internally
+  // Set iframe height and add blockquote collapse toggles after load
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
 
     const handleLoad = () => {
-      // Calculate max height based on viewport (matching HtmlBodyContainer max-height)
       const maxHeight = window.innerHeight - 300;
-      // Set iframe to fixed height so it scrolls internally
       setIframeHeight(Math.max(100, maxHeight));
+
+      // Add collapse toggles to blockquotes via parent DOM access
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc) return;
+
+        const blockquotes = doc.querySelectorAll('blockquote');
+        blockquotes.forEach((bq) => {
+          if (bq.previousElementSibling?.classList.contains('quote-toggle-btn')) return;
+
+          const btn = doc.createElement('button');
+          btn.className = 'quote-toggle-btn';
+          btn.textContent = '\u2026';
+          btn.title = 'Show quoted text';
+          bq.classList.add('quote-collapsed');
+
+          btn.addEventListener('click', () => {
+            const collapsed = bq.classList.toggle('quote-collapsed');
+            btn.textContent = collapsed ? '\u2026' : '\u25B4 Hide quoted text';
+            btn.title = collapsed ? 'Show quoted text' : 'Hide quoted text';
+          });
+
+          bq.parentNode?.insertBefore(btn, bq);
+        });
+      } catch {
+        // Cross-origin or sandbox restriction — silently ignore
+      }
     };
 
-    // Also recalculate on window resize
     const handleResize = () => {
       const maxHeight = window.innerHeight - 300;
       setIframeHeight(Math.max(100, maxHeight));
@@ -519,7 +564,6 @@ export function HtmlViewer({
     iframe.addEventListener('load', handleLoad);
     window.addEventListener('resize', handleResize);
 
-    // Set initial height
     const maxHeight = window.innerHeight - 300;
     setIframeHeight(Math.max(100, maxHeight));
 

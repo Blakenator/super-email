@@ -1,0 +1,36 @@
+---
+description: Ensure feature consistency between web and mobile apps
+alwaysApply: true
+---
+
+# Cross-Platform Consistency
+
+The web app (`frontend/`) and mobile app (`mobile/`) are separate codebases that share a backend and common utilities. When the user requests a feature or fix, always clarify scope.
+
+## Before Implementing
+
+When a feature request could apply to both platforms, ask:
+- "Should this apply to the web app, the mobile app, or both?"
+- "Should the behavior be consistent between web and mobile?"
+
+Do NOT assume "mobile" means the responsive web view — this project has a dedicated Expo/React Native app in `mobile/`.
+
+## Shared Code
+
+When implementing the same feature on both platforms, extract shared logic into `common/src/` where possible:
+- HTML/CSS generation (e.g., `common/src/emailHtmlStyles.ts`)
+- Type definitions and constants
+- Business logic that doesn't depend on platform APIs
+
+## Platform Differences
+
+Each platform has its own patterns — don't copy web patterns into mobile or vice versa:
+
+| Concern | Web (`frontend/`) | Mobile (`mobile/`) |
+|---------|-------------------|-------------------|
+| GraphQL | Apollo hooks or `fetch()` with codegen types | `apolloClient.query()` / `.mutate()` |
+| Auth tokens | `supabase.auth.getSession()` | `secureGet(STORAGE_KEYS.AUTH_TOKEN)` |
+| Styling | styled-components / `.wrappers.ts` | `StyleSheet.create()` + theme constants |
+| Navigation | React Router (`useNavigate`) | React Navigation (props callbacks) |
+| State | React context / Zustand | Zustand stores |
+| File download | Blob URL + anchor click | `expo-file-system` + `expo-sharing` |

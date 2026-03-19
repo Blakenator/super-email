@@ -20,9 +20,14 @@ import {
   faFilter,
   faShieldAlt,
   faCreditCard,
+  faSun,
+  faMoon,
+  faDesktop,
 } from '@fortawesome/free-solid-svg-icons';
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import { EmailFolder } from '../../__generated__/graphql';
+import { useTheme } from '../../contexts/ThemeContext';
+import type { ThemePreference } from '../../core/theme';
 import {
   MobileNavbarContainer,
   MobileLogo,
@@ -92,6 +97,20 @@ const navItems: {
   },
 ];
 
+const themeOrder: ThemePreference[] = ['LIGHT', 'DARK', 'AUTO'];
+
+function getThemeIcon(pref: ThemePreference) {
+  if (pref === 'LIGHT') return faSun;
+  if (pref === 'DARK') return faMoon;
+  return faDesktop;
+}
+
+function getThemeLabel(pref: ThemePreference, isDarkMode: boolean) {
+  if (pref === 'LIGHT') return 'Light Mode';
+  if (pref === 'DARK') return 'Dark Mode';
+  return `System (${isDarkMode ? 'Dark' : 'Light'})`;
+}
+
 export function MobileNavbar({
   user,
   unreadCount,
@@ -99,6 +118,7 @@ export function MobileNavbar({
 }: MobileNavbarProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { themePreference, setThemePreference, isDarkMode } = useTheme();
 
   const isPathActive = useCallback(
     (basePath: string) => {
@@ -194,6 +214,16 @@ export function MobileNavbar({
             <MobileNavItem onClick={() => handleNavigate('/settings/rules')}>
               <FontAwesomeIcon icon={faFilter} />
               Mail Rules
+            </MobileNavItem>
+            <MobileNavItem
+              onClick={(e) => {
+                e.stopPropagation();
+                const nextIndex = (themeOrder.indexOf(themePreference) + 1) % themeOrder.length;
+                setThemePreference(themeOrder[nextIndex]);
+              }}
+            >
+              <FontAwesomeIcon icon={getThemeIcon(themePreference)} />
+              {getThemeLabel(themePreference, isDarkMode)}
             </MobileNavItem>
             <MobileNavItem
               onClick={() => handleNavigate('/settings/appearance')}

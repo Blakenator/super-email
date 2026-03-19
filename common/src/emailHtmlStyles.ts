@@ -86,6 +86,28 @@ export function getEmailHtmlCss(options: EmailHtmlStyleOptions): string {
       color: ${mutedColor};
       background-color: ${isDarkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'};
     }
+    blockquote.quote-collapsed {
+      display: none;
+    }
+    .quote-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      margin: 4px 0;
+      border: 1px solid ${borderColor};
+      border-radius: 4px;
+      background: ${isDarkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'};
+      color: ${mutedColor};
+      font-size: 12px;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.4;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .quote-toggle-btn:hover {
+      background: ${isDarkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)'};
+    }
     /* HR */
     hr {
       border: none;

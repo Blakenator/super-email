@@ -6,15 +6,16 @@ import {
   StyleSheet,
   Modal,
   Pressable,
+  useColorScheme,
 } from 'react-native';
 import {
   DrawerContentScrollView,
   DrawerContentComponentProps,
 } from '@react-navigation/drawer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme, SPACING, FONT_SIZE, RADIUS } from '../../theme';
 import { useEmailStore, EmailFolder } from '../../stores/emailStore';
+import { useAuthStore, ThemePreference } from '../../stores/authStore';
 import { Icon, IconName } from '../ui';
 
 interface FolderConfig {
@@ -42,10 +43,27 @@ const SCREENS: ScreenConfig[] = [
   { route: 'Settings', label: 'Settings', icon: 'settings' },
 ];
 
+const THEME_ORDER: ThemePreference[] = ['LIGHT', 'DARK', 'AUTO'];
+const THEME_ICONS: Record<ThemePreference, IconName> = {
+  LIGHT: 'sun',
+  DARK: 'moon',
+  AUTO: 'smartphone',
+};
+
+function getThemeLabel(pref: ThemePreference, systemIsDark: boolean): string {
+  if (pref === 'LIGHT') return 'Light Mode';
+  if (pref === 'DARK') return 'Dark Mode';
+  return `System (${systemIsDark ? 'Dark' : 'Light'})`;
+}
+
 export function DrawerContent(props: DrawerContentComponentProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const systemColorScheme = useColorScheme();
+  const systemIsDark = systemColorScheme === 'dark';
   const { currentFolder, setFolder, emailAccounts, currentAccountId, setAccountId } = useEmailStore();
+  const themePreference = useAuthStore((state) => state.user?.themePreference) ?? 'AUTO';
+  const setThemePreference = useAuthStore((state) => state.setThemePreference);
   const activeRoute = props.state.routes[props.state.index]?.name;
   const [showAccountPicker, setShowAccountPicker] = useState(false);
 
@@ -185,6 +203,31 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               </TouchableOpacity>
             );
           })}
+        </View>
+
+        <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+
+        <Text style={[styles.sectionTitle, { color: theme.colors.textMuted }]}>
+          APPEARANCE
+        </Text>
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() => {
+              const nextIndex = (THEME_ORDER.indexOf(themePreference) + 1) % THEME_ORDER.length;
+              setThemePreference(THEME_ORDER[nextIndex]);
+            }}
+            activeOpacity={0.7}
+          >
+            <Icon
+              name={THEME_ICONS[themePreference]}
+              size="md"
+              color={theme.colors.primary}
+            />
+            <Text style={[styles.itemLabel, { color: theme.colors.text }]}>
+              {getThemeLabel(themePreference, systemIsDark)}
+            </Text>
+          </TouchableOpacity>
         </View>
       </DrawerContentScrollView>
 
