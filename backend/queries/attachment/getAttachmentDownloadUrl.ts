@@ -29,9 +29,7 @@ export const getAttachmentDownloadUrl = makeQuery(
       throw new Error('Attachment not found');
     }
 
-    // Generate a signed URL (S3 in production) or local path (development)
-    // Use attachment ID as the storage key (flat bucket structure)
-    const downloadUrl = await getDownloadUrl(attachment.id);
+    const downloadUrl = await getDownloadUrl(attachment.storageKey);
 
     return downloadUrl;
   },

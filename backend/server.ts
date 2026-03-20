@@ -769,7 +769,7 @@ export async function createServer(
       if (process.env.NODE_ENV !== 'production') {
         const { getLocalAttachmentPath } =
           await import('./helpers/attachment-storage.js');
-        const filePath = getLocalAttachmentPath(attachmentId);
+        const filePath = getLocalAttachmentPath(attachmentData.storageKey);
 
         res.setHeader('Content-Type', attachmentData.mimeType);
         res.setHeader(
@@ -784,7 +784,7 @@ export async function createServer(
       } else {
         const { getAttachmentDownloadUrl } =
           await import('./helpers/attachment-storage.js');
-        const url = await getAttachmentDownloadUrl(attachmentId);
+        const url = await getAttachmentDownloadUrl(attachmentData.storageKey);
         res.redirect(url);
       }
     } catch (error: any) {

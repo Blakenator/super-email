@@ -59,9 +59,10 @@ export async function recalculateUserUsage(userId: string): Promise<UserUsage> {
     LEFT JOIN (
       SELECT 
         COUNT(e.id) AS email_count,
-        SUM(COALESCE(LENGTH(e."textBody"), 0) + COALESCE(LENGTH(e."htmlBody"), 0)) AS total_body_size
+        COALESCE(SUM(esi."bodySize"), 0) AS total_body_size
       FROM emails e
       INNER JOIN email_accounts ea ON e."emailAccountId" = ea.id
+      LEFT JOIN email_search_index esi ON esi."emailId" = e.id
       WHERE ea."userId" = :userId
     ) email_stats ON true
     LEFT JOIN (
@@ -168,9 +169,10 @@ export async function getUserStorageUsageRealtime(
     LEFT JOIN (
       SELECT 
         COUNT(e.id) AS email_count,
-        SUM(COALESCE(LENGTH(e."textBody"), 0) + COALESCE(LENGTH(e."htmlBody"), 0)) AS total_body_size
+        COALESCE(SUM(esi."bodySize"), 0) AS total_body_size
       FROM emails e
       INNER JOIN email_accounts ea ON e."emailAccountId" = ea.id
+      LEFT JOIN email_search_index esi ON esi."emailId" = e.id
       WHERE ea."userId" = :userId
     ) email_stats ON true
     LEFT JOIN (

@@ -17,6 +17,7 @@ import { EmailTag } from './models/email-tag.model.js';
 import { MailRule } from './models/mail-rule.model.js';
 import { Email } from './models/email.model.js';
 import { Attachment } from './models/attachment.model.js';
+import { EmailSearchIndex } from './models/email-search-index.model.js';
 import { Subscription } from './models/subscription.model.js';
 import { UserUsage } from './models/user-usage.model.js';
 import { PushToken } from './models/push-token.model.js';
@@ -55,6 +56,7 @@ export const sequelize = new Sequelize({
     EmailTag,
     MailRule,
     Attachment,
+    EmailSearchIndex,
     Subscription,
     UserUsage,
     PushToken,

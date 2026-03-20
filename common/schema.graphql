@@ -1081,13 +1081,17 @@ type Email implements BaseEntityProps {
   """
   subject: String!
   """
-  Plain text body content
+  Plain text body content (resolved from S3 on single-email and thread queries)
   """
   textBody: String
   """
-  HTML body content
+  HTML body content (resolved from S3 on single-email and thread queries)
   """
   htmlBody: String
+  """
+  Short preview of the text body (~200 chars, stored in PG for fast list views)
+  """
+  bodyPreview: String
   """
   When the email was received (from email headers)
   """
@@ -1930,6 +1934,22 @@ type EmailSource {
   count: Int!
 }
 
+# ============ Semantic Search ============
+
+"""
+Result of a semantic search query, including a relevance score.
+"""
+type EmailSearchResult {
+  """
+  Cosine similarity score (0-1, higher = more relevant)
+  """
+  score: Float!
+  """
+  The matching email
+  """
+  email: Email!
+}
+
 # ============ Health ============
 
 """
@@ -2088,6 +2108,27 @@ type Query {
     """
     limit: Int
   ): [EmailSource!]!
+
+  # Semantic Search
+  """
+  Search emails by semantic meaning using vector embeddings.
+  If emailAccountId is provided, search is scoped to that account.
+  Otherwise, searches across all of the user's accounts.
+  """
+  semanticSearch(
+    """
+    Natural language search query
+    """
+    query: String!
+    """
+    Optional: scope search to a specific email account
+    """
+    emailAccountId: String
+    """
+    Maximum results to return (default: 10)
+    """
+    limit: Int
+  ): [EmailSearchResult!]!
 
   # Attachments
   """

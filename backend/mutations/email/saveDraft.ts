@@ -3,6 +3,8 @@ import { Email, EmailAccount, SendProfile } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { EmailFolder } from '../../db/models/email.model.js';
 import { v4 as uuidv4 } from 'uuid';
+import { storeEmailBody } from '../../helpers/body-storage.js';
+import { generateBodyPreview } from '../../helpers/search-index.js';
 
 export const saveDraft = makeMutation(
   'saveDraft',
@@ -27,6 +29,9 @@ export const saveDraft = makeMutation(
       }
     }
 
+    const textBody = input.textBody ?? null;
+    const htmlBody = input.htmlBody ?? null;
+
     if (input.id) {
       const existingDraft = await Email.findOne({
         where: { id: input.id, emailAccountId: emailAccount.id, isDraft: true },
@@ -42,10 +47,17 @@ export const saveDraft = makeMutation(
         ccAddresses: input.ccAddresses ?? existingDraft.ccAddresses,
         bccAddresses: input.bccAddresses ?? existingDraft.bccAddresses,
         subject: input.subject ?? existingDraft.subject,
-        textBody: input.textBody ?? existingDraft.textBody,
-        htmlBody: input.htmlBody ?? existingDraft.htmlBody,
+        bodyPreview: generateBodyPreview(textBody, htmlBody) ?? existingDraft.bodyPreview,
         inReplyTo: input.inReplyTo ?? existingDraft.inReplyTo,
       });
+
+      // Store body in S3 (overwrite previous version)
+      await storeEmailBody(
+        emailAccount.id,
+        existingDraft.id,
+        textBody,
+        htmlBody,
+      );
 
       return existingDraft;
     }
@@ -61,14 +73,18 @@ export const saveDraft = makeMutation(
       ccAddresses: input.ccAddresses ?? null,
       bccAddresses: input.bccAddresses ?? null,
       subject: input.subject ?? '(No Subject)',
-      textBody: input.textBody ?? null,
-      htmlBody: input.htmlBody ?? null,
+      bodyPreview: generateBodyPreview(textBody, htmlBody),
       receivedAt: new Date(),
       isRead: true,
       isStarred: false,
       isDraft: true,
       inReplyTo: input.inReplyTo ?? null,
     });
+
+    // Set bodyStorageKey and store body in S3
+    const storageKey = `${emailAccount.id}/${draft.id}`;
+    await draft.update({ bodyStorageKey: storageKey });
+    await storeEmailBody(emailAccount.id, draft.id, textBody, htmlBody);
 
     return draft;
   },

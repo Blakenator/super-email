@@ -36,6 +36,7 @@ export interface EmailWithAttachments {
  */
 export async function uploadAttachmentsImmediately(
   parsedEmail: ParsedMail,
+  emailAccountId: string,
 ): Promise<PreProcessedAttachment[]> {
   if (!parsedEmail.attachments || parsedEmail.attachments.length === 0) {
     return [];
@@ -57,6 +58,7 @@ export async function uploadAttachmentsImmediately(
       const stream = Readable.from(attachment.content);
 
       const uploadResult = await uploadAttachment({
+        emailAccountId,
         attachmentId,
         mimeType: attachment.contentType || 'application/octet-stream',
         stream,

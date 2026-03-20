@@ -13,6 +13,7 @@ import { getEmail } from './email/getEmail.js';
 import { getEmailCount } from './email/getEmailCount.js';
 import { getEmailsByThread } from './email/getEmailsByThread.js';
 import { getTopEmailSources } from './email/getTopEmailSources.js';
+import { semanticSearch } from './email/semanticSearch.js';
 import { getContacts } from './contact/getContacts.js';
 import { getContact } from './contact/getContact.js';
 import { searchContacts } from './contact/searchContacts.js';
@@ -43,6 +44,7 @@ export const QueryResolvers: AllQueries = {
   getEmailCount,
   getEmailsByThread,
   getTopEmailSources,
+  semanticSearch,
   getContacts,
   getContact,
   searchContacts,

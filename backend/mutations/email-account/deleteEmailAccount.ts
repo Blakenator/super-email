@@ -3,6 +3,8 @@ import { EmailAccount, Email } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { deleteImapCredentials } from '../../helpers/secrets.js';
 import { recalculateUserUsage } from '../../helpers/usage-calculator.js';
+import { deleteEmailBodiesByAccount } from '../../helpers/body-storage.js';
+import { deleteAttachmentsByAccount } from '../../helpers/attachment-storage.js';
 import { logger } from '../../helpers/logger.js';
 
 export const deleteEmailAccount = makeMutation(
@@ -18,8 +20,14 @@ export const deleteEmailAccount = makeMutation(
       throw new Error('Email account not found');
     }
 
-    // Delete associated emails first
+    // Delete associated emails first (CASCADE handles search_index, attachments, tags)
     await Email.destroy({ where: { emailAccountId: id } });
+
+    // Bulk-delete S3 objects for this account (email bodies + attachments)
+    await Promise.all([
+      deleteEmailBodiesByAccount(id),
+      deleteAttachmentsByAccount(id),
+    ]);
 
     // Delete credentials from secure secrets store
     await deleteImapCredentials(id);

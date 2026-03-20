@@ -17,8 +17,7 @@ const createMockEmail = (overrides: Record<string, any> = {}) => ({
   ccAddresses: [],
   bccAddresses: [],
   subject: 'Test Subject',
-  textBody: 'This is the email body text.',
-  htmlBody: '<p>This is the email body text.</p>',
+  bodyPreview: 'This is the email body text.',
   ...overrides,
 });
 
@@ -151,25 +150,22 @@ describe('rule-matcher helpers', function () {
     });
 
     describe('bodyContains condition', () => {
-      it('should match when text body contains term', () => {
-        const email = createMockEmail({ textBody: 'Please unsubscribe me from this list' });
+      it('should match when bodyPreview contains term', () => {
+        const email = createMockEmail({ bodyPreview: 'Please unsubscribe me from this list' });
         const rule = createMockRule({ bodyContains: 'unsubscribe' });
         
         expect(emailMatchesRule(email as any, rule as any)).to.be.true;
       });
 
-      it('should match when html body contains term', () => {
-        const email = createMockEmail({ 
-          textBody: '',
-          htmlBody: '<p>Click to unsubscribe</p>' 
-        });
+      it('should match case-insensitively', () => {
+        const email = createMockEmail({ bodyPreview: 'Click to Unsubscribe here' });
         const rule = createMockRule({ bodyContains: 'unsubscribe' });
         
         expect(emailMatchesRule(email as any, rule as any)).to.be.true;
       });
 
-      it('should handle null bodies', () => {
-        const email = createMockEmail({ textBody: null, htmlBody: null });
+      it('should handle null bodyPreview', () => {
+        const email = createMockEmail({ bodyPreview: null });
         const rule = createMockRule({ bodyContains: 'test' });
         
         expect(emailMatchesRule(email as any, rule as any)).to.be.false;

@@ -11,22 +11,21 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './logger.js';
 import { config } from '../config/env.js';
+import { deleteS3ObjectsByPrefix } from './body-storage.js';
 
 const LOCAL_ATTACHMENTS_DIR = path.join(
   process.cwd(),
   config.attachments.localDir,
 );
 
-// Initialize S3 client for production
 let s3Client: S3Client | null = null;
 if (config.isProduction) {
   s3Client = new S3Client({ region: config.aws.region });
 }
 
-// Ensure local attachments directory exists
-async function ensureLocalDirectory() {
+async function ensureLocalDirectory(dirPath: string) {
   try {
-    await fs.mkdir(LOCAL_ATTACHMENTS_DIR, { recursive: true });
+    await fs.mkdir(dirPath, { recursive: true });
   } catch (error) {
     logger.error(
       'AttachmentStorage',
@@ -38,7 +37,8 @@ async function ensureLocalDirectory() {
 }
 
 interface UploadOptions {
-  attachmentId: string; // Use the attachment's UUID as the storage key
+  emailAccountId: string;
+  attachmentId: string;
   mimeType: string;
   stream: Readable;
 }
@@ -49,17 +49,14 @@ interface UploadResult {
 }
 
 /**
- * Upload an attachment to storage (S3 in production, local disk in development)
- * Uses the attachment UUID as the storage key for a flat bucket structure
- * Returns the storage key and size in bytes
+ * Upload an attachment to storage (S3 in production, local disk in development).
+ * Key format: {emailAccountId}/{attachmentId}
  */
 export async function uploadAttachment(
   options: UploadOptions,
 ): Promise<UploadResult> {
-  const { attachmentId, mimeType, stream } = options;
-
-  // Use the attachment UUID directly as the storage key (flat structure)
-  const storageKey = attachmentId;
+  const { emailAccountId, attachmentId, mimeType, stream } = options;
+  const storageKey = `${emailAccountId}/${attachmentId}`;
 
   if (config.isProduction && s3Client) {
     return uploadToS3(storageKey, mimeType, stream);
@@ -68,10 +65,6 @@ export async function uploadAttachment(
   }
 }
 
-/**
- * Upload to S3 in production using streaming multipart upload
- * This avoids loading the entire attachment into memory
- */
 async function uploadToS3(
   key: string,
   mimeType: string,
@@ -81,7 +74,6 @@ async function uploadToS3(
     throw new Error('S3 client not initialized');
   }
 
-  // Use a PassThrough stream to track size while streaming
   let size = 0;
   const passThrough = new PassThrough();
 
@@ -89,11 +81,8 @@ async function uploadToS3(
     size += chunk.length;
   });
 
-  // Pipe the input stream through the PassThrough
   stream.pipe(passThrough);
 
-  // Use @aws-sdk/lib-storage Upload for streaming multipart uploads
-  // This automatically handles large files without buffering to memory
   const upload = new Upload({
     client: s3Client,
     params: {
@@ -102,9 +91,7 @@ async function uploadToS3(
       Body: passThrough,
       ContentType: mimeType,
     },
-    // Use smaller part size (5MB) for more granular streaming
     partSize: 5 * 1024 * 1024,
-    // Maximum concurrent uploads
     queueSize: 4,
   });
 
@@ -114,16 +101,12 @@ async function uploadToS3(
   return { storageKey: key, size };
 }
 
-/**
- * Upload to local disk in development (flat structure, no subdirectories)
- */
 async function uploadToLocalDisk(
   key: string,
   stream: Readable,
 ): Promise<UploadResult> {
-  await ensureLocalDirectory();
-
   const filePath = path.join(LOCAL_ATTACHMENTS_DIR, key);
+  await ensureLocalDirectory(path.dirname(filePath));
 
   const writeStream = createWriteStream(filePath);
   await pipeline(stream, writeStream);
@@ -138,51 +121,48 @@ async function uploadToLocalDisk(
 }
 
 /**
- * Get a signed download URL for an attachment
- * In production, returns a presigned S3 URL
- * In development, returns a local API endpoint URL
- * Uses the attachment ID (UUID) as the storage key
+ * Get a signed download URL for an attachment.
+ * Accepts the full storageKey from the attachment record.
  */
 export async function getAttachmentDownloadUrl(
-  attachmentId: string,
+  storageKey: string,
   expiresIn: number = 3600,
 ): Promise<string> {
   if (config.isProduction && s3Client) {
     const command = new GetObjectCommand({
       Bucket: config.attachments.s3Bucket,
-      Key: attachmentId,
+      Key: storageKey,
     });
 
     const url = await getSignedUrl(s3Client, command, { expiresIn });
     return url;
   } else {
-    // In development, return a simple API path using the attachment UUID
-    return `/api/attachments/download/${attachmentId}`;
+    return `/api/attachments/download/${storageKey}`;
   }
 }
 
 /**
- * Get the local file path for an attachment (development only)
- * Uses the attachment UUID as the filename
+ * Get the local file path for an attachment (development only).
+ * Accepts the full storageKey from the attachment record.
  */
-export function getLocalAttachmentPath(attachmentId: string): string {
+export function getLocalAttachmentPath(storageKey: string): string {
   if (config.isProduction) {
     throw new Error('Local attachment paths are only available in development');
   }
-  return path.join(LOCAL_ATTACHMENTS_DIR, attachmentId);
+  return path.join(LOCAL_ATTACHMENTS_DIR, storageKey);
 }
 
 /**
- * Stream an attachment from storage
- * Uses the attachment UUID as the storage key
+ * Stream an attachment from storage.
+ * Accepts the full storageKey from the attachment record.
  */
 export async function streamAttachment(
-  attachmentId: string,
+  storageKey: string,
 ): Promise<Readable> {
   if (config.isProduction && s3Client) {
     const command = new GetObjectCommand({
       Bucket: config.attachments.s3Bucket,
-      Key: attachmentId,
+      Key: storageKey,
     });
 
     const response = await s3Client.send(command);
@@ -191,32 +171,48 @@ export async function streamAttachment(
     }
     return response.Body as Readable;
   } else {
-    const filePath = getLocalAttachmentPath(attachmentId);
+    const filePath = getLocalAttachmentPath(storageKey);
     const { createReadStream } = await import('fs');
     return createReadStream(filePath);
   }
 }
 
 /**
- * Delete an attachment from storage
- * Uses the attachment UUID as the storage key
+ * Delete an attachment from storage.
+ * Accepts the full storageKey from the attachment record.
  */
-export async function deleteAttachment(attachmentId: string): Promise<void> {
+export async function deleteAttachment(storageKey: string): Promise<void> {
   if (config.isProduction && s3Client) {
     const { DeleteObjectCommand } = await import('@aws-sdk/client-s3');
     const command = new DeleteObjectCommand({
       Bucket: config.attachments.s3Bucket,
-      Key: attachmentId,
+      Key: storageKey,
     });
     await s3Client.send(command);
     logger.info('AttachmentStorage', 'Deleted attachment from S3', {
-      key: attachmentId,
+      key: storageKey,
     });
   } else {
-    const filePath = getLocalAttachmentPath(attachmentId);
-    await fs.unlink(filePath);
-    logger.info('AttachmentStorage', 'Deleted attachment from local disk', {
-      key: attachmentId,
-    });
+    const filePath = getLocalAttachmentPath(storageKey);
+    try {
+      await fs.unlink(filePath);
+      logger.info('AttachmentStorage', 'Deleted attachment from local disk', {
+        key: storageKey,
+      });
+    } catch (err: any) {
+      if (err.code !== 'ENOENT') throw err;
+    }
   }
+}
+
+/**
+ * Bulk-delete all attachments for an account using the account prefix.
+ */
+export async function deleteAttachmentsByAccount(
+  emailAccountId: string,
+): Promise<void> {
+  await deleteS3ObjectsByPrefix(
+    config.attachments.s3Bucket,
+    `${emailAccountId}/`,
+  );
 }

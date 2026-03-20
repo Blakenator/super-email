@@ -343,6 +343,33 @@ new aws.s3.BucketPublicAccessBlock(`${stackName}-raw-emails-pab`, {
 });
 
 // =============================================================================
+// S3 Bucket for Email Bodies (encrypted at rest)
+// =============================================================================
+
+const emailBodiesBucket = new aws.s3.Bucket(`${stackName}-email-bodies`, {
+  bucket: `${stackName}-email-bodies`,
+  acl: 'private',
+  versioning: { enabled: false },
+  serverSideEncryptionConfiguration: {
+    rule: {
+      applyServerSideEncryptionByDefault: { sseAlgorithm: 'AES256' },
+    },
+  },
+  tags: {
+    Name: `${stackName}-email-bodies`,
+    Environment: environment,
+  },
+});
+
+new aws.s3.BucketPublicAccessBlock(`${stackName}-email-bodies-pab`, {
+  bucket: emailBodiesBucket.id,
+  blockPublicAcls: true,
+  blockPublicPolicy: true,
+  ignorePublicAcls: true,
+  restrictPublicBuckets: true,
+});
+
+// =============================================================================
 // S3 Bucket for Frontend Static Files
 // =============================================================================
 
@@ -521,26 +548,28 @@ const taskRole = new aws.iam.Role(`${stackName}-task-role`, {
   tags: { Name: `${stackName}-task-role`, Environment: environment },
 });
 
-// S3 policy for attachments
+// S3 policy for attachments + email bodies
 const s3Policy = new aws.iam.Policy(`${stackName}-s3-policy`, {
   name: `${stackName}-s3-policy`,
-  policy: attachmentsBucket.arn.apply((arn) =>
-    JSON.stringify({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect: 'Allow',
-          Action: [
-            's3:PutObject',
-            's3:GetObject',
-            's3:DeleteObject',
-            's3:ListBucket',
-          ],
-          Resource: [arn, `${arn}/*`],
-        },
-      ],
-    }),
-  ),
+  policy: pulumi
+    .all([attachmentsBucket.arn, emailBodiesBucket.arn])
+    .apply(([attachArn, bodiesArn]) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              's3:PutObject',
+              's3:GetObject',
+              's3:DeleteObject',
+              's3:ListBucket',
+            ],
+            Resource: [attachArn, `${attachArn}/*`, bodiesArn, `${bodiesArn}/*`],
+          },
+        ],
+      }),
+    ),
 });
 
 new aws.iam.RolePolicyAttachment(`${stackName}-task-s3-policy`, {
@@ -1154,6 +1183,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
         dbPort: database.port,
         dbPass: dbPassword,
         bucketName: attachmentsBucket.bucket,
+        emailBodiesBucketName: emailBodiesBucket.bucket,
         region: currentRegion.name,
         supabaseSecretArn: supabaseServiceSecretVersion.arn,
         stripeKeyArn: stripeKeySecretVersion.arn,
@@ -1170,6 +1200,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
           dbPort,
           dbPass,
           bucketName,
+          emailBodiesBucketName,
           region,
           supabaseSecretArn,
           stripeKeyArn,
@@ -1197,6 +1228,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'DB_PASSWORD', value: dbPass },
                 { name: 'PORT', value: '4000' },
                 { name: 'ATTACHMENTS_S3_BUCKET', value: bucketName },
+                { name: 'EMAIL_BODIES_S3_BUCKET', value: emailBodiesBucketName },
                 { name: 'AWS_REGION', value: region },
                 { name: 'SECRETS_BASE_PATH', value: 'email-client' },
                 { name: 'SUPABASE_URL', value: supabaseUrl },
@@ -1673,6 +1705,7 @@ export const databaseEndpoint = database.endpoint;
 export const databaseAddress = database.address;
 export const clusterArn = cluster.arn;
 export const attachmentsBucketName = attachmentsBucket.bucket;
+export const emailBodiesBucketName = emailBodiesBucket.bucket;
 export const backendLogGroupName = backendLogGroup.name;
 export const albDnsName = alb.dnsName;
 export const syncLambdaArn = syncLambda.arn;

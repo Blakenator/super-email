@@ -53,7 +53,7 @@ export function buildEmailWhereClause(
 
   const andConditions: any[] = [];
 
-  // Full-text search using PostgreSQL's to_tsvector and to_tsquery
+  // Full-text search using pre-computed tsvector in email_search_index
   if (input.searchQuery?.trim()) {
     const searchTerm = input.searchQuery.trim();
     const sanitized = searchTerm
@@ -65,13 +65,11 @@ export function buildEmailWhereClause(
 
     if (sanitized) {
       andConditions.push(
-        literal(`(
-          to_tsvector('english', COALESCE("subject", '')) ||
-          to_tsvector('english', COALESCE("textBody", '')) ||
-          to_tsvector('english', COALESCE("fromAddress", '')) ||
-          to_tsvector('english', COALESCE("fromName", '')) ||
-          to_tsvector('english', COALESCE(array_to_string("toAddresses", ' '), ''))
-        ) @@ to_tsquery('english', '${sanitized}')`),
+        literal(`EXISTS (
+          SELECT 1 FROM email_search_index esi
+          WHERE esi."emailId" = "Email"."id"
+          AND esi."searchVector" @@ to_tsquery('english', '${sanitized}')
+        )`),
       );
     }
   }
@@ -124,10 +122,22 @@ export function buildEmailWhereClause(
   }
 
   if (input.bodyContains?.trim()) {
-    const bodyTerm = input.bodyContains.trim().toLowerCase().replace(/'/g, "''");
-    andConditions.push(
-      literal(`(LOWER("textBody") LIKE '%${bodyTerm}%' OR LOWER("htmlBody") LIKE '%${bodyTerm}%')`),
-    );
+    const bodyTerm = input.bodyContains.trim()
+      .replace(/[^\w\s@.-]/g, '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word: string) => word + ':*')
+      .join(' & ');
+
+    if (bodyTerm) {
+      andConditions.push(
+        literal(`EXISTS (
+          SELECT 1 FROM email_search_index esi
+          WHERE esi."emailId" = "Email"."id"
+          AND esi."searchVector" @@ to_tsquery('english', '${bodyTerm}')
+        )`),
+      );
+    }
   }
 
   // Tag filtering - emails must have ALL specified tags

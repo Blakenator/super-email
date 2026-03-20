@@ -3,6 +3,8 @@ import { Email, EmailAccount, SendProfile, SmtpAccountSettings, EmailFolder } fr
 import { requireAuth } from '../../helpers/auth.js';
 import { sendEmail } from '../../helpers/email.js';
 import { publishMailboxUpdate } from '../../helpers/pubsub.js';
+import { storeEmailBody, getEmailBody } from '../../helpers/body-storage.js';
+import { upsertSearchIndex, generateBodyPreview } from '../../helpers/search-index.js';
 
 export const forwardEmail = makeMutation(
   'forwardEmail',
@@ -38,6 +40,19 @@ export const forwardEmail = makeMutation(
       throw new Error('Send profile not found');
     }
 
+    // Fetch original body from S3
+    let originalTextBody: string | null = null;
+    let originalHtmlBody: string | null = null;
+    if (originalEmail.bodyStorageKey) {
+      try {
+        const body = await getEmailBody(originalEmail.emailAccountId, originalEmail.id);
+        originalTextBody = body.textBody;
+        originalHtmlBody = body.htmlBody;
+      } catch {
+        // Fall back to empty if S3 fetch fails
+      }
+    }
+
     const forwardSubject = originalEmail.subject.startsWith('Fwd:')
       ? originalEmail.subject
       : `Fwd: ${originalEmail.subject}`;
@@ -56,7 +71,7 @@ To: ${originalEmail.toAddresses.join(', ')}
       textBody += input.additionalText + '\n\n';
     }
     textBody += forwardedHeader + '\n\n';
-    textBody += originalEmail.textBody || '';
+    textBody += originalTextBody || '';
 
     let htmlBody = '';
     if (input.additionalText) {
@@ -72,7 +87,7 @@ To: ${originalEmail.toAddresses.join(', ')}
     To: ${originalEmail.toAddresses.join(', ')}
   </p>
   <br>
-  ${originalEmail.htmlBody || `<p>${(originalEmail.textBody || '').replace(/\n/g, '<br>')}</p>`}
+  ${originalHtmlBody || `<p>${(originalTextBody || '').replace(/\n/g, '<br>')}</p>`}
 </div>
 `;
 
@@ -96,8 +111,7 @@ To: ${originalEmail.toAddresses.join(', ')}
       ccAddresses: input.ccAddresses || null,
       bccAddresses: input.bccAddresses || null,
       subject: forwardSubject,
-      textBody,
-      htmlBody,
+      bodyPreview: generateBodyPreview(textBody, htmlBody),
       receivedAt: new Date(),
       isRead: true,
       isStarred: false,
@@ -105,6 +119,22 @@ To: ${originalEmail.toAddresses.join(', ')}
       inReplyTo: null,
       references: originalEmail.messageId ? [originalEmail.messageId] : null,
     });
+
+    // Store forwarded body in S3 and create search index
+    const storageKey = `${input.emailAccountId}/${sentEmail.id}`;
+    await sentEmail.update({ bodyStorageKey: storageKey });
+    await Promise.all([
+      storeEmailBody(input.emailAccountId, sentEmail.id, textBody, htmlBody),
+      upsertSearchIndex({
+        emailId: sentEmail.id,
+        emailAccountId: input.emailAccountId,
+        subject: forwardSubject,
+        textBody,
+        fromAddress: sendProfile.email,
+        toAddresses: input.toAddresses,
+        bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+      }),
+    ]);
 
     publishMailboxUpdate(userId, {
       type: 'NEW_EMAILS',

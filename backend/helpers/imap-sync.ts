@@ -12,6 +12,8 @@ import {
   createAttachmentRecords,
   type EmailWithAttachments,
 } from './email-parser.js';
+import { storeEmailBody } from './body-storage.js';
+import { upsertSearchIndex, generateBodyPreview } from './search-index.js';
 import {
   type SyncResult,
   type SyncType,
@@ -654,7 +656,7 @@ async function processBatch(
         messageIdsInBatch.push(envelopeMessageId);
 
         const parsed = await simpleParser(message.source);
-        const attachments = await uploadAttachmentsImmediately(parsed);
+        const attachments = await uploadAttachmentsImmediately(parsed, emailAccountId);
 
         const emailData = createEmailDataFromParsed(
           emailAccountId,
@@ -749,19 +751,49 @@ async function insertEmailBatch(
     for (let j = 0; j < newEmailsData.length; j += DB_BATCH_SIZE) {
       const dbBatch = newEmailsData.slice(j, j + DB_BATCH_SIZE);
       try {
+        // Extract bodies before DB insert (bodies go to S3, not PG)
+        const bodyData = dbBatch.map((d) => {
+          const textBody = d.emailData.textBody as string | null;
+          const htmlBody = d.emailData.htmlBody as string | null;
+          const id = crypto.randomUUID();
+
+          d.emailData.id = id;
+          d.emailData.bodyStorageKey = `${emailAccountId}/${id}`;
+          d.emailData.bodyPreview = generateBodyPreview(textBody, htmlBody);
+          delete d.emailData.textBody;
+          delete d.emailData.htmlBody;
+
+          return { id, textBody, htmlBody };
+        });
+
         const createdEmails = await Email.bulkCreate(
           dbBatch.map((d) => d.emailData) as any,
         );
         result.synced += dbBatch.length;
         result.newEmailIds.push(...createdEmails.map((e) => e.id));
 
+        // Store bodies in S3 and create search index entries in parallel
         for (let k = 0; k < createdEmails.length; k++) {
           const email = createdEmails[k];
+          const { textBody, htmlBody } = bodyData[k];
           const attachments = dbBatch[k].attachments;
+
           try {
-            await createAttachmentRecords(email.id, attachments);
+            await Promise.all([
+              storeEmailBody(emailAccountId, email.id, textBody, htmlBody),
+              createAttachmentRecords(email.id, attachments),
+              upsertSearchIndex({
+                emailId: email.id,
+                emailAccountId,
+                subject: email.subject,
+                textBody,
+                fromAddress: email.fromAddress,
+                toAddresses: email.toAddresses,
+                bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+              }),
+            ]);
           } catch (err) {
-            logger.error('IMAP', `Failed to create attachment records for email ${email.id}`, { error: err instanceof Error ? err.message : err });
+            logger.error('IMAP', `Failed post-create tasks for email ${email.id}`, { error: err instanceof Error ? err.message : err });
           }
         }
       } catch (err) {

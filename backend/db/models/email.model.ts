@@ -110,11 +110,13 @@ export class Email extends Model {
   })
   declare subject: string;
 
+  // S3 storage key for email body (format: {emailAccountId}/{emailId})
   @Column({ type: DataType.TEXT, allowNull: true })
-  declare textBody: string | null;
+  declare bodyStorageKey: string | null;
 
+  // First ~200 chars of text body for list views and notifications
   @Column({ type: DataType.TEXT, allowNull: true })
-  declare htmlBody: string | null;
+  declare bodyPreview: string | null;
 
   @Column({ type: DataType.DATE, allowNull: false })
   declare receivedAt: Date;

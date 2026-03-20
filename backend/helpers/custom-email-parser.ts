@@ -13,6 +13,8 @@ import { simpleParser } from 'mailparser';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config/env.js';
 import { Email, EmailFolder } from '../db/models/email.model.js';
+import { storeEmailBody } from './body-storage.js';
+import { upsertSearchIndex, generateBodyPreview } from './search-index.js';
 import { logger } from './logger.js';
 import {
   uploadAttachmentsImmediately,
@@ -102,7 +104,7 @@ export async function parseAndStoreCustomEmail(
 
   const rawStorageKey = await archiveRawEmail(rawEmail, emailAccountId, messageId);
 
-  const preProcessedAttachments = await uploadAttachmentsImmediately(parsed);
+  const preProcessedAttachments = await uploadAttachmentsImmediately(parsed, emailAccountId);
 
   const fromAddress = parsed.from?.value?.[0]?.address || 'unknown@unknown.com';
   const fromName = parsed.from?.value?.[0]?.name || null;
@@ -129,6 +131,9 @@ export async function parseAndStoreCustomEmail(
 
   const threadId = referencesArray?.[0] || parsed.inReplyTo || messageId;
 
+  const textBody = parsed.text || null;
+  const htmlBody = parsed.html || null;
+
   const emailData = {
     emailAccountId,
     messageId,
@@ -139,8 +144,7 @@ export async function parseAndStoreCustomEmail(
     ccAddresses: ccAddresses && ccAddresses.length > 0 ? ccAddresses : null,
     bccAddresses: null,
     subject: parsed.subject || '(No Subject)',
-    textBody: parsed.text || null,
-    htmlBody: parsed.html || null,
+    bodyPreview: generateBodyPreview(textBody, htmlBody),
     receivedAt: parsed.date || new Date(),
     isRead: false,
     isStarred: false,
@@ -155,6 +159,23 @@ export async function parseAndStoreCustomEmail(
   };
 
   const newEmail = await Email.create(emailData as any);
+
+  // Set bodyStorageKey and store body in S3
+  const storageKey = `${emailAccountId}/${newEmail.id}`;
+  await newEmail.update({ bodyStorageKey: storageKey });
+
+  await Promise.all([
+    storeEmailBody(emailAccountId, newEmail.id, textBody, htmlBody),
+    upsertSearchIndex({
+      emailId: newEmail.id,
+      emailAccountId,
+      subject: parsed.subject || '(No Subject)',
+      textBody,
+      fromAddress,
+      toAddresses,
+      bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+    }),
+  ]);
 
   if (preProcessedAttachments.length > 0) {
     await createAttachmentRecords(newEmail.id, preProcessedAttachments);

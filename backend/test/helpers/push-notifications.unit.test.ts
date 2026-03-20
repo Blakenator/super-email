@@ -20,8 +20,7 @@ function createMockEmails(count: number): NewEmailInfo[] {
     subject: `Subject ${i + 1}`,
     fromName: `Sender ${i + 1}`,
     fromAddress: `sender${i + 1}@example.com`,
-    textBody: `Body text for email ${i + 1}`,
-    htmlBody: null,
+    bodyPreview: `Body text for email ${i + 1}`,
   }));
 }
 
@@ -108,21 +107,19 @@ describe('push-notifications helpers', function () {
         });
       });
 
-      it('should include HTML body snippet when textBody is absent', async () => {
+      it('should include bodyPreview in notification', async () => {
         const emails: NewEmailInfo[] = [{
           id: 'email-html',
           subject: 'HTML Email',
           fromName: 'HTML Sender',
           fromAddress: 'html@example.com',
-          textBody: null,
-          htmlBody: '<p>Hello &amp; welcome to our <b>newsletter</b>!</p>',
+          bodyPreview: 'Hello & welcome to our newsletter!',
         }];
 
         await sendNewEmailNotifications('user-1', emails, 'user@example.com');
 
         const body = JSON.parse(fetchStub.firstCall.args[1].body);
         expect(body[0].body).to.include('Hello & welcome');
-        expect(body[0].body).to.not.include('<p>');
       });
     });
 
@@ -319,7 +316,7 @@ describe('push-notifications helpers', function () {
 
         const emails: NewEmailInfo[] = [{
           id: 'e1', subject: 'Test', fromName: 'Sender', fromAddress: null,
-          textBody: 'Some body', htmlBody: null,
+          bodyPreview: 'Some body',
         }];
         await sendNewEmailNotifications('user-1', emails, 'a@b.com');
 

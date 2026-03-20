@@ -1,7 +1,10 @@
 import { makeMutation } from '../../types.js';
 import { Email, EmailAccount, EmailFolder } from '../../db/models/index.js';
+import { Attachment } from '../../db/models/attachment.model.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { Op } from 'sequelize';
+import { deleteEmailBody } from '../../helpers/body-storage.js';
+import { deleteAttachment } from '../../helpers/attachment-storage.js';
 import { logger } from '../../helpers/logger.js';
 
 export const bulkDeleteEmails = makeMutation(
@@ -13,7 +16,6 @@ export const bulkDeleteEmails = makeMutation(
       return 0;
     }
 
-    // Get user's email account IDs for authorization
     const userAccounts = await EmailAccount.findAll({
       where: { userId },
       attributes: ['id'],
@@ -24,7 +26,6 @@ export const bulkDeleteEmails = makeMutation(
       throw new Error('No email accounts found');
     }
 
-    // Find emails to process
     const emails = await Email.findAll({
       where: {
         id: { [Op.in]: ids },
@@ -37,11 +38,41 @@ export const bulkDeleteEmails = makeMutation(
 
     for (const email of emails) {
       if (email.folder === EmailFolder.TRASH) {
-        // Permanently delete if already in trash
+        // Clean up S3 objects before permanent deletion
+        const attachments = await Attachment.findAll({
+          where: { emailId: email.id },
+          attributes: ['storageKey'],
+        });
+
+        const cleanupPromises: Promise<void>[] = [];
+
+        if (email.bodyStorageKey) {
+          cleanupPromises.push(
+            deleteEmailBody(email.emailAccountId, email.id).catch((err) => {
+              logger.error('bulkDeleteEmails', 'Failed to delete email body from S3', {
+                emailId: email.id,
+                error: err instanceof Error ? err.message : err,
+              });
+            }),
+          );
+        }
+
+        for (const att of attachments) {
+          cleanupPromises.push(
+            deleteAttachment(att.storageKey).catch((err) => {
+              logger.error('bulkDeleteEmails', 'Failed to delete attachment from S3', {
+                storageKey: att.storageKey,
+                error: err instanceof Error ? err.message : err,
+              });
+            }),
+          );
+        }
+
+        await Promise.all(cleanupPromises);
+
         await email.destroy();
         deletedCount++;
       } else {
-        // Move to trash (soft delete)
         await email.update({ folder: EmailFolder.TRASH });
         movedCount++;
       }

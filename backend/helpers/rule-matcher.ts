@@ -10,6 +10,7 @@ import {
 import { Op, literal } from 'sequelize';
 import type { WhereOptions } from 'sequelize';
 import { sendEmail } from './email.js';
+import { getEmailBody } from './body-storage.js';
 import { logger } from './logger.js';
 
 const BATCH_SIZE = 100;
@@ -72,12 +73,22 @@ export function buildRuleWhereClause(
   }
 
   if (conditions.bodyContains?.trim()) {
-    const term = conditions.bodyContains.trim().toLowerCase().replace(/'/g, "''");
-    andConditions.push(
-      literal(
-        `(LOWER("textBody") LIKE '%${term}%' OR LOWER("htmlBody") LIKE '%${term}%')`,
-      ),
-    );
+    const bodyTerm = conditions.bodyContains.trim()
+      .replace(/[^\w\s@.-]/g, '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((word: string) => word + ':*')
+      .join(' & ');
+
+    if (bodyTerm) {
+      andConditions.push(
+        literal(`EXISTS (
+          SELECT 1 FROM email_search_index esi
+          WHERE esi."emailId" = "Email"."id"
+          AND esi."searchVector" @@ to_tsquery('english', '${bodyTerm}')
+        )`),
+      );
+    }
   }
 
   if (andConditions.length > 0) {
@@ -129,7 +140,7 @@ export function emailMatchesRule(email: Email, rule: MailRule): boolean {
 
   if (conditions.bodyContains?.trim()) {
     const term = conditions.bodyContains.trim().toLowerCase();
-    const body = `${email.textBody || ''} ${email.htmlBody || ''}`.toLowerCase();
+    const body = ((email as any).bodyPreview || '').toLowerCase();
     if (!body.includes(term)) return false;
   }
 
@@ -205,13 +216,24 @@ export async function applyRuleActions(
       });
 
       if (sendProfile) {
-        const forwardText = `---------- Forwarded message ----------\nFrom: ${email.fromName || email.fromAddress} <${email.fromAddress}>\nDate: ${email.receivedAt}\nSubject: ${email.subject}\nTo: ${email.toAddresses.join(', ')}\n\n${email.textBody || ''}`;
+        let textBody: string | null = null;
+        let htmlBody: string | null = null;
+        if (email.bodyStorageKey) {
+          try {
+            const body = await getEmailBody(email.emailAccountId, email.id);
+            textBody = body.textBody;
+            htmlBody = body.htmlBody;
+          } catch {
+            // Proceed with empty body if S3 fetch fails
+          }
+        }
+        const forwardText = `---------- Forwarded message ----------\nFrom: ${email.fromName || email.fromAddress} <${email.fromAddress}>\nDate: ${email.receivedAt}\nSubject: ${email.subject}\nTo: ${email.toAddresses.join(', ')}\n\n${textBody || ''}`;
 
         await sendEmail(sendProfile, {
           to: actions.forwardTo.split(',').map((e) => e.trim()),
           subject: `Fwd: ${email.subject}`,
           text: forwardText,
-          html: email.htmlBody || undefined,
+          html: htmlBody || undefined,
         });
       } else {
         logger.warn('RuleMatcher', `Cannot forward email ${email.id}: no default send profile found for user ${userId}`);

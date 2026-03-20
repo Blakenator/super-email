@@ -8,6 +8,8 @@ import { applyRulesToEmail } from './rule-matcher.js';
 import { sendNewEmailNotifications } from './push-notifications.js';
 import { createImapClient } from './imap-client.js';
 import { createEmailDataFromParsed } from './email-parser.js';
+import { storeEmailBody } from './body-storage.js';
+import { upsertSearchIndex, generateBodyPreview } from './search-index.js';
 
 // Connection timeout - 4.5 minutes (server will close, client should reconnect)
 const CONNECTION_TIMEOUT_MS = 4.5 * 60 * 1000;
@@ -177,8 +179,40 @@ async function startIdleForAccount(
               EmailFolder.INBOX,
               message,
             );
-            
+
+            // Extract bodies for S3 storage (not stored in PG)
+            const textBody = emailData.textBody as string | null;
+            const htmlBody = emailData.htmlBody as string | null;
+            delete emailData.textBody;
+            delete emailData.htmlBody;
+            emailData.bodyPreview = generateBodyPreview(textBody, htmlBody);
+            emailData.bodyStorageKey = `${account.id}/${emailData.id || ''}`;
+
             const newEmail = await Email.create(emailData as any);
+
+            // Set correct bodyStorageKey now that we have the ID
+            const storageKey = `${account.id}/${newEmail.id}`;
+            if (emailData.bodyStorageKey !== storageKey) {
+              await newEmail.update({ bodyStorageKey: storageKey });
+            }
+
+            // Store body in S3 and create search index (non-blocking for user)
+            try {
+              await Promise.all([
+                storeEmailBody(account.id, newEmail.id, textBody, htmlBody),
+                upsertSearchIndex({
+                  emailId: newEmail.id,
+                  emailAccountId: account.id,
+                  subject: newEmail.subject,
+                  textBody,
+                  fromAddress: newEmail.fromAddress,
+                  toAddresses: newEmail.toAddresses,
+                  bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+                }),
+              ]);
+            } catch (bodyErr: any) {
+              logger.error('IMAP-IDLE', `[${account.email}] Failed to store body/index: ${bodyErr.message}`);
+            }
             
             const verified = await Email.findByPk(newEmail.id);
             if (!verified) {

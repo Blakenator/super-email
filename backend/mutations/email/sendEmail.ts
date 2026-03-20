@@ -13,6 +13,8 @@ import {
 } from '../../helpers/email.js';
 import { EmailFolder } from '../../db/models/email.model.js';
 import { uploadAttachment } from '../../helpers/attachment-storage.js';
+import { storeEmailBody, deleteEmailBody } from '../../helpers/body-storage.js';
+import { upsertSearchIndex, generateBodyPreview } from '../../helpers/search-index.js';
 import { Readable } from 'stream';
 import { AttachmentType } from '../../db/models/attachment.model.js';
 import { logger } from '../../helpers/logger.js';
@@ -99,6 +101,12 @@ export const sendEmail = makeMutation(
     });
 
     if (input.draftId) {
+      // Clean up draft body from S3 before deleting
+      try {
+        await deleteEmailBody(emailAccount.id, input.draftId);
+      } catch (err) {
+        logger.error('sendEmail', 'Failed to clean up draft body from S3', { error: err instanceof Error ? err.message : err });
+      }
       await Email.destroy({
         where: {
           id: input.draftId,
@@ -107,6 +115,9 @@ export const sendEmail = makeMutation(
         },
       });
     }
+
+    const textBody = input.textBody ?? null;
+    const htmlBody = input.htmlBody ?? null;
 
     const email = await Email.create({
       emailAccountId: emailAccount.id,
@@ -119,14 +130,29 @@ export const sendEmail = makeMutation(
       ccAddresses: input.ccAddresses ?? null,
       bccAddresses: input.bccAddresses ?? null,
       subject: input.subject,
-      textBody: input.textBody ?? null,
-      htmlBody: input.htmlBody ?? null,
+      bodyPreview: generateBodyPreview(textBody, htmlBody),
       receivedAt: new Date(),
       isRead: true,
       isStarred: false,
       isDraft: false,
       inReplyTo: input.inReplyTo ?? null,
     });
+
+    // Store body in S3 and create search index
+    const storageKey = `${emailAccount.id}/${email.id}`;
+    await email.update({ bodyStorageKey: storageKey });
+    await Promise.all([
+      storeEmailBody(emailAccount.id, email.id, textBody, htmlBody),
+      upsertSearchIndex({
+        emailId: email.id,
+        emailAccountId: emailAccount.id,
+        subject: input.subject,
+        textBody,
+        fromAddress: sendProfile.email,
+        toAddresses: input.toAddresses,
+        bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+      }),
+    ]);
 
     if (emailAttachments.length > 0) {
       const CONCURRENCY_LIMIT = 5;
@@ -139,6 +165,7 @@ export const sendEmail = makeMutation(
             const attachmentId = crypto.randomUUID();
             const stream = Readable.from(emailAttachment.content);
             const uploadResult = await uploadAttachment({
+              emailAccountId: emailAccount.id,
               attachmentId,
               mimeType: emailAttachment.contentType,
               stream,

@@ -325,23 +325,19 @@ export interface NewEmailInfo {
   subject?: string | null;
   fromName?: string | null;
   fromAddress?: string | null;
-  textBody?: string | null;
-  htmlBody?: string | null;
+  bodyPreview?: string | null;
 }
 
 /**
  * Build the body snippet for a single email notification.
  */
 function buildEmailSnippet(email: NewEmailInfo): string {
-  if (email.textBody) {
-    let snippet = email.textBody.replace(/\s+/g, ' ').trim();
+  if (email.bodyPreview) {
+    let snippet = email.bodyPreview.replace(/\s+/g, ' ').trim();
     if (snippet.length > 100) {
       snippet = snippet.substring(0, 97).trim() + '...';
     }
     return snippet;
-  }
-  if (email.htmlBody) {
-    return stripHtmlForSnippet(email.htmlBody, 100);
   }
   return '';
 }

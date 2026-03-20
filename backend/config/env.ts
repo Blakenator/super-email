@@ -44,6 +44,12 @@ export const config = {
     localDir: process.env.ATTACHMENTS_LOCAL_DIR || 'data/attachments',
   },
 
+  // S3 Email Bodies Storage (encrypted at rest)
+  emailBodies: {
+    s3Bucket: process.env.EMAIL_BODIES_S3_BUCKET || 'email-bodies',
+    localDir: process.env.EMAIL_BODIES_LOCAL_DIR || 'data/email-bodies',
+  },
+
   // S3 Raw Emails Storage (for custom domain inbound, not counting towards storage budget)
   rawEmails: {
     s3Bucket: process.env.RAW_EMAILS_S3_BUCKET || 'email-raw-emails',
@@ -202,6 +208,10 @@ export const envVarDefinitions = {
       'Firebase Admin SDK service account JSON (stringified) for web push notifications',
     FIREBASE_SERVICE_ACCOUNT_PATH:
       'Path to Firebase service account JSON file (alternative to JSON string)',
+    EMAIL_BODIES_S3_BUCKET:
+      'S3 bucket name for email body storage (encrypted at rest)',
+    EMAIL_BODIES_LOCAL_DIR:
+      'Local directory for email bodies in development',
     RAW_EMAILS_S3_BUCKET:
       'S3 bucket name for raw inbound emails (custom domains)',
     RAW_EMAILS_LOCAL_DIR:
