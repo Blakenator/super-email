@@ -1,0 +1,50 @@
+---
+description: Require clarifying questions before starting work or completing plans
+globs:
+alwaysApply: true
+---
+
+# Clarifying Questions Before Work
+
+Created By: Blake Stacks
+Last Edited: March 20, 2026
+
+## Rule
+
+Before starting implementation (Agent mode) or finalizing a plan (Plan mode), the agent MUST ask at least 3 clarifying questions about the work to be completed. Use the `AskQuestion` tool to present questions in a structured multiple-choice format when applicable. Fall back to inline text questions only when multiple-choice options don't make sense.
+
+## When This Applies
+
+- **Agent mode**: Before writing any code or making changes for a new feature or task
+- **Plan mode**: Before presenting the final plan
+
+## When This Does NOT Apply
+
+- Follow-up messages where the user has already answered clarifying questions
+- Simple, mechanically unambiguous tasks (e.g., "rename variable X to Y", "fix this typo")
+- Executing a pre-approved plan
+
+Note: Even when the user provides detailed requirements upfront, there are always assumptions worth validating. Do NOT skip clarifying questions just because the request seems thorough.
+
+## Question Quality Guidelines
+
+Questions should focus on genuinely reducing uncertainty. Prioritize repo-specific concerns:
+
+| Category | Example |
+| --- | --- |
+| **Platform scope** | "Should this apply to the web app (`frontend/`), the mobile app (`mobile/`), or both?" |
+| **GraphQL impact** | "Does this require schema changes in `common/schema.graphql` and new resolvers?" |
+| **Database impact** | "Will this need a new Sequelize model or migration in `backend/db/`?" |
+| **Shared code** | "Should shared logic live in `common/src/` so both platforms can use it?" |
+| **AWS / local** | "Does this involve an AWS service? Should I add a local-dev fallback?" |
+| **Testing** | "Should I add unit tests, integration tests, or both?" |
+| **Existing patterns** | "I see pattern X in the codebase -- should I follow it or deviate?" |
+| **Ambiguity** | "When you say Y, do you mean A or B?" |
+
+Avoid filler questions that don't genuinely reduce uncertainty.
+
+## Related Rules
+
+- [Cross-Platform Consistency](.cursor/rules/cross-platform-consistency.mdc) - Platform scope questions overlap with this rule's guidance
+- [Testing Requirements](.cursor/rules/testing-requirements.mdc) - Testing expectations for new code
+- [AWS & Local Development](.cursor/rules/aws-local-development.mdc) - Local-dev fallback requirements
