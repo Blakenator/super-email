@@ -39,6 +39,7 @@ import {
   runBackgroundSyncCycle,
 } from './helpers/background-sync.js';
 import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
+import { preWarmEmbeddingModel } from './helpers/embedding.js';
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
 import { parseAndStoreCustomEmail } from './helpers/custom-email-parser.js';
 import { sendNewEmailNotifications, type NewEmailInfo } from './helpers/push-notifications.js';
@@ -793,6 +794,229 @@ export async function createServer(
     }
   });
 
+  // ====================================================================
+  // OAuth Routes for email account linking (Google, Yahoo, Outlook)
+  // ====================================================================
+  const setupOAuthRoutes = async () => {
+    const jwt = await import('jsonwebtoken');
+    const { verifyToken: verifyAuthToken } = await import('./helpers/auth.js');
+    const {
+      buildGoogleAuthUrl,
+      buildYahooAuthUrl,
+      buildOutlookAuthUrl,
+      exchangeGoogleCode,
+      exchangeYahooCode,
+      exchangeOutlookCode,
+      revokeToken,
+    } = await import('./helpers/oauth-tokens.js');
+    const { storeImapCredentials, storeSmtpCredentials } = await import('./helpers/secrets.js');
+    const { EmailAccount, AuthMethod } = await import('./db/models/email-account.model.js');
+    const { ImapAccountSettings, ImapAccountType } = await import('./db/models/imap-account-settings.model.js');
+    const { SendProfile, SendProfileType } = await import('./db/models/send-profile.model.js');
+    const { SmtpAccountSettings } = await import('./db/models/smtp-account-settings.model.js');
+
+    type OAuthProviderKey = 'google' | 'yahoo' | 'outlook';
+
+    const providerConfig: Record<OAuthProviderKey, {
+      buildAuthUrl: (state: string) => string;
+      exchangeCode: (code: string) => Promise<{ accessToken: string; refreshToken: string; expiresAt: number; email: string }>;
+      authMethod: string;
+      providerId: string;
+      imap: { host: string; port: number; useSsl: boolean };
+      smtp: { host: string; port: number; useSsl: boolean };
+    }> = {
+      google: {
+        buildAuthUrl: buildGoogleAuthUrl,
+        exchangeCode: exchangeGoogleCode,
+        authMethod: AuthMethod.OAUTH_GOOGLE,
+        providerId: 'gmail',
+        imap: { host: 'imap.gmail.com', port: 993, useSsl: true },
+        smtp: { host: 'smtp.gmail.com', port: 587, useSsl: false },
+      },
+      yahoo: {
+        buildAuthUrl: buildYahooAuthUrl,
+        exchangeCode: exchangeYahooCode,
+        authMethod: AuthMethod.OAUTH_YAHOO,
+        providerId: 'yahoo',
+        imap: { host: 'imap.mail.yahoo.com', port: 993, useSsl: true },
+        smtp: { host: 'smtp.mail.yahoo.com', port: 587, useSsl: false },
+      },
+      outlook: {
+        buildAuthUrl: buildOutlookAuthUrl,
+        exchangeCode: exchangeOutlookCode,
+        authMethod: AuthMethod.OAUTH_OUTLOOK,
+        providerId: 'outlook',
+        imap: { host: 'outlook.office365.com', port: 993, useSsl: true },
+        smtp: { host: 'smtp.office365.com', port: 587, useSsl: false },
+      },
+    };
+
+    const OAUTH_STATE_EXPIRY = '10m';
+    const frontendSettingsUrl = `${config.frontendUrl}/settings/accounts`;
+
+    for (const [provider, pConfig] of Object.entries(providerConfig) as [OAuthProviderKey, typeof providerConfig[OAuthProviderKey]][]) {
+      // Start: validate user token, redirect to provider consent screen
+      app.get(`/api/oauth/${provider}/start`, async (req, res) => {
+        try {
+          const token = req.query.token as string;
+          const accountId = req.query.accountId as string | undefined;
+          if (!token) {
+            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=missing_token`);
+          }
+
+          const payload = await verifyAuthToken(token);
+          if (!payload?.userId) {
+            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=invalid_token`);
+          }
+
+          const statePayload = {
+            userId: payload.userId,
+            provider,
+            accountId: accountId || undefined,
+            csrf: crypto.randomUUID(),
+          };
+          const stateJwt = jwt.default.sign(statePayload, config.jwt.secret, {
+            expiresIn: OAUTH_STATE_EXPIRY,
+          });
+
+          const authUrl = pConfig.buildAuthUrl(stateJwt);
+          res.redirect(authUrl);
+        } catch (err: any) {
+          logger.error('OAuth', `${provider} start failed`, { error: err.message });
+          res.redirect(`${frontendSettingsUrl}?oauth=error&reason=start_failed`);
+        }
+      });
+
+      // Callback: exchange code for tokens, create account + send profile
+      app.get(`/api/oauth/${provider}/callback`, async (req, res) => {
+        try {
+          const { code, state, error: oauthError } = req.query as Record<string, string>;
+
+          if (oauthError) {
+            logger.warn('OAuth', `${provider} callback received error: ${oauthError}`);
+            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=${encodeURIComponent(oauthError)}`);
+          }
+
+          if (!code || !state) {
+            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=missing_params`);
+          }
+
+          // Verify the state JWT
+          let statePayload: { userId: string; provider: string; accountId?: string; csrf: string };
+          try {
+            statePayload = jwt.default.verify(state, config.jwt.secret) as any;
+          } catch {
+            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=invalid_state`);
+          }
+
+          if (statePayload.provider !== provider) {
+            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=provider_mismatch`);
+          }
+
+          // Exchange code for tokens
+          const tokenResult = await pConfig.exchangeCode(code);
+          const oauthCreds = {
+            type: 'oauth' as const,
+            accessToken: tokenResult.accessToken,
+            refreshToken: tokenResult.refreshToken,
+            expiresAt: tokenResult.expiresAt,
+            email: tokenResult.email,
+            provider: provider as OAuthProviderKey,
+          };
+
+          // Re-auth flow: update existing account
+          if (statePayload.accountId) {
+            const existing = await EmailAccount.findOne({
+              where: { id: statePayload.accountId, userId: statePayload.userId },
+            });
+            if (existing) {
+              await storeImapCredentials(existing.id, oauthCreds);
+              const linkedProfile = await SendProfile.findOne({
+                where: { emailAccountId: existing.id },
+              });
+              if (linkedProfile) {
+                await storeSmtpCredentials(linkedProfile.id, oauthCreds);
+              }
+              await existing.update({ needsReauth: false });
+              logger.info('OAuth', `Re-authenticated ${provider} account ${existing.id} for user ${statePayload.userId}`);
+              return res.redirect(`${frontendSettingsUrl}?oauth=success&reauth=true`);
+            }
+          }
+
+          // Block duplicate: check if an account with the same email + provider already exists
+          const existingDuplicate = await EmailAccount.findOne({
+            where: {
+              userId: statePayload.userId,
+              email: tokenResult.email,
+              authMethod: pConfig.authMethod,
+            },
+          });
+          if (existingDuplicate) {
+            logger.warn('OAuth', `Duplicate ${provider} account for ${tokenResult.email} blocked for user ${statePayload.userId}`);
+            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=account_already_connected`);
+          }
+
+          // Create new account + send profile in a transaction
+          const transaction = await deps.sequelize.transaction();
+          try {
+            const emailAccount = await EmailAccount.create({
+              userId: statePayload.userId,
+              name: tokenResult.email,
+              email: tokenResult.email,
+              type: 'IMAP',
+              providerId: pConfig.providerId,
+              authMethod: pConfig.authMethod,
+            }, { transaction });
+
+            const sendProfile = await SendProfile.create({
+              userId: statePayload.userId,
+              name: tokenResult.email,
+              email: tokenResult.email,
+              type: SendProfileType.SMTP,
+              providerId: pConfig.providerId,
+              authMethod: pConfig.authMethod,
+              emailAccountId: emailAccount.id,
+            }, { transaction });
+
+            await emailAccount.update({ defaultSendProfileId: sendProfile.id }, { transaction });
+
+            await SmtpAccountSettings.create({
+              sendProfileId: sendProfile.id,
+              host: pConfig.smtp.host,
+              port: pConfig.smtp.port,
+              useSsl: pConfig.smtp.useSsl,
+            }, { transaction });
+
+            await ImapAccountSettings.create({
+              emailAccountId: emailAccount.id,
+              host: pConfig.imap.host,
+              port: pConfig.imap.port,
+              accountType: ImapAccountType.IMAP,
+              useSsl: pConfig.imap.useSsl,
+            }, { transaction });
+
+            await transaction.commit();
+
+            // Store credentials after transaction (not critical path for rollback)
+            await storeImapCredentials(emailAccount.id, oauthCreds);
+            await storeSmtpCredentials(sendProfile.id, oauthCreds);
+
+            logger.info('OAuth', `Created ${provider} account ${emailAccount.id} for user ${statePayload.userId}`);
+            res.redirect(`${frontendSettingsUrl}?oauth=success`);
+          } catch (txErr) {
+            await transaction.rollback();
+            throw txErr;
+          }
+        } catch (err: any) {
+          logger.error('OAuth', `${provider} callback failed`, { error: err.message });
+          res.redirect(`${frontendSettingsUrl}?oauth=error&reason=callback_failed`);
+        }
+      });
+    }
+  };
+
+  await setupOAuthRoutes();
+
   // Stripe webhook endpoint (must use raw body for signature verification)
   app.post(
     '/api/webhooks/stripe',
@@ -837,6 +1061,8 @@ export async function createServer(
           `📧 Email Client API ready at http://localhost:${port}${API_ROUTES.GRAPHQL}`,
         );
       }
+      // Pre-warm embedding model so first semantic search has no cold-start
+      preWarmEmbeddingModel();
       // Start background sync for stale email accounts (unless disabled)
       if (!deps.skipBackgroundSync) {
         startBackgroundSync();

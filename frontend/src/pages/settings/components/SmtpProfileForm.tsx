@@ -71,6 +71,7 @@ interface SmtpProfileFormProps {
     type?: string;
     isDefault: boolean;
     providerId?: string | null;
+    authMethod?: string;
     smtpSettings?: {
       host: string;
       port: number;
@@ -516,7 +517,64 @@ export function SmtpProfileForm({
     </>
   );
 
+  const isEditingOAuth = !!editingProfile && !!editingProfile.authMethod && editingProfile.authMethod !== 'PASSWORD';
+
+  const oauthEditForm = (
+    <>
+      <Form.Group className="mb-3">
+        <Form.Label>Email Address</Form.Label>
+        <Form.Control type="text" value={formData.email} disabled />
+        <Form.Text className="text-muted">
+          This send profile is managed by an OAuth connection. The email and SMTP settings cannot be changed.
+        </Form.Text>
+      </Form.Group>
+
+      <Form.Group className="mb-3">
+        <Form.Label>Profile Name</Form.Label>
+        <Form.Control
+          type="text"
+          placeholder="Display name"
+          value={formData.name}
+          onChange={(e) =>
+            setFormData({ ...formData, name: e.target.value })
+          }
+          required
+        />
+      </Form.Group>
+
+      <Form.Group className="mb-3">
+        <Form.Label>Alias (Optional)</Form.Label>
+        <Form.Control
+          type="text"
+          placeholder="Display name, e.g., John Doe"
+          value={formData.alias}
+          onChange={(e) =>
+            setFormData({ ...formData, alias: e.target.value })
+          }
+        />
+        <Form.Text className="text-muted">
+          This name will appear as the sender in outgoing emails.
+        </Form.Text>
+      </Form.Group>
+
+      <Form.Group className="mb-3">
+        <Form.Check
+          type="checkbox"
+          id="smtp-isDefault"
+          label="Set as default sending profile"
+          checked={formData.isDefault}
+          onChange={(e) =>
+            setFormData({ ...formData, isDefault: e.target.checked })
+          }
+        />
+      </Form.Group>
+    </>
+  );
+
   const renderBody = () => {
+    if (isEditingOAuth) {
+      return oauthEditForm;
+    }
     if (isEditingCustomDomain) {
       return customDomainEditForm;
     }
@@ -560,7 +618,7 @@ export function SmtpProfileForm({
         </Button>
       );
     }
-    if (isEditingCustomDomain) {
+    if (isEditingCustomDomain || isEditingOAuth) {
       return (
         <Button type="submit" variant="primary" disabled={isSubmitting}>
           {isSubmitting ? (

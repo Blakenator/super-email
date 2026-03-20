@@ -31,6 +31,7 @@ export const createSmtpProfile = makeMutation(
 
     // Store credentials in secure secrets store
     await storeSmtpCredentials(smtpProfile.id, {
+      type: 'password',
       username: input.username,
       password: input.password,
     });

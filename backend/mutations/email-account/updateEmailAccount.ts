@@ -50,10 +50,13 @@ export const updateEmailAccount = makeMutation(
 
       if (input.imapUsername !== undefined || input.imapPassword !== undefined) {
         const existingCreds = await getImapCredentials(emailAccount.id);
-        const newUsername = input.imapUsername ?? existingCreds?.username ?? '';
-        const newPassword = input.imapPassword ?? existingCreds?.password ?? '';
+        const existingUsername = existingCreds?.type === 'password' ? existingCreds.username : '';
+        const existingPassword = existingCreds?.type === 'password' ? existingCreds.password : '';
+        const newUsername = input.imapUsername ?? existingUsername;
+        const newPassword = input.imapPassword ?? existingPassword;
 
         await storeImapCredentials(emailAccount.id, {
+          type: 'password',
           username: newUsername,
           password: newPassword,
         });

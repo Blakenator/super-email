@@ -65,6 +65,11 @@ export async function startAsyncSync(
 ): Promise<boolean> {
   await imapSettings.reload();
 
+  if (emailAccount.needsReauth) {
+    logger.info('IMAP', `Sync skipped for ${emailAccount.email}: account needs re-authentication`);
+    return false;
+  }
+
   const billingCheck = await checkBillingLimits(emailAccount.userId);
   if (!billingCheck.canSync) {
     logger.warn('IMAP', `Sync blocked for ${emailAccount.email}: ${billingCheck.reason}`);

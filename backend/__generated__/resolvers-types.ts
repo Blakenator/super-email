@@ -113,6 +113,18 @@ export enum AttachmentType {
   Inline = 'INLINE'
 }
 
+/** Authentication method for email accounts and send profiles. */
+export enum AuthMethod {
+  /** OAuth 2.0 via Google */
+  OauthGoogle = 'OAUTH_GOOGLE',
+  /** OAuth 2.0 via Microsoft/Outlook */
+  OauthOutlook = 'OAUTH_OUTLOOK',
+  /** OAuth 2.0 via Yahoo */
+  OauthYahoo = 'OAUTH_YAHOO',
+  /** Traditional username/password or app password */
+  Password = 'PASSWORD'
+}
+
 /** Supported authentication providers for user login. */
 export enum AuthProvider {
   /** Apple Sign-In */
@@ -594,6 +606,8 @@ export type Email = BaseEntityProps & {
   attachments: Array<Attachment>;
   /** List of "BCC" recipient email addresses (only for sent emails) */
   bccAddresses?: Maybe<Array<Scalars['String']['output']>>;
+  /** Short preview of the text body (~200 chars, stored in PG for fast list views) */
+  bodyPreview?: Maybe<Scalars['String']['output']>;
   /** List of "CC" recipient email addresses */
   ccAddresses?: Maybe<Array<Scalars['String']['output']>>;
   /** Timestamp when the email was stored locally */
@@ -612,7 +626,7 @@ export type Email = BaseEntityProps & {
   hasAttachments: Scalars['Boolean']['output'];
   /** Raw email headers as JSON (for debugging) */
   headers?: Maybe<Scalars['JSON']['output']>;
-  /** HTML body content */
+  /** HTML body content (resolved from S3 on single-email and thread queries) */
   htmlBody?: Maybe<Scalars['String']['output']>;
   /** Unique identifier for this email */
   id: Scalars['String']['output'];
@@ -640,7 +654,7 @@ export type Email = BaseEntityProps & {
   subject: Scalars['String']['output'];
   /** Tags/labels applied to this email */
   tags: Array<Tag>;
-  /** Plain text body content */
+  /** Plain text body content (resolved from S3 on single-email and thread queries) */
   textBody?: Maybe<Scalars['String']['output']>;
   /** Number of emails in this thread */
   threadCount?: Maybe<Scalars['Int']['output']>;
@@ -662,6 +676,8 @@ export type Email = BaseEntityProps & {
  */
 export type EmailAccount = BaseEntityProps & {
   __typename?: 'EmailAccount';
+  /** Authentication method used for this account */
+  authMethod: AuthMethod;
   /** Timestamp when the account was added */
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** The default send profile object for sending emails */
@@ -678,6 +694,8 @@ export type EmailAccount = BaseEntityProps & {
   isDefault: Scalars['Boolean']['output'];
   /** Display name for this account (e.g., "Work Gmail") */
   name: Scalars['String']['output'];
+  /** Whether this account needs re-authentication (e.g., OAuth token expired/revoked) */
+  needsReauth: Scalars['Boolean']['output'];
   /** External provider ID (for OAuth-linked accounts like Google Workspace) */
   providerId?: Maybe<Scalars['String']['output']>;
   /** Account type (IMAP or CUSTOM_DOMAIN) */
@@ -711,6 +729,15 @@ export enum EmailFolder {
   /** Deleted emails (soft delete) */
   Trash = 'TRASH'
 }
+
+/** Result of a semantic search query, including a relevance score. */
+export type EmailSearchResult = {
+  __typename?: 'EmailSearchResult';
+  /** The matching email */
+  email: Email;
+  /** Cosine similarity score (0-1, higher = more relevant) */
+  score: Scalars['Float']['output'];
+};
 
 /**
  * Aggregated information about a unique email sender.
@@ -1564,6 +1591,12 @@ export type Query = {
    * Performs case-insensitive partial matching.
    */
   searchContacts: Array<Contact>;
+  /**
+   * Search emails by semantic meaning using vector embeddings.
+   * If emailAccountId is provided, search is scoped to that account.
+   * Otherwise, searches across all of the user's accounts.
+   */
+  semanticSearch: Array<EmailSearchResult>;
 };
 
 
@@ -1721,6 +1754,17 @@ export type QuerySearchContactsArgs = {
   query: Scalars['String']['input'];
 };
 
+
+/**
+ * GraphQL queries for fetching data. All queries require authentication
+ * unless otherwise noted.
+ */
+export type QuerySemanticSearchArgs = {
+  emailAccountId?: InputMaybe<Scalars['String']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  query: Scalars['String']['input'];
+};
+
 /** Input for registering a push notification token. */
 export type RegisterPushTokenInput = {
   /** Optional device name for identification */
@@ -1856,10 +1900,16 @@ export type SendProfile = BaseEntityProps & {
   __typename?: 'SendProfile';
   /** Optional display name alias (e.g., "John Doe" instead of just the email) */
   alias?: Maybe<Scalars['String']['output']>;
+  /** Authentication method used for this send profile */
+  authMethod: AuthMethod;
   /** Timestamp when the profile was created */
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** The "from" email address for sent emails */
   email: Scalars['String']['output'];
+  /** The email account this send profile is linked to (null for standalone profiles) */
+  emailAccount?: Maybe<EmailAccount>;
+  /** ID of the email account this send profile is linked to (null for standalone profiles) */
+  emailAccountId?: Maybe<Scalars['String']['output']>;
   /** Unique identifier for this send profile */
   id: Scalars['String']['output'];
   /** Whether this is the user's default send profile */
@@ -2352,6 +2402,7 @@ export type ResolversTypes = ResolversObject<{
   Attachment: ResolverTypeWrapper<Attachment>;
   AttachmentInput: AttachmentInput;
   AttachmentType: AttachmentType;
+  AuthMethod: AuthMethod;
   AuthProvider: AuthProvider;
   AuthenticationMethod: ResolverTypeWrapper<AuthenticationMethod>;
   BaseEntityProps: ResolverTypeWrapper<ResolversInterfaceTypes<ResolversTypes>['BaseEntityProps']>;
@@ -2382,6 +2433,7 @@ export type ResolversTypes = ResolversObject<{
   EmailAccount: ResolverTypeWrapper<EmailAccount>;
   EmailAccountType: EmailAccountType;
   EmailFolder: EmailFolder;
+  EmailSearchResult: ResolverTypeWrapper<EmailSearchResult>;
   EmailSource: ResolverTypeWrapper<EmailSource>;
   Float: ResolverTypeWrapper<Scalars['Float']['output']>;
   ForwardEmailInput: ForwardEmailInput;
@@ -2465,6 +2517,7 @@ export type ResolversParentTypes = ResolversObject<{
   Date: Scalars['Date']['output'];
   Email: Email;
   EmailAccount: EmailAccount;
+  EmailSearchResult: EmailSearchResult;
   EmailSource: EmailSource;
   Float: Scalars['Float']['output'];
   ForwardEmailInput: ForwardEmailInput;
@@ -2655,6 +2708,7 @@ export type EmailResolvers<ContextType = MyContext, ParentType extends Resolvers
   attachmentCount?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   attachments?: Resolver<Array<ResolversTypes['Attachment']>, ParentType, ContextType>;
   bccAddresses?: Resolver<Maybe<Array<ResolversTypes['String']>>, ParentType, ContextType>;
+  bodyPreview?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   ccAddresses?: Resolver<Maybe<Array<ResolversTypes['String']>>, ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   emailAccount?: Resolver<Maybe<ResolversTypes['EmailAccount']>, ParentType, ContextType>;
@@ -2689,6 +2743,7 @@ export type EmailResolvers<ContextType = MyContext, ParentType extends Resolvers
 }>;
 
 export type EmailAccountResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['EmailAccount'] = ResolversParentTypes['EmailAccount']> = ResolversObject<{
+  authMethod?: Resolver<ResolversTypes['AuthMethod'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   defaultSendProfile?: Resolver<Maybe<ResolversTypes['SendProfile']>, ParentType, ContextType>;
   defaultSendProfileId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -2697,11 +2752,17 @@ export type EmailAccountResolvers<ContextType = MyContext, ParentType extends Re
   imapSettings?: Resolver<Maybe<ResolversTypes['ImapAccountSettings']>, ParentType, ContextType>;
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  needsReauth?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   providerId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   type?: Resolver<ResolversTypes['EmailAccountType'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   userId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;
+}>;
+
+export type EmailSearchResultResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['EmailSearchResult'] = ResolversParentTypes['EmailSearchResult']> = ResolversObject<{
+  email?: Resolver<ResolversTypes['Email'], ParentType, ContextType>;
+  score?: Resolver<ResolversTypes['Float'], ParentType, ContextType>;
 }>;
 
 export type EmailSourceResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['EmailSource'] = ResolversParentTypes['EmailSource']> = ResolversObject<{
@@ -2865,6 +2926,7 @@ export type QueryResolvers<ContextType = MyContext, ParentType extends Resolvers
   previewMailRule?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<QueryPreviewMailRuleArgs, 'id'>>;
   previewSubscriptionChange?: Resolver<Maybe<ResolversTypes['SubscriptionPreview']>, ParentType, ContextType, RequireFields<QueryPreviewSubscriptionChangeArgs, 'accountTier' | 'domainTier' | 'storageTier'>>;
   searchContacts?: Resolver<Array<ResolversTypes['Contact']>, ParentType, ContextType, RequireFields<QuerySearchContactsArgs, 'query'>>;
+  semanticSearch?: Resolver<Array<ResolversTypes['EmailSearchResult']>, ParentType, ContextType, RequireFields<QuerySemanticSearchArgs, 'query'>>;
 }>;
 
 export type RuleActionsResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['RuleActions'] = ResolversParentTypes['RuleActions']> = ResolversObject<{
@@ -2892,8 +2954,11 @@ export type RunRuleResultResolvers<ContextType = MyContext, ParentType extends R
 
 export type SendProfileResolvers<ContextType = MyContext, ParentType extends ResolversParentTypes['SendProfile'] = ResolversParentTypes['SendProfile']> = ResolversObject<{
   alias?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  authMethod?: Resolver<ResolversTypes['AuthMethod'], ParentType, ContextType>;
   createdAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   email?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  emailAccount?: Resolver<Maybe<ResolversTypes['EmailAccount']>, ParentType, ContextType>;
+  emailAccountId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   id?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   isDefault?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -3001,6 +3066,7 @@ export type Resolvers<ContextType = MyContext> = ResolversObject<{
   Date?: GraphQLScalarType;
   Email?: EmailResolvers<ContextType>;
   EmailAccount?: EmailAccountResolvers<ContextType>;
+  EmailSearchResult?: EmailSearchResultResolvers<ContextType>;
   EmailSource?: EmailSourceResolvers<ContextType>;
   HealthInfo?: HealthInfoResolvers<ContextType>;
   ImapAccountSettings?: ImapAccountSettingsResolvers<ContextType>;

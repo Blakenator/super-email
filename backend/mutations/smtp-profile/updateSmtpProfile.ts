@@ -39,14 +39,14 @@ export const updateSmtpProfile = makeMutation(
 
     // Update credentials in secure secrets store if username or password changed
     if (input.username !== undefined || input.password !== undefined) {
-      // Get existing credentials to merge with updates
       const existingCreds = await getSmtpCredentials(smtpProfile.id);
-      const newUsername =
-        input.username ?? existingCreds?.username ?? smtpProfile.username;
-      const newPassword =
-        input.password ?? existingCreds?.password ?? smtpProfile.password;
+      const existingUsername = existingCreds?.type === 'password' ? existingCreds.username : smtpProfile.username;
+      const existingPassword = existingCreds?.type === 'password' ? existingCreds.password : smtpProfile.password;
+      const newUsername = input.username ?? existingUsername;
+      const newPassword = input.password ?? existingPassword;
 
       await storeSmtpCredentials(smtpProfile.id, {
+        type: 'password',
         username: newUsername,
         password: newPassword,
       });

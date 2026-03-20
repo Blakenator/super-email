@@ -84,6 +84,16 @@ export async function generateEmbeddingBatch(
 }
 
 /**
+ * Pre-warm the embedding model on server startup.
+ * Fires and forgets -- logs success/failure but doesn't block the caller.
+ */
+export function preWarmEmbeddingModel(): void {
+  loadModel().catch(() => {
+    // Already logged inside loadModel
+  });
+}
+
+/**
  * Build the text to embed from email fields.
  * Combines subject and text body for richer semantic representation.
  */

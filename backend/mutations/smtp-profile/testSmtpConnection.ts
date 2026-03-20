@@ -27,7 +27,7 @@ export const testSmtpConnection = makeMutation(
 
       // Get saved credentials
       const credentials = await getSmtpCredentials(profileId);
-      if (credentials?.password) {
+      if (credentials?.type === 'password' && credentials.password) {
         password = credentials.password;
       } else if (profile.password) {
         password = profile.password;

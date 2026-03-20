@@ -1,6 +1,8 @@
 import { Button, Badge } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faTrash, faEdit, faLock } from '@fortawesome/free-solid-svg-icons';
+import { faTrash, faEdit, faLock, faLink } from '@fortawesome/free-solid-svg-icons';
+import { faGoogle, faMicrosoft, faYahoo } from '@fortawesome/free-brands-svg-icons';
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
 import {
   SmtpCardStyled,
   SmtpCardHeader,
@@ -13,6 +15,12 @@ import {
   SmtpCardActions,
 } from './SmtpProfileCard.wrappers';
 
+const OAUTH_PROVIDER_LABELS: Record<string, { label: string; icon: IconDefinition }> = {
+  OAUTH_GOOGLE: { label: 'Google', icon: faGoogle },
+  OAUTH_YAHOO: { label: 'Yahoo', icon: faYahoo },
+  OAUTH_OUTLOOK: { label: 'Outlook', icon: faMicrosoft },
+};
+
 export interface SmtpProfileData {
   id: string;
   name: string;
@@ -20,6 +28,13 @@ export interface SmtpProfileData {
   alias?: string | null;
   type: string;
   isDefault: boolean;
+  authMethod?: string;
+  emailAccountId?: string | null;
+  emailAccount?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
   smtpSettings?: {
     host: string;
     port: number;
@@ -38,6 +53,9 @@ export function SmtpProfileCard({
   onEdit,
   onDelete,
 }: SmtpProfileCardProps) {
+  const oauthInfo = profile.authMethod ? OAUTH_PROVIDER_LABELS[profile.authMethod] : null;
+  const isOAuth = !!oauthInfo;
+
   return (
     <SmtpCardStyled className="card">
       <SmtpCardHeader $isDefault={profile.isDefault} className="card-header">
@@ -56,7 +74,15 @@ export function SmtpProfileCard({
         </SmtpCardSubtitle>
       </SmtpCardHeader>
       <SmtpCardBody className="card-body">
-        {profile.smtpSettings ? (
+        {isOAuth ? (
+          <SmtpDetailRow>
+            <SmtpDetailLabel>Type</SmtpDetailLabel>
+            <Badge bg="primary">
+              <FontAwesomeIcon icon={oauthInfo.icon} className="me-1" />
+              Connected via {oauthInfo.label}
+            </Badge>
+          </SmtpDetailRow>
+        ) : profile.smtpSettings ? (
           <>
             <SmtpDetailRow>
               <SmtpDetailLabel>Server</SmtpDetailLabel>
@@ -84,6 +110,15 @@ export function SmtpProfileCard({
           <SmtpDetailRow>
             <SmtpDetailLabel>Type</SmtpDetailLabel>
             <Badge bg="success">Custom Domain (SES)</Badge>
+          </SmtpDetailRow>
+        )}
+        {profile.emailAccount && (
+          <SmtpDetailRow>
+            <SmtpDetailLabel>
+              <FontAwesomeIcon icon={faLink} className="me-1" />
+              Linked Account
+            </SmtpDetailLabel>
+            <span>{profile.emailAccount.name}</span>
           </SmtpDetailRow>
         )}
         {profile.alias && (

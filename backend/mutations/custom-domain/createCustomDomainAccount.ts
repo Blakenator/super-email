@@ -52,6 +52,7 @@ export const createCustomDomainAccount = makeMutation(
       email: emailAddress,
       type: SendProfileType.CUSTOM_DOMAIN,
       isDefault: false,
+      emailAccountId: emailAccount.id,
     });
 
     await emailAccount.update({ defaultSendProfileId: sendProfile.id });

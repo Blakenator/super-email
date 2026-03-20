@@ -1172,8 +1172,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
     family: `${stackName}-backend`,
     networkMode: 'awsvpc',
     requiresCompatibilities: ['FARGATE'],
-    cpu: '256',
-    memory: '512',
+    cpu: '512',
+    memory: '1024',
     executionRoleArn: taskExecutionRole.arn,
     taskRoleArn: taskRole.arn,
     containerDefinitions: pulumi

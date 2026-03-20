@@ -20,6 +20,13 @@ export enum EmailAccountType {
   CUSTOM_DOMAIN = 'CUSTOM_DOMAIN',
 }
 
+export enum AuthMethod {
+  PASSWORD = 'PASSWORD',
+  OAUTH_GOOGLE = 'OAUTH_GOOGLE',
+  OAUTH_YAHOO = 'OAUTH_YAHOO',
+  OAUTH_OUTLOOK = 'OAUTH_OUTLOOK',
+}
+
 @Table({
   timestamps: true,
   tableName: 'email_accounts',
@@ -70,6 +77,16 @@ export class EmailAccount extends Model {
 
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare isDefault: boolean;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(AuthMethod)),
+    allowNull: false,
+    defaultValue: AuthMethod.PASSWORD,
+  })
+  declare authMethod: AuthMethod;
+
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare needsReauth: boolean;
 
   @HasOne(() => ImapAccountSettings)
   declare imapSettings?: ImapAccountSettingsType | null;

@@ -12,6 +12,8 @@ export interface EmailProviderPreset {
   name: string;
   icon: IconDefinition;
   iconColor?: string;
+  supportsOAuth?: boolean;
+  oauthProvider?: string;
   imap: {
     host: string;
     port: number;
@@ -33,6 +35,8 @@ export const EMAIL_PROVIDERS: EmailProviderPreset[] = [
     name: 'Gmail',
     icon: faGoogle,
     iconColor: '#EA4335',
+    supportsOAuth: true,
+    oauthProvider: 'google',
     imap: {
       host: 'imap.gmail.com',
       port: 993,
@@ -53,6 +57,8 @@ export const EMAIL_PROVIDERS: EmailProviderPreset[] = [
     name: 'Outlook / Microsoft 365',
     icon: faMicrosoft,
     iconColor: '#0078D4',
+    supportsOAuth: true,
+    oauthProvider: 'outlook',
     imap: {
       host: 'outlook.office365.com',
       port: 993,
@@ -73,6 +79,8 @@ export const EMAIL_PROVIDERS: EmailProviderPreset[] = [
     name: 'Yahoo Mail',
     icon: faYahoo,
     iconColor: '#6001D2',
+    supportsOAuth: true,
+    oauthProvider: 'yahoo',
     imap: {
       host: 'imap.mail.yahoo.com',
       port: 993,

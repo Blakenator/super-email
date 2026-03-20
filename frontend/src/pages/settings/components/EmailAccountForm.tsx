@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Button, Card, Col, Form, Modal, Row, Spinner, Tabs, Tab } from 'react-bootstrap';
+import { Button, Card, Collapse, Col, Form, Modal, Row, Spinner, Tabs, Tab } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCheckCircle,
+  faChevronDown,
+  faChevronRight,
   faInfoCircle,
+  faKey,
   faPlug,
   faSave,
+  faSignInAlt,
   faTimesCircle,
   faUserPlus,
 } from '@fortawesome/free-solid-svg-icons';
@@ -22,6 +26,8 @@ import {
   ProviderGrid,
   TestResult,
 } from './EmailAccountForm.wrappers';
+import { useAuth } from '../../../contexts/AuthContext';
+import { config } from '../../../config';
 
 export interface EmailAccountFormData {
   name: string;
@@ -84,6 +90,7 @@ interface EmailAccountFormProps {
     name: string;
     email: string;
     type?: string;
+    authMethod?: string;
     imapSettings?: {
       host: string;
       port: number;
@@ -116,9 +123,11 @@ export function EmailAccountForm({
   onCreateCustomDomainAccount,
   isCreatingCustomDomainAccount,
 }: EmailAccountFormProps) {
+  const { token } = useAuth();
   const [formData, setFormData] =
     useState<EmailAccountFormData>(defaultFormData);
   const [activeTab, setActiveTab] = useState<string>('imap');
+  const [showAppPasswordForm, setShowAppPasswordForm] = useState(false);
   const [cdLocalPart, setCdLocalPart] = useState('');
   const [cdDisplayName, setCdDisplayName] = useState('');
   const [cdDomainId, setCdDomainId] = useState('');
@@ -150,6 +159,7 @@ export function EmailAccountForm({
       } else {
         setFormData(defaultFormData);
         setActiveTab('imap');
+        setShowAppPasswordForm(false);
         setCdLocalPart('');
         setCdDisplayName('');
         setCdDomainId(verifiedDomains[0]?.id ?? '');
@@ -165,6 +175,13 @@ export function EmailAccountForm({
       port: provider.imap.port,
       useSsl: provider.imap.useSsl,
     }));
+    setShowAppPasswordForm(false);
+  };
+
+  const handleOAuthSignIn = () => {
+    if (!selectedProvider?.oauthProvider || !token) return;
+    const oauthUrl = `${config.api.baseUrl}/api/oauth/${selectedProvider.oauthProvider}/start?token=${encodeURIComponent(token)}`;
+    window.location.href = oauthUrl;
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -192,41 +209,10 @@ export function EmailAccountForm({
     }
   };
 
-  const imapForm = (
+  const showOAuth = !editingAccount && selectedProvider?.supportsOAuth;
+
+  const appPasswordFields = (
     <>
-      {/* Provider Selection */}
-      <Form.Group className="mb-3">
-        <Form.Label>Email Provider</Form.Label>
-        <ProviderGrid>
-          {EMAIL_PROVIDERS.map((provider) => (
-            <ProviderCard
-              key={provider.id}
-              $selected={formData.providerId === provider.id}
-              onClick={() => handleProviderSelect(provider)}
-            >
-              <FontAwesomeIcon
-                icon={provider.icon}
-                className="provider-icon"
-                style={{ color: provider.iconColor }}
-              />
-              <span className="provider-name">{provider.name}</span>
-            </ProviderCard>
-          ))}
-        </ProviderGrid>
-      </Form.Group>
-
-      {/* Provider Instructions */}
-      {showInstructions && (
-        <InstructionsCard className="card">
-          <Card.Body className="py-2 px-3">
-            <small className="d-flex align-items-start gap-2">
-              <FontAwesomeIcon icon={faInfoCircle} className="mt-1" />
-              <span>{selectedProvider.instructions}</span>
-            </small>
-          </Card.Body>
-        </InstructionsCard>
-      )}
-
       {/* Test Result */}
       {testResult && (
         <TestResult $success={testResult.success}>
@@ -415,6 +401,84 @@ export function EmailAccountForm({
     </>
   );
 
+  const imapForm = (
+    <>
+      {/* Provider Selection */}
+      <Form.Group className="mb-3">
+        <Form.Label>Email Provider</Form.Label>
+        <ProviderGrid>
+          {EMAIL_PROVIDERS.map((provider) => (
+            <ProviderCard
+              key={provider.id}
+              $selected={formData.providerId === provider.id}
+              onClick={() => handleProviderSelect(provider)}
+            >
+              <FontAwesomeIcon
+                icon={provider.icon}
+                className="provider-icon"
+                style={{ color: provider.iconColor }}
+              />
+              <span className="provider-name">{provider.name}</span>
+            </ProviderCard>
+          ))}
+        </ProviderGrid>
+      </Form.Group>
+
+      {/* Provider Instructions */}
+      {showInstructions && !showOAuth && (
+        <InstructionsCard className="card">
+          <Card.Body className="py-2 px-3">
+            <small className="d-flex align-items-start gap-2">
+              <FontAwesomeIcon icon={faInfoCircle} className="mt-1" />
+              <span>{selectedProvider.instructions}</span>
+            </small>
+          </Card.Body>
+        </InstructionsCard>
+      )}
+
+      {/* OAuth sign-in for supported providers */}
+      {showOAuth ? (
+        <>
+          <div className="d-grid mb-3">
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleOAuthSignIn}
+              disabled={!token}
+            >
+              <FontAwesomeIcon icon={selectedProvider.icon} className="me-2" />
+              Sign in with {selectedProvider.name}
+            </Button>
+            <Form.Text className="text-muted text-center mt-1">
+              Automatically configures IMAP and SMTP. A send profile is also created.
+            </Form.Text>
+          </div>
+
+          <div className="mb-3">
+            <Button
+              variant="link"
+              size="sm"
+              className="text-muted p-0"
+              onClick={() => setShowAppPasswordForm(!showAppPasswordForm)}
+            >
+              <FontAwesomeIcon
+                icon={showAppPasswordForm ? faChevronDown : faChevronRight}
+                className="me-1"
+              />
+              <FontAwesomeIcon icon={faKey} className="me-1" />
+              Advanced: Use app password instead
+            </Button>
+            <Collapse in={showAppPasswordForm}>
+              <div className="mt-3">{appPasswordFields}</div>
+            </Collapse>
+          </div>
+        </>
+      ) : (
+        appPasswordFields
+      )}
+    </>
+  );
+
   const customDomainForm = (
     <>
       <Form.Group className="mb-3">
@@ -466,6 +530,64 @@ export function EmailAccountForm({
 
   const isCustomDomainTab = activeTab === 'custom-domain';
   const isEditingCustomDomain = editingAccount?.type === 'CUSTOM_DOMAIN';
+  const isEditingOAuth = editingAccount?.authMethod?.startsWith('OAUTH_');
+
+  const oauthEditForm = (
+    <>
+      <Form.Group className="mb-3">
+        <Form.Label>Email Address</Form.Label>
+        <Form.Control type="text" value={formData.email} disabled />
+        <Form.Text className="text-muted">
+          This account is connected via OAuth. The email address cannot be changed.
+        </Form.Text>
+      </Form.Group>
+
+      <Form.Group className="mb-3">
+        <Form.Label>Account Name</Form.Label>
+        <Form.Control
+          type="text"
+          placeholder="Display name"
+          value={formData.name}
+          onChange={(e) =>
+            setFormData({ ...formData, name: e.target.value })
+          }
+          required
+        />
+      </Form.Group>
+
+      <Form.Group className="mb-3">
+        <Form.Label>Default Send Profile (for sending)</Form.Label>
+        <Form.Select
+          value={formData.defaultSendProfileId}
+          onChange={(e) =>
+            setFormData({
+              ...formData,
+              defaultSendProfileId: e.target.value,
+            })
+          }
+        >
+          <option value="">None</option>
+          {smtpProfiles.map((profile) => (
+            <option key={profile.id} value={profile.id}>
+              {profile.name} ({profile.alias || profile.email})
+            </option>
+          ))}
+        </Form.Select>
+      </Form.Group>
+
+      <Form.Group className="mb-3">
+        <Form.Check
+          type="checkbox"
+          id="isDefault"
+          label="Set as default account for composing new emails"
+          checked={formData.isDefault}
+          onChange={(e) =>
+            setFormData({ ...formData, isDefault: e.target.checked })
+          }
+        />
+      </Form.Group>
+    </>
+  );
 
   const customDomainEditForm = (
     <>
@@ -525,6 +647,9 @@ export function EmailAccountForm({
   );
 
   const renderBody = () => {
+    if (isEditingOAuth) {
+      return oauthEditForm;
+    }
     if (isEditingCustomDomain) {
       return customDomainEditForm;
     }
@@ -568,7 +693,7 @@ export function EmailAccountForm({
         </Button>
       );
     }
-    if (isEditingCustomDomain) {
+    if (isEditingCustomDomain || isEditingOAuth) {
       return (
         <Button type="submit" variant="primary" disabled={isSubmitting}>
           {isSubmitting ? (
@@ -583,6 +708,9 @@ export function EmailAccountForm({
           )}
         </Button>
       );
+    }
+    if (showOAuth && !showAppPasswordForm) {
+      return null;
     }
     return (
       <>

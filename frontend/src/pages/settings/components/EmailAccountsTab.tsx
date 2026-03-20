@@ -1,6 +1,11 @@
 import { Button, Card, Spinner, Modal, Alert } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faInbox, faPlus, faSync } from '@fortawesome/free-solid-svg-icons';
+import {
+  faExclamationTriangle,
+  faInbox,
+  faPlus,
+  faSync,
+} from '@fortawesome/free-solid-svg-icons';
 import { EmailAccountCard } from './EmailAccountCard';
 import { SectionCard, AccountCardGrid } from '../Settings.wrappers';
 
@@ -18,6 +23,7 @@ interface EmailAccountsTabProps {
   onSyncAll: () => void;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
+  onReauth?: (id: string) => void;
 }
 
 export function EmailAccountsTab({
@@ -34,9 +40,21 @@ export function EmailAccountsTab({
   onSyncAll,
   onConfirmDelete,
   onCancelDelete,
+  onReauth,
 }: EmailAccountsTabProps) {
+  const needsReauthCount = accounts.filter((a) => a.needsReauth).length;
+  const isOAuthAccount = deletingAccount?.authMethod?.startsWith('OAUTH_');
+
   return (
     <>
+      {needsReauthCount > 0 && (
+        <Alert variant="warning" className="mb-3">
+          <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+          {needsReauthCount === 1
+            ? '1 account needs re-authentication'
+            : `${needsReauthCount} accounts need re-authentication`}
+        </Alert>
+      )}
       <SectionCard className="card">
         <Card.Body>
           <div className="d-flex justify-content-between align-items-center mb-3">
@@ -99,6 +117,7 @@ export function EmailAccountsTab({
                   onEdit={onEditAccount}
                   onSync={onSyncAccount}
                   onDelete={onDeleteAccount}
+                  onReauth={onReauth}
                 />
               ))}
             </AccountCardGrid>
@@ -118,6 +137,12 @@ export function EmailAccountsTab({
           <Alert variant="danger">
             <strong>Warning:</strong> This will permanently delete the email
             account and all associated emails. This action cannot be undone.
+            {isOAuthAccount && (
+              <>
+                {' '}Additionally, the OAuth access granted to this application will
+                be revoked with the provider.
+              </>
+            )}
           </Alert>
           <div className="text-muted small">
             <strong>Account:</strong> {deletingAccount?.email}

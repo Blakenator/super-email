@@ -9,6 +9,7 @@ import {
 } from '../db/models/email-account.model.js';
 import { startAsyncSync } from './imap-sync.js';
 import { getSmtpCredentials } from './secrets.js';
+import { getValidAccessToken } from './oauth-tokens.js';
 import { sendEmailViaSes } from './ses-email-sender.js';
 import { config } from '../config/env.js';
 import { logger } from './logger.js';
@@ -53,6 +54,23 @@ async function createSmtpTransporter(
     throw new Error(
       `No SMTP credentials found for send profile ${sendProfileId}`,
     );
+  }
+
+  if (credentials.type === 'oauth') {
+    const accessToken = await getValidAccessToken('smtp', sendProfileId, credentials);
+    return nodemailer.createTransport({
+      host: smtpSettings.host,
+      port: smtpSettings.port,
+      secure: useImmediateTls,
+      auth: {
+        type: 'OAuth2',
+        user: credentials.email,
+        accessToken,
+      },
+      tls: {
+        rejectUnauthorized: config.isProduction,
+      },
+    });
   }
 
   return nodemailer.createTransport({

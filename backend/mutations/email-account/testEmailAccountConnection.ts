@@ -23,7 +23,7 @@ export const testEmailAccountConnection = makeMutation(
       }
 
       const credentials = await getImapCredentials(accountId);
-      if (credentials?.password) {
+      if (credentials?.type === 'password' && credentials.password) {
         password = credentials.password;
       }
     }

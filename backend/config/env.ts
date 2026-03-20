@@ -140,6 +140,25 @@ export const config = {
     },
   },
 
+  // OAuth Configuration (for Gmail, Yahoo, Outlook email account linking)
+  oauth: {
+    google: {
+      clientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+      clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+      redirectUri: process.env.GOOGLE_OAUTH_REDIRECT_URI || 'http://localhost:5173/api/oauth/google/callback',
+    },
+    yahoo: {
+      clientId: process.env.YAHOO_OAUTH_CLIENT_ID || '',
+      clientSecret: process.env.YAHOO_OAUTH_CLIENT_SECRET || '',
+      redirectUri: process.env.YAHOO_OAUTH_REDIRECT_URI || 'http://localhost:5173/api/oauth/yahoo/callback',
+    },
+    outlook: {
+      clientId: process.env.OUTLOOK_OAUTH_CLIENT_ID || '',
+      clientSecret: process.env.OUTLOOK_OAUTH_CLIENT_SECRET || '',
+      redirectUri: process.env.OUTLOOK_OAUTH_REDIRECT_URI || 'http://localhost:5173/api/oauth/outlook/callback',
+    },
+  },
+
   // Firebase Configuration (for web push notifications)
   firebase: {
     // Firebase Admin SDK service account JSON (stringified)
@@ -208,6 +227,24 @@ export const envVarDefinitions = {
       'Firebase Admin SDK service account JSON (stringified) for web push notifications',
     FIREBASE_SERVICE_ACCOUNT_PATH:
       'Path to Firebase service account JSON file (alternative to JSON string)',
+    GOOGLE_OAUTH_CLIENT_ID:
+      'Google OAuth client ID for Gmail IMAP/SMTP access',
+    GOOGLE_OAUTH_CLIENT_SECRET:
+      'Google OAuth client secret',
+    GOOGLE_OAUTH_REDIRECT_URI:
+      'Google OAuth redirect URI (default: http://localhost:5173/api/oauth/google/callback)',
+    YAHOO_OAUTH_CLIENT_ID:
+      'Yahoo OAuth client ID for Yahoo Mail IMAP/SMTP access',
+    YAHOO_OAUTH_CLIENT_SECRET:
+      'Yahoo OAuth client secret',
+    YAHOO_OAUTH_REDIRECT_URI:
+      'Yahoo OAuth redirect URI (default: http://localhost:5173/api/oauth/yahoo/callback)',
+    OUTLOOK_OAUTH_CLIENT_ID:
+      'Microsoft/Outlook OAuth application (client) ID for IMAP/SMTP access',
+    OUTLOOK_OAUTH_CLIENT_SECRET:
+      'Microsoft/Outlook OAuth client secret',
+    OUTLOOK_OAUTH_REDIRECT_URI:
+      'Microsoft/Outlook OAuth redirect URI (default: http://localhost:5173/api/oauth/outlook/callback)',
     EMAIL_BODIES_S3_BUCKET:
       'S3 bucket name for email body storage (encrypted at rest)',
     EMAIL_BODIES_LOCAL_DIR:

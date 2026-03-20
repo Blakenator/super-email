@@ -247,6 +247,28 @@ enum EmailAccountType {
 }
 
 """
+Authentication method for email accounts and send profiles.
+"""
+enum AuthMethod {
+  """
+  Traditional username/password or app password
+  """
+  PASSWORD
+  """
+  OAuth 2.0 via Google
+  """
+  OAUTH_GOOGLE
+  """
+  OAuth 2.0 via Yahoo
+  """
+  OAUTH_YAHOO
+  """
+  OAuth 2.0 via Microsoft/Outlook
+  """
+  OAUTH_OUTLOOK
+}
+
+"""
 Type of IMAP receiving protocol.
 """
 enum ImapAccountType {
@@ -374,6 +396,14 @@ type EmailAccount implements BaseEntityProps {
   Whether this is the user's default/primary email account
   """
   isDefault: Boolean!
+  """
+  Authentication method used for this account
+  """
+  authMethod: AuthMethod!
+  """
+  Whether this account needs re-authentication (e.g., OAuth token expired/revoked)
+  """
+  needsReauth: Boolean!
   """
   IMAP-specific settings (null for custom domain accounts)
   """
@@ -591,6 +621,18 @@ type SendProfile implements BaseEntityProps {
   SMTP-specific settings (null for custom domain profiles)
   """
   smtpSettings: SmtpAccountSettings
+  """
+  Authentication method used for this send profile
+  """
+  authMethod: AuthMethod!
+  """
+  ID of the email account this send profile is linked to (null for standalone profiles)
+  """
+  emailAccountId: String
+  """
+  The email account this send profile is linked to (null for standalone profiles)
+  """
+  emailAccount: EmailAccount
 }
 
 """

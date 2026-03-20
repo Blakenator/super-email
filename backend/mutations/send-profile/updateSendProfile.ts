@@ -48,10 +48,13 @@ export const updateSendProfile = makeMutation(
 
       if (input.smtpUsername !== undefined || input.smtpPassword !== undefined) {
         const existingCreds = await getSmtpCredentials(sendProfile.id);
-        const newUsername = input.smtpUsername ?? existingCreds?.username ?? '';
-        const newPassword = input.smtpPassword ?? existingCreds?.password ?? '';
+        const existingUsername = existingCreds?.type === 'password' ? existingCreds.username : '';
+        const existingPassword = existingCreds?.type === 'password' ? existingCreds.password : '';
+        const newUsername = input.smtpUsername ?? existingUsername;
+        const newPassword = input.smtpPassword ?? existingPassword;
 
         await storeSmtpCredentials(sendProfile.id, {
+          type: 'password',
           username: newUsername,
           password: newPassword,
         });

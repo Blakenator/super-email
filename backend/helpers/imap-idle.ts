@@ -109,6 +109,11 @@ async function startIdleForAccount(
   const userConnections = userIdleConnections.get(userId);
   if (!userConnections) return;
 
+  if (account.needsReauth) {
+    logger.info('IMAP-IDLE', `[${account.email}] Skipping IDLE - account needs re-authentication`);
+    return;
+  }
+
   const client = await createImapClient(account.imapSettings!);
 
   client.on('mailboxOpen', (mailbox: any) => {

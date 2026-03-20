@@ -2,6 +2,20 @@
 --
 -- Move email bodies from PostgreSQL to S3 with pgvector-backed search index.
 -- This migration wipes all existing email data for a clean start.
+--
+-- PRE-REQUISITES (local development):
+--   1. Docker image must be pgvector/pgvector:pg15 (not postgres:15).
+--      If you previously used postgres:15, destroy and recreate the volume:
+--        docker compose down -v && docker compose up -d
+--   2. The CREATE EXTENSION vector command below requires the pgvector
+--      binary to be present in the PostgreSQL installation.
+--
+-- PRE-REQUISITES (production):
+--   1. Deploy Pulumi infra changes FIRST (new email-bodies S3 bucket,
+--      updated IAM policy, EMAIL_BODIES_S3_BUCKET env var).
+--   2. Manually purge orphaned flat-keyed objects from the attachments
+--      S3 bucket after deploy (old format: {attachmentId}, new format:
+--      {emailAccountId}/{attachmentId}).
 
 -- 1. Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;

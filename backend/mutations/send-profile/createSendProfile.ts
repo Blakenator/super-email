@@ -44,6 +44,7 @@ export const createSendProfile = makeMutation(
       });
 
       await storeSmtpCredentials(sendProfile.id, {
+        type: 'password',
         username: input.smtpUsername!,
         password: input.smtpPassword!,
       });

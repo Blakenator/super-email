@@ -11,6 +11,10 @@ import { User } from './user.model.js';
 import type { User as UserType } from './user.model.js';
 import { SmtpAccountSettings } from './smtp-account-settings.model.js';
 import type { SmtpAccountSettings as SmtpAccountSettingsType } from './smtp-account-settings.model.js';
+import { EmailAccount, AuthMethod } from './email-account.model.js';
+import type { EmailAccount as EmailAccountType } from './email-account.model.js';
+
+export { AuthMethod };
 
 export enum SendProfileType {
   SMTP = 'SMTP',
@@ -61,6 +65,20 @@ export class SendProfile extends Model {
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare providerId: string | null;
+
+  @Column({
+    type: DataType.ENUM(...Object.values(AuthMethod)),
+    allowNull: false,
+    defaultValue: AuthMethod.PASSWORD,
+  })
+  declare authMethod: AuthMethod;
+
+  @ForeignKey(() => EmailAccount)
+  @Column({ type: DataType.UUID, allowNull: true })
+  declare emailAccountId: string | null;
+
+  @BelongsTo(() => EmailAccount, { foreignKey: 'emailAccountId', onDelete: 'SET NULL' })
+  declare emailAccount?: EmailAccountType | null;
 
   @HasOne(() => SmtpAccountSettings)
   declare smtpSettings?: SmtpAccountSettingsType | null;

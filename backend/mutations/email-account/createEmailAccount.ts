@@ -62,6 +62,7 @@ export const createEmailAccount = makeMutation(
       });
 
       await storeImapCredentials(emailAccount.id, {
+        type: 'password',
         username: input.imapUsername!,
         password: input.imapPassword!,
       });

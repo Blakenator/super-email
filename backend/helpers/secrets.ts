@@ -5,6 +5,7 @@
  * In development (local): Uses a local JSON file in data/ directory
  * 
  * Credentials are stored per email account/SMTP profile ID.
+ * Supports both password-based and OAuth token-based credentials.
  */
 
 import { config } from '../config/env.js';
@@ -12,10 +13,37 @@ import { logger } from './logger.js';
 import fs from 'fs/promises';
 import path from 'path';
 
-// Types for credentials
-export interface EmailCredentials {
+export type OAuthProvider = 'google' | 'yahoo' | 'outlook';
+
+export interface PasswordCredentials {
+  type: 'password';
   username: string;
   password: string;
+}
+
+export interface OAuthCredentials {
+  type: 'oauth';
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  email: string;
+  provider: OAuthProvider;
+}
+
+export type EmailCredentials = PasswordCredentials | OAuthCredentials;
+
+/**
+ * Normalize credentials loaded from storage. Handles legacy entries
+ * that were stored before the discriminated union was introduced
+ * (they have username/password but no `type` field).
+ */
+function normalizeCredentials(raw: any): EmailCredentials {
+  if (raw && raw.type === 'oauth') return raw as OAuthCredentials;
+  if (raw && raw.type === 'password') return raw as PasswordCredentials;
+  if (raw && raw.username !== undefined) {
+    return { type: 'password', username: raw.username, password: raw.password };
+  }
+  return raw;
 }
 
 // AWS SDK is only loaded in production to avoid local dependency issues
@@ -60,7 +88,7 @@ async function ensureLocalSecretsDir(): Promise<void> {
 /**
  * Read local secrets file
  */
-async function readLocalSecrets(): Promise<Record<string, EmailCredentials>> {
+async function readLocalSecrets(): Promise<Record<string, any>> {
   try {
     const data = await fs.readFile(getLocalSecretsPath(), 'utf-8');
     return JSON.parse(data);
@@ -76,7 +104,7 @@ async function readLocalSecrets(): Promise<Record<string, EmailCredentials>> {
 /**
  * Write local secrets file
  */
-async function writeLocalSecrets(secrets: Record<string, EmailCredentials>): Promise<void> {
+async function writeLocalSecrets(secrets: Record<string, any>): Promise<void> {
   await ensureLocalSecretsDir();
   await fs.writeFile(getLocalSecretsPath(), JSON.stringify(secrets, null, 2), 'utf-8');
 }
@@ -217,7 +245,7 @@ async function getCredentialsAWS(
     }));
     
     if (response.SecretString) {
-      return JSON.parse(response.SecretString);
+      return normalizeCredentials(JSON.parse(response.SecretString));
     }
     
     return null;
@@ -276,7 +304,9 @@ async function getCredentialsLocal(
 ): Promise<EmailCredentials | null> {
   const secrets = await readLocalSecrets();
   const key = `${type}:${id}`;
-  return secrets[key] || null;
+  const raw = secrets[key];
+  if (!raw) return null;
+  return normalizeCredentials(raw);
 }
 
 async function deleteCredentialsLocal(

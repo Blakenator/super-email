@@ -30,6 +30,8 @@ export const GET_EMAIL_ACCOUNTS_QUERY = gql(`
       }
       providerId
       isDefault
+      authMethod
+      needsReauth
       imapSettings {
         id
         host
@@ -117,6 +119,13 @@ export const GET_SEND_PROFILES_FULL_QUERY = gql(`
       type
       isDefault
       providerId
+      authMethod
+      emailAccountId
+      emailAccount {
+        id
+        name
+        email
+      }
       smtpSettings {
         id
         host

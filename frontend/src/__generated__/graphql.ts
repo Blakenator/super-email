@@ -112,6 +112,18 @@ export enum AttachmentType {
   Inline = 'INLINE'
 }
 
+/** Authentication method for email accounts and send profiles. */
+export enum AuthMethod {
+  /** OAuth 2.0 via Google */
+  OauthGoogle = 'OAUTH_GOOGLE',
+  /** OAuth 2.0 via Microsoft/Outlook */
+  OauthOutlook = 'OAUTH_OUTLOOK',
+  /** OAuth 2.0 via Yahoo */
+  OauthYahoo = 'OAUTH_YAHOO',
+  /** Traditional username/password or app password */
+  Password = 'PASSWORD'
+}
+
 /** Supported authentication providers for user login. */
 export enum AuthProvider {
   /** Apple Sign-In */
@@ -593,6 +605,8 @@ export type Email = BaseEntityProps & {
   attachments: Array<Attachment>;
   /** List of "BCC" recipient email addresses (only for sent emails) */
   bccAddresses?: Maybe<Array<Scalars['String']['output']>>;
+  /** Short preview of the text body (~200 chars, stored in PG for fast list views) */
+  bodyPreview?: Maybe<Scalars['String']['output']>;
   /** List of "CC" recipient email addresses */
   ccAddresses?: Maybe<Array<Scalars['String']['output']>>;
   /** Timestamp when the email was stored locally */
@@ -611,7 +625,7 @@ export type Email = BaseEntityProps & {
   hasAttachments: Scalars['Boolean']['output'];
   /** Raw email headers as JSON (for debugging) */
   headers?: Maybe<Scalars['JSON']['output']>;
-  /** HTML body content */
+  /** HTML body content (resolved from S3 on single-email and thread queries) */
   htmlBody?: Maybe<Scalars['String']['output']>;
   /** Unique identifier for this email */
   id: Scalars['String']['output'];
@@ -639,7 +653,7 @@ export type Email = BaseEntityProps & {
   subject: Scalars['String']['output'];
   /** Tags/labels applied to this email */
   tags: Array<Tag>;
-  /** Plain text body content */
+  /** Plain text body content (resolved from S3 on single-email and thread queries) */
   textBody?: Maybe<Scalars['String']['output']>;
   /** Number of emails in this thread */
   threadCount?: Maybe<Scalars['Int']['output']>;
@@ -661,6 +675,8 @@ export type Email = BaseEntityProps & {
  */
 export type EmailAccount = BaseEntityProps & {
   __typename?: 'EmailAccount';
+  /** Authentication method used for this account */
+  authMethod: AuthMethod;
   /** Timestamp when the account was added */
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** The default send profile object for sending emails */
@@ -677,6 +693,8 @@ export type EmailAccount = BaseEntityProps & {
   isDefault: Scalars['Boolean']['output'];
   /** Display name for this account (e.g., "Work Gmail") */
   name: Scalars['String']['output'];
+  /** Whether this account needs re-authentication (e.g., OAuth token expired/revoked) */
+  needsReauth: Scalars['Boolean']['output'];
   /** External provider ID (for OAuth-linked accounts like Google Workspace) */
   providerId?: Maybe<Scalars['String']['output']>;
   /** Account type (IMAP or CUSTOM_DOMAIN) */
@@ -710,6 +728,15 @@ export enum EmailFolder {
   /** Deleted emails (soft delete) */
   Trash = 'TRASH'
 }
+
+/** Result of a semantic search query, including a relevance score. */
+export type EmailSearchResult = {
+  __typename?: 'EmailSearchResult';
+  /** The matching email */
+  email: Email;
+  /** Cosine similarity score (0-1, higher = more relevant) */
+  score: Scalars['Float']['output'];
+};
 
 /**
  * Aggregated information about a unique email sender.
@@ -1563,6 +1590,12 @@ export type Query = {
    * Performs case-insensitive partial matching.
    */
   searchContacts: Array<Contact>;
+  /**
+   * Search emails by semantic meaning using vector embeddings.
+   * If emailAccountId is provided, search is scoped to that account.
+   * Otherwise, searches across all of the user's accounts.
+   */
+  semanticSearch: Array<EmailSearchResult>;
 };
 
 
@@ -1720,6 +1753,17 @@ export type QuerySearchContactsArgs = {
   query: Scalars['String']['input'];
 };
 
+
+/**
+ * GraphQL queries for fetching data. All queries require authentication
+ * unless otherwise noted.
+ */
+export type QuerySemanticSearchArgs = {
+  emailAccountId?: InputMaybe<Scalars['String']['input']>;
+  limit?: InputMaybe<Scalars['Int']['input']>;
+  query: Scalars['String']['input'];
+};
+
 /** Input for registering a push notification token. */
 export type RegisterPushTokenInput = {
   /** Optional device name for identification */
@@ -1855,10 +1899,16 @@ export type SendProfile = BaseEntityProps & {
   __typename?: 'SendProfile';
   /** Optional display name alias (e.g., "John Doe" instead of just the email) */
   alias?: Maybe<Scalars['String']['output']>;
+  /** Authentication method used for this send profile */
+  authMethod: AuthMethod;
   /** Timestamp when the profile was created */
   createdAt?: Maybe<Scalars['Date']['output']>;
   /** The "from" email address for sent emails */
   email: Scalars['String']['output'];
+  /** The email account this send profile is linked to (null for standalone profiles) */
+  emailAccount?: Maybe<EmailAccount>;
+  /** ID of the email account this send profile is linked to (null for standalone profiles) */
+  emailAccountId?: Maybe<Scalars['String']['output']>;
   /** Unique identifier for this send profile */
   id: Scalars['String']['output'];
   /** Whether this is the user's default send profile */
@@ -2509,7 +2559,7 @@ export type HealthCheckQuery = { __typename?: 'Query', healthCheck: { __typename
 export type GetEmailAccountsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetEmailAccountsQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, type: EmailAccountType, defaultSendProfileId?: string | null, providerId?: string | null, isDefault: boolean, defaultSendProfile?: { __typename?: 'SendProfile', id: string, name: string, email: string } | null, imapSettings?: { __typename?: 'ImapAccountSettings', id: string, host: string, port: number, accountType: ImapAccountType, useSsl: boolean, lastSyncedAt?: string | null, isHistoricalSyncing: boolean, historicalSyncProgress?: number | null, historicalSyncStatus?: string | null, historicalSyncLastAt?: string | null, isUpdateSyncing: boolean, updateSyncProgress?: number | null, updateSyncStatus?: string | null } | null }> };
+export type GetEmailAccountsQuery = { __typename?: 'Query', getEmailAccounts: Array<{ __typename?: 'EmailAccount', id: string, name: string, email: string, type: EmailAccountType, defaultSendProfileId?: string | null, providerId?: string | null, isDefault: boolean, authMethod: AuthMethod, needsReauth: boolean, defaultSendProfile?: { __typename?: 'SendProfile', id: string, name: string, email: string } | null, imapSettings?: { __typename?: 'ImapAccountSettings', id: string, host: string, port: number, accountType: ImapAccountType, useSsl: boolean, lastSyncedAt?: string | null, isHistoricalSyncing: boolean, historicalSyncProgress?: number | null, historicalSyncStatus?: string | null, historicalSyncLastAt?: string | null, isUpdateSyncing: boolean, updateSyncProgress?: number | null, updateSyncStatus?: string | null } | null }> };
 
 export type CreateEmailAccountMutationVariables = Exact<{
   input: CreateEmailAccountInput;
@@ -2554,7 +2604,7 @@ export type TestImapConnectionMutation = { __typename?: 'Mutation', testImapConn
 export type GetSendProfilesFullQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetSendProfilesFullQuery = { __typename?: 'Query', getSendProfiles: Array<{ __typename?: 'SendProfile', id: string, name: string, email: string, alias?: string | null, type: SendProfileType, isDefault: boolean, providerId?: string | null, smtpSettings?: { __typename?: 'SmtpAccountSettings', id: string, host: string, port: number, useSsl: boolean } | null }> };
+export type GetSendProfilesFullQuery = { __typename?: 'Query', getSendProfiles: Array<{ __typename?: 'SendProfile', id: string, name: string, email: string, alias?: string | null, type: SendProfileType, isDefault: boolean, providerId?: string | null, authMethod: AuthMethod, emailAccountId?: string | null, emailAccount?: { __typename?: 'EmailAccount', id: string, name: string, email: string } | null, smtpSettings?: { __typename?: 'SmtpAccountSettings', id: string, host: string, port: number, useSsl: boolean } | null }> };
 
 export type CreateSendProfileMutationVariables = Exact<{
   input: CreateSendProfileInput;
@@ -2827,14 +2877,14 @@ export const GetPushTokensDocument = {"kind":"Document","definitions":[{"kind":"
 export const RegisterPushTokenDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RegisterPushToken"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RegisterPushTokenInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"registerPushToken"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<RegisterPushTokenMutation, RegisterPushTokenMutationVariables>;
 export const UnregisterPushTokenDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UnregisterPushToken"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"token"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unregisterPushToken"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"token"},"value":{"kind":"Variable","name":{"kind":"Name","value":"token"}}}]}]}}]} as unknown as DocumentNode<UnregisterPushTokenMutation, UnregisterPushTokenMutationVariables>;
 export const HealthCheckDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"HealthCheck"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"healthCheck"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}},{"kind":"Field","name":{"kind":"Name","value":"uptimeSeconds"}}]}}]}}]} as unknown as DocumentNode<HealthCheckQuery, HealthCheckQueryVariables>;
-export const GetEmailAccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"imapSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"accountType"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"lastSyncedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isHistoricalSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncLastAt"}},{"kind":"Field","name":{"kind":"Name","value":"isUpdateSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncStatus"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsQuery, GetEmailAccountsQueryVariables>;
+export const GetEmailAccountsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getEmailAccounts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"authMethod"}},{"kind":"Field","name":{"kind":"Name","value":"needsReauth"}},{"kind":"Field","name":{"kind":"Name","value":"imapSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"accountType"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}},{"kind":"Field","name":{"kind":"Name","value":"lastSyncedAt"}},{"kind":"Field","name":{"kind":"Name","value":"isHistoricalSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncStatus"}},{"kind":"Field","name":{"kind":"Name","value":"historicalSyncLastAt"}},{"kind":"Field","name":{"kind":"Name","value":"isUpdateSyncing"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncProgress"}},{"kind":"Field","name":{"kind":"Name","value":"updateSyncStatus"}}]}}]}}]}}]} as unknown as DocumentNode<GetEmailAccountsQuery, GetEmailAccountsQueryVariables>;
 export const CreateEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}}]}}]} as unknown as DocumentNode<CreateEmailAccountMutation, CreateEmailAccountMutationVariables>;
 export const DeleteEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteEmailAccountMutation, DeleteEmailAccountMutationVariables>;
 export const SyncEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SyncEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}]}]}}]} as unknown as DocumentNode<SyncEmailAccountMutation, SyncEmailAccountMutationVariables>;
 export const SyncAllAccountsSettingsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"SyncAllAccountsSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"syncAllAccounts"}}]}}]} as unknown as DocumentNode<SyncAllAccountsSettingsMutation, SyncAllAccountsSettingsMutationVariables>;
 export const UpdateEmailAccountDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateEmailAccount"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateEmailAccountInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateEmailAccount"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"defaultSendProfileId"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"imapSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}}]}}]}}]}}]} as unknown as DocumentNode<UpdateEmailAccountMutation, UpdateEmailAccountMutationVariables>;
 export const TestImapConnectionDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"TestImapConnection"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"TestImapConnectionInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"testImapConnection"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"success"}},{"kind":"Field","name":{"kind":"Name","value":"message"}}]}}]}}]} as unknown as DocumentNode<TestImapConnectionMutation, TestImapConnectionMutationVariables>;
-export const GetSendProfilesFullDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetSendProfilesFull"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getSendProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"smtpSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}}]}}]}}]}}]} as unknown as DocumentNode<GetSendProfilesFullQuery, GetSendProfilesFullQueryVariables>;
+export const GetSendProfilesFullDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GetSendProfilesFull"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"getSendProfiles"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"providerId"}},{"kind":"Field","name":{"kind":"Name","value":"authMethod"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccountId"}},{"kind":"Field","name":{"kind":"Name","value":"emailAccount"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}}]}},{"kind":"Field","name":{"kind":"Name","value":"smtpSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}}]}}]}}]}}]} as unknown as DocumentNode<GetSendProfilesFullQuery, GetSendProfilesFullQueryVariables>;
 export const CreateSendProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"CreateSendProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"CreateSendProfileInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createSendProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}}]} as unknown as DocumentNode<CreateSendProfileMutation, CreateSendProfileMutationVariables>;
 export const DeleteSendProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"DeleteSendProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"deleteSendProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}]} as unknown as DocumentNode<DeleteSendProfileMutation, DeleteSendProfileMutationVariables>;
 export const UpdateSendProfileDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"UpdateSendProfile"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UpdateSendProfileInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"updateSendProfile"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"email"}},{"kind":"Field","name":{"kind":"Name","value":"alias"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"isDefault"}},{"kind":"Field","name":{"kind":"Name","value":"smtpSettings"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"host"}},{"kind":"Field","name":{"kind":"Name","value":"port"}},{"kind":"Field","name":{"kind":"Name","value":"useSsl"}}]}}]}}]}}]} as unknown as DocumentNode<UpdateSendProfileMutation, UpdateSendProfileMutationVariables>;

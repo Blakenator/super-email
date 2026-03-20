@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { Container, Button, Alert, Tabs, Tab } from 'react-bootstrap';
-import { useParams, useNavigate } from 'react-router';
+import { useCallback, useEffect, useState } from 'react';
+import { Container, Button, Alert, Modal, Tabs, Tab } from 'react-bootstrap';
+import { useParams, useNavigate, useSearchParams } from 'react-router';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faCog,
@@ -67,7 +67,13 @@ const REVERSE_TAB_MAPPING = Object.fromEntries(
 export function Settings() {
   const { tab } = useParams<{ tab: string }>();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user, logout, token } = useAuth();
+  const [oauthResultModal, setOauthResultModal] = useState<{
+    show: boolean;
+    success: boolean;
+    message: string;
+  }>({ show: false, success: false, message: '' });
 
   const activeTab =
     tab && TAB_MAPPING[tab] ? TAB_MAPPING[tab] : 'email-accounts';
@@ -83,6 +89,67 @@ export function Settings() {
   const customDomains = useCustomDomains();
   const sendProfiles = useSendProfiles(customDomains.domains);
   const authMethods = useAuthMethods();
+
+  // Handle OAuth redirect result query params
+  useEffect(() => {
+    const oauthStatus = searchParams.get('oauth');
+    if (!oauthStatus) return;
+
+    if (oauthStatus === 'success') {
+      const isReauth = searchParams.get('reauth') === 'true';
+      setOauthResultModal({
+        show: true,
+        success: true,
+        message: isReauth
+          ? 'Account re-authenticated successfully.'
+          : 'Email account connected successfully. Your IMAP and SMTP settings have been configured automatically.',
+      });
+      void emailAccounts.refetch();
+      void sendProfiles.refetch();
+    } else if (oauthStatus === 'error') {
+      const reason = searchParams.get('reason') || 'unknown';
+      const reasonMessages: Record<string, string> = {
+        denied: 'You denied the authorization request.',
+        access_denied: 'You denied the authorization request.',
+        missing_token: 'Authentication token was missing. Please try again.',
+        invalid_token: 'Authentication token was invalid. Please sign in again.',
+        invalid_state: 'Security check failed. Please try again.',
+        provider_mismatch: 'Provider mismatch detected. Please try again.',
+        callback_failed: 'Failed to complete the OAuth flow. Please try again.',
+        start_failed: 'Failed to start the OAuth flow. Please try again.',
+        account_already_connected: 'This email account is already connected. To refresh its credentials, use the Re-authenticate button on the existing account.',
+      };
+      setOauthResultModal({
+        show: true,
+        success: false,
+        message: reasonMessages[reason] || `OAuth connection failed: ${reason}`,
+      });
+    }
+
+    // Clear query params
+    searchParams.delete('oauth');
+    searchParams.delete('reason');
+    searchParams.delete('reauth');
+    setSearchParams(searchParams, { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleReauth = useCallback(
+    (accountId: string) => {
+      if (!token) return;
+      const account = emailAccounts.accounts.find((a) => a.id === accountId);
+      if (!account) return;
+      const providerMap: Record<string, string> = {
+        OAUTH_GOOGLE: 'google',
+        OAUTH_YAHOO: 'yahoo',
+        OAUTH_OUTLOOK: 'outlook',
+      };
+      const oauthProvider = providerMap[account.authMethod];
+      if (!oauthProvider) return;
+      const oauthUrl = `${window.location.origin}/api/oauth/${oauthProvider}/start?token=${encodeURIComponent(token)}&accountId=${encodeURIComponent(accountId)}`;
+      window.location.href = oauthUrl;
+    },
+    [token, emailAccounts.accounts],
+  );
 
   // Open SMTP modal when email account is created with "also create SMTP" checked
   useEffect(() => {
@@ -166,6 +233,7 @@ export function Settings() {
                 onSyncAll={emailAccounts.handleSyncAll}
                 onConfirmDelete={emailAccounts.confirmDelete}
                 onCancelDelete={emailAccounts.closeDeleteModal}
+                onReauth={handleReauth}
               />
             </Tab>
 
@@ -333,6 +401,31 @@ export function Settings() {
           }
           isCreatingCustomDomainSendProfile={sendProfiles.creatingCustomDomain}
         />
+
+        <Modal
+          show={oauthResultModal.show}
+          onHide={() => setOauthResultModal((prev) => ({ ...prev, show: false }))}
+          centered
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>
+              {oauthResultModal.success ? 'Account Connected' : 'Connection Failed'}
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Alert variant={oauthResultModal.success ? 'success' : 'danger'} className="mb-0">
+              {oauthResultModal.message}
+            </Alert>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant={oauthResultModal.success ? 'primary' : 'secondary'}
+              onClick={() => setOauthResultModal((prev) => ({ ...prev, show: false }))}
+            >
+              OK
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
         <AppVersion>v{__APP_VERSION__}</AppVersion>
       </Container>

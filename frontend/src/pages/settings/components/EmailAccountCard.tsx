@@ -1,4 +1,5 @@
 import {
+  Alert,
   Button,
   Badge,
   Spinner,
@@ -7,7 +8,15 @@ import {
   ProgressBar,
 } from 'react-bootstrap';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSync, faTrash, faEdit, faCheck } from '@fortawesome/free-solid-svg-icons';
+import {
+  faExclamationTriangle,
+  faSignInAlt,
+  faSync,
+  faTrash,
+  faEdit,
+  faCheck,
+} from '@fortawesome/free-solid-svg-icons';
+import { faGoogle, faMicrosoft, faYahoo } from '@fortawesome/free-brands-svg-icons';
 import {
   AccountCardStyled,
   AccountCardHeader,
@@ -29,6 +38,8 @@ export interface EmailAccountData {
   name: string;
   email: string;
   type: string;
+  authMethod?: string;
+  needsReauth?: boolean;
   imapSettings?: {
     host: string;
     port: number;
@@ -47,11 +58,18 @@ export interface EmailAccountData {
   isDefault?: boolean;
 }
 
+const OAUTH_PROVIDER_LABELS: Record<string, { label: string; icon: typeof faGoogle }> = {
+  OAUTH_GOOGLE: { label: 'Google', icon: faGoogle },
+  OAUTH_YAHOO: { label: 'Yahoo', icon: faYahoo },
+  OAUTH_OUTLOOK: { label: 'Outlook', icon: faMicrosoft },
+};
+
 interface EmailAccountCardProps {
   account: EmailAccountData;
   onEdit: (id: string) => void;
   onSync: (id: string) => void;
   onDelete: (id: string) => void;
+  onReauth?: (id: string) => void;
 }
 
 export function EmailAccountCard({
@@ -59,6 +77,7 @@ export function EmailAccountCard({
   onEdit,
   onSync,
   onDelete,
+  onReauth,
 }: EmailAccountCardProps) {
   const imap = account.imapSettings;
   const isSyncing = imap?.isHistoricalSyncing || imap?.isUpdateSyncing || false;
@@ -69,9 +88,31 @@ export function EmailAccountCard({
     ? imap?.historicalSyncStatus
     : imap?.updateSyncStatus;
   const isCustomDomain = account.type === 'CUSTOM_DOMAIN';
+  const oauthInfo = account.authMethod ? OAUTH_PROVIDER_LABELS[account.authMethod] : null;
+  const isOAuth = !!oauthInfo;
 
   return (
     <AccountCardStyled $isSyncing={isSyncing} className="card">
+      {account.needsReauth && (
+        <Alert variant="warning" className="mb-0 rounded-0 border-start-0 border-end-0 border-top-0 py-2 px-3">
+          <div className="d-flex align-items-center justify-content-between">
+            <small>
+              <FontAwesomeIcon icon={faExclamationTriangle} className="me-1" />
+              This account needs to be re-authenticated
+            </small>
+            {onReauth && (
+              <Button
+                variant="warning"
+                size="sm"
+                onClick={() => onReauth(account.id)}
+              >
+                <FontAwesomeIcon icon={faSignInAlt} className="me-1" />
+                Re-authenticate
+              </Button>
+            )}
+          </div>
+        </Alert>
+      )}
       <AccountCardHeader className="card-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <AccountCardTitle>{account.name}</AccountCardTitle>
@@ -85,7 +126,7 @@ export function EmailAccountCard({
         <AccountCardSubtitle>{account.email}</AccountCardSubtitle>
       </AccountCardHeader>
       <AccountCardBody className="card-body">
-        {imap && (
+        {imap && !isOAuth && (
           <AccountDetailRow>
             <AccountDetailLabel>Server</AccountDetailLabel>
             <span>
@@ -95,9 +136,16 @@ export function EmailAccountCard({
         )}
         <AccountDetailRow>
           <AccountDetailLabel>Type</AccountDetailLabel>
-          <Badge bg={isCustomDomain ? 'success' : 'info'}>
-            {isCustomDomain ? 'Custom Domain' : imap?.accountType || account.type}
-          </Badge>
+          {isOAuth ? (
+            <Badge bg="primary">
+              <FontAwesomeIcon icon={oauthInfo.icon} className="me-1" />
+              Connected via {oauthInfo.label}
+            </Badge>
+          ) : (
+            <Badge bg={isCustomDomain ? 'success' : 'info'}>
+              {isCustomDomain ? 'Custom Domain' : imap?.accountType || account.type}
+            </Badge>
+          )}
         </AccountDetailRow>
         <AccountDetailRow>
           <AccountDetailLabel>Default Send Profile</AccountDetailLabel>

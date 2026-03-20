@@ -1,5 +1,5 @@
 import { makeQuery } from '../../types.js';
-import { SendProfile, SmtpAccountSettings } from '../../db/models/index.js';
+import { SendProfile, SmtpAccountSettings, EmailAccount } from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 
 export const getSendProfile = makeQuery(
@@ -14,6 +14,12 @@ export const getSendProfile = makeQuery(
           model: SmtpAccountSettings,
           as: 'smtpSettings',
           required: false,
+        },
+        {
+          model: EmailAccount,
+          as: 'emailAccount',
+          required: false,
+          attributes: ['id', 'name', 'email'],
         },
       ],
     });

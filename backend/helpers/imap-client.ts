@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow';
 import type { ImapAccountSettings } from '../db/models/imap-account-settings.model.js';
 import { getImapCredentials } from './secrets.js';
+import { getValidAccessToken } from './oauth-tokens.js';
 import { logger } from './logger.js';
 
 const MAX_RETRIES = 3;
@@ -69,7 +70,7 @@ export function createImapClientFromCredentials(
 
 /**
  * Create an IMAP client for an account, resolving credentials
- * from the secure store.
+ * from the secure store. Supports both password and OAuth (XOAUTH2).
  */
 export async function createImapClient(
   imapSettings: ImapAccountSettings,
@@ -80,6 +81,18 @@ export async function createImapClient(
       `No IMAP credentials found for account ${imapSettings.emailAccountId}`,
     );
   }
+
+  if (credentials.type === 'oauth') {
+    const accessToken = await getValidAccessToken('imap', imapSettings.emailAccountId, credentials);
+    return new ImapFlow({
+      host: imapSettings.host,
+      port: imapSettings.port,
+      secure: imapSettings.useSsl,
+      auth: { user: credentials.email, accessToken },
+      logger: false,
+    });
+  }
+
   return createImapClientFromCredentials(
     imapSettings.host,
     imapSettings.port,
@@ -119,6 +132,26 @@ export async function testImapConnectionForAccount(
   const credentials = await getImapCredentials(imapSettings.emailAccountId);
   if (!credentials) {
     return { success: false, error: 'No credentials found for this account' };
+  }
+
+  if (credentials.type === 'oauth') {
+    const accessToken = await getValidAccessToken('imap', imapSettings.emailAccountId, credentials);
+    const client = new ImapFlow({
+      host: imapSettings.host,
+      port: imapSettings.port,
+      secure: imapSettings.useSsl,
+      auth: { user: credentials.email, accessToken },
+      logger: false,
+    });
+    try {
+      await withRetry(() => client.connect(), `Test OAuth connect to ${imapSettings.host}`);
+      await client.logout();
+      return { success: true };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      try { await client.logout(); } catch { /* ignore */ }
+      return { success: false, error: errorMsg };
+    }
   }
 
   return testImapConnection(
