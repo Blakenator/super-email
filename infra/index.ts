@@ -7,15 +7,14 @@ import * as cloudflare from '@pulumi/cloudflare';
 // COST-OPTIMIZED ECS ARCHITECTURE
 // =============================================================================
 // Estimated monthly costs (low traffic):
-//   - NAT Gateway (prod only, single): ~$32/month
 //   - ALB: ~$16/month
 //   - RDS t4g.micro: ~$12/month
 //   - ECS Fargate Spot: ~$3-5/month
 //   - CloudFront: ~$1-5/month
 //   - S3: ~$1-2/month
 //   - CloudWatch Logs: ~$1-2/month
-// Total (prod): ~$65-75/month
-// Total (dev): ~$35-45/month (no NAT, no multi-AZ)
+// Total (prod): ~$35-40/month (no NAT Gateway)
+// Total (dev): ~$35-40/month (no NAT, no multi-AZ)
 //
 // Cost savings vs original:
 //   - Removed VPC Interface Endpoints (~$28/month saved)
@@ -53,8 +52,7 @@ const imageTag = 'latest';
 // =============================================================================
 // VPC and Networking - Cost Optimized
 // =============================================================================
-// Dev: No NAT Gateway, ECS runs in public subnets
-// Prod: Single NAT Gateway (not one per AZ)
+// All envs: No NAT Gateway, ECS runs in public subnets (SG restricts inbound to VPC only)
 
 const vpc = new awsx.ec2.Vpc(`${stackName}-vpc`, {
   cidrBlock: '10.0.0.0/16',
@@ -62,8 +60,8 @@ const vpc = new awsx.ec2.Vpc(`${stackName}-vpc`, {
   enableDnsHostnames: true,
   enableDnsSupport: true,
   natGateways: {
-    // Cost optimization: Single NAT for prod, None for dev
-    strategy: isProd ? 'Single' : 'None',
+    // Cost optimization: No NAT Gateway in any environment; ECS runs in public subnets
+    strategy: 'None',
   },
   tags: {
     Name: `${stackName}-vpc`,
@@ -1303,7 +1301,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
     networkMode: 'awsvpc',
     requiresCompatibilities: ['FARGATE'],
     cpu: '256',
-    memory: '512',
+    memory: '1024',
     executionRoleArn: taskExecutionRole.arn,
     taskRoleArn: taskRole.arn,
     containerDefinitions: pulumi
@@ -1497,11 +1495,10 @@ const backendService = new aws.ecs.Service(
       },
     ],
     networkConfiguration: {
-      // Cost optimization: Use public subnets for dev (no NAT needed)
-      // Use private subnets for prod (with NAT)
-      subnets: isProd ? vpc.privateSubnetIds : vpc.publicSubnetIds,
+      // Cost optimization: Public subnets in all envs; NAT Gateway eliminated
+      subnets: vpc.publicSubnetIds,
       securityGroups: [backendSecurityGroup.id],
-      assignPublicIp: !isProd, // Public IP for dev (no NAT)
+      assignPublicIp: true,
     },
     loadBalancers: [
       {

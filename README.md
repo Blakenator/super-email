@@ -133,6 +133,81 @@ The backend uses a centralized configuration in `backend/config/env.ts`. Default
 
 In development, IMAP/SMTP credentials are stored in `data/secrets.json` (gitignored). In production, AWS Secrets Manager is used.
 
+### OAuth Provider Setup (One-Time, Per Provider)
+
+To enable "Sign in with Google/Yahoo/Outlook" for connecting email accounts, you need to register an OAuth application with each provider you want to support. Set the resulting credentials in your `.env` file.
+
+#### Google (Gmail)
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project (or select an existing one)
+3. Navigate to **APIs & Services > OAuth consent screen**
+   - Choose **External** (or **Internal** for Google Workspace orgs)
+   - Fill in app name, support email, and developer contact
+   - Add your test email as a test user (required while app status is "Testing")
+4. Navigate to **APIs & Services > Library**
+   - Search for **Gmail API** and enable it
+5. Navigate to **APIs & Services > Credentials**
+   - Click **Create Credentials > OAuth client ID**
+   - Application type: **Web application**
+   - Add authorized redirect URI: `http://localhost:5173/api/oauth/google/callback`
+   - Note the **Client ID** and **Client Secret**
+6. Add to `.env`:
+
+   ```
+   GOOGLE_OAUTH_CLIENT_ID=your-client-id.apps.googleusercontent.com
+   GOOGLE_OAUTH_CLIENT_SECRET=your-client-secret
+   ```
+
+#### Yahoo
+
+1. Go to [Yahoo Developer Console](https://developer.yahoo.com/apps/)
+2. Click **Create an App**
+   - Application Name: your app name
+   - Application Type: **Web Application**
+   - Redirect URI: `http://localhost:5173/api/oauth/yahoo/callback`
+   - API Permissions: select **Mail** (read/write)
+3. Note the **Client ID (Consumer Key)** and **Client Secret (Consumer Secret)**
+4. Add to `.env`:
+
+   ```
+   YAHOO_OAUTH_CLIENT_ID=your-client-id
+   YAHOO_OAUTH_CLIENT_SECRET=your-client-secret
+   ```
+
+#### Microsoft / Outlook
+
+1. Go to [Azure Portal > App registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
+2. Click **New registration**
+   - Name: your app name
+   - Supported account types: **Accounts in any organizational directory and personal Microsoft accounts**
+   - Redirect URI: **Web** platform, `http://localhost:5173/api/oauth/outlook/callback`
+3. In the app registration, go to **Certificates & secrets**
+   - Click **New client secret**, note the **Value** (not the Secret ID)
+4. Go to **API permissions**
+   - Click **Add a permission > Microsoft Graph > Delegated permissions**
+   - Add: `IMAP.AccessAsUser.All`, `SMTP.Send`, `offline_access`, `openid`, `email`, `profile`
+   - Click **Grant admin consent** if you have admin access
+5. Note the **Application (client) ID** from the Overview page
+6. Add to `.env`:
+
+   ```
+   OUTLOOK_OAUTH_CLIENT_ID=your-application-client-id
+   OUTLOOK_OAUTH_CLIENT_SECRET=your-client-secret-value
+   ```
+
+#### Production Redirect URIs
+
+For production deployments, override the default localhost redirect URIs:
+
+```
+GOOGLE_OAUTH_REDIRECT_URI=https://your-domain.com/api/oauth/google/callback
+YAHOO_OAUTH_REDIRECT_URI=https://your-domain.com/api/oauth/yahoo/callback
+OUTLOOK_OAUTH_REDIRECT_URI=https://your-domain.com/api/oauth/outlook/callback
+```
+
+Remember to add these production URIs to each provider's authorized redirect URIs as well.
+
 ## Deployment to AWS
 
 ### Prerequisites
