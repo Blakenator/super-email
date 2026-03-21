@@ -12,19 +12,32 @@
 #   - SUPABASE_ANON_KEY: Supabase anon/public key
 #   - SUPABASE_SERVICE_ROLE_KEY: Supabase service role key
 #
-# Optional GitHub Secrets (for billing):
-#   - STRIPE_SECRET_KEY: Stripe secret API key (sk_test_... or sk_live_...)
-#   - STRIPE_WEBHOOK_SECRET: Stripe webhook signing secret (whsec_...)
-#   - STRIPE_PUBLISHABLE_KEY: Stripe publishable key (pk_test_... or pk_live_...)
-#   - STRIPE_PRICE_STORAGE_BASIC: Stripe price ID for Basic storage tier
-#   - STRIPE_PRICE_STORAGE_PRO: Stripe price ID for Pro storage tier
-#   - STRIPE_PRICE_STORAGE_ENTERPRISE: Stripe price ID for Enterprise storage tier
-#   - STRIPE_PRICE_ACCOUNTS_BASIC: Stripe price ID for Basic accounts tier
-#   - STRIPE_PRICE_ACCOUNTS_PRO: Stripe price ID for Pro accounts tier
-#   - STRIPE_PRICE_ACCOUNTS_ENTERPRISE: Stripe price ID for Enterprise accounts tier
-#   - STRIPE_PRICE_DOMAINS_BASIC: Stripe price ID for Basic domain tier (1 domain)
-#   - STRIPE_PRICE_DOMAINS_PRO: Stripe price ID for Pro domain tier (2 domains)
-#   - STRIPE_PRICE_DOMAINS_ENTERPRISE: Stripe price ID for Enterprise domain tier (5 domains)
+# Optional GitHub Secrets (billing — see also docs/BILLING.md):
+#   - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY
+#   - STRIPE_PRICE_STORAGE_BASIC / PRO / ENTERPRISE
+#   - STRIPE_PRICE_ACCOUNTS_BASIC / PRO / ENTERPRISE
+#   - STRIPE_PRICE_DOMAINS_BASIC / PRO / ENTERPRISE
+#   - STRIPE_PRICE_PLATFORM_BASE (platform base fee; required if other Stripe prices are set)
+#   All STRIPE_PRICE_* values are copied into Pulumi config by scripts/deploy-infrastructure.sh
+#   (camelCase keys) and injected into the ECS task as STRIPE_PRICE_* env vars.
+#
+# Optional GitHub Secrets (custom domain + Cloudflare — passed through to deploy-infrastructure.sh):
+#   - DOMAIN_NAME: Apex hostname (e.g., super-mail.app) for CloudFront/ACM and FRONTEND_URL
+#   - CLOUDFLARE_ZONE_ID: DNS zone ID in Cloudflare
+#   - CLOUDFLARE_API_TOKEN: API token (Cloudflare Pulumi provider reads from env)
+#
+# Optional GitHub Secrets (regional SES — SES is not available in every region):
+#   - SES_REGION: e.g., us-west-2 when the stack runs in us-west-1
+#
+# Generated in AWS by Pulumi (no GitHub secret unless you override via config below):
+#   - DB_* , S3 bucket names, SQS URL, INTERNAL_API_TOKEN, JWT_SECRET (Secrets Manager → ECS)
+#
+# Optional GitHub Secrets (OAuth + Firebase — passed to deploy-infrastructure.sh → Pulumi → ECS):
+#   - GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+#   - YAHOO_OAUTH_CLIENT_ID, YAHOO_OAUTH_CLIENT_SECRET
+#   - OUTLOOK_OAUTH_CLIENT_ID, OUTLOOK_OAUTH_CLIENT_SECRET
+#   - FIREBASE_SERVICE_ACCOUNT_JSON (full service account JSON string; minify to one line or use multiline secret)
+# Redirect URIs are computed in infra from the deployed FRONTEND_URL (…/api/oauth/{provider}/callback).
 
 name: Deploy to AWS
 
@@ -122,7 +135,18 @@ jobs:
           STRIPE_PRICE_DOMAINS_BASIC: ${{ secrets.STRIPE_PRICE_DOMAINS_BASIC }}
           STRIPE_PRICE_DOMAINS_PRO: ${{ secrets.STRIPE_PRICE_DOMAINS_PRO }}
           STRIPE_PRICE_DOMAINS_ENTERPRISE: ${{ secrets.STRIPE_PRICE_DOMAINS_ENTERPRISE }}
+          STRIPE_PRICE_PLATFORM_BASE: ${{ secrets.STRIPE_PRICE_PLATFORM_BASE }}
           SES_REGION: ${{ secrets.SES_REGION }}
+          DOMAIN_NAME: ${{ secrets.DOMAIN_NAME }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          YAHOO_OAUTH_CLIENT_ID: ${{ secrets.YAHOO_OAUTH_CLIENT_ID }}
+          YAHOO_OAUTH_CLIENT_SECRET: ${{ secrets.YAHOO_OAUTH_CLIENT_SECRET }}
+          OUTLOOK_OAUTH_CLIENT_ID: ${{ secrets.OUTLOOK_OAUTH_CLIENT_ID }}
+          OUTLOOK_OAUTH_CLIENT_SECRET: ${{ secrets.OUTLOOK_OAUTH_CLIENT_SECRET }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: |
           ENVIRONMENT="${{ github.event.inputs.environment || 'dev' }}"
           ./scripts/deploy-infrastructure.sh "$ENVIRONMENT"

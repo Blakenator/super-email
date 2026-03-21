@@ -42,8 +42,14 @@ async function initializeFirebase(): Promise<boolean> {
   // Check if Firebase is configured via JSON string or file path
   const serviceAccountJson = config.firebase?.serviceAccountJson;
   const serviceAccountPath = config.firebase?.serviceAccountPath;
-  
-  if (!serviceAccountJson && !serviceAccountPath) {
+
+  const jsonTrimmed = serviceAccountJson?.trim() ?? '';
+  const jsonUnset =
+    !jsonTrimmed ||
+    jsonTrimmed === 'not-configured' ||
+    jsonTrimmed === '{}';
+
+  if (jsonUnset && !serviceAccountPath) {
     logger.debug('push', 'Firebase not configured - web push notifications disabled');
     return false;
   }
@@ -64,7 +70,7 @@ async function initializeFirebase(): Promise<boolean> {
         logger.error('push', `Failed to load Firebase service account from ${serviceAccountPath}: ${e.message}`);
         return false;
       }
-    } else if (serviceAccountJson) {
+    } else if (serviceAccountJson && !jsonUnset) {
       // Parse the JSON string
       try {
         serviceAccount = JSON.parse(serviceAccountJson);

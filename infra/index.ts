@@ -741,6 +741,7 @@ const stripePriceAccountsEnterprise = config.get('stripePriceAccountsEnterprise'
 const stripePriceDomainBasic = config.get('stripePriceDomainsBasic') || '';
 const stripePriceDomainPro = config.get('stripePriceDomainsPro') || '';
 const stripePriceDomainEnterprise = config.get('stripePriceDomainsEnterprise') || '';
+const stripePricePlatformBase = config.get('stripePricePlatformBase') || '';
 
 // SES region override (SES is not available in all regions, e.g. us-west-1)
 const sesRegion = config.get('sesRegion') || 'us-west-2';
@@ -810,6 +811,135 @@ const internalApiTokenVersion = new aws.secretsmanager.SecretVersion(
       .apply((p) => p.randomPassword),
   },
   { ignoreChanges: ['secretString'] },
+);
+
+// JWT signing secret for OAuth state tokens (backend/server.ts). Must not use dev default in production.
+const jwtSigningSecret = new aws.secretsmanager.Secret(
+  `${stackName}-jwt-signing`,
+  {
+    namePrefix: `${stackName}-jwt-`,
+    description: 'JWT signing secret for OAuth state',
+    recoveryWindowInDays: 0,
+    tags: { Name: `${stackName}-jwt-signing`, Environment: environment },
+  },
+);
+
+const jwtSigningSecretVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-jwt-signing-version`,
+  {
+    secretId: jwtSigningSecret.id,
+    secretString: pulumi
+      .output(
+        aws.secretsmanager.getRandomPassword({
+          passwordLength: 64,
+          excludePunctuation: true,
+        }),
+      )
+      .apply((p) => p.randomPassword),
+  },
+  { ignoreChanges: ['secretString'] },
+);
+
+// =============================================================================
+// OAuth client credentials (optional — Gmail / Yahoo / Outlook linking)
+// =============================================================================
+
+const googleOAuthClientId = config.get('googleOAuthClientId') || '';
+const googleOAuthClientSecret =
+  config.getSecret('googleOAuthClientSecret') || pulumi.output('not-configured');
+const yahooOAuthClientId = config.get('yahooOAuthClientId') || '';
+const yahooOAuthClientSecret =
+  config.getSecret('yahooOAuthClientSecret') || pulumi.output('not-configured');
+const outlookOAuthClientId = config.get('outlookOAuthClientId') || '';
+const outlookOAuthClientSecret =
+  config.getSecret('outlookOAuthClientSecret') || pulumi.output('not-configured');
+
+const googleOAuthClientSecretResource = new aws.secretsmanager.Secret(
+  `${stackName}-google-oauth-client-secret`,
+  {
+    namePrefix: `${stackName}-google-oauth-`,
+    description: 'Google OAuth client secret',
+    recoveryWindowInDays: 0,
+    tags: {
+      Name: `${stackName}-google-oauth-client-secret`,
+      Environment: environment,
+    },
+  },
+);
+
+const googleOAuthClientSecretVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-google-oauth-client-secret-version`,
+  {
+    secretId: googleOAuthClientSecretResource.id,
+    secretString: googleOAuthClientSecret,
+  },
+);
+
+const yahooOAuthClientSecretResource = new aws.secretsmanager.Secret(
+  `${stackName}-yahoo-oauth-client-secret`,
+  {
+    namePrefix: `${stackName}-yahoo-oauth-`,
+    description: 'Yahoo OAuth client secret',
+    recoveryWindowInDays: 0,
+    tags: {
+      Name: `${stackName}-yahoo-oauth-client-secret`,
+      Environment: environment,
+    },
+  },
+);
+
+const yahooOAuthClientSecretVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-yahoo-oauth-client-secret-version`,
+  {
+    secretId: yahooOAuthClientSecretResource.id,
+    secretString: yahooOAuthClientSecret,
+  },
+);
+
+const outlookOAuthClientSecretResource = new aws.secretsmanager.Secret(
+  `${stackName}-outlook-oauth-client-secret`,
+  {
+    namePrefix: `${stackName}-outlook-oauth-`,
+    description: 'Microsoft Outlook OAuth client secret',
+    recoveryWindowInDays: 0,
+    tags: {
+      Name: `${stackName}-outlook-oauth-client-secret`,
+      Environment: environment,
+    },
+  },
+);
+
+const outlookOAuthClientSecretVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-outlook-oauth-client-secret-version`,
+  {
+    secretId: outlookOAuthClientSecretResource.id,
+    secretString: outlookOAuthClientSecret,
+  },
+);
+
+// Firebase Admin JSON (optional — web push). Placeholder "{}" when unset (skipped by backend).
+const firebaseServiceAccountJson =
+  config.getSecret('firebaseServiceAccountJson') || pulumi.output('{}');
+
+const firebaseServiceAccountSecret = new aws.secretsmanager.Secret(
+  `${stackName}-firebase-service-account`,
+  {
+    namePrefix: `${stackName}-firebase-`,
+    description: 'Firebase Admin service account JSON',
+    recoveryWindowInDays: 0,
+    tags: {
+      Name: `${stackName}-firebase-service-account`,
+      Environment: environment,
+    },
+  },
+);
+
+const firebaseServiceAccountSecretVersion = new aws.secretsmanager.SecretVersion(
+  `${stackName}-firebase-service-account-version`,
+  {
+    secretId: firebaseServiceAccountSecret.id,
+    secretString: firebaseServiceAccountJson,
+  },
 );
 
 // =============================================================================
@@ -1189,6 +1319,11 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
         stripeKeyArn: stripeKeySecretVersion.arn,
         stripeWebhookArn: stripeWebhookSecretVersion.arn,
         internalApiTokenArn: internalApiTokenVersion.arn,
+        jwtSigningSecretArn: jwtSigningSecretVersion.arn,
+        googleOAuthClientSecretArn: googleOAuthClientSecretVersion.arn,
+        yahooOAuthClientSecretArn: yahooOAuthClientSecretVersion.arn,
+        outlookOAuthClientSecretArn: outlookOAuthClientSecretVersion.arn,
+        firebaseServiceAccountSecretArn: firebaseServiceAccountSecretVersion.arn,
         cloudfrontDomain: frontendDistribution.domainName,
         rawEmailsBucketName: rawEmailsBucket.bucket,
         customEmailQueueUrl: customEmailQueue.url,
@@ -1206,11 +1341,19 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
           stripeKeyArn,
           stripeWebhookArn,
           internalApiTokenArn,
+          jwtSigningSecretArn,
+          googleOAuthClientSecretArn,
+          yahooOAuthClientSecretArn,
+          outlookOAuthClientSecretArn,
+          firebaseServiceAccountSecretArn,
           cloudfrontDomain,
           rawEmailsBucketName,
           customEmailQueueUrl,
-        }) =>
-          JSON.stringify([
+        }) => {
+          const frontendBase = domainName
+            ? `https://${domainName}`
+            : `https://${cloudfrontDomain}`;
+          return JSON.stringify([
             {
               name: 'backend',
               image: `${repoUrl}:${imageTag}`,
@@ -1236,9 +1379,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'STRIPE_PUBLISHABLE_KEY', value: stripePublishableKey },
                 {
                   name: 'FRONTEND_URL',
-                  value: domainName
-                    ? `https://${domainName}`
-                    : `https://${cloudfrontDomain}`,
+                  value: frontendBase,
                 },
                 // Stripe price IDs for subscription tiers
                 { name: 'STRIPE_PRICE_STORAGE_BASIC', value: stripePriceStorageBasic },
@@ -1250,12 +1391,29 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'STRIPE_PRICE_DOMAINS_BASIC', value: stripePriceDomainBasic },
                 { name: 'STRIPE_PRICE_DOMAINS_PRO', value: stripePriceDomainPro },
                 { name: 'STRIPE_PRICE_DOMAINS_ENTERPRISE', value: stripePriceDomainEnterprise },
+                { name: 'STRIPE_PRICE_PLATFORM_BASE', value: stripePricePlatformBase },
                 // Custom domain email infrastructure
                 { name: 'SES_REGION', value: sesRegion },
                 { name: 'RAW_EMAILS_S3_BUCKET', value: rawEmailsBucketName },
                 { name: 'SQS_CUSTOM_EMAIL_QUEUE_URL', value: customEmailQueueUrl },
                 // Disable in-process background sync - Lambda handles this
                 { name: 'BACKGROUND_SYNC_ENABLED', value: 'false' },
+                // OAuth (client IDs + redirect URIs aligned with FRONTEND_URL)
+                { name: 'GOOGLE_OAUTH_CLIENT_ID', value: googleOAuthClientId },
+                {
+                  name: 'GOOGLE_OAUTH_REDIRECT_URI',
+                  value: `${frontendBase}/api/oauth/google/callback`,
+                },
+                { name: 'YAHOO_OAUTH_CLIENT_ID', value: yahooOAuthClientId },
+                {
+                  name: 'YAHOO_OAUTH_REDIRECT_URI',
+                  value: `${frontendBase}/api/oauth/yahoo/callback`,
+                },
+                { name: 'OUTLOOK_OAUTH_CLIENT_ID', value: outlookOAuthClientId },
+                {
+                  name: 'OUTLOOK_OAUTH_REDIRECT_URI',
+                  value: `${frontendBase}/api/oauth/outlook/callback`,
+                },
               ],
               secrets: [
                 {
@@ -1265,6 +1423,23 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 { name: 'STRIPE_SECRET_KEY', valueFrom: stripeKeyArn },
                 { name: 'STRIPE_WEBHOOK_SECRET', valueFrom: stripeWebhookArn },
                 { name: 'INTERNAL_API_TOKEN', valueFrom: internalApiTokenArn },
+                { name: 'JWT_SECRET', valueFrom: jwtSigningSecretArn },
+                {
+                  name: 'GOOGLE_OAUTH_CLIENT_SECRET',
+                  valueFrom: googleOAuthClientSecretArn,
+                },
+                {
+                  name: 'YAHOO_OAUTH_CLIENT_SECRET',
+                  valueFrom: yahooOAuthClientSecretArn,
+                },
+                {
+                  name: 'OUTLOOK_OAUTH_CLIENT_SECRET',
+                  valueFrom: outlookOAuthClientSecretArn,
+                },
+                {
+                  name: 'FIREBASE_SERVICE_ACCOUNT_JSON',
+                  valueFrom: firebaseServiceAccountSecretArn,
+                },
               ],
               logConfiguration: {
                 logDriver: 'awslogs',
@@ -1285,7 +1460,8 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 startPeriod: 60,
               },
             },
-          ]),
+          ]);
+        },
       ),
     tags: {
       Name: `${stackName}-backend-task`,

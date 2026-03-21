@@ -140,9 +140,14 @@ export const sendEmail = makeMutation(
 
     // Store body in S3 and create search index
     const storageKey = `${emailAccount.id}/${email.id}`;
-    await email.update({ bodyStorageKey: storageKey });
+    const { bodySizeBytes } = await storeEmailBody(
+      emailAccount.id,
+      email.id,
+      textBody,
+      htmlBody,
+    );
     await Promise.all([
-      storeEmailBody(emailAccount.id, email.id, textBody, htmlBody),
+      email.update({ bodyStorageKey: storageKey, bodySizeBytes }),
       upsertSearchIndex({
         emailId: email.id,
         emailAccountId: emailAccount.id,
@@ -150,7 +155,7 @@ export const sendEmail = makeMutation(
         textBody,
         fromAddress: sendProfile.email,
         toAddresses: input.toAddresses,
-        bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+        bodySize: bodySizeBytes,
       }),
     ]);
 

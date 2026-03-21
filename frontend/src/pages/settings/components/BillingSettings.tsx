@@ -16,6 +16,8 @@ import {
   faCrown,
   faArrowRight,
   faInfoCircle,
+  faPen,
+  faCheck,
 } from '@fortawesome/free-solid-svg-icons';
 import toast from 'react-hot-toast';
 import {
@@ -65,6 +67,16 @@ import {
   DowngradeWarning,
   UnavailableBadge,
 } from './BillingSettings.wrappers';
+import {
+  formatTier,
+  getStorageLimit,
+  getAccountLimit,
+  getDomainLimit,
+  buildStorageTiers,
+  buildAccountTiers,
+  buildDomainTiers,
+  type TierInfo,
+} from './billingTierBuilders';
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 Bytes';
@@ -81,70 +93,14 @@ function formatCents(cents: number, currency = 'usd'): string {
   }).format(cents / 100);
 }
 
-function formatTier(tier: string, category?: 'storage' | 'account' | 'domain'): string {
-  switch (tier) {
-    case 'FREE':
-      return 'Free';
-    case 'BASIC':
-      return 'Basic';
-    case 'PRO':
-      return 'Pro';
-    case 'ENTERPRISE':
-      return category === 'domain' ? 'Super Domains' : 'Enterprise';
-    default:
-      return tier;
-  }
-}
-
-function getStorageLimit(tier: string): string {
-  switch (tier) {
-    case 'FREE':
-      return '5 GB';
-    case 'BASIC':
-      return '10 GB';
-    case 'PRO':
-      return '20 GB';
-    case 'ENTERPRISE':
-      return '100 GB';
-    default:
-      return 'Unknown';
-  }
-}
-
-function getAccountLimit(tier: string): string {
-  switch (tier) {
-    case 'FREE':
-      return '1 account';
-    case 'BASIC':
-      return '2 accounts';
-    case 'PRO':
-      return '5 accounts';
-    case 'ENTERPRISE':
-      return 'Unlimited';
-    default:
-      return 'Unknown';
-  }
-}
-
-function getDomainLimit(tier: string): string {
-  switch (tier) {
-    case 'FREE':
-      return '0 domains';
-    case 'BASIC':
-      return '1 domain';
-    case 'PRO':
-      return '2 domains';
-    case 'ENTERPRISE':
-      return '5 domains';
-    default:
-      return 'Unknown';
-  }
-}
-
 function getProgressVariant(percent: number): 'success' | 'warning' | 'danger' {
   if (percent >= 90) return 'danger';
   if (percent >= 75) return 'warning';
   return 'success';
+}
+
+function findTierInfo(tiers: TierInfo[], id: string): TierInfo | undefined {
+  return tiers.find((t) => t.id === id);
 }
 
 // Storage limits in bytes for each tier
@@ -169,175 +125,6 @@ const DOMAIN_LIMIT_COUNT: Record<string, number> = {
   PRO: 2,
   ENTERPRISE: 5,
 };
-
-const DEFAULT_DOMAIN_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
-  { id: DomainTier.Free, name: 'Free', limit: '0 domains', price: '$0' },
-  { id: DomainTier.Basic, name: 'Basic', limit: '1 domain', price: '$5/mo' },
-  { id: DomainTier.Pro, name: 'Pro', limit: '2 domains', price: '$7/mo' },
-  {
-    id: DomainTier.Enterprise,
-    name: 'Super Domains',
-    limit: '5 domains',
-    price: '$10/mo',
-  },
-];
-
-const DEFAULT_STORAGE_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
-  { id: StorageTier.Free, name: 'Free', limit: '5 GB', price: '$0' },
-  { id: StorageTier.Basic, name: 'Basic', limit: '10 GB', price: '$5/mo' },
-  { id: StorageTier.Pro, name: 'Pro', limit: '20 GB', price: '$10/mo' },
-  {
-    id: StorageTier.Enterprise,
-    name: 'Enterprise',
-    limit: '100 GB',
-    price: '$20/mo',
-  },
-];
-
-const DEFAULT_ACCOUNT_TIERS: Omit<TierInfo, 'isConfigured'>[] = [
-  { id: AccountTier.Free, name: 'Free', limit: '1 account', price: '$0' },
-  { id: AccountTier.Basic, name: 'Basic', limit: '2 accounts', price: '$5/mo' },
-  { id: AccountTier.Pro, name: 'Pro', limit: '5 accounts', price: '$10/mo' },
-  {
-    id: AccountTier.Enterprise,
-    name: 'Enterprise',
-    limit: 'Unlimited',
-    price: '$20/mo',
-  },
-];
-
-/**
- * Format price from cents to display string
- */
-function formatPrice(
-  unitAmount: number,
-  currency: string,
-  interval: string,
-): string {
-  const amount = unitAmount / 100;
-  const currencySymbol = currency.toUpperCase() === 'USD' ? '$' : currency;
-  const intervalLabel = interval === 'month' ? '/mo' : `/${interval}`;
-  return `${currencySymbol}${amount}${intervalLabel}`;
-}
-
-interface TierInfo {
-  id: StorageTier | AccountTier | DomainTier;
-  name: string;
-  limit: string;
-  price: string;
-  isConfigured: boolean; // Whether this tier has a Stripe price configured
-}
-
-/**
- * Build tier list from Stripe prices, falling back to defaults
- */
-function buildStorageTiers(
-  prices: Array<{
-    tier: string;
-    type: string;
-    name: string;
-    unitAmount: number;
-    currency: string;
-    interval: string;
-  }>,
-): TierInfo[] {
-  const storagePrices = prices.filter((p) => p.type === 'storage');
-  const priceMap = new Map(storagePrices.map((p) => [p.tier, p]));
-
-  return DEFAULT_STORAGE_TIERS.map((tier) => {
-    const stripePrice = priceMap.get(tier.id.toUpperCase());
-    // Free tier is always available, paid tiers need Stripe price
-    const isFree = tier.id === StorageTier.Free;
-    const isConfigured = isFree || !!stripePrice;
-
-    if (stripePrice) {
-      return {
-        ...tier,
-        name: stripePrice.name.replace(' Storage', '').replace(' storage', ''),
-        price: formatPrice(
-          stripePrice.unitAmount,
-          stripePrice.currency,
-          stripePrice.interval,
-        ),
-        isConfigured,
-      };
-    }
-    return { ...tier, isConfigured };
-  });
-}
-
-function buildAccountTiers(
-  prices: Array<{
-    tier: string;
-    type: string;
-    name: string;
-    unitAmount: number;
-    currency: string;
-    interval: string;
-  }>,
-): TierInfo[] {
-  const accountPrices = prices.filter((p) => p.type === 'account');
-  const priceMap = new Map(accountPrices.map((p) => [p.tier, p]));
-
-  return DEFAULT_ACCOUNT_TIERS.map((tier) => {
-    const stripePrice = priceMap.get(tier.id.toUpperCase());
-    // Free tier is always available, paid tiers need Stripe price
-    const isFree = tier.id === AccountTier.Free;
-    const isConfigured = isFree || !!stripePrice;
-
-    if (stripePrice) {
-      return {
-        ...tier,
-        name: stripePrice.name
-          .replace(' Accounts', '')
-          .replace(' accounts', ''),
-        price: formatPrice(
-          stripePrice.unitAmount,
-          stripePrice.currency,
-          stripePrice.interval,
-        ),
-        isConfigured,
-      };
-    }
-    return { ...tier, isConfigured };
-  });
-}
-
-function buildDomainTiers(
-  prices: Array<{
-    tier: string;
-    type: string;
-    name: string;
-    unitAmount: number;
-    currency: string;
-    interval: string;
-  }>,
-): TierInfo[] {
-  const domainPrices = prices.filter((p) => p.type === 'domain');
-  const priceMap = new Map(domainPrices.map((p) => [p.tier, p]));
-
-  return DEFAULT_DOMAIN_TIERS.map((tier) => {
-    const stripePrice = priceMap.get(tier.id.toUpperCase());
-    const isFree = tier.id === DomainTier.Free;
-    const isConfigured = isFree || !!stripePrice;
-
-    if (stripePrice) {
-      return {
-        ...tier,
-        name: stripePrice.name
-          .replace(' Domains', '')
-          .replace(' domains', ''),
-        price: formatPrice(
-          stripePrice.unitAmount,
-          stripePrice.currency,
-          stripePrice.interval,
-        ),
-        isConfigured,
-      };
-    }
-    return { ...tier, isConfigured };
-  });
-}
 
 export function BillingSettings() {
   // Extract checkout session ID from URL (set by Stripe redirect)
@@ -376,6 +163,9 @@ export function BillingSettings() {
     useState<DomainTier | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalStep, setConfirmModalStep] = useState<1 | 2>(1);
+  const [editingStoragePlan, setEditingStoragePlan] = useState(false);
+  const [editingAccountPlan, setEditingAccountPlan] = useState(false);
+  const [editingDomainPlan, setEditingDomainPlan] = useState(false);
 
   // Auto-refresh on page focus
   useEffect(() => {
@@ -494,18 +284,6 @@ export function BillingSettings() {
     const domainTier =
       pendingDomainTier ||
       (data?.getBillingInfo?.subscription?.domainTier as DomainTier);
-
-    if (
-      storageTier === StorageTier.Free &&
-      accountTier === AccountTier.Free &&
-      domainTier === DomainTier.Free
-    ) {
-      toast.error(
-        'To cancel your subscription, please use the Manage Billing button',
-      );
-      setShowConfirmModal(false);
-      return;
-    }
 
     try {
       const result = await createCheckoutSession({
@@ -704,6 +482,23 @@ export function BillingSettings() {
                 )}
               </SubscriptionGrid>
 
+              {(() => {
+                const platformPrice = billing?.prices?.find(
+                  (p) => p.type === 'platform',
+                );
+                if (!platformPrice) return null;
+                return (
+                  <p className="text-muted small mb-0 mt-2">
+                    {platformPrice.name}:{' '}
+                    {formatCents(
+                      platformPrice.unitAmount,
+                      platformPrice.currency,
+                    )}
+                    /{platformPrice.interval}
+                  </p>
+                );
+              })()}
+
               {subscription?.cancelAtPeriodEnd && subscription?.isValid && (
                 <>
                   <WarningBox>
@@ -812,9 +607,22 @@ export function BillingSettings() {
       {billing?.isStripeConfigured && (
         <>
           <BillingCard className="card">
-            <Card.Header>
-              <FontAwesomeIcon icon={faDatabase} className="me-2" />
-              Storage Plan
+            <Card.Header className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <span>
+                <FontAwesomeIcon icon={faDatabase} className="me-2" />
+                Storage Plan
+              </span>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={() => setEditingStoragePlan((v) => !v)}
+              >
+                <FontAwesomeIcon
+                  icon={editingStoragePlan ? faCheck : faPen}
+                  className="me-1"
+                />
+                {editingStoragePlan ? 'Done' : 'Edit'}
+              </Button>
             </Card.Header>
             <Card.Body>
               {!hasStripeCustomer && (
@@ -827,213 +635,318 @@ export function BillingSettings() {
                   billing information first.
                 </Alert>
               )}
-              <TierSelectionGrid>
-                {storageTiers.map((tier) => {
-                  const isCurrent = currentStorageTier === tier.id;
-                  const isSelected = effectiveStorageTier === tier.id;
-                  const isPending = pendingStorageTier === tier.id;
-                  const isDisabled = !tier.isConfigured;
-                  return (
-                    <TierCard
-                      key={tier.id}
-                      $selected={isSelected}
-                      $current={isCurrent}
-                      $disabled={isDisabled}
-                      onClick={() =>
-                        !isDisabled &&
-                        handleStorageTierSelect(tier.id as StorageTier)
-                      }
-                    >
-                      {isCurrent && <CurrentBadge>Current</CurrentBadge>}
-                      {isDisabled && !isCurrent && (
-                        <UnavailableBadge>Coming Soon</UnavailableBadge>
-                      )}
-                      <TierCardHeader>{tier.name}</TierCardHeader>
-                      <TierCardPrice>{tier.price}</TierCardPrice>
-                      <TierCardFeatures>
-                        <TierCardFeature>
-                          <FontAwesomeIcon icon={faCheckCircle} />
-                          {tier.limit} storage
-                        </TierCardFeature>
-                      </TierCardFeatures>
-                      {isPending && (
-                        <small className="text-warning mt-2 d-block">
-                          <FontAwesomeIcon
-                            icon={faArrowRight}
-                            className="me-1"
-                          />
-                          Selected
-                        </small>
-                      )}
-                    </TierCard>
+              {!editingStoragePlan ? (
+                (() => {
+                  const info = findTierInfo(
+                    storageTiers,
+                    currentStorageTier,
                   );
-                })}
-              </TierSelectionGrid>
-              {/* Downgrade warning for storage */}
-              {pendingStorageTier && (() => {
-                const pendingLimitBytes = STORAGE_LIMIT_BYTES[pendingStorageTier] ?? 0;
-                const currentUsageBytes = usage?.totalStorageBytes ?? 0;
-                const wouldExceedLimit = currentUsageBytes > pendingLimitBytes;
-                
-                if (wouldExceedLimit) {
                   return (
-                    <DowngradeWarning>
-                      <FontAwesomeIcon icon={faExclamationTriangle} />
-                      <div>
-                        <strong>Storage limit will be exceeded</strong>
-                        Your current usage ({formatBytes(currentUsageBytes)}) exceeds the{' '}
-                        {formatTier(pendingStorageTier)} plan limit ({formatBytes(pendingLimitBytes)}).
-                        Email syncing will be paused until you free up storage or upgrade to a higher tier.
-                        Existing emails will not be deleted, but new emails won't sync until you're under the limit.
-                      </div>
-                    </DowngradeWarning>
+                    <div className="d-flex flex-column gap-1">
+                      <span className="fw-semibold">
+                        {info?.name ?? formatTier(currentStorageTier)}
+                      </span>
+                      <span className="text-muted">{info?.price ?? '—'}</span>
+                      <span className="text-muted small">
+                        {info?.limit ?? getStorageLimit(currentStorageTier)}{' '}
+                        storage
+                      </span>
+                    </div>
                   );
-                }
-                return null;
-              })()}
+                })()
+              ) : (
+                <>
+                  <TierSelectionGrid>
+                    {storageTiers.map((tier) => {
+                      const isCurrent = currentStorageTier === tier.id;
+                      const isSelected = effectiveStorageTier === tier.id;
+                      const isPending = pendingStorageTier === tier.id;
+                      const isDisabled = !tier.isConfigured;
+                      return (
+                        <TierCard
+                          key={tier.id}
+                          $selected={isSelected}
+                          $current={isCurrent}
+                          $disabled={isDisabled}
+                          onClick={() =>
+                            !isDisabled &&
+                            handleStorageTierSelect(tier.id as StorageTier)
+                          }
+                        >
+                          {isCurrent && <CurrentBadge>Current</CurrentBadge>}
+                          {isDisabled && !isCurrent && (
+                            <UnavailableBadge>Coming Soon</UnavailableBadge>
+                          )}
+                          <TierCardHeader>{tier.name}</TierCardHeader>
+                          <TierCardPrice>{tier.price}</TierCardPrice>
+                          <TierCardFeatures>
+                            <TierCardFeature>
+                              <FontAwesomeIcon icon={faCheckCircle} />
+                              {tier.limit} storage
+                            </TierCardFeature>
+                          </TierCardFeatures>
+                          {isPending && (
+                            <small className="text-warning mt-2 d-block">
+                              <FontAwesomeIcon
+                                icon={faArrowRight}
+                                className="me-1"
+                              />
+                              Selected
+                            </small>
+                          )}
+                        </TierCard>
+                      );
+                    })}
+                  </TierSelectionGrid>
+                  {pendingStorageTier && (() => {
+                    const pendingLimitBytes =
+                      STORAGE_LIMIT_BYTES[pendingStorageTier] ?? 0;
+                    const currentUsageBytes = usage?.totalStorageBytes ?? 0;
+                    const wouldExceedLimit =
+                      currentUsageBytes > pendingLimitBytes;
+
+                    if (wouldExceedLimit) {
+                      return (
+                        <DowngradeWarning>
+                          <FontAwesomeIcon icon={faExclamationTriangle} />
+                          <div>
+                            <strong>Storage limit will be exceeded</strong>
+                            Your current usage ({formatBytes(currentUsageBytes)})
+                            exceeds the {formatTier(pendingStorageTier)} plan
+                            limit ({formatBytes(pendingLimitBytes)}). Email
+                            syncing will be paused until you free up storage or
+                            upgrade to a higher tier. Existing emails will not
+                            be deleted, but new emails won't sync until you're
+                            under the limit.
+                          </div>
+                        </DowngradeWarning>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
+              )}
             </Card.Body>
           </BillingCard>
 
           <BillingCard className="card">
-            <Card.Header>
-              <FontAwesomeIcon icon={faEnvelope} className="me-2" />
-              Email Accounts Plan
+            <Card.Header className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <span>
+                <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+                Email Accounts Plan
+              </span>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={() => setEditingAccountPlan((v) => !v)}
+              >
+                <FontAwesomeIcon
+                  icon={editingAccountPlan ? faCheck : faPen}
+                  className="me-1"
+                />
+                {editingAccountPlan ? 'Done' : 'Edit'}
+              </Button>
             </Card.Header>
             <Card.Body>
-              <TierSelectionGrid>
-                {accountTiers.map((tier) => {
-                  const isCurrent = currentAccountTier === tier.id;
-                  const isSelected = effectiveAccountTier === tier.id;
-                  const isPending = pendingAccountTier === tier.id;
-                  const isDisabled = !tier.isConfigured;
-                  return (
-                    <TierCard
-                      key={tier.id}
-                      $selected={isSelected}
-                      $current={isCurrent}
-                      $disabled={isDisabled}
-                      onClick={() =>
-                        !isDisabled &&
-                        handleAccountTierSelect(tier.id as AccountTier)
-                      }
-                    >
-                      {isCurrent && <CurrentBadge>Current</CurrentBadge>}
-                      {isDisabled && !isCurrent && (
-                        <UnavailableBadge>Coming Soon</UnavailableBadge>
-                      )}
-                      <TierCardHeader>{tier.name}</TierCardHeader>
-                      <TierCardPrice>{tier.price}</TierCardPrice>
-                      <TierCardFeatures>
-                        <TierCardFeature>
-                          <FontAwesomeIcon icon={faCheckCircle} />
-                          {tier.limit}
-                        </TierCardFeature>
-                      </TierCardFeatures>
-                      {isPending && (
-                        <small className="text-warning mt-2 d-block">
-                          <FontAwesomeIcon
-                            icon={faArrowRight}
-                            className="me-1"
-                          />
-                          Selected
-                        </small>
-                      )}
-                    </TierCard>
+              {!editingAccountPlan ? (
+                (() => {
+                  const info = findTierInfo(
+                    accountTiers,
+                    currentAccountTier,
                   );
-                })}
-              </TierSelectionGrid>
-              {pendingAccountTier && (() => {
-                const pendingLimit = ACCOUNT_LIMIT_COUNT[pendingAccountTier] ?? 0;
-                const currentAccountCount = usage?.accountCount ?? 0;
-                const wouldExceedLimit = pendingLimit !== -1 && currentAccountCount > pendingLimit;
-                
-                if (wouldExceedLimit) {
                   return (
-                    <DowngradeWarning>
-                      <FontAwesomeIcon icon={faExclamationTriangle} />
-                      <div>
-                        <strong>Account limit will be exceeded</strong>
-                        You currently have {currentAccountCount} email account{currentAccountCount !== 1 ? 's' : ''}, 
-                        but the {formatTier(pendingAccountTier)} plan only allows {pendingLimit}.
-                        You won't be able to add new email accounts until you remove some or upgrade to a higher tier.
-                        Existing accounts will continue to work, but some may be disabled if you don't remove them.
-                      </div>
-                    </DowngradeWarning>
+                    <div className="d-flex flex-column gap-1">
+                      <span className="fw-semibold">
+                        {info?.name ?? formatTier(currentAccountTier)}
+                      </span>
+                      <span className="text-muted">{info?.price ?? '—'}</span>
+                      <span className="text-muted small">
+                        {info?.limit ?? getAccountLimit(currentAccountTier)}
+                      </span>
+                    </div>
                   );
-                }
-                return null;
-              })()}
+                })()
+              ) : (
+                <>
+                  <TierSelectionGrid>
+                    {accountTiers.map((tier) => {
+                      const isCurrent = currentAccountTier === tier.id;
+                      const isSelected = effectiveAccountTier === tier.id;
+                      const isPending = pendingAccountTier === tier.id;
+                      const isDisabled = !tier.isConfigured;
+                      return (
+                        <TierCard
+                          key={tier.id}
+                          $selected={isSelected}
+                          $current={isCurrent}
+                          $disabled={isDisabled}
+                          onClick={() =>
+                            !isDisabled &&
+                            handleAccountTierSelect(tier.id as AccountTier)
+                          }
+                        >
+                          {isCurrent && <CurrentBadge>Current</CurrentBadge>}
+                          {isDisabled && !isCurrent && (
+                            <UnavailableBadge>Coming Soon</UnavailableBadge>
+                          )}
+                          <TierCardHeader>{tier.name}</TierCardHeader>
+                          <TierCardPrice>{tier.price}</TierCardPrice>
+                          <TierCardFeatures>
+                            <TierCardFeature>
+                              <FontAwesomeIcon icon={faCheckCircle} />
+                              {tier.limit}
+                            </TierCardFeature>
+                          </TierCardFeatures>
+                          {isPending && (
+                            <small className="text-warning mt-2 d-block">
+                              <FontAwesomeIcon
+                                icon={faArrowRight}
+                                className="me-1"
+                              />
+                              Selected
+                            </small>
+                          )}
+                        </TierCard>
+                      );
+                    })}
+                  </TierSelectionGrid>
+                  {pendingAccountTier && (() => {
+                    const pendingLimit =
+                      ACCOUNT_LIMIT_COUNT[pendingAccountTier] ?? 0;
+                    const currentAccountCount = usage?.accountCount ?? 0;
+                    const wouldExceedLimit =
+                      pendingLimit !== -1 &&
+                      currentAccountCount > pendingLimit;
+
+                    if (wouldExceedLimit) {
+                      return (
+                        <DowngradeWarning>
+                          <FontAwesomeIcon icon={faExclamationTriangle} />
+                          <div>
+                            <strong>Account limit will be exceeded</strong>
+                            You currently have {currentAccountCount} email
+                            account{currentAccountCount !== 1 ? 's' : ''}, but
+                            the {formatTier(pendingAccountTier)} plan only
+                            allows {pendingLimit}. You won't be able to add new
+                            email accounts until you remove some or upgrade to a
+                            higher tier. Existing accounts will continue to
+                            work, but some may be disabled if you don't remove
+                            them.
+                          </div>
+                        </DowngradeWarning>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
+              )}
             </Card.Body>
           </BillingCard>
 
           <BillingCard className="card">
-            <Card.Header>
-              <FontAwesomeIcon icon={faGlobe} className="me-2" />
-              Custom Domains Plan
+            <Card.Header className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <span>
+                <FontAwesomeIcon icon={faGlobe} className="me-2" />
+                Custom Domains Plan
+              </span>
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={() => setEditingDomainPlan((v) => !v)}
+              >
+                <FontAwesomeIcon
+                  icon={editingDomainPlan ? faCheck : faPen}
+                  className="me-1"
+                />
+                {editingDomainPlan ? 'Done' : 'Edit'}
+              </Button>
             </Card.Header>
             <Card.Body>
-              <TierSelectionGrid>
-                {domainTiers.map((tier) => {
-                  const isCurrent = currentDomainTier === tier.id;
-                  const isSelected = effectiveDomainTier === tier.id;
-                  const isPending = pendingDomainTier === tier.id;
-                  const isDisabled = !tier.isConfigured;
+              {!editingDomainPlan ? (
+                (() => {
+                  const info = findTierInfo(domainTiers, currentDomainTier);
                   return (
-                    <TierCard
-                      key={tier.id}
-                      $selected={isSelected}
-                      $current={isCurrent}
-                      $disabled={isDisabled}
-                      onClick={() =>
-                        !isDisabled &&
-                        handleDomainTierSelect(tier.id as DomainTier)
-                      }
-                    >
-                      {isCurrent && <CurrentBadge>Current</CurrentBadge>}
-                      {isDisabled && !isCurrent && (
-                        <UnavailableBadge>Coming Soon</UnavailableBadge>
-                      )}
-                      <TierCardHeader>{tier.name}</TierCardHeader>
-                      <TierCardPrice>{tier.price}</TierCardPrice>
-                      <TierCardFeatures>
-                        <TierCardFeature>
-                          <FontAwesomeIcon icon={faCheckCircle} />
-                          {tier.limit}
-                        </TierCardFeature>
-                      </TierCardFeatures>
-                      {isPending && (
-                        <small className="text-warning mt-2 d-block">
-                          <FontAwesomeIcon
-                            icon={faArrowRight}
-                            className="me-1"
-                          />
-                          Selected
-                        </small>
-                      )}
-                    </TierCard>
+                    <div className="d-flex flex-column gap-1">
+                      <span className="fw-semibold">
+                        {info?.name ??
+                          formatTier(currentDomainTier, 'domain')}
+                      </span>
+                      <span className="text-muted">{info?.price ?? '—'}</span>
+                      <span className="text-muted small">
+                        {info?.limit ?? getDomainLimit(currentDomainTier)}
+                      </span>
+                    </div>
                   );
-                })}
-              </TierSelectionGrid>
-              {pendingDomainTier && (() => {
-                const pendingLimit = DOMAIN_LIMIT_COUNT[pendingDomainTier] ?? 0;
-                const currentDomainCount = usage?.domainCount ?? 0;
-                const wouldExceedLimit = currentDomainCount > pendingLimit;
+                })()
+              ) : (
+                <>
+                  <TierSelectionGrid>
+                    {domainTiers.map((tier) => {
+                      const isCurrent = currentDomainTier === tier.id;
+                      const isSelected = effectiveDomainTier === tier.id;
+                      const isPending = pendingDomainTier === tier.id;
+                      const isDisabled = !tier.isConfigured;
+                      return (
+                        <TierCard
+                          key={tier.id}
+                          $selected={isSelected}
+                          $current={isCurrent}
+                          $disabled={isDisabled}
+                          onClick={() =>
+                            !isDisabled &&
+                            handleDomainTierSelect(tier.id as DomainTier)
+                          }
+                        >
+                          {isCurrent && <CurrentBadge>Current</CurrentBadge>}
+                          {isDisabled && !isCurrent && (
+                            <UnavailableBadge>Coming Soon</UnavailableBadge>
+                          )}
+                          <TierCardHeader>{tier.name}</TierCardHeader>
+                          <TierCardPrice>{tier.price}</TierCardPrice>
+                          <TierCardFeatures>
+                            <TierCardFeature>
+                              <FontAwesomeIcon icon={faCheckCircle} />
+                              {tier.limit}
+                            </TierCardFeature>
+                          </TierCardFeatures>
+                          {isPending && (
+                            <small className="text-warning mt-2 d-block">
+                              <FontAwesomeIcon
+                                icon={faArrowRight}
+                                className="me-1"
+                              />
+                              Selected
+                            </small>
+                          )}
+                        </TierCard>
+                      );
+                    })}
+                  </TierSelectionGrid>
+                  {pendingDomainTier && (() => {
+                    const pendingLimit =
+                      DOMAIN_LIMIT_COUNT[pendingDomainTier] ?? 0;
+                    const currentDomainCount = usage?.domainCount ?? 0;
+                    const wouldExceedLimit = currentDomainCount > pendingLimit;
 
-                if (wouldExceedLimit) {
-                  return (
-                    <DowngradeWarning>
-                      <FontAwesomeIcon icon={faExclamationTriangle} />
-                      <div>
-                        <strong>Domain limit will be exceeded</strong>
-                        You currently have {currentDomainCount} custom domain{currentDomainCount !== 1 ? 's' : ''},
-                        but the {formatTier(pendingDomainTier, 'domain')} plan only allows {pendingLimit}.
-                        You'll need to remove domains before downgrading.
-                      </div>
-                    </DowngradeWarning>
-                  );
-                }
-                return null;
-              })()}
+                    if (wouldExceedLimit) {
+                      return (
+                        <DowngradeWarning>
+                          <FontAwesomeIcon icon={faExclamationTriangle} />
+                          <div>
+                            <strong>Domain limit will be exceeded</strong>
+                            You currently have {currentDomainCount} custom
+                            domain{currentDomainCount !== 1 ? 's' : ''}, but
+                            the {formatTier(pendingDomainTier, 'domain')} plan
+                            only allows {pendingLimit}. You'll need to remove
+                            domains before downgrading.
+                          </div>
+                        </DowngradeWarning>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
+              )}
             </Card.Body>
           </BillingCard>
         </>

@@ -118,6 +118,10 @@ type User implements BaseEntityProps {
   """
   blockExternalImages: Boolean!
   """
+  When the user finished the onboarding setup wizard (null = must complete wizard).
+  """
+  setupWizardCompletedAt: Date
+  """
   List of email accounts configured for this user
   """
   emailAccounts: [EmailAccount!]!
@@ -2314,10 +2318,23 @@ type Query {
 # ============ Mutations ============
 
 """
+Where Stripe Checkout should return the user after a successful or canceled session.
+"""
+enum CheckoutContext {
+  BILLING
+  SETUP
+}
+
+"""
 GraphQL mutations for modifying data. All mutations require authentication.
 """
 type Mutation {
   # Auth
+  """
+  Mark the setup wizard as finished for the current user (allows access to the main app).
+  """
+  completeSetupWizard: User!
+
   """
   Delete an authentication method (unlink OAuth provider).
   Cannot delete the last remaining auth method.
@@ -2764,6 +2781,10 @@ type Mutation {
     Domain tier to subscribe to
     """
     domainTier: DomainTier!
+    """
+    Redirect target after Checkout (default BILLING: settings billing; SETUP: onboarding wizard).
+    """
+    checkoutContext: CheckoutContext
   ): String
 
   """

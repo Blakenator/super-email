@@ -57,7 +57,7 @@ export const EMAIL_PROVIDERS: EmailProviderPreset[] = [
     name: 'Outlook / Microsoft 365',
     icon: faMicrosoft,
     iconColor: '#0078D4',
-    supportsOAuth: true,
+    supportsOAuth: false, // Microsoft OAuth requires approval — use app password instead
     oauthProvider: 'outlook',
     imap: {
       host: 'outlook.office365.com',
@@ -79,7 +79,7 @@ export const EMAIL_PROVIDERS: EmailProviderPreset[] = [
     name: 'Yahoo Mail',
     icon: faYahoo,
     iconColor: '#6001D2',
-    supportsOAuth: true,
+    supportsOAuth: false, // Yahoo OAuth requires approval — use app password instead
     oauthProvider: 'yahoo',
     imap: {
       host: 'imap.mail.yahoo.com',

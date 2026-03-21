@@ -506,8 +506,18 @@ export const REFRESH_STORAGE_USAGE_MUTATION = gql(`
 `);
 
 export const CREATE_CHECKOUT_SESSION_MUTATION = gql(`
-  mutation CreateCheckoutSession($storageTier: StorageTier!, $accountTier: AccountTier!, $domainTier: DomainTier!) {
-    createCheckoutSession(storageTier: $storageTier, accountTier: $accountTier, domainTier: $domainTier)
+  mutation CreateCheckoutSession(
+    $storageTier: StorageTier!
+    $accountTier: AccountTier!
+    $domainTier: DomainTier!
+    $checkoutContext: CheckoutContext
+  ) {
+    createCheckoutSession(
+      storageTier: $storageTier
+      accountTier: $accountTier
+      domainTier: $domainTier
+      checkoutContext: $checkoutContext
+    )
   }
 `);
 

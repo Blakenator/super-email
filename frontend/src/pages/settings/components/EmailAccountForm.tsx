@@ -107,6 +107,8 @@ interface EmailAccountFormProps {
   customDomains?: CustomDomainOption[];
   onCreateCustomDomainAccount?: (data: CustomDomainAccountData) => void;
   isCreatingCustomDomainAccount?: boolean;
+  /** When set, OAuth callback redirects to this app path (e.g. /setup). */
+  oauthReturnPath?: string;
 }
 
 export function EmailAccountForm({
@@ -122,6 +124,7 @@ export function EmailAccountForm({
   customDomains,
   onCreateCustomDomainAccount,
   isCreatingCustomDomainAccount,
+  oauthReturnPath,
 }: EmailAccountFormProps) {
   const { token } = useAuth();
   const [formData, setFormData] =
@@ -180,7 +183,13 @@ export function EmailAccountForm({
 
   const handleOAuthSignIn = () => {
     if (!selectedProvider?.oauthProvider || !token) return;
-    const oauthUrl = `${config.api.baseUrl}/api/oauth/${selectedProvider.oauthProvider}/start?token=${encodeURIComponent(token)}`;
+    const params = new URLSearchParams({
+      token,
+    });
+    if (oauthReturnPath) {
+      params.set('returnPath', oauthReturnPath);
+    }
+    const oauthUrl = `${config.api.baseUrl}/api/oauth/${selectedProvider.oauthProvider}/start?${params.toString()}`;
     window.location.href = oauthUrl;
   };
 

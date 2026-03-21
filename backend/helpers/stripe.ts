@@ -103,13 +103,6 @@ export async function createCheckoutSession(
   const customerId = await getOrCreateStripeCustomer(user);
   const desired = collectPriceItems(storageTier, accountTier, domainTier);
 
-  if (desired.length === 0) {
-    throw new Error(
-      'Cannot create checkout session for free tier. ' +
-        'Please select at least one paid plan to upgrade.',
-    );
-  }
-
   const lineItems = desired.map((d) => ({ price: d.priceId, quantity: 1 }));
 
   const session = await stripeClient.checkout.sessions.create({
@@ -135,9 +128,19 @@ export async function createCheckoutSession(
   return session.url!;
 }
 
+function getPlatformBasePriceId(): string | null {
+  const id = config.stripe.platformBasePriceId?.trim();
+  return id || null;
+}
+
+export function isBasePriceId(priceId: string): boolean {
+  const base = getPlatformBasePriceId();
+  return !!base && priceId === base;
+}
+
 /**
- * Collect the Stripe price IDs for the requested tiers.
- * Throws if any paid tier is missing its env-var configuration.
+ * Collect the Stripe price IDs for the subscription: platform base (always) + paid feature tiers.
+ * Throws if STRIPE_PRICE_PLATFORM_BASE or any selected paid tier is missing.
  */
 function collectPriceItems(
   storageTier: StorageTier,
@@ -145,6 +148,18 @@ function collectPriceItems(
   domainTier: DomainTier,
 ): { priceId: string; tier: string }[] {
   const items: { priceId: string; tier: string }[] = [];
+  const baseId = getPlatformBasePriceId();
+  if (!baseId) {
+    logger.error(
+      'Stripe',
+      'STRIPE_PRICE_PLATFORM_BASE is not configured; cannot build subscription line items.',
+    );
+    throw new Error(
+      'Billing is not fully configured (platform base price missing). Please contact support.',
+    );
+  }
+  items.push({ priceId: baseId, tier: 'platform base' });
+
   const missing: string[] = [];
 
   if (storageTier !== StorageTier.FREE) {
@@ -203,13 +218,6 @@ export async function tryResumeOrUpdateStripeSubscription(
   }
 
   const desired = collectPriceItems(storageTier, accountTier, domainTier);
-
-  if (desired.length === 0) {
-    throw new Error(
-      'Cannot update subscription to all-free tiers. ' +
-        'Use the Manage Billing portal to cancel your subscription.',
-    );
-  }
 
   const currentItems = stripeSub.items?.data ?? [];
   const desiredPriceIds = new Set(desired.map((d) => d.priceId));
@@ -906,7 +914,15 @@ export async function syncSubscriptionFromStripe(
       }
     }
 
-    if (items.length > 0 && storageTier === StorageTier.FREE && accountTier === AccountTier.FREE && domainTier === DomainTier.FREE) {
+    const onlyBaseOrUnmapped =
+      items.length > 0 &&
+      storageTier === StorageTier.FREE &&
+      accountTier === AccountTier.FREE &&
+      domainTier === DomainTier.FREE;
+    const allItemsAreBase =
+      onlyBaseOrUnmapped &&
+      items.every((i) => isBasePriceId(i.price.id));
+    if (onlyBaseOrUnmapped && !allItemsAreBase) {
       logger.warn(
         'Stripe',
         `No tier mappings found for subscription ${subscription.stripeSubscriptionId}. ` +
@@ -919,7 +935,8 @@ export async function syncSubscriptionFromStripe(
           `enterprise=${config.stripe.accountPriceIds.enterprise || '(empty)'}. ` +
           `Configured domain price IDs: basic=${config.stripe.domainPriceIds.basic || '(empty)'}, ` +
           `pro=${config.stripe.domainPriceIds.pro || '(empty)'}, ` +
-          `enterprise=${config.stripe.domainPriceIds.enterprise || '(empty)'}`,
+          `enterprise=${config.stripe.domainPriceIds.enterprise || '(empty)'}. ` +
+          `Platform base: ${getPlatformBasePriceId() || '(empty)'}`,
       );
     }
 
@@ -987,7 +1004,7 @@ export async function syncSubscriptionFromStripe(
 export interface StripePriceInfo {
   id: string;
   tier: string;
-  type: 'storage' | 'account' | 'domain';
+  type: 'storage' | 'account' | 'domain' | 'platform';
   name: string;
   unitAmount: number; // in cents
   currency: string;
@@ -1005,6 +1022,27 @@ export async function getStripePrices(): Promise<StripePriceInfo[]> {
   try {
     const stripeClient = getStripeClient();
     const prices: StripePriceInfo[] = [];
+
+    const platformId = getPlatformBasePriceId();
+    if (platformId) {
+      try {
+        const price = await stripeClient.prices.retrieve(platformId, {
+          expand: ['product'],
+        });
+        const product = price.product as Stripe.Product;
+        prices.push({
+          id: price.id,
+          tier: 'BASE',
+          type: 'platform',
+          name: product.name || 'SuperMail account',
+          unitAmount: price.unit_amount || 0,
+          currency: price.currency,
+          interval: price.recurring?.interval || 'month',
+        });
+      } catch (e: any) {
+        logger.warn('Stripe', `Failed to fetch platform base price ${platformId}: ${e.message}`);
+      }
+    }
 
     // Get all configured price IDs
     const storagePriceIds = [

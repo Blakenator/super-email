@@ -1,4 +1,5 @@
 import type { AllMutations } from '../types.js';
+import { completeSetupWizard } from './auth/completeSetupWizard.js';
 import { deleteAuthenticationMethod } from './auth/deleteAuthenticationMethod.js';
 import { updateThemePreference } from './auth/updateThemePreference.js';
 import { updateUserPreferences } from './auth/updateUserPreferences.js';
@@ -46,6 +47,7 @@ import { unregisterPushToken } from './push-token/unregisterPushToken.js';
 import { getPushTokens } from './push-token/getPushTokens.js';
 
 export const MutationResolvers: AllMutations = {
+  completeSetupWizard,
   deleteAuthenticationMethod,
   updateThemePreference,
   updateUserPreferences,

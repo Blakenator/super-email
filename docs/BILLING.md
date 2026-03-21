@@ -6,6 +6,7 @@ This document explains how to set up and configure the usage-based billing syste
 
 The billing system provides:
 
+- **Platform base subscription**: Every paying subscriber has a recurring **platform / base** price (for example $5/month) on the subscription, separate from storage, account, and domain add-on tiers.
 - **Storage-based billing**: Users are billed based on total email body size + attachment size
 - **Account-based billing**: Users are limited by the number of email accounts they can add
 - **Stripe integration**: Subscriptions are managed via Stripe
@@ -36,6 +37,12 @@ The billing system provides:
 ### 1. Create Stripe Products and Prices
 
 In the [Stripe Dashboard](https://dashboard.stripe.com), you can organize your products in two ways:
+
+#### Platform base price (required for paid checkout)
+
+1. Create a product for the recurring platform fee (for example **SuperMail platform** or **Account base**).
+2. Add a **recurring** monthly price and copy its Price ID — this maps to `STRIPE_PRICE_PLATFORM_BASE` in the backend.
+3. New checkouts and in-app subscription updates always include this line item (even when storage, accounts, and domains are all on the free tier).
 
 #### Option A: Single Product with Multiple Prices (Recommended)
 
@@ -119,7 +126,26 @@ STRIPE_PRICE_ACCOUNTS_ENTERPRISE=price_...
 STRIPE_PRICE_DOMAINS_BASIC=price_...
 STRIPE_PRICE_DOMAINS_PRO=price_...
 STRIPE_PRICE_DOMAINS_ENTERPRISE=price_...
+
+# Platform base (recurring) — required whenever other Stripe price IDs are set
+STRIPE_PRICE_PLATFORM_BASE=price_...
 ```
+
+`FRONTEND_URL` must be set so Stripe Checkout can redirect users back to the web app (`/settings/billing` or `/setup` after onboarding).
+
+## Web setup wizard (post-signup)
+
+New users who have not completed onboarding are guided through plan selection (Stripe Checkout) and optional email account linking on **`/setup`**. The app gates the main inbox until `completeSetupWizard` has run. Mobile does not include this wizard; subscription details on mobile still come from `getBillingInfo` (including the platform price in `prices` when configured).
+
+## Existing Stripe subscribers (operations)
+
+Subscriptions created **before** the platform base price existed do **not** automatically gain the new line item from application code. To align legacy customers with new pricing:
+
+1. In Stripe Dashboard, open the **customer** → **subscription**.
+2. Use **Update subscription** → **Add item** and add the same recurring price used for `STRIPE_PRICE_PLATFORM_BASE`.
+3. Confirm proration / billing behavior with your finance policy (Stripe will prorate by default depending on settings).
+
+Repeat per subscription or use Stripe’s bulk tools as appropriate for your org.
 
 ## Database Setup
 
@@ -213,7 +239,8 @@ For local development without Stripe:
 To test Stripe locally:
 
 1. Use Stripe test mode keys (sk*test*..., pk*test*...)
-2. Use the [Stripe CLI](https://stripe.com/docs/stripe-cli) to forward webhooks:
+2. Set **all** tier price IDs **and** `STRIPE_PRICE_PLATFORM_BASE` to test paid checkout and the setup wizard plan step; missing `STRIPE_PRICE_PLATFORM_BASE` while other prices are set causes checkout to fail with a clear configuration error.
+3. Use the [Stripe CLI](https://stripe.com/docs/stripe-cli) to forward webhooks:
    ```bash
    stripe listen --forward-to localhost:4000/api/webhooks/stripe
    ```

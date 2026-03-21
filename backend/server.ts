@@ -913,26 +913,36 @@ export async function createServer(
         imap: { host: 'imap.gmail.com', port: 993, useSsl: true },
         smtp: { host: 'smtp.gmail.com', port: 587, useSsl: false },
       },
-      yahoo: {
-        buildAuthUrl: buildYahooAuthUrl,
-        exchangeCode: exchangeYahooCode,
-        authMethod: AuthMethod.OAUTH_YAHOO,
-        providerId: 'yahoo',
-        imap: { host: 'imap.mail.yahoo.com', port: 993, useSsl: true },
-        smtp: { host: 'smtp.mail.yahoo.com', port: 587, useSsl: false },
-      },
-      outlook: {
-        buildAuthUrl: buildOutlookAuthUrl,
-        exchangeCode: exchangeOutlookCode,
-        authMethod: AuthMethod.OAUTH_OUTLOOK,
-        providerId: 'outlook',
-        imap: { host: 'outlook.office365.com', port: 993, useSsl: true },
-        smtp: { host: 'smtp.office365.com', port: 587, useSsl: false },
-      },
+      // Yahoo OAuth requires a lengthy approval process for mail access — disabled for now
+      // yahoo: {
+      //   buildAuthUrl: buildYahooAuthUrl,
+      //   exchangeCode: exchangeYahooCode,
+      //   authMethod: AuthMethod.OAUTH_YAHOO,
+      //   providerId: 'yahoo',
+      //   imap: { host: 'imap.mail.yahoo.com', port: 993, useSsl: true },
+      //   smtp: { host: 'smtp.mail.yahoo.com', port: 587, useSsl: false },
+      // },
+      // Microsoft OAuth requires a lengthy approval process for mail access — disabled for now
+      // outlook: {
+      //   buildAuthUrl: buildOutlookAuthUrl,
+      //   exchangeCode: exchangeOutlookCode,
+      //   authMethod: AuthMethod.OAUTH_OUTLOOK,
+      //   providerId: 'outlook',
+      //   imap: { host: 'outlook.office365.com', port: 993, useSsl: true },
+      //   smtp: { host: 'smtp.office365.com', port: 587, useSsl: false },
+      // },
     };
 
     const OAUTH_STATE_EXPIRY = '10m';
-    const frontendSettingsUrl = `${config.frontendUrl}/settings/accounts`;
+    const defaultOAuthAppUrl = `${config.frontendUrl}/settings/accounts`;
+
+    /** Whitelisted post-OAuth redirect paths (path only, no query). */
+    function oauthAppUrl(returnPath: string | undefined): string {
+      if (returnPath === '/setup') {
+        return `${config.frontendUrl}/setup`;
+      }
+      return defaultOAuthAppUrl;
+    }
 
     for (const [provider, pConfig] of Object.entries(providerConfig) as [
       OAuthProviderKey,
@@ -943,16 +953,20 @@ export async function createServer(
         try {
           const token = req.query.token as string;
           const accountId = req.query.accountId as string | undefined;
+          const returnPathRaw = req.query.returnPath as string | undefined;
+          const returnPath = returnPathRaw === '/setup' ? '/setup' : undefined;
+          const appUrl = oauthAppUrl(returnPath);
+
           if (!token) {
             return res.redirect(
-              `${frontendSettingsUrl}?oauth=error&reason=missing_token`,
+              `${appUrl}?oauth=error&reason=missing_token`,
             );
           }
 
           const payload = await verifyAuthToken(token);
           if (!payload?.userId) {
             return res.redirect(
-              `${frontendSettingsUrl}?oauth=error&reason=invalid_token`,
+              `${appUrl}?oauth=error&reason=invalid_token`,
             );
           }
 
@@ -961,6 +975,7 @@ export async function createServer(
             provider,
             accountId: accountId || undefined,
             csrf: crypto.randomUUID(),
+            returnPath,
           };
           const stateJwt = jwt.default.sign(statePayload, config.jwt.secret, {
             expiresIn: OAUTH_STATE_EXPIRY,
@@ -973,7 +988,7 @@ export async function createServer(
             error: err.message,
           });
           res.redirect(
-            `${frontendSettingsUrl}?oauth=error&reason=start_failed`,
+            `${defaultOAuthAppUrl}?oauth=error&reason=start_failed`,
           );
         }
       });
@@ -993,13 +1008,13 @@ export async function createServer(
               `${provider} callback received error: ${oauthError}`,
             );
             return res.redirect(
-              `${frontendSettingsUrl}?oauth=error&reason=${encodeURIComponent(oauthError)}`,
+              `${defaultOAuthAppUrl}?oauth=error&reason=${encodeURIComponent(oauthError)}`,
             );
           }
 
           if (!code || !state) {
             return res.redirect(
-              `${frontendSettingsUrl}?oauth=error&reason=missing_params`,
+              `${defaultOAuthAppUrl}?oauth=error&reason=missing_params`,
             );
           }
 
@@ -1009,20 +1024,23 @@ export async function createServer(
             provider: string;
             accountId?: string;
             csrf: string;
+            returnPath?: string;
           };
           try {
             statePayload = jwt.default.verify(state, config.jwt.secret) as any;
           } catch {
             return res.redirect(
-              `${frontendSettingsUrl}?oauth=error&reason=invalid_state`,
+              `${defaultOAuthAppUrl}?oauth=error&reason=invalid_state`,
             );
           }
 
           if (statePayload.provider !== provider) {
             return res.redirect(
-              `${frontendSettingsUrl}?oauth=error&reason=provider_mismatch`,
+              `${defaultOAuthAppUrl}?oauth=error&reason=provider_mismatch`,
             );
           }
+
+          const appUrl = oauthAppUrl(statePayload.returnPath);
 
           // Exchange code for tokens
           const tokenResult = await pConfig.exchangeCode(code);
@@ -1057,7 +1075,7 @@ export async function createServer(
                 `Re-authenticated ${provider} account ${existing.id} for user ${statePayload.userId}`,
               );
               return res.redirect(
-                `${frontendSettingsUrl}?oauth=success&reauth=true`,
+                `${appUrl}?oauth=success&reauth=true`,
               );
             }
           }
@@ -1076,7 +1094,7 @@ export async function createServer(
               `Duplicate ${provider} account for ${tokenResult.email} blocked for user ${statePayload.userId}`,
             );
             return res.redirect(
-              `${frontendSettingsUrl}?oauth=error&reason=account_already_connected`,
+              `${appUrl}?oauth=error&reason=account_already_connected`,
             );
           }
 
@@ -1144,7 +1162,7 @@ export async function createServer(
               'OAuth',
               `Created ${provider} account ${emailAccount.id} for user ${statePayload.userId}`,
             );
-            res.redirect(`${frontendSettingsUrl}?oauth=success`);
+            res.redirect(`${appUrl}?oauth=success`);
           } catch (txErr) {
             await transaction.rollback();
             throw txErr;
@@ -1154,7 +1172,7 @@ export async function createServer(
             error: err.message,
           });
           res.redirect(
-            `${frontendSettingsUrl}?oauth=error&reason=callback_failed`,
+            `${defaultOAuthAppUrl}?oauth=error&reason=callback_failed`,
           );
         }
       });

@@ -8,6 +8,7 @@ import {
 import { useAuth } from './contexts/AuthContext';
 import { Login } from './pages/auth/Login';
 import { SignUp } from './pages/auth/SignUp';
+import { SetupWizard } from './pages/setup/SetupWizard';
 import { Inbox } from './pages/inbox/Inbox';
 import { StarredInbox } from './pages/inbox/StarredInbox';
 import { Compose } from './pages/compose/Compose';
@@ -180,7 +181,7 @@ function AuthenticatedApp() {
 }
 
 function App() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
@@ -191,9 +192,14 @@ function App() {
   // Public routes
   if (location.pathname === '/login' || location.pathname === '/signup') {
     if (isAuthenticated) {
-      // Check for redirect param
       const redirectPath = searchParams.get('redirect');
-      return <Navigate to={redirectPath || '/inbox'} replace />;
+      if (redirectPath) {
+        return <Navigate to={redirectPath} replace />;
+      }
+      if (user?.setupWizardCompletedAt === null) {
+        return <Navigate to="/setup" replace />;
+      }
+      return <Navigate to="/inbox" replace />;
     }
     return (
       <Routes>
@@ -211,6 +217,15 @@ function App() {
         ? `/login?redirect=${encodeURIComponent(currentPath)}`
         : '/login';
     return <Navigate to={redirectTo} replace />;
+  }
+
+  if (user?.setupWizardCompletedAt === null) {
+    return (
+      <Routes>
+        <Route path="/setup" element={<SetupWizard />} />
+        <Route path="*" element={<Navigate to="/setup" replace />} />
+      </Routes>
+    );
   }
 
   return <AuthenticatedApp />;

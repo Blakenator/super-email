@@ -114,6 +114,10 @@ export class Email extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare bodyStorageKey: string | null;
 
+  // UTF-8 byte length of stored body JSON (same as S3 object size); used for billing
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare bodySizeBytes: number;
+
   // First ~200 chars of text body for list views and notifications
   @Column({ type: DataType.TEXT, allowNull: true })
   declare bodyPreview: string | null;

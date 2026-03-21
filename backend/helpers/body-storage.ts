@@ -42,6 +42,12 @@ export interface EmailBodyData {
   htmlBody: string | null;
 }
 
+export interface StoreEmailBodyResult {
+  storageKey: string;
+  /** UTF-8 byte length of the stored JSON payload (matches S3/local file size). */
+  bodySizeBytes: number;
+}
+
 /**
  * Store an email body in S3 (production) or local filesystem (development).
  * Key format: {emailAccountId}/{emailId}
@@ -51,9 +57,10 @@ export async function storeEmailBody(
   emailId: string,
   textBody: string | null,
   htmlBody: string | null,
-): Promise<string> {
+): Promise<StoreEmailBodyResult> {
   const storageKey = getStorageKey(emailAccountId, emailId);
   const body = JSON.stringify({ textBody, htmlBody });
+  const bodySizeBytes = Buffer.byteLength(body, 'utf8');
 
   if (config.isProduction && s3Client) {
     await s3Client.send(
@@ -72,7 +79,7 @@ export async function storeEmailBody(
     logger.debug('BodyStorage', 'Stored email body to local disk', { storageKey });
   }
 
-  return storageKey;
+  return { storageKey, bodySizeBytes };
 }
 
 /**

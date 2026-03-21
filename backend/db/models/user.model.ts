@@ -88,6 +88,10 @@ export class User extends Model {
   })
   declare blockExternalImages: boolean;
 
+  /** Null = user must complete web setup wizard (new signups). */
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare setupWizardCompletedAt: Date | null;
+
   // Associations
   @HasMany(() => EmailAccount)
   declare emailAccounts?: EmailAccountType[];

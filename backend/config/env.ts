@@ -138,6 +138,8 @@ export const config = {
       pro: process.env.STRIPE_PRICE_DOMAINS_PRO || '',
       enterprise: process.env.STRIPE_PRICE_DOMAINS_ENTERPRISE || '',
     },
+    /** Recurring platform / account base fee (required when Stripe billing is used) */
+    platformBasePriceId: process.env.STRIPE_PRICE_PLATFORM_BASE || '',
   },
 
   // OAuth Configuration (for Gmail, Yahoo, Outlook email account linking)
@@ -223,6 +225,8 @@ export const envVarDefinitions = {
       'Stripe Price ID for Pro domain tier (2 custom domains, $7/mo)',
     STRIPE_PRICE_DOMAINS_ENTERPRISE:
       'Stripe Price ID for Enterprise domain tier (5 custom domains, $10/mo)',
+    STRIPE_PRICE_PLATFORM_BASE:
+      'Stripe Price ID for monthly platform / account base fee (always on active subscriptions)',
     FIREBASE_SERVICE_ACCOUNT_JSON:
       'Firebase Admin SDK service account JSON (stringified) for web push notifications',
     FIREBASE_SERVICE_ACCOUNT_PATH:

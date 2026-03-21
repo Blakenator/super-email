@@ -122,9 +122,14 @@ To: ${originalEmail.toAddresses.join(', ')}
 
     // Store forwarded body in S3 and create search index
     const storageKey = `${input.emailAccountId}/${sentEmail.id}`;
-    await sentEmail.update({ bodyStorageKey: storageKey });
+    const { bodySizeBytes } = await storeEmailBody(
+      input.emailAccountId,
+      sentEmail.id,
+      textBody,
+      htmlBody,
+    );
     await Promise.all([
-      storeEmailBody(input.emailAccountId, sentEmail.id, textBody, htmlBody),
+      sentEmail.update({ bodyStorageKey: storageKey, bodySizeBytes }),
       upsertSearchIndex({
         emailId: sentEmail.id,
         emailAccountId: input.emailAccountId,
@@ -132,7 +137,7 @@ To: ${originalEmail.toAddresses.join(', ')}
         textBody,
         fromAddress: sendProfile.email,
         toAddresses: input.toAddresses,
-        bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+        bodySize: bodySizeBytes,
       }),
     ]);
 

@@ -166,20 +166,23 @@ export async function parseAndStoreCustomEmail(
 
   // Set bodyStorageKey and store body in S3
   const storageKey = `${emailAccountId}/${newEmail.id}`;
-  await newEmail.update({ bodyStorageKey: storageKey });
+  const { bodySizeBytes } = await storeEmailBody(
+    emailAccountId,
+    newEmail.id,
+    textBody,
+    htmlBody,
+  );
+  await newEmail.update({ bodyStorageKey: storageKey, bodySizeBytes });
 
-  await Promise.all([
-    storeEmailBody(emailAccountId, newEmail.id, textBody, htmlBody),
-    upsertSearchIndex({
-      emailId: newEmail.id,
-      emailAccountId,
-      subject: parsed.subject || '(No Subject)',
-      textBody,
-      fromAddress,
-      toAddresses,
-      bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
-    }),
-  ]);
+  await upsertSearchIndex({
+    emailId: newEmail.id,
+    emailAccountId,
+    subject: parsed.subject || '(No Subject)',
+    textBody,
+    fromAddress,
+    toAddresses,
+    bodySize: bodySizeBytes,
+  });
 
   if (preProcessedAttachments.length > 0) {
     await createAttachmentRecords(newEmail.id, preProcessedAttachments);

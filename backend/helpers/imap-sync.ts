@@ -784,8 +784,14 @@ async function insertEmailBatch(
           const attachments = dbBatch[k].attachments;
 
           try {
+            const { bodySizeBytes } = await storeEmailBody(
+              emailAccountId,
+              email.id,
+              textBody,
+              htmlBody,
+            );
             await Promise.all([
-              storeEmailBody(emailAccountId, email.id, textBody, htmlBody),
+              Email.update({ bodySizeBytes }, { where: { id: email.id } }),
               createAttachmentRecords(email.id, attachments),
               upsertSearchIndex({
                 emailId: email.id,
@@ -794,7 +800,7 @@ async function insertEmailBatch(
                 textBody,
                 fromAddress: email.fromAddress,
                 toAddresses: email.toAddresses,
-                bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+                bodySize: bodySizeBytes,
               }),
             ]);
           } catch (err) {

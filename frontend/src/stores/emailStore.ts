@@ -152,6 +152,7 @@ export interface CachedUser {
   inboxDensity?: boolean;
   inboxGroupByDate?: boolean;
   blockExternalImages?: boolean;
+  setupWizardCompletedAt?: string | null;
 }
 
 export interface SavedUser {

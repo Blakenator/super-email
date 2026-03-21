@@ -272,6 +272,12 @@ export type BulkUpdateEmailsInput = {
   isStarred?: InputMaybe<Scalars['Boolean']['input']>;
 };
 
+/** Where Stripe Checkout should return the user after a successful or canceled session. */
+export enum CheckoutContext {
+  Billing = 'BILLING',
+  Setup = 'SETUP'
+}
+
 /** Input for composing and sending an email. */
 export type ComposeEmailInput = {
   /** List of file attachments to include */
@@ -966,6 +972,8 @@ export type Mutation = {
    * Returns the updated emails.
    */
   bulkUpdateEmails: Array<Email>;
+  /** Mark the setup wizard as finished for the current user (allows access to the main app). */
+  completeSetupWizard: User;
   /**
    * Create a Stripe Billing Portal session to manage subscription.
    * Returns the URL to redirect the user to.
@@ -1169,6 +1177,7 @@ export type MutationBulkUpdateEmailsArgs = {
 /** GraphQL mutations for modifying data. All mutations require authentication. */
 export type MutationCreateCheckoutSessionArgs = {
   accountTier: AccountTier;
+  checkoutContext?: InputMaybe<CheckoutContext>;
   domainTier: DomainTier;
   storageTier: StorageTier;
 };
@@ -2296,6 +2305,8 @@ export type User = BaseEntityProps & {
   notificationDetailLevel: NotificationDetailLevel;
   /** List of send profiles configured for sending emails */
   sendProfiles: Array<SendProfile>;
+  /** When the user finished the onboarding setup wizard (null = must complete wizard). */
+  setupWizardCompletedAt?: Maybe<Scalars['Date']['output']>;
   /** User's preferred color scheme (LIGHT, DARK, or AUTO) */
   themePreference: ThemePreference;
   /** Timestamp when the user account was last updated */
@@ -2414,6 +2425,7 @@ export type ResolversTypes = ResolversObject<{
   BillingSubscriptionStatus: BillingSubscriptionStatus;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   BulkUpdateEmailsInput: BulkUpdateEmailsInput;
+  CheckoutContext: CheckoutContext;
   ComposeEmailInput: ComposeEmailInput;
   Contact: ResolverTypeWrapper<Contact>;
   ContactEmail: ResolverTypeWrapper<ContactEmail>;
@@ -2835,6 +2847,7 @@ export type MutationResolvers<ContextType = MyContext, ParentType extends Resolv
   addTagsToEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationAddTagsToEmailsArgs, 'input'>>;
   bulkDeleteEmails?: Resolver<ResolversTypes['Int'], ParentType, ContextType, RequireFields<MutationBulkDeleteEmailsArgs, 'ids'>>;
   bulkUpdateEmails?: Resolver<Array<ResolversTypes['Email']>, ParentType, ContextType, RequireFields<MutationBulkUpdateEmailsArgs, 'input'>>;
+  completeSetupWizard?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   createBillingPortalSession?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   createCheckoutSession?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType, RequireFields<MutationCreateCheckoutSessionArgs, 'accountTier' | 'domainTier' | 'storageTier'>>;
   createContact?: Resolver<ResolversTypes['Contact'], ParentType, ContextType, RequireFields<MutationCreateContactArgs, 'input'>>;
@@ -3050,6 +3063,7 @@ export type UserResolvers<ContextType = MyContext, ParentType extends ResolversP
   navbarCollapsed?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   notificationDetailLevel?: Resolver<ResolversTypes['NotificationDetailLevel'], ParentType, ContextType>;
   sendProfiles?: Resolver<Array<ResolversTypes['SendProfile']>, ParentType, ContextType>;
+  setupWizardCompletedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   themePreference?: Resolver<ResolversTypes['ThemePreference'], ParentType, ContextType>;
   updatedAt?: Resolver<Maybe<ResolversTypes['Date']>, ParentType, ContextType>;
   __isTypeOf?: IsTypeOfResolverFn<ParentType, ContextType>;

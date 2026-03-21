@@ -82,7 +82,9 @@ export function DomainSettings() {
         void refetch();
         setShowAddDomain(false);
         setNewDomain('');
-        toast.success('Domain added! Configure the DNS records below to verify.');
+        toast.success(
+          'Domain added! Configure the DNS records below to verify.',
+        );
       },
       onError: (err) => toast.error(err.message),
     },
@@ -96,9 +98,12 @@ export function DomainSettings() {
         if (result.verifyCustomDomain?.status === 'VERIFIED') {
           toast.success('Domain verified successfully!');
         } else {
-          toast('DNS records not yet verified. Please allow propagation time.', {
-            icon: '⏳',
-          });
+          toast(
+            'DNS records not yet verified. Please allow propagation time.',
+            {
+              icon: '⏳',
+            },
+          );
         }
       },
       onError: (err) => toast.error(err.message),
@@ -117,16 +122,13 @@ export function DomainSettings() {
     },
   );
 
-  const [deleteAccount] = useMutation(
-    DELETE_CUSTOM_DOMAIN_ACCOUNT_MUTATION,
-    {
-      onCompleted: () => {
-        void refetch();
-        toast.success('Account removed');
-      },
-      onError: (err) => toast.error(err.message),
+  const [deleteAccount] = useMutation(DELETE_CUSTOM_DOMAIN_ACCOUNT_MUTATION, {
+    onCompleted: () => {
+      void refetch();
+      toast.success('Account removed');
     },
-  );
+    onError: (err) => toast.error(err.message),
+  });
 
   const domains = data?.getCustomDomains ?? [];
 
@@ -167,10 +169,7 @@ export function DomainSettings() {
               Add your own domain to send and receive email with custom
               addresses like <code>you@yourdomain.com</code>.
             </p>
-            <Button
-              variant="primary"
-              onClick={() => setShowAddDomain(true)}
-            >
+            <Button variant="primary" onClick={() => setShowAddDomain(true)}>
               <FontAwesomeIcon icon={faPlus} className="me-1" />
               Add Your First Domain
             </Button>
@@ -191,109 +190,139 @@ export function DomainSettings() {
                   </div>
                 </Accordion.Header>
                 <Accordion.Body>
-                  {/* DNS Records */}
-                  <h6>DNS Records</h6>
-                  <Alert variant="info" className="py-2">
-                    <small>
-                      Add these records to your domain's DNS configuration.
-                      After adding them, click "Check Verification" to verify.
-                    </small>
-                  </Alert>
-                  <Table size="sm" responsive className="mb-3">
-                    <thead>
-                      <tr>
-                        <th>Type</th>
-                        <th>Purpose</th>
-                        <th>Name</th>
-                        <th>Value</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {domain.dnsRecords?.map((record) => (
-                        <tr key={record.id}>
-                          <td>
-                            <Badge bg="secondary">{record.recordType}</Badge>
-                          </td>
-                          <td>
-                            <small>{record.purpose}</small>
-                          </td>
-                          <td>
-                            <code
-                              style={{
-                                fontSize: '0.75rem',
-                                cursor: 'pointer',
-                              }}
-                              onClick={() => copyToClipboard(record.name)}
-                              title="Click to copy"
-                            >
-                              {record.name.length > 40
-                                ? record.name.slice(0, 37) + '...'
-                                : record.name}
-                            </code>
-                            <FontAwesomeIcon
-                              icon={faCopy}
-                              className="ms-1 text-muted"
-                              style={{ cursor: 'pointer', fontSize: '0.7rem' }}
-                              onClick={() => copyToClipboard(record.name)}
-                            />
-                          </td>
-                          <td>
-                            <code
-                              style={{
-                                fontSize: '0.75rem',
-                                cursor: 'pointer',
-                              }}
-                              onClick={() => copyToClipboard(record.value)}
-                              title="Click to copy"
-                            >
-                              {record.value.length > 40
-                                ? record.value.slice(0, 37) + '...'
-                                : record.value}
-                            </code>
-                            <FontAwesomeIcon
-                              icon={faCopy}
-                              className="ms-1 text-muted"
-                              style={{ cursor: 'pointer', fontSize: '0.7rem' }}
-                              onClick={() => copyToClipboard(record.value)}
-                            />
-                          </td>
-                          <td>
-                            {record.isVerified ? (
-                              <FontAwesomeIcon
-                                icon={faCheckCircle}
-                                className="text-success"
+                  <Accordion
+                    key={`${domain.id}-dns-${domain.status}`}
+                    defaultActiveKey={
+                      domain.status === 'VERIFIED' ? undefined : 'dns-records'
+                    }
+                    className="mb-3"
+                  >
+                    <Accordion.Item eventKey="dns-records">
+                      <Accordion.Header>DNS Records</Accordion.Header>
+                      <Accordion.Body className="pt-0">
+                        <Alert variant="info" className="py-2">
+                          <small>
+                            Add these records to your domain's DNS
+                            configuration. After adding them, click "Check
+                            Verification" to verify.
+                          </small>
+                        </Alert>
+                        <Table size="sm" responsive className="mb-3">
+                          <thead>
+                            <tr>
+                              <th>Type</th>
+                              <th>Purpose</th>
+                              <th>Name</th>
+                              <th>Value</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {domain.dnsRecords?.map((record) => (
+                              <tr key={record.id}>
+                                <td>
+                                  <Badge bg="secondary">
+                                    {record.recordType}
+                                  </Badge>
+                                </td>
+                                <td>
+                                  <small>{record.purpose}</small>
+                                </td>
+                                <td>
+                                  <code
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      cursor: 'pointer',
+                                    }}
+                                    onClick={() => copyToClipboard(record.name)}
+                                    title="Click to copy"
+                                  >
+                                    {record.name.length > 40
+                                      ? record.name.slice(0, 37) + '...'
+                                      : record.name}
+                                  </code>
+                                  <FontAwesomeIcon
+                                    icon={faCopy}
+                                    className="ms-1 text-muted"
+                                    style={{
+                                      cursor: 'pointer',
+                                      fontSize: '0.7rem',
+                                    }}
+                                    onClick={() => copyToClipboard(record.name)}
+                                  />
+                                </td>
+                                <td>
+                                  <code
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      cursor: 'pointer',
+                                    }}
+                                    onClick={() =>
+                                      copyToClipboard(record.value)
+                                    }
+                                    title="Click to copy"
+                                  >
+                                    {record.value.length > 40
+                                      ? record.value.slice(0, 37) + '...'
+                                      : record.value}
+                                  </code>
+                                  <FontAwesomeIcon
+                                    icon={faCopy}
+                                    className="ms-1 text-muted"
+                                    style={{
+                                      cursor: 'pointer',
+                                      fontSize: '0.7rem',
+                                    }}
+                                    onClick={() =>
+                                      copyToClipboard(record.value)
+                                    }
+                                  />
+                                </td>
+                                <td>
+                                  {record.isVerified ? (
+                                    <FontAwesomeIcon
+                                      icon={faCheckCircle}
+                                      className="text-success"
+                                    />
+                                  ) : (
+                                    <FontAwesomeIcon
+                                      icon={faTimesCircle}
+                                      className="text-warning"
+                                    />
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+
+                        {domain.status !== 'VERIFIED' && (
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            className="mb-0"
+                            onClick={() =>
+                              void verifyDomain({
+                                variables: { id: domain.id },
+                              })
+                            }
+                            disabled={verifying}
+                          >
+                            {verifying ? (
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-1"
                               />
                             ) : (
-                              <FontAwesomeIcon
-                                icon={faTimesCircle}
-                                className="text-warning"
-                              />
+                              <FontAwesomeIcon icon={faSync} className="me-1" />
                             )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-
-                  {domain.status !== 'VERIFIED' && (
-                    <Button
-                      variant="outline-primary"
-                      size="sm"
-                      className="mb-3"
-                      onClick={() =>
-                        void verifyDomain({ variables: { id: domain.id } })
-                      }
-                      disabled={verifying}
-                    >
-                      {verifying ? (
-                        <Spinner animation="border" size="sm" className="me-1" />
-                      ) : (
-                        <FontAwesomeIcon icon={faSync} className="me-1" />
-                      )}
-                      Check Verification
-                    </Button>
-                  )}
+                            Check Verification
+                          </Button>
+                        )}
+                      </Accordion.Body>
+                    </Accordion.Item>
+                  </Accordion>
 
                   {/* Email Accounts */}
                   <hr />
@@ -345,10 +374,15 @@ export function DomainSettings() {
                             <Button
                               variant="outline-secondary"
                               size="sm"
-                              onClick={() => void navigate('/settings/accounts')}
+                              onClick={() =>
+                                void navigate('/settings/accounts')
+                              }
                               title="Edit in Email Accounts"
                             >
-                              <FontAwesomeIcon icon={faExternalLinkAlt} className="me-1" />
+                              <FontAwesomeIcon
+                                icon={faExternalLinkAlt}
+                                className="me-1"
+                              />
                               Edit
                             </Button>
                             <Button
@@ -408,10 +442,7 @@ export function DomainSettings() {
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>
-            <Button
-              variant="secondary"
-              onClick={() => setShowAddDomain(false)}
-            >
+            <Button variant="secondary" onClick={() => setShowAddDomain(false)}>
               Cancel
             </Button>
             <Button
@@ -451,9 +482,9 @@ export function DomainSettings() {
               ?
             </p>
             <Alert variant="danger">
-              <strong>Warning:</strong> This will permanently delete the
-              domain, all associated email accounts, send profiles, and
-              emails. This action cannot be undone.
+              <strong>Warning:</strong> This will permanently delete the domain,
+              all associated email accounts, send profiles, and emails. This
+              action cannot be undone.
             </Alert>
           </Modal.Body>
           <Modal.Footer>

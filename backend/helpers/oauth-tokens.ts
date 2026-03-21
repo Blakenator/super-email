@@ -248,12 +248,14 @@ export function buildGoogleAuthUrl(stateJwt: string): string {
 }
 
 export function buildYahooAuthUrl(stateJwt: string): string {
+  const nonce = crypto.randomUUID();
   const params = new URLSearchParams({
     client_id: config.oauth.yahoo.clientId,
     redirect_uri: config.oauth.yahoo.redirectUri,
     response_type: 'code',
     scope: 'mail-r mail-w openid',
     state: stateJwt,
+    nonce,
   });
   return `https://api.login.yahoo.com/oauth2/request_auth?${params.toString()}`;
 }

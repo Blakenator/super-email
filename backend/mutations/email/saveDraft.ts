@@ -52,12 +52,13 @@ export const saveDraft = makeMutation(
       });
 
       // Store body in S3 (overwrite previous version)
-      await storeEmailBody(
+      const { bodySizeBytes } = await storeEmailBody(
         emailAccount.id,
         existingDraft.id,
         textBody,
         htmlBody,
       );
+      await existingDraft.update({ bodySizeBytes });
 
       return existingDraft;
     }
@@ -83,8 +84,13 @@ export const saveDraft = makeMutation(
 
     // Set bodyStorageKey and store body in S3
     const storageKey = `${emailAccount.id}/${draft.id}`;
-    await draft.update({ bodyStorageKey: storageKey });
-    await storeEmailBody(emailAccount.id, draft.id, textBody, htmlBody);
+    const { bodySizeBytes } = await storeEmailBody(
+      emailAccount.id,
+      draft.id,
+      textBody,
+      htmlBody,
+    );
+    await draft.update({ bodyStorageKey: storageKey, bodySizeBytes });
 
     return draft;
   },

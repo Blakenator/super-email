@@ -50,6 +50,13 @@ const GET_BILLING_INFO_QUERY = gql`
         currentPeriodEnd
         cancelAtPeriodEnd
       }
+      prices {
+        type
+        name
+        unitAmount
+        currency
+        interval
+      }
     }
   }
 `;
@@ -62,6 +69,21 @@ interface BillingSubscription {
   isValid: boolean;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+}
+
+interface MobileStripePriceRow {
+  type: string;
+  name: string;
+  unitAmount: number;
+  currency: string;
+  interval: string;
+}
+
+function formatBillingCents(cents: number, currency = 'usd'): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  }).format(cents / 100);
 }
 
 function formatTierName(tier: string): string {
@@ -151,6 +173,8 @@ export function SettingsScreen({
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscription, setSubscription] =
     useState<BillingSubscription | null>(null);
+  const [platformPrice, setPlatformPrice] =
+    useState<MobileStripePriceRow | null>(null);
   const [billingLoading, setBillingLoading] = useState(false);
 
   const fetchBillingInfo = async () => {
@@ -161,8 +185,14 @@ export function SettingsScreen({
         fetchPolicy: 'network-only',
       });
       setSubscription(data?.getBillingInfo?.subscription ?? null);
+      const prices = (data?.getBillingInfo?.prices ??
+        []) as MobileStripePriceRow[];
+      setPlatformPrice(
+        prices.find((p) => p.type === 'platform') ?? null,
+      );
     } catch (error) {
       // Billing info may not be available — show modal anyway
+      setPlatformPrice(null);
     } finally {
       setBillingLoading(false);
     }
@@ -496,6 +526,38 @@ export function SettingsScreen({
                     { backgroundColor: theme.colors.border },
                   ]}
                 />
+                {platformPrice ? (
+                  <>
+                    <View style={styles.subscriptionRow}>
+                      <Text
+                        style={[
+                          styles.subscriptionLabel,
+                          { color: theme.colors.textMuted },
+                        ]}
+                      >
+                        {platformPrice.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.subscriptionValue,
+                          { color: theme.colors.text },
+                        ]}
+                      >
+                        {formatBillingCents(
+                          platformPrice.unitAmount,
+                          platformPrice.currency,
+                        )}
+                        /{platformPrice.interval}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.subscriptionDivider,
+                        { backgroundColor: theme.colors.border },
+                      ]}
+                    />
+                  </>
+                ) : null}
                 <View style={styles.subscriptionRow}>
                   <Text
                     style={[

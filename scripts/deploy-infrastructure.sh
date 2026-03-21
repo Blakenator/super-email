@@ -3,22 +3,43 @@
 # Deploy Infrastructure with Pulumi
 # ============================================================================
 # Usage: ./deploy-infrastructure.sh ENVIRONMENT
-# Environment variables required:
+#
+# Required environment variables:
 #   - AWS_REGION
 #   - SUPABASE_URL
 #   - SUPABASE_ANON_KEY
 #   - SUPABASE_SERVICE_ROLE_KEY
-# Environment variables optional (for billing):
-#   - STRIPE_SECRET_KEY
-#   - STRIPE_WEBHOOK_SECRET
-#   - STRIPE_PUBLISHABLE_KEY
-# Environment variables optional (for paid subscription tiers):
-#   - Any STRIPE_PRICE_* variables are auto-loaded into Pulumi config
-#   - e.g., STRIPE_PRICE_STORAGE_BASIC -> stripePriceStorageBasic
-# Environment variables optional (for custom domain):
-#   - DOMAIN_NAME (e.g., super-mail.app)
-#   - CLOUDFLARE_API_TOKEN (auto-read by Cloudflare provider)
-#   - CLOUDFLARE_ZONE_ID (zone ID from Cloudflare dashboard)
+#
+# Optional — Stripe (pulumi config → ECS env / Secrets Manager):
+#   - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY
+#   - Every STRIPE_PRICE_* name is auto-imported: env | grep ^STRIPE_PRICE_
+#     → Pulumi camelCase key (e.g. STRIPE_PRICE_PLATFORM_BASE → stripePricePlatformBase)
+#     → ECS env STRIPE_PRICE_* (see infra/index.ts backend task definition)
+#
+# Optional — custom domain + Cloudflare:
+#   - DOMAIN_NAME, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ZONE_ID
+#
+# Optional — SES (stack region may lack SES; default in infra is us-west-2):
+#   - SES_REGION
+#
+# Populated by Pulumi into ECS without CI env vars:
+#   - DB_*, ATTACHMENTS_S3_BUCKET, EMAIL_BODIES_S3_BUCKET, RAW_EMAILS_S3_BUCKET,
+#     AWS_REGION, SECRETS_BASE_PATH, FRONTEND_URL, SQS_CUSTOM_EMAIL_QUEUE_URL,
+#     BACKGROUND_SYNC_ENABLED, NODE_ENV, LOG_LEVEL, PORT, SUPABASE_URL, SUPABASE_ANON_KEY,
+#     STRIPE_PUBLISHABLE_KEY + all STRIPE_PRICE_* from config
+#   - Secrets Manager → ECS: SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY,
+#     STRIPE_WEBHOOK_SECRET, INTERNAL_API_TOKEN, JWT_SECRET,
+#     GOOGLE_OAUTH_CLIENT_SECRET, YAHOO_OAUTH_CLIENT_SECRET, OUTLOOK_OAUTH_CLIENT_SECRET,
+#     FIREBASE_SERVICE_ACCOUNT_JSON
+#
+# Optional — OAuth (plain config: client IDs; secrets: client secrets).
+# Redirect URIs are set automatically from FRONTEND_URL in infra (…/api/oauth/{google|yahoo|outlook}/callback).
+#   - GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET
+#   - YAHOO_OAUTH_CLIENT_ID, YAHOO_OAUTH_CLIENT_SECRET
+#   - OUTLOOK_OAUTH_CLIENT_ID, OUTLOOK_OAUTH_CLIENT_SECRET
+#
+# Optional — Firebase Admin JSON (web push), same as backend FIREBASE_SERVICE_ACCOUNT_JSON:
+#   - FIREBASE_SERVICE_ACCOUNT_JSON (entire JSON object as a string; use GitHub multiline secret or CI file)
 # ============================================================================
 
 set -e
@@ -139,6 +160,38 @@ fi
 if [ -n "$CLOUDFLARE_ZONE_ID" ]; then
     log_info "Setting Cloudflare zone ID..."
     pulumi config set cloudflareZoneId "$CLOUDFLARE_ZONE_ID"
+fi
+
+# OAuth (optional — email provider linking)
+if [ -n "$GOOGLE_OAUTH_CLIENT_ID" ]; then
+    log_info "Setting Google OAuth client ID..."
+    pulumi config set googleOAuthClientId "$GOOGLE_OAUTH_CLIENT_ID"
+fi
+if [ -n "$GOOGLE_OAUTH_CLIENT_SECRET" ]; then
+    log_info "Setting Google OAuth client secret..."
+    pulumi config set --secret googleOAuthClientSecret "$GOOGLE_OAUTH_CLIENT_SECRET"
+fi
+if [ -n "$YAHOO_OAUTH_CLIENT_ID" ]; then
+    log_info "Setting Yahoo OAuth client ID..."
+    pulumi config set yahooOAuthClientId "$YAHOO_OAUTH_CLIENT_ID"
+fi
+if [ -n "$YAHOO_OAUTH_CLIENT_SECRET" ]; then
+    log_info "Setting Yahoo OAuth client secret..."
+    pulumi config set --secret yahooOAuthClientSecret "$YAHOO_OAUTH_CLIENT_SECRET"
+fi
+if [ -n "$OUTLOOK_OAUTH_CLIENT_ID" ]; then
+    log_info "Setting Outlook OAuth client ID..."
+    pulumi config set outlookOAuthClientId "$OUTLOOK_OAUTH_CLIENT_ID"
+fi
+if [ -n "$OUTLOOK_OAUTH_CLIENT_SECRET" ]; then
+    log_info "Setting Outlook OAuth client secret..."
+    pulumi config set --secret outlookOAuthClientSecret "$OUTLOOK_OAUTH_CLIENT_SECRET"
+fi
+
+# Firebase Admin (optional — web push)
+if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+    log_info "Setting Firebase service account JSON..."
+    pulumi config set --secret firebaseServiceAccountJson "$FIREBASE_SERVICE_ACCOUNT_JSON"
 fi
 
 # Deploy infrastructure

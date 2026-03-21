@@ -25,6 +25,15 @@ export const SignUpCard = styled.div`
   box-shadow: ${({ theme }) => theme.shadows.lg};
 `;
 
+/** Full-page setup wizard: wider than auth forms so plan tiers and accounts UI stay usable. */
+export const SetupWizardCard = styled.div`
+  width: 100%;
+  max-width: min(1080px, calc(100vw - 2rem));
+  border: none;
+  border-radius: ${({ theme }) => theme.borderRadius.xl};
+  box-shadow: ${({ theme }) => theme.shadows.lg};
+`;
+
 export const Logo = styled.h1`
   font-size: ${({ theme }) => theme.fontSizes.xxl};
   font-weight: 700;

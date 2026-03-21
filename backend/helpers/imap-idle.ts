@@ -203,8 +203,14 @@ async function startIdleForAccount(
 
             // Store body in S3 and create search index (non-blocking for user)
             try {
+              const { bodySizeBytes } = await storeEmailBody(
+                account.id,
+                newEmail.id,
+                textBody,
+                htmlBody,
+              );
               await Promise.all([
-                storeEmailBody(account.id, newEmail.id, textBody, htmlBody),
+                newEmail.update({ bodySizeBytes }),
                 upsertSearchIndex({
                   emailId: newEmail.id,
                   emailAccountId: account.id,
@@ -212,7 +218,7 @@ async function startIdleForAccount(
                   textBody,
                   fromAddress: newEmail.fromAddress,
                   toAddresses: newEmail.toAddresses,
-                  bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+                  bodySize: bodySizeBytes,
                 }),
               ]);
             } catch (bodyErr: any) {

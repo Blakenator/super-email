@@ -45,6 +45,10 @@ interface User {
   inboxDensity: boolean;
   inboxGroupByDate: boolean;
   blockExternalImages: boolean;
+  /**
+   * Null = must complete setup wizard. Undefined = legacy client cache (treat as completed).
+   */
+  setupWizardCompletedAt?: string | null;
 }
 
 interface UpdatePreferencesInput {
@@ -74,7 +78,7 @@ interface AuthContextType {
     password: string,
     firstName: string,
     lastName: string,
-  ) => Promise<void>;
+  ) => Promise<{ needsEmailConfirmation: boolean }>;
   logout: (redirectPath?: string) => Promise<void>;
   refetchProfile: () => Promise<void>;
   updatePreferences: (input: UpdatePreferencesInput) => Promise<void>;
@@ -161,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             inboxDensity: data.fetchProfile.inboxDensity ?? false,
             inboxGroupByDate: data.fetchProfile.inboxGroupByDate ?? false,
             blockExternalImages: data.fetchProfile.blockExternalImages ?? false,
+            setupWizardCompletedAt:
+              data.fetchProfile.setupWizardCompletedAt ?? null,
           };
           setUser(userData);
 
@@ -176,6 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             inboxDensity: userData.inboxDensity,
             inboxGroupByDate: userData.inboxGroupByDate,
             blockExternalImages: userData.blockExternalImages,
+            setupWizardCompletedAt: userData.setupWizardCompletedAt,
           };
           setCachedUser(cachedUserData);
 
@@ -210,6 +217,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             inboxDensity: cachedUser.inboxDensity ?? false,
             inboxGroupByDate: cachedUser.inboxGroupByDate ?? false,
             blockExternalImages: cachedUser.blockExternalImages ?? false,
+            setupWizardCompletedAt:
+              cachedUser.setupWizardCompletedAt ?? undefined,
           });
           return cachedUser;
         }
@@ -282,6 +291,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
                 blockExternalImages:
                   currentCachedUser.blockExternalImages ?? false,
+                setupWizardCompletedAt:
+                  currentCachedUser.setupWizardCompletedAt ?? undefined,
               });
             } else {
               // Set minimal user data so app doesn't get stuck
@@ -322,6 +333,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
               blockExternalImages:
                 currentCachedUser.blockExternalImages ?? false,
+              setupWizardCompletedAt:
+                currentCachedUser.setupWizardCompletedAt ?? undefined,
             });
             // Set a placeholder token for offline mode
             setToken('offline-mode');
@@ -348,6 +361,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             inboxDensity: currentCachedUser.inboxDensity ?? false,
             inboxGroupByDate: currentCachedUser.inboxGroupByDate ?? false,
             blockExternalImages: currentCachedUser.blockExternalImages ?? false,
+            setupWizardCompletedAt:
+              currentCachedUser.setupWizardCompletedAt ?? undefined,
           });
           setToken('offline-mode');
         }
@@ -511,9 +526,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.session) {
         setToken(data.session.access_token);
-        // Fetch profile from backend to create user/auth method
         await fetchProfileFromBackend(data.session.access_token);
+        return { needsEmailConfirmation: false };
       }
+      return { needsEmailConfirmation: true };
     },
     [fetchProfileFromBackend],
   );

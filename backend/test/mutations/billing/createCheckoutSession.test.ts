@@ -9,11 +9,17 @@ import {
   createMockContext,
   createUnauthenticatedContext,
 } from '../../utils/index.js';
+import { CheckoutContext } from '../../../__generated__/resolvers-types.js';
 
 describe('createCheckoutSession mutation', () => {
   let createCheckoutSession: (
     parent: unknown,
-    args: { storageTier: string; accountTier: string; domainTier: string },
+    args: {
+      storageTier: string;
+      accountTier: string;
+      domainTier: string;
+      checkoutContext?: CheckoutContext;
+    },
     context: unknown,
   ) => Promise<string | null>;
   let getOrCreateSubscriptionStub: sinon.SinonStub;
@@ -103,6 +109,21 @@ describe('createCheckoutSession mutation', () => {
     expect(out).to.equal('https://checkout.stripe.com/test');
     expect(stripeCheckoutSessionStub.calledOnce).to.be.true;
     expect(syncSubscriptionFromStripeStub.callCount).to.equal(1);
+  });
+
+  it('uses /setup checkout return URLs when checkoutContext is SETUP', async () => {
+    tryResumeOrUpdateStub.resolves(false);
+    const ctx = createMockContext({ userId: 'user-1' });
+    await createCheckoutSession(
+      null,
+      { ...tierArgs, checkoutContext: CheckoutContext.Setup },
+      ctx,
+    );
+    expect(stripeCheckoutSessionStub.calledOnce).to.be.true;
+    const successUrl = stripeCheckoutSessionStub.firstCall.args[3] as string;
+    const cancelUrl = stripeCheckoutSessionStub.firstCall.args[4] as string;
+    expect(successUrl).to.contain('/setup?checkout=success');
+    expect(cancelUrl).to.contain('/setup?checkout=canceled');
   });
 
   it('creates checkout when there is no stripeSubscriptionId after sync', async () => {

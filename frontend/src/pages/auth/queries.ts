@@ -13,6 +13,7 @@ export const FETCH_PROFILE_QUERY = gql(`
       inboxDensity
       inboxGroupByDate
       blockExternalImages
+      setupWizardCompletedAt
     }
   }
 `);
