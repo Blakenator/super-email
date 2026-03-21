@@ -39,7 +39,6 @@ async function initializeFirebase(): Promise<boolean> {
     return true;
   }
 
-  // Check if Firebase is configured via JSON string or file path
   const serviceAccountJson = config.firebase?.serviceAccountJson;
   const serviceAccountPath = config.firebase?.serviceAccountPath;
 
@@ -49,38 +48,37 @@ async function initializeFirebase(): Promise<boolean> {
     jsonTrimmed === 'not-configured' ||
     jsonTrimmed === '{}';
 
-  if (jsonUnset && !serviceAccountPath) {
-    logger.debug('push', 'Firebase not configured - web push notifications disabled');
-    return false;
-  }
-
   try {
-    firebaseAdmin = await import('firebase-admin');
-    
-    let serviceAccount: object;
-    
-    if (serviceAccountPath) {
-      // Load from file path
+    const fs = await import('fs');
+
+    let serviceAccount: object | null = null;
+
+    if (serviceAccountPath && fs.existsSync(serviceAccountPath)) {
       try {
-        const fs = await import('fs');
         const fileContents = fs.readFileSync(serviceAccountPath, 'utf-8');
         serviceAccount = JSON.parse(fileContents);
         logger.info('push', `Loaded Firebase service account from ${serviceAccountPath}`);
       } catch (e: any) {
-        logger.error('push', `Failed to load Firebase service account from ${serviceAccountPath}: ${e.message}`);
+        logger.error('push', `Failed to parse Firebase service account from ${serviceAccountPath}: ${e.message}`);
         return false;
       }
-    } else if (serviceAccountJson && !jsonUnset) {
-      // Parse the JSON string
+    }
+
+    if (!serviceAccount && !jsonUnset) {
       try {
-        serviceAccount = JSON.parse(serviceAccountJson);
+        serviceAccount = JSON.parse(serviceAccountJson!);
       } catch (e) {
         logger.error('push', 'Invalid Firebase service account JSON');
         return false;
       }
-    } else {
+    }
+
+    if (!serviceAccount) {
+      logger.debug('push', 'Firebase not configured - web push notifications disabled');
       return false;
     }
+
+    firebaseAdmin = await import('firebase-admin');
 
     // Initialize the app
     firebaseAdmin.initializeApp({
