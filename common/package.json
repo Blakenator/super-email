@@ -1,6 +1,6 @@
 {
   "name": "@main/common",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Shared GraphQL schema and types for email client",
   "main": "src/index.ts",
   "type": "module",

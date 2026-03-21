@@ -1,5 +1,39 @@
 # @main/common
 
+## 0.2.0
+
+### Minor Changes
+
+### Secure storage & google oauth
+
+- **a211b49**
+  - add initial setup wizard
+  - added base platform fee
+  - collapse custom domain dns when verified
+  - make billing more compact by default
+  - ensure billing uses email size bytes
+  - remove yahoo and microsoft oauth for now
+- **435f855**
+  - fix email bodies loading bugs
+  - fix cancelled subscription issues
+  - fix local storage janky loading
+- **ed9ee44**
+  - fix download & preview attachments logic
+  - show attachment list for emails in threads now
+  - fix initial load not using cache
+- **2de6fd7**
+  - add ask questions rule
+- **4375741**
+  - implement oauth login for email accounts
+  - save profile type (oauth or password) for send profiles too
+  - link send profiles to email accounts for custom domains and oauth
+  -
+- **5db769b**
+  - untested full migration
+- **9e4df3d**
+  - fix attachment lists across apps and add preview UIs
+  - add in light/dark toggle for mobile
+
 ## 0.1.3
 
 ### Patch Changes
