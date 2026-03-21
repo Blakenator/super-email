@@ -12,6 +12,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
+import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { GraphQLScalarType, Kind } from 'graphql';
@@ -48,6 +49,17 @@ import type { Email } from './db/models/email.model.js';
 import { setupBillingDatabase } from './db/setup-billing.js';
 import { runMigrations } from './db/migrations/migrator.js';
 import { API_ROUTES } from '@main/common';
+import {
+  shutdownObservability,
+  setActiveSpanAttributes,
+  withObservedSpan,
+} from './helpers/observability.js';
+import {
+  getActiveTraceContext,
+  getRequestContext,
+  runWithRequestContext,
+  updateRequestContext,
+} from './helpers/request-context.js';
 
 // Default models - imported from db
 import {
@@ -214,14 +226,40 @@ function createLoggingPlugin(
     async requestDidStart({ request }) {
       const start = Date.now();
       const operationName = request.operationName;
+      updateRequestContext({
+        graphqlOperationName: operationName,
+      });
+      setActiveSpanAttributes({
+        'graphql.operation.name': operationName,
+      });
       logger.request(operationName, request.variables);
       return {
+        async didResolveOperation({ operationName: resolvedOperationName, operation }) {
+          const operationType = operation?.operation;
+          updateRequestContext({
+            graphqlOperationName: resolvedOperationName ?? undefined,
+            graphqlOperationType: operationType,
+          });
+          setActiveSpanAttributes({
+            'graphql.operation.name': resolvedOperationName ?? undefined,
+            'graphql.operation.type': operationType,
+          });
+        },
         async didEncounterErrors({ errors }) {
           const duration = Date.now() - start;
+          setActiveSpanAttributes({
+            'graphql.duration.ms': duration,
+            'graphql.has_error': true,
+          });
           logger.response(operationName, duration, errors[0]);
         },
         async willSendResponse() {
           const duration = Date.now() - start;
+          setActiveSpanAttributes({
+            'graphql.duration.ms': duration,
+            'graphql.slow_request':
+              duration >= config.observability.traceSlowRequestThresholdMs,
+          });
           logger.response(operationName, duration);
         },
       };
@@ -448,6 +486,30 @@ export async function createServer(
   const app = express();
   const httpServer = http.createServer(app);
 
+  app.use((req, res, next) => {
+    const incomingRequestId = req.headers['x-request-id'];
+    const requestId =
+      typeof incomingRequestId === 'string' && incomingRequestId.trim()
+        ? incomingRequestId
+        : randomUUID();
+
+    res.setHeader('x-request-id', requestId);
+
+    runWithRequestContext(
+      {
+        requestId,
+        method: req.method,
+        path: req.path,
+      },
+      () => {
+        setActiveSpanAttributes({
+          'app.request.method': req.method,
+        });
+        next();
+      },
+    );
+  });
+
   // Load GraphQL schema
   const schemaPath =
     deps.schemaPath ||
@@ -492,11 +554,14 @@ export async function createServer(
             supabaseUserId = payload?.supabaseUserId;
           }
 
+          const requestId = randomUUID();
+
           return {
             token,
             userId,
             supabaseUserId,
             sequelize: deps.sequelize,
+            requestId,
           } satisfies BackendContext;
         },
         onConnect: async () => {
@@ -615,7 +680,28 @@ export async function createServer(
           supabaseUserId = payload?.supabaseUserId;
         }
 
-        return { token, userId, supabaseUserId, sequelize: deps.sequelize };
+        const requestContext = getRequestContext();
+        const { traceId, spanId } = getActiveTraceContext();
+
+        if (requestContext?.requestId) {
+          updateRequestContext({
+            requestId: requestContext.requestId,
+          });
+        }
+
+        setActiveSpanAttributes({
+          'app.authenticated': Boolean(userId),
+        });
+
+        return {
+          token,
+          userId,
+          supabaseUserId,
+          sequelize: deps.sequelize,
+          requestId: requestContext?.requestId,
+          traceId,
+          spanId,
+        };
       },
     }),
   );
@@ -652,7 +738,19 @@ export async function createServer(
 
     try {
       logger.info('Internal API', 'Trigger sync requested via internal API');
-      const result = await runBackgroundSyncCycle();
+      const result = await withObservedSpan(
+        'sync.trigger',
+        async (span) => {
+          span.setAttribute('sync.trigger.source', 'http_internal');
+          span.setAttribute('sync.trigger.route', '/api/internal/trigger-sync');
+          return runBackgroundSyncCycle();
+        },
+        {},
+        {
+          operation: 'sync.trigger',
+          source: 'http_internal',
+        },
+      );
       logger.info('Internal API', 'Trigger sync completed via internal API');
       res.json({
         success: true,
@@ -1079,6 +1177,7 @@ export async function createServer(
       // Stop usage daemon
       stopUsageDaemon();
       await apolloServer.stop();
+      await shutdownObservability();
       httpServer.close();
     },
 
@@ -1092,6 +1191,9 @@ export async function createServer(
         supabaseUserId: undefined,
         token: '',
         sequelize: deps.sequelize,
+        requestId: randomUUID(),
+        traceId: undefined,
+        spanId: undefined,
         ...context,
       };
 

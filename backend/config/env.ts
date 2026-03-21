@@ -23,6 +23,34 @@ export const config = {
   // Logging
   logLevel: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
 
+  // Observability
+  observability: {
+    enabled: process.env.OTEL_ENABLED !== 'false',
+    serviceName: process.env.OTEL_SERVICE_NAME || 'email-backend',
+    serviceVersion:
+      process.env.OTEL_SERVICE_VERSION ||
+      process.env.GIT_COMMIT_SHA ||
+      'unknown',
+    environment:
+      process.env.OBSERVABILITY_ENVIRONMENT ||
+      process.env.NODE_ENV ||
+      'development',
+    otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT || '',
+    otlpHeaders: process.env.OTEL_EXPORTER_OTLP_HEADERS || '',
+    pyroscopeEnabled:
+      process.env.PYROSCOPE_ENABLED === 'false'
+        ? false
+        : Boolean(process.env.PYROSCOPE_SERVER_ADDRESS),
+    pyroscopeServerAddress: process.env.PYROSCOPE_SERVER_ADDRESS || '',
+    pyroscopeBasicAuthUser: process.env.PYROSCOPE_BASIC_AUTH_USER || '',
+    pyroscopeBasicAuthPassword:
+      process.env.PYROSCOPE_BASIC_AUTH_PASSWORD || '',
+    traceSlowRequestThresholdMs: parseInt(
+      process.env.TRACE_SLOW_REQUEST_THRESHOLD_MS || '1000',
+      10,
+    ),
+  },
+
   // Database (PostgreSQL)
   db: {
     host: process.env.DB_HOST || 'localhost',
@@ -189,6 +217,27 @@ export const envVarDefinitions = {
     PORT: 'Server port (default: 4000)',
     LOG_LEVEL:
       'Logging level: debug, info, warn, error (default: info in prod)',
+    OTEL_ENABLED: 'Enable or disable OpenTelemetry tracing (default: true)',
+    OTEL_SERVICE_NAME:
+      'Service name reported to OpenTelemetry and Grafana Cloud',
+    OTEL_SERVICE_VERSION:
+      'Service version reported to OpenTelemetry (defaults to GIT_COMMIT_SHA when available)',
+    OBSERVABILITY_ENVIRONMENT:
+      'Logical environment label for traces/profiles (for example local, staging, prod)',
+    OTEL_EXPORTER_OTLP_ENDPOINT:
+      'OTLP HTTP traces endpoint for Grafana Cloud',
+    OTEL_EXPORTER_OTLP_HEADERS:
+      'Comma-separated OTLP headers such as Authorization=Basic ...',
+    PYROSCOPE_ENABLED:
+      'Enable or disable continuous profiling (defaults to enabled when server address is set)',
+    PYROSCOPE_SERVER_ADDRESS:
+      'Grafana Cloud Profiles server address',
+    PYROSCOPE_BASIC_AUTH_USER:
+      'Grafana Cloud Profiles user ID for basic auth',
+    PYROSCOPE_BASIC_AUTH_PASSWORD:
+      'Grafana Cloud Profiles API key for basic auth',
+    TRACE_SLOW_REQUEST_THRESHOLD_MS:
+      'Threshold used to classify a request as slow in logs and spans',
     SUPABASE_URL: 'Supabase project URL',
     SUPABASE_ANON_KEY: 'Supabase anonymous key',
     SECRETS_BASE_PATH: 'Base path in AWS Secrets Manager for credentials',

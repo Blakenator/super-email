@@ -1,4 +1,8 @@
 import { logger } from './logger.js';
+import {
+  setActiveSpanAttributes,
+  withObservedSpan,
+} from './observability.js';
 
 let pipeline: any = null;
 let extractor: any = null;
@@ -15,22 +19,37 @@ async function loadModel(): Promise<void> {
     return;
   }
 
-  loadingPromise = (async () => {
-    try {
-      logger.info('Embedding', `Loading model ${MODEL_NAME}...`);
-      const transformers = await import('@huggingface/transformers');
-      pipeline = transformers.pipeline;
-      extractor = await pipeline('feature-extraction', MODEL_NAME, {
-        dtype: 'fp32',
-      });
-      logger.info('Embedding', 'Model loaded successfully');
-    } catch (err) {
-      loadFailed = true;
-      logger.error('Embedding', 'Failed to load embedding model; semantic search will be unavailable', {
-        error: err instanceof Error ? err.message : err,
-      });
-    }
-  })();
+  loadingPromise = withObservedSpan(
+    'embedding.model_load',
+    async () => {
+      try {
+        logger.info('Embedding', `Loading model ${MODEL_NAME}...`);
+        const transformers = await import('@huggingface/transformers');
+        pipeline = transformers.pipeline;
+        extractor = await pipeline('feature-extraction', MODEL_NAME, {
+          dtype: 'fp32',
+        });
+        setActiveSpanAttributes({
+          'embedding.model': MODEL_NAME,
+        });
+        logger.info('Embedding', 'Model loaded successfully');
+      } catch (err) {
+        loadFailed = true;
+        logger.error('Embedding', 'Failed to load embedding model; semantic search will be unavailable', {
+          error: err instanceof Error ? err.message : err,
+        });
+      }
+    },
+    {
+      attributes: {
+        'embedding.model': MODEL_NAME,
+      },
+    },
+    {
+      operation: 'embedding.model_load',
+      embedding_model: MODEL_NAME,
+    },
+  );
 
   await loadingPromise;
 }
@@ -51,19 +70,37 @@ export async function generateEmbedding(
   await loadModel();
   if (!extractor) return null;
 
-  try {
-    const truncated = truncateText(text);
-    const output = await extractor(truncated, {
-      pooling: 'mean',
-      normalize: true,
-    });
-    return Array.from(output.data as Float32Array);
-  } catch (err) {
-    logger.error('Embedding', 'Failed to generate embedding', {
-      error: err instanceof Error ? err.message : err,
-    });
-    return null;
-  }
+  return withObservedSpan(
+    'embedding.generate',
+    async () => {
+      try {
+        const truncated = truncateText(text);
+        const output = await extractor(truncated, {
+          pooling: 'mean',
+          normalize: true,
+        });
+        setActiveSpanAttributes({
+          'embedding.model': MODEL_NAME,
+          'embedding.input.word_count': truncated.split(/\s+/).length,
+        });
+        return Array.from(output.data as Float32Array);
+      } catch (err) {
+        logger.error('Embedding', 'Failed to generate embedding', {
+          error: err instanceof Error ? err.message : err,
+        });
+        return null;
+      }
+    },
+    {
+      attributes: {
+        'embedding.model': MODEL_NAME,
+      },
+    },
+    {
+      operation: 'embedding.generate',
+      embedding_model: MODEL_NAME,
+    },
+  );
 }
 
 /**

@@ -48,6 +48,19 @@ describe('logger helpers', function () {
       const loggedMessage = consoleLogStub.firstCall.args[0];
       expect(loggedMessage).to.include('{"key":"value"}');
     });
+
+    it('should include request ids from request context', async () => {
+      const { logger } = await import('../../helpers/logger.js');
+      const { runWithRequestContext } = await import('../../helpers/request-context.js');
+
+      runWithRequestContext({ requestId: 'req-123' }, () => {
+        logger.info('Context', 'Message');
+      });
+
+      expect(consoleLogStub.calledOnce).to.be.true;
+      const loggedMessage = consoleLogStub.firstCall.args[0];
+      expect(loggedMessage).to.include('requestId=req-123');
+    });
   });
 
   describe('logger.error', () => {

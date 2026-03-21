@@ -1,4 +1,8 @@
 import { config } from '../config/env.js';
+import {
+  getActiveTraceContext,
+  getRequestContext,
+} from './request-context.js';
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -27,9 +31,27 @@ function safeStringify(data: unknown): string {
   }
 }
 
+function formatCorrelationContext(): string {
+  const requestContext = getRequestContext();
+  const traceContext = getActiveTraceContext();
+  const parts: string[] = [];
+
+  if (requestContext?.requestId) {
+    parts.push(`requestId=${requestContext.requestId}`);
+  }
+  if (traceContext.traceId) {
+    parts.push(`traceId=${traceContext.traceId}`);
+  }
+  if (traceContext.spanId) {
+    parts.push(`spanId=${traceContext.spanId}`);
+  }
+
+  return parts.length > 0 ? ` [${parts.join(' ')}]` : '';
+}
+
 function formatMessage(level: LogLevel, context: string, message: string, data?: unknown): string {
   const timestamp = new Date().toISOString();
-  const prefix = `[${timestamp}] [${level.toUpperCase()}] [${context}]`;
+  const prefix = `[${timestamp}] [${level.toUpperCase()}] [${context}]${formatCorrelationContext()}`;
   
   if (data !== undefined) {
     return `${prefix} ${message} ${safeStringify(data)}`;

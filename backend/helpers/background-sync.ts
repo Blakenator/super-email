@@ -13,6 +13,11 @@ import { ImapAccountSettings } from '../db/models/imap-account-settings.model.js
 import { startAsyncSync } from './imap-sync.js';
 import { logger } from './logger.js';
 import { DateTime } from 'luxon';
+import {
+  hashIdentifier,
+  setActiveSpanAttributes,
+  withObservedSpan,
+} from './observability.js';
 
 // Track the interval timer so we can stop it if needed
 let syncIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -62,96 +67,117 @@ export async function runBackgroundSyncCycle(): Promise<{
   syncsStarted: number;
   errors: string[];
 }> {
-  const result = {
-    checked: 0,
-    syncsStarted: 0,
-    errors: [] as string[],
-  };
+  return withObservedSpan(
+    'sync.cycle',
+    async (span) => {
+      const result = {
+        checked: 0,
+        syncsStarted: 0,
+        errors: [] as string[],
+      };
 
-  try {
-    // Run repair on every cycle (fast no-op when nothing to fix)
-    await repairHistoricalSyncFlags();
-
-    const staleAccounts = await findStaleEmailAccounts();
-    result.checked = staleAccounts.length;
-
-    if (staleAccounts.length === 0) {
-      const allAccounts = await EmailAccount.findAll({
-        where: { type: EmailAccountType.IMAP },
-        include: [{
-          model: ImapAccountSettings,
-          as: 'imapSettings',
-          attributes: ['historicalSyncComplete', 'lastSyncedAt', 'historicalSyncLastAt'],
-        }],
-        attributes: ['id', 'email'],
-      });
-      if (allAccounts.length > 0) {
-        const summary = allAccounts.map((a) => {
-          const reasons: string[] = [];
-          const imap = a.imapSettings;
-          if (!imap) { reasons.push('no imapSettings'); return `${a.email}: ${reasons.join(', ')}`; }
-          if (!imap.historicalSyncComplete) reasons.push('historicalSyncComplete=false');
-          if (imap.lastSyncedAt) {
-            const ageMin = Math.round((Date.now() - new Date(imap.lastSyncedAt).getTime()) / 60000);
-            reasons.push(`lastSyncedAt=${ageMin}m ago`);
-          } else {
-            reasons.push('lastSyncedAt=null');
-          }
-          return `${a.email}: ${reasons.join(', ')}`;
-        });
-        logger.info('BackgroundSync', `No stale accounts found. ${allAccounts.length} IMAP account(s) in system: ${summary.join('; ')}`);
-      } else {
-        logger.info('BackgroundSync', 'No stale accounts found (0 IMAP accounts in system)');
-      }
-      return result;
-    }
-
-    logger.info(
-      'BackgroundSync',
-      `Found ${staleAccounts.length} stale email account(s) to sync`,
-    );
-
-    // Start syncs for all stale accounts
-    // We don't await all of them - startAsyncSync runs in background
-    for (const account of staleAccounts) {
       try {
-        const started = await startAsyncSync(account, account.imapSettings!);
-        if (started) {
-          result.syncsStarted++;
-          logger.info(
-            'BackgroundSync',
-            `Started sync for ${account.email} (user: ${account.userId})`,
-          );
-        } else {
-          logger.info(
-            'BackgroundSync',
-            `Sync already in progress for ${account.email}`,
-          );
+        // Run repair on every cycle (fast no-op when nothing to fix)
+        await repairHistoricalSyncFlags();
+
+        const staleAccounts = await findStaleEmailAccounts();
+        result.checked = staleAccounts.length;
+        span.setAttribute('sync.accounts.checked', staleAccounts.length);
+
+        if (staleAccounts.length === 0) {
+          const allAccounts = await EmailAccount.findAll({
+            where: { type: EmailAccountType.IMAP },
+            include: [{
+              model: ImapAccountSettings,
+              as: 'imapSettings',
+              attributes: ['historicalSyncComplete', 'lastSyncedAt', 'historicalSyncLastAt'],
+            }],
+            attributes: ['id', 'email'],
+          });
+          if (allAccounts.length > 0) {
+            const summary = allAccounts.map((a) => {
+              const reasons: string[] = [];
+              const imap = a.imapSettings;
+              if (!imap) { reasons.push('no imapSettings'); return `${a.email}: ${reasons.join(', ')}`; }
+              if (!imap.historicalSyncComplete) reasons.push('historicalSyncComplete=false');
+              if (imap.lastSyncedAt) {
+                const ageMin = Math.round((Date.now() - new Date(imap.lastSyncedAt).getTime()) / 60000);
+                reasons.push(`lastSyncedAt=${ageMin}m ago`);
+              } else {
+                reasons.push('lastSyncedAt=null');
+              }
+              return `${a.email}: ${reasons.join(', ')}`;
+            });
+            logger.info('BackgroundSync', `No stale accounts found. ${allAccounts.length} IMAP account(s) in system: ${summary.join('; ')}`);
+          } else {
+            logger.info('BackgroundSync', 'No stale accounts found (0 IMAP accounts in system)');
+          }
+          return result;
         }
+
+        logger.info(
+          'BackgroundSync',
+          `Found ${staleAccounts.length} stale email account(s) to sync`,
+        );
+
+        // Start syncs for all stale accounts
+        // We don't await all of them - startAsyncSync runs in background
+        for (const account of staleAccounts) {
+          try {
+            const started = await startAsyncSync(account, account.imapSettings!);
+            if (started) {
+              result.syncsStarted++;
+              logger.info(
+                'BackgroundSync',
+                `Started sync for ${account.email}`,
+                { userIdHash: hashIdentifier(account.userId) },
+              );
+            } else {
+              logger.info(
+                'BackgroundSync',
+                `Sync already in progress for ${account.email}`,
+              );
+            }
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+            result.errors.push(
+              `Failed to start sync for ${account.email}: ${errorMsg}`,
+            );
+            logger.error(
+              'BackgroundSync',
+              `Failed to start sync for ${account.email}`,
+              err,
+            );
+          }
+        }
+
+        setActiveSpanAttributes({
+          'sync.accounts.started': result.syncsStarted,
+          'sync.errors.count': result.errors.length,
+        });
+
+        logger.info(
+          'BackgroundSync',
+          `Sync cycle complete: ${result.syncsStarted} syncs started out of ${result.checked} stale accounts`,
+        );
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        result.errors.push(
-          `Failed to start sync for ${account.email}: ${errorMsg}`,
-        );
-        logger.error(
-          'BackgroundSync',
-          `Failed to start sync for ${account.email}`,
-          err,
-        );
+        result.errors.push(`Background sync cycle failed: ${errorMsg}`);
+        logger.error('BackgroundSync', 'Sync cycle failed', err);
       }
-    }
 
-    logger.info(
-      'BackgroundSync',
-      `Sync cycle complete: ${result.syncsStarted} syncs started out of ${result.checked} stale accounts`,
-    );
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-    result.errors.push(`Background sync cycle failed: ${errorMsg}`);
-    logger.error('BackgroundSync', 'Sync cycle failed', err);
-  }
-
-  return result;
+      return result;
+    },
+    {
+      attributes: {
+        'sync.type': 'background_cycle',
+      },
+    },
+    {
+      operation: 'sync.cycle',
+      sync_type: 'background_cycle',
+    },
+  );
 }
 
 /**

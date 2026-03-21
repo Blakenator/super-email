@@ -23,7 +23,8 @@
     "test:watch:unit": "mocha --no-config --node-option=import=tsx --watch 'test/**/*.unit.test.ts'",
     "test:watch:integration": "mocha --no-config --node-option=import=tsx --require test/integration/hooks.ts --watch 'test/**/*.integration.test.ts'",
     "test:coverage": "c8 --reporter=html --reporter=text mocha 'test/**/*.test.ts'",
-    "test:ci": "c8 --reporter=lcov --reporter=text mocha 'test/**/*.test.ts'"
+    "test:ci": "c8 --reporter=lcov --reporter=text mocha 'test/**/*.test.ts'",
+    "profile:0x": "pnpm run build && 0x dist/bootstrap.js"
   },
   "keywords": [],
   "author": "",
@@ -43,6 +44,11 @@
     "@graphql-tools/schema": "^10.0.8",
     "@huggingface/transformers": "^3.8.1",
     "@main/common": "workspace:^",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.71.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
+    "@opentelemetry/sdk-node": "^0.213.0",
+    "@pyroscope/nodejs": "^0.4.10",
     "@supabase/supabase-js": "^2.90.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -68,6 +74,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "0x": "^6.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/chai": "^4.3.16",
     "@types/cors": "^2.8.19",

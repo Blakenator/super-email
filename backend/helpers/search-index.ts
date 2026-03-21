@@ -2,6 +2,11 @@ import { sequelize } from '../db/database.js';
 import { EmailSearchIndex } from '../db/models/email-search-index.model.js';
 import { generateEmbedding, buildEmbeddingText } from './embedding.js';
 import { logger } from './logger.js';
+import {
+  bucketBodySize,
+  hashIdentifier,
+  withObservedSpan,
+} from './observability.js';
 
 /**
  * Create or update a search index entry for an email.
@@ -28,38 +33,53 @@ export async function upsertSearchIndex(params: {
     skipEmbedding = false,
   } = params;
 
-  try {
-    const searchText = [subject, textBody, fromAddress, ...toAddresses]
-      .filter(Boolean)
-      .join(' ');
+  await withObservedSpan(
+    'search_index.upsert',
+    async () => {
+      try {
+        const searchText = [subject, textBody, fromAddress, ...toAddresses]
+          .filter(Boolean)
+          .join(' ');
 
-    let embedding: number[] | null = null;
-    if (!skipEmbedding) {
-      embedding = await generateEmbedding(buildEmbeddingText(subject, textBody));
-    }
+        let embedding: number[] | null = null;
+        if (!skipEmbedding) {
+          embedding = await generateEmbedding(buildEmbeddingText(subject, textBody));
+        }
 
-    const embeddingLiteral = embedding
-      ? `'[${embedding.join(',')}]'::vector`
-      : 'NULL';
+        const embeddingLiteral = embedding
+          ? `'[${embedding.join(',')}]'::vector`
+          : 'NULL';
 
-    await sequelize.query(
-      `INSERT INTO email_search_index ("id", "emailId", "emailAccountId", "searchVector", "embedding", "bodySize", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid(), :emailId, :emailAccountId, to_tsvector('english', :searchText), ${embeddingLiteral}, :bodySize, NOW(), NOW())
-       ON CONFLICT ("emailId") DO UPDATE SET
-         "searchVector" = to_tsvector('english', :searchText),
-         "embedding" = ${embeddingLiteral},
-         "bodySize" = :bodySize,
-         "updatedAt" = NOW()`,
-      {
-        replacements: { emailId, emailAccountId, searchText, bodySize },
+        await sequelize.query(
+          `INSERT INTO email_search_index ("id", "emailId", "emailAccountId", "searchVector", "embedding", "bodySize", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid(), :emailId, :emailAccountId, to_tsvector('english', :searchText), ${embeddingLiteral}, :bodySize, NOW(), NOW())
+           ON CONFLICT ("emailId") DO UPDATE SET
+             "searchVector" = to_tsvector('english', :searchText),
+             "embedding" = ${embeddingLiteral},
+             "bodySize" = :bodySize,
+             "updatedAt" = NOW()`,
+          {
+            replacements: { emailId, emailAccountId, searchText, bodySize },
+          },
+        );
+      } catch (err) {
+        logger.error('SearchIndex', 'Failed to upsert search index', {
+          emailId,
+          error: err instanceof Error ? err.message : err,
+        });
+      }
+    },
+    {
+      attributes: {
+        'email.account.hash': hashIdentifier(emailAccountId),
+        'body.size.bucket': bucketBodySize(bodySize),
+        'search_index.skip_embedding': skipEmbedding,
       },
-    );
-  } catch (err) {
-    logger.error('SearchIndex', 'Failed to upsert search index', {
-      emailId,
-      error: err instanceof Error ? err.message : err,
-    });
-  }
+    },
+    {
+      operation: 'search_index.upsert',
+    },
+  );
 }
 
 /**

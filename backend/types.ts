@@ -4,6 +4,9 @@ import type { MyContext } from '@main/common';
 
 export type BackendContext = MyContext & {
   sequelize: Sequelize;
+  requestId?: string;
+  traceId?: string;
+  spanId?: string;
 };
 export type AllBackendResolvers = Resolvers<BackendContext>;
 

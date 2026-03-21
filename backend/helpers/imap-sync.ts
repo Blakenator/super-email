@@ -32,6 +32,12 @@ import { checkBillingLimits } from './billing-checks.js';
 import { recalculateUserUsage } from './usage-calculator.js';
 import { sendNewEmailNotifications } from './push-notifications.js';
 import { logger } from './logger.js';
+import {
+  bucketBodySize,
+  hashIdentifier,
+  setActiveSpanAttributes,
+  withObservedSpan,
+} from './observability.js';
 
 const BATCH_SIZE = 100;
 const DB_BATCH_SIZE = 50;
@@ -63,144 +69,159 @@ export async function startAsyncSync(
   emailAccount: EmailAccount,
   imapSettings: ImapAccountSettings,
 ): Promise<boolean> {
-  await imapSettings.reload();
+  return withObservedSpan(
+    'sync.trigger',
+    async (span) => {
+      await imapSettings.reload();
 
-  if (emailAccount.needsReauth) {
-    logger.info('IMAP', `Sync skipped for ${emailAccount.email}: account needs re-authentication`);
-    return false;
-  }
-
-  const billingCheck = await checkBillingLimits(emailAccount.userId);
-  if (!billingCheck.canSync) {
-    logger.warn('IMAP', `Sync blocked for ${emailAccount.email}: ${billingCheck.reason}`);
-    publishMailboxUpdate(emailAccount.userId, {
-      type: 'ERROR',
-      emailAccountId: emailAccount.id,
-      message: billingCheck.reason || 'Usage limit exceeded',
-    });
-    return false;
-  }
-
-  const needsHistoricalSync =
-    !imapSettings.historicalSyncLastAt && !imapSettings.historicalSyncComplete;
-  const syncType: SyncType = needsHistoricalSync ? 'historical' : 'update';
-  const fields = getSyncFields(syncType);
-
-  const existingSyncId = imapSettings[fields.syncIdField];
-  const existingExpiresAt = imapSettings[fields.expiresAtField];
-
-  if (existingSyncId) {
-    if (isSyncExpired(existingExpiresAt)) {
-      logger.info('IMAP', `${syncType} sync for ${emailAccount.email} has expired (syncId: ${existingSyncId}), starting new sync`);
-      await clearExpiredSync(imapSettings, syncType);
-    } else {
-      logger.debug('IMAP', `${syncType} sync already in progress for ${emailAccount.email} (syncId: ${existingSyncId}), skipping`);
-      return false;
-    }
-  }
-
-  const syncId = uuidv4();
-
-  const started = await markSyncStarted(imapSettings, syncType, syncId);
-  if (!started) {
-    logger.debug('IMAP', `${syncType} sync lost race for ${emailAccount.email}, another sync started first`);
-    return false;
-  }
-
-  publishMailboxUpdate(emailAccount.userId, {
-    type: 'SYNC_STARTED',
-    emailAccountId: emailAccount.id,
-    message:
-      syncType === 'historical'
-        ? 'Starting historical sync...'
-        : 'Starting email sync...',
-  });
-
-  // Run sync in background (fire-and-forget)
-  syncEmailsFromImapAccount(emailAccount, imapSettings, syncId, syncType)
-    .then(async (result) => {
-      const updated = await markSyncCompleted(imapSettings, syncType, syncId, result);
-      if (!updated) {
-        logger.info('IMAP', `${syncType} sync ${syncId} was superseded, not updating status`);
-        return;
+      if (emailAccount.needsReauth) {
+        logger.info('IMAP', `Sync skipped for ${emailAccount.email}: account needs re-authentication`);
+        return false;
       }
 
-      logger.info('IMAP', `${syncType} sync complete for ${emailAccount.email}: ${result.synced} synced`);
+      const billingCheck = await checkBillingLimits(emailAccount.userId);
+      if (!billingCheck.canSync) {
+        logger.warn('IMAP', `Sync blocked for ${emailAccount.email}: ${billingCheck.reason}`);
+        publishMailboxUpdate(emailAccount.userId, {
+          type: 'ERROR',
+          emailAccountId: emailAccount.id,
+          message: billingCheck.reason || 'Usage limit exceeded',
+        });
+        return false;
+      }
 
-      try {
-        await recalculateUserUsage(emailAccount.userId);
-      } catch (usageError) {
-        logger.error('IMAP', 'Failed to recalculate usage after sync', { error: usageError instanceof Error ? usageError.message : usageError });
+      const needsHistoricalSync =
+        !imapSettings.historicalSyncLastAt && !imapSettings.historicalSyncComplete;
+      const syncType: SyncType = needsHistoricalSync ? 'historical' : 'update';
+      const fields = getSyncFields(syncType);
+
+      span.setAttribute('sync.type', syncType);
+      span.setAttribute(
+        'email.account.hash',
+        hashIdentifier(emailAccount.id) ?? 'unknown',
+      );
+
+      const existingSyncId = imapSettings[fields.syncIdField];
+      const existingExpiresAt = imapSettings[fields.expiresAtField];
+
+      if (existingSyncId) {
+        if (isSyncExpired(existingExpiresAt)) {
+          logger.info('IMAP', `${syncType} sync for ${emailAccount.email} has expired (syncId: ${existingSyncId}), starting new sync`);
+          await clearExpiredSync(imapSettings, syncType);
+        } else {
+          logger.debug('IMAP', `${syncType} sync already in progress for ${emailAccount.email} (syncId: ${existingSyncId}), skipping`);
+          return false;
+        }
+      }
+
+      const syncId = uuidv4();
+
+      const started = await markSyncStarted(imapSettings, syncType, syncId);
+      if (!started) {
+        logger.debug('IMAP', `${syncType} sync lost race for ${emailAccount.email}, another sync started first`);
+        return false;
       }
 
       publishMailboxUpdate(emailAccount.userId, {
-        type: 'SYNC_COMPLETED',
+        type: 'SYNC_STARTED',
         emailAccountId: emailAccount.id,
-        message: result.cancelled
-          ? 'Sync cancelled'
-          : `Synced ${result.synced} new email(s)`,
+        message:
+          syncType === 'historical'
+            ? 'Starting historical sync...'
+            : 'Starting email sync...',
       });
 
-      if (syncType === 'update' && result.synced > 0 && !result.cancelled) {
-        try {
-          const recentEmails = await Email.findAll({
-            where: { emailAccountId: emailAccount.id, folder: EmailFolder.INBOX },
-            order: [['receivedAt', 'DESC']],
-            limit: Math.min(result.synced, 20),
+      // Run sync in background (fire-and-forget)
+      syncEmailsFromImapAccount(emailAccount, imapSettings, syncId, syncType)
+        .then(async (result) => {
+          const updated = await markSyncCompleted(imapSettings, syncType, syncId, result);
+          if (!updated) {
+            logger.info('IMAP', `${syncType} sync ${syncId} was superseded, not updating status`);
+            return;
+          }
+
+          logger.info('IMAP', `${syncType} sync complete for ${emailAccount.email}: ${result.synced} synced`);
+
+          try {
+            await recalculateUserUsage(emailAccount.userId);
+          } catch (usageError) {
+            logger.error('IMAP', 'Failed to recalculate usage after sync', { error: usageError instanceof Error ? usageError.message : usageError });
+          }
+
+          publishMailboxUpdate(emailAccount.userId, {
+            type: 'SYNC_COMPLETED',
+            emailAccountId: emailAccount.id,
+            message: result.cancelled
+              ? 'Sync cancelled'
+              : `Synced ${result.synced} new email(s)`,
           });
 
-          await sendNewEmailNotifications(
-            emailAccount.userId,
-            recentEmails,
-            emailAccount.email,
-          );
-        } catch (pushError) {
-          logger.error('IMAP', 'Failed to send push notification after sync', { error: pushError instanceof Error ? pushError.message : pushError });
-        }
-      }
+          if (syncType === 'update' && result.synced > 0 && !result.cancelled) {
+            try {
+              const recentEmails = await Email.findAll({
+                where: { emailAccountId: emailAccount.id, folder: EmailFolder.INBOX },
+                order: [['receivedAt', 'DESC']],
+                limit: Math.min(result.synced, 20),
+              });
 
-      // Clear status after a short delay
-      setTimeout(async () => {
-        try {
-          await imapSettings.reload();
-          if (!imapSettings[fields.syncIdField]) {
-            await imapSettings.update({
-              [fields.progressField]: null,
-              [fields.statusField]: null,
-            });
+              await sendNewEmailNotifications(
+                emailAccount.userId,
+                recentEmails,
+                emailAccount.email,
+              );
+            } catch (pushError) {
+              logger.error('IMAP', 'Failed to send push notification after sync', { error: pushError instanceof Error ? pushError.message : pushError });
+            }
           }
-        } catch (cleanupErr) {
-          logger.debug('IMAP', 'Error during post-sync cleanup (10s timeout)', { error: cleanupErr instanceof Error ? cleanupErr.message : cleanupErr });
-        }
-      }, 10000);
-    })
-    .catch(async (err) => {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
 
-      await markSyncFailed(imapSettings, syncType, syncId, errorMsg);
-      logger.error('IMAP', `${syncType} sync failed for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
+          // Clear status after a short delay
+          setTimeout(async () => {
+            try {
+              await imapSettings.reload();
+              if (!imapSettings[fields.syncIdField]) {
+                await imapSettings.update({
+                  [fields.progressField]: null,
+                  [fields.statusField]: null,
+                });
+              }
+            } catch (cleanupErr) {
+              logger.debug('IMAP', 'Error during post-sync cleanup (10s timeout)', { error: cleanupErr instanceof Error ? cleanupErr.message : cleanupErr });
+            }
+          }, 10000);
+        })
+        .catch(async (err) => {
+          const errorMsg = err instanceof Error ? err.message : 'Unknown error';
 
-      publishMailboxUpdate(emailAccount.userId, {
-        type: 'ERROR',
-        emailAccountId: emailAccount.id,
-        message: `Sync failed: ${errorMsg}`,
-      });
+          await markSyncFailed(imapSettings, syncType, syncId, errorMsg);
+          logger.error('IMAP', `${syncType} sync failed for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
 
-      setTimeout(async () => {
-        try {
-          await imapSettings.reload();
-          if (!imapSettings[fields.syncIdField]) {
-            await imapSettings.update({
-              [fields.statusField]: null,
-            });
-          }
-        } catch (cleanupErr) {
-          logger.debug('IMAP', 'Error during post-failure cleanup (30s timeout)', { error: cleanupErr instanceof Error ? cleanupErr.message : cleanupErr });
-        }
-      }, 30000);
-    });
+          publishMailboxUpdate(emailAccount.userId, {
+            type: 'ERROR',
+            emailAccountId: emailAccount.id,
+            message: `Sync failed: ${errorMsg}`,
+          });
 
-  return true;
+          setTimeout(async () => {
+            try {
+              await imapSettings.reload();
+              if (!imapSettings[fields.syncIdField]) {
+                await imapSettings.update({
+                  [fields.statusField]: null,
+                });
+              }
+            } catch (cleanupErr) {
+              logger.debug('IMAP', 'Error during post-failure cleanup (30s timeout)', { error: cleanupErr instanceof Error ? cleanupErr.message : cleanupErr });
+            }
+          }, 30000);
+        });
+
+      return true;
+    },
+    {},
+    {
+      operation: 'sync.trigger',
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -213,81 +234,106 @@ export async function syncEmailsFromImapAccount(
   syncId: string,
   syncType: SyncType = 'update',
 ): Promise<SyncResult> {
-  const result: SyncResult = {
-    synced: 0,
-    skipped: 0,
-    errors: [],
-    cancelled: false,
-  };
+  return withObservedSpan(
+    'sync.account',
+    async (span) => {
+      const result: SyncResult = {
+        synced: 0,
+        skipped: 0,
+        errors: [],
+        cancelled: false,
+      };
 
-  const client = await createImapClient(imapSettings);
-  const expirationTracker = { lastUpdate: Date.now() };
-  const fields = getSyncFields(syncType);
+      const client = await createImapClient(imapSettings);
+      const expirationTracker = { lastUpdate: Date.now() };
+      const fields = getSyncFields(syncType);
 
-  try {
-    await imapSettings.update({
-      [fields.statusField]: 'Connecting to server...',
-    });
-    await updateSyncExpiration(imapSettings, syncId, syncType);
+      span.setAttribute('sync.type', syncType);
+      span.setAttribute(
+        'email.account.hash',
+        hashIdentifier(emailAccount.id) ?? 'unknown',
+      );
+      span.setAttribute('sync.id.hash', hashIdentifier(syncId) ?? 'unknown');
 
-    await withRetry(() => client.connect(), `Connect to ${imapSettings.host}`);
-    logger.info('IMAP', `Connected to ${imapSettings.host}`);
+      try {
+        await imapSettings.update({
+          [fields.statusField]: 'Connecting to server...',
+        });
+        await updateSyncExpiration(imapSettings, syncId, syncType);
 
-    await imapSettings.update({
-      [fields.statusField]: 'Opening mailbox...',
-    });
-    await updateSyncExpiration(imapSettings, syncId, syncType);
+        await withRetry(() => client.connect(), `Connect to ${imapSettings.host}`);
+        logger.info('IMAP', `Connected to ${imapSettings.host}`);
 
-    const mailbox = await withRetry(
-      () => client.mailboxOpen('INBOX'),
-      'Open INBOX mailbox',
-    );
-    logger.info('IMAP', `Mailbox opened: ${mailbox.exists} messages total`);
+        await imapSettings.update({
+          [fields.statusField]: 'Opening mailbox...',
+        });
+        await updateSyncExpiration(imapSettings, syncId, syncType);
 
-    if (mailbox.exists === 0) {
-      await client.logout();
+        const mailbox = await withRetry(
+          () => client.mailboxOpen('INBOX'),
+          'Open INBOX mailbox',
+        );
+        logger.info('IMAP', `Mailbox opened: ${mailbox.exists} messages total`);
+        span.setAttribute('sync.mailbox.exists', mailbox.exists);
+
+        if (mailbox.exists === 0) {
+          await client.logout();
+          return result;
+        }
+
+        const isFullSync =
+          syncType === 'historical' || !imapSettings.lastSyncedAt;
+        const statusMsg = isFullSync
+          ? 'Fetching message list (first sync)...'
+          : 'Searching for new messages...';
+
+        await imapSettings.update({
+          [fields.statusField]: statusMsg,
+        });
+
+        // Sync INBOX
+        await syncFolderMessages(client, emailAccount, imapSettings, syncId, syncType, {
+          folder: EmailFolder.INBOX,
+          folderLabel: 'INBOX',
+          resumeUidField: 'historicalSyncLastUidInbox',
+          totalField: 'historicalSyncTotalInbox',
+          uidNextField: 'lastSyncUidNextInbox',
+          reportProgress: true,
+        }, result, expirationTracker);
+
+        logger.info('IMAP', `${emailAccount.email} INBOX sync complete: ${result.synced} synced, ${result.skipped} skipped`);
+
+        // Sync Sent folder
+        await syncSentFolder(client, emailAccount, imapSettings, syncId, syncType, result, expirationTracker);
+
+        await client.logout();
+        setActiveSpanAttributes({
+          'sync.result.synced': result.synced,
+          'sync.result.skipped': result.skipped,
+          'sync.result.cancelled': result.cancelled,
+          'sync.errors.count': result.errors.length,
+        });
+        logger.info('IMAP', `Sync complete for ${emailAccount.email}: ${result.synced} emails synced, ${result.skipped} skipped`);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        result.errors.push(`IMAP connection error: ${errorMsg}`);
+        logger.error('IMAP', `Sync error for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
+
+        try {
+          await client.logout();
+        } catch (logoutErr) {
+          logger.debug('IMAP', `Logout failed after sync error for ${emailAccount.email}`, { error: logoutErr instanceof Error ? logoutErr.message : logoutErr });
+        }
+      }
+
       return result;
-    }
-
-    const isFullSync = syncType === 'historical' || !imapSettings.lastSyncedAt;
-    const statusMsg = isFullSync
-      ? 'Fetching message list (first sync)...'
-      : 'Searching for new messages...';
-
-    await imapSettings.update({
-      [fields.statusField]: statusMsg,
-    });
-
-    // Sync INBOX
-    await syncFolderMessages(client, emailAccount, imapSettings, syncId, syncType, {
-      folder: EmailFolder.INBOX,
-      folderLabel: 'INBOX',
-      resumeUidField: 'historicalSyncLastUidInbox',
-      totalField: 'historicalSyncTotalInbox',
-      uidNextField: 'lastSyncUidNextInbox',
-      reportProgress: true,
-    }, result, expirationTracker);
-
-    logger.info('IMAP', `${emailAccount.email} INBOX sync complete: ${result.synced} synced, ${result.skipped} skipped`);
-
-    // Sync Sent folder
-    await syncSentFolder(client, emailAccount, imapSettings, syncId, syncType, result, expirationTracker);
-
-    await client.logout();
-    logger.info('IMAP', `Sync complete for ${emailAccount.email}: ${result.synced} emails synced, ${result.skipped} skipped`);
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-    result.errors.push(`IMAP connection error: ${errorMsg}`);
-    logger.error('IMAP', `Sync error for ${emailAccount.email}`, { error: err instanceof Error ? err.message : err });
-
-    try {
-      await client.logout();
-    } catch (logoutErr) {
-      logger.debug('IMAP', `Logout failed after sync error for ${emailAccount.email}`, { error: logoutErr instanceof Error ? logoutErr.message : logoutErr });
-    }
-  }
-
-  return result;
+    },
+    {},
+    {
+      operation: 'sync.account',
+      sync_type: syncType,
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -308,200 +354,232 @@ async function syncFolderMessages(
   result: SyncResult,
   expirationTracker: { lastUpdate: number },
 ): Promise<void> {
-  const fields = getSyncFields(syncType);
-  const isFullSync = syncType === 'historical' || !imapSettings.lastSyncedAt;
+  await withObservedSpan(
+    'sync.folder',
+    async (span) => {
+      const fields = getSyncFields(syncType);
+      const isFullSync = syncType === 'historical' || !imapSettings.lastSyncedAt;
 
-  if (isFullSync) {
-    await imapSettings.reload();
-    const isResuming =
-      syncType === 'historical' &&
-      imapSettings[config.resumeUidField] !== null;
+      span.setAttribute('sync.type', syncType);
+      span.setAttribute('sync.folder', config.folder);
+      span.setAttribute(
+        'email.account.hash',
+        hashIdentifier(emailAccount.id) ?? 'unknown',
+      );
 
-    const lastProcessedUid = isResuming
-      ? (imapSettings[config.resumeUidField] as number)
-      : null;
+      if (isFullSync) {
+        await imapSettings.reload();
+        const isResuming =
+          syncType === 'historical' &&
+          imapSettings[config.resumeUidField] !== null;
 
-    if (isResuming) {
-      logger.info('IMAP', `${emailAccount.email} Resuming ${config.folderLabel} sync from UID ${lastProcessedUid}`);
-    }
+        const lastProcessedUid = isResuming
+          ? (imapSettings[config.resumeUidField] as number)
+          : null;
 
-    const searchResult = await withRetry(
-      () => client.search({ all: true }, { uid: true }),
-      `Search for all ${config.folderLabel} messages`,
-    );
-    const allUids = searchResult === false ? [] : searchResult;
+        if (isResuming) {
+          logger.info('IMAP', `${emailAccount.email} Resuming ${config.folderLabel} sync from UID ${lastProcessedUid}`);
+        }
 
-    if (allUids.length === 0) {
-      logger.info('IMAP', `${emailAccount.email} No ${config.folderLabel} messages to sync`);
-      return;
-    }
-
-    const sortedUids = [...allUids].sort((a, b) => b - a);
-
-    let uidsToProcess: number[];
-    if (isResuming && lastProcessedUid !== null) {
-      uidsToProcess = sortedUids.filter((uid) => uid < lastProcessedUid);
-      logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`);
-    } else {
-      uidsToProcess = sortedUids;
-    }
-
-    const totalUids = sortedUids.length;
-    const totalRemaining = uidsToProcess.length;
-
-    if (syncType === 'historical' && !isResuming) {
-      await imapSettings.update({ [config.totalField]: totalUids });
-    }
-
-    const savedTotal =
-      (imapSettings[config.totalField] as number | null) || totalUids;
-
-    logger.info('IMAP', `${emailAccount.email} ${config.folderLabel}: ${totalRemaining} messages to process`);
-
-    let batchNumber = 0;
-    let processedInSession = 0;
-
-    for (let i = 0; i < uidsToProcess.length; i += BATCH_SIZE) {
-      if (!(await shouldContinueSync(imapSettings, syncId, syncType))) {
-        logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
-        result.cancelled = true;
-        break;
-      }
-
-      batchNumber++;
-      const batchUids = uidsToProcess.slice(i, i + BATCH_SIZE);
-      const lowestUidInBatch = Math.min(...batchUids);
-
-      if (config.reportProgress) {
-        const totalProcessed = savedTotal - totalRemaining + processedInSession;
-        const progress = Math.min(
-          99,
-          Math.round((totalProcessed / Math.max(1, savedTotal)) * 100),
+        const searchResult = await withRetry(
+          () => client.search({ all: true }, { uid: true }),
+          `Search for all ${config.folderLabel} messages`,
         );
-        const progressMsg = `Processing batch ${batchNumber} (${result.synced + result.skipped} processed, ${result.synced} new)...`;
-        await imapSettings.update({
-          [fields.progressField]: progress,
-          [fields.statusField]: progressMsg,
-        });
-      }
+        const allUids = searchResult === false ? [] : searchResult;
 
-      const now = Date.now();
-      if (now - expirationTracker.lastUpdate > SYNC_EXPIRATION_UPDATE_INTERVAL * 1000) {
-        await updateSyncExpiration(imapSettings, syncId, syncType);
-        expirationTracker.lastUpdate = now;
-      }
+        if (allUids.length === 0) {
+          logger.info('IMAP', `${emailAccount.email} No ${config.folderLabel} messages to sync`);
+          return;
+        }
 
-      const batchResult = await processBatchByUids(
-        client,
-        emailAccount.id,
-        batchUids,
-        config.folder,
-        emailAccount.userId,
-      );
+        const sortedUids = [...allUids].sort((a, b) => b - a);
 
-      result.synced += batchResult.synced;
-      result.skipped += batchResult.skipped;
-      result.errors.push(...batchResult.errors);
-      processedInSession += batchResult.synced + batchResult.skipped;
+        let uidsToProcess: number[];
+        if (isResuming && lastProcessedUid !== null) {
+          uidsToProcess = sortedUids.filter((uid) => uid < lastProcessedUid);
+          logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} resuming: ${uidsToProcess.length} UIDs remaining (of ${sortedUids.length} total)`);
+        } else {
+          uidsToProcess = sortedUids;
+        }
 
-      if (syncType === 'historical') {
-        await imapSettings.update({
-          [config.resumeUidField]: lowestUidInBatch,
-        });
-      }
+        const totalUids = sortedUids.length;
+        const totalRemaining = uidsToProcess.length;
+        span.setAttribute('sync.folder.message_count', totalRemaining);
 
-      logger.debug('IMAP', `${emailAccount.email} ${config.folderLabel} batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
-    }
+        if (syncType === 'historical' && !isResuming) {
+          await imapSettings.update({ [config.totalField]: totalUids });
+        }
 
-    if (syncType === 'historical' && !result.cancelled) {
-      await imapSettings.update({
-        [config.resumeUidField]: null,
-        [config.totalField]: null,
-      });
-      // Store uidNext so the first incremental sync can use UID-based search
-      await storeUidNext(client, imapSettings, config);
-      logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} historical sync completed, cleared resume point`);
-    }
-  } else {
-    // Incremental sync — prefer UID-based search over date-based IMAP SINCE,
-    // which is unreliable on some servers (date-only comparison, search index lag).
-    const sinceDate = new Date(imapSettings.lastSyncedAt!);
+        const savedTotal =
+          (imapSettings[config.totalField] as number | null) || totalUids;
 
-    const storedUidNext = imapSettings[config.uidNextField];
-    let messageUids: number[];
+        logger.info('IMAP', `${emailAccount.email} ${config.folderLabel}: ${totalRemaining} messages to process`);
 
-    if (storedUidNext) {
-      const searchResult = await withRetry(
-        () => client.search({ uid: `${storedUidNext}:*` }, { uid: true }),
-        `Search ${config.folderLabel} by UID range`,
-      );
-      if (searchResult === false) {
-        logger.warn('IMAP', `${emailAccount.email} ${config.folderLabel} UID range search failed, will scan recent messages`);
-        messageUids = await fetchRecentMessageUids(client, sinceDate, config.folderLabel, emailAccount.email);
+        let batchNumber = 0;
+        let processedInSession = 0;
+
+        for (let i = 0; i < uidsToProcess.length; i += BATCH_SIZE) {
+          if (!(await shouldContinueSync(imapSettings, syncId, syncType))) {
+            logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
+            result.cancelled = true;
+            break;
+          }
+
+          batchNumber++;
+          const batchUids = uidsToProcess.slice(i, i + BATCH_SIZE);
+          const lowestUidInBatch = Math.min(...batchUids);
+
+          if (config.reportProgress) {
+            const totalProcessed =
+              savedTotal - totalRemaining + processedInSession;
+            const progress = Math.min(
+              99,
+              Math.round((totalProcessed / Math.max(1, savedTotal)) * 100),
+            );
+            const progressMsg = `Processing batch ${batchNumber} (${result.synced + result.skipped} processed, ${result.synced} new)...`;
+            await imapSettings.update({
+              [fields.progressField]: progress,
+              [fields.statusField]: progressMsg,
+            });
+          }
+
+          const now = Date.now();
+          if (
+            now - expirationTracker.lastUpdate >
+            SYNC_EXPIRATION_UPDATE_INTERVAL * 1000
+          ) {
+            await updateSyncExpiration(imapSettings, syncId, syncType);
+            expirationTracker.lastUpdate = now;
+          }
+
+          const batchResult = await processBatchByUids(
+            client,
+            emailAccount.id,
+            batchUids,
+            config.folder,
+            emailAccount.userId,
+          );
+
+          result.synced += batchResult.synced;
+          result.skipped += batchResult.skipped;
+          result.errors.push(...batchResult.errors);
+          processedInSession += batchResult.synced + batchResult.skipped;
+
+          if (syncType === 'historical') {
+            await imapSettings.update({
+              [config.resumeUidField]: lowestUidInBatch,
+            });
+          }
+
+          logger.debug('IMAP', `${emailAccount.email} ${config.folderLabel} batch ${batchNumber}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
+        }
+
+        if (syncType === 'historical' && !result.cancelled) {
+          await imapSettings.update({
+            [config.resumeUidField]: null,
+            [config.totalField]: null,
+          });
+          // Store uidNext so the first incremental sync can use UID-based search
+          await storeUidNext(client, imapSettings, config);
+          logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} historical sync completed, cleared resume point`);
+        }
       } else {
-        messageUids = searchResult.filter(uid => uid >= storedUidNext);
+        // Incremental sync — prefer UID-based search over date-based IMAP SINCE,
+        // which is unreliable on some servers (date-only comparison, search index lag).
+        const sinceDate = new Date(imapSettings.lastSyncedAt!);
+
+        const storedUidNext = imapSettings[config.uidNextField];
+        let messageUids: number[];
+
+        if (storedUidNext) {
+          const searchResult = await withRetry(
+            () => client.search({ uid: `${storedUidNext}:*` }, { uid: true }),
+            `Search ${config.folderLabel} by UID range`,
+          );
+          if (searchResult === false) {
+            logger.warn('IMAP', `${emailAccount.email} ${config.folderLabel} UID range search failed, will scan recent messages`);
+            messageUids = await fetchRecentMessageUids(client, sinceDate, config.folderLabel, emailAccount.email);
+          } else {
+            messageUids = searchResult.filter(uid => uid >= storedUidNext);
+          }
+          logger.info('IMAP', `${emailAccount.email} Incremental ${config.folderLabel} sync: ${messageUids.length} messages (UID >= ${storedUidNext})`);
+        } else {
+          // No stored uidNext yet — scan recent messages by sequence number and
+          // filter by internalDate. This bypasses IMAP SEARCH SINCE entirely.
+          messageUids = await fetchRecentMessageUids(client, sinceDate, config.folderLabel, emailAccount.email);
+          logger.info('IMAP', `${emailAccount.email} Incremental ${config.folderLabel} sync: ${messageUids.length} messages since ${sinceDate.toISOString()} (scanned recent messages)`);
+        }
+
+        if (messageUids.length === 0) {
+          // Still store uidNext even when nothing new so future syncs use UID path
+          await storeUidNext(client, imapSettings, config);
+          return;
+        }
+
+        const totalToProcess = messageUids.length;
+        span.setAttribute('sync.folder.message_count', totalToProcess);
+
+        for (let i = 0; i < messageUids.length; i += BATCH_SIZE) {
+          if (!(await shouldContinueSync(imapSettings, syncId, syncType))) {
+            logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
+            result.cancelled = true;
+            break;
+          }
+
+          const batchUids = messageUids.slice(i, i + BATCH_SIZE);
+
+          if (config.reportProgress) {
+            const progress = Math.round((i / totalToProcess) * 100);
+            const progressMsg = `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`;
+            await imapSettings.update({
+              [fields.progressField]: Math.min(99, progress),
+              [fields.statusField]: progressMsg,
+            });
+          }
+
+          const now = Date.now();
+          if (
+            now - expirationTracker.lastUpdate >
+            SYNC_EXPIRATION_UPDATE_INTERVAL * 1000
+          ) {
+            await updateSyncExpiration(imapSettings, syncId, syncType);
+            expirationTracker.lastUpdate = now;
+          }
+
+          const batchResult = await processBatchByUids(
+            client,
+            emailAccount.id,
+            batchUids,
+            config.folder,
+            emailAccount.userId,
+          );
+
+          result.synced += batchResult.synced;
+          result.skipped += batchResult.skipped;
+          result.errors.push(...batchResult.errors);
+
+          logger.debug('IMAP', `${emailAccount.email} ${config.folderLabel} batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
+        }
+
+        if (!result.cancelled) {
+          await storeUidNext(client, imapSettings, config);
+        }
       }
-      logger.info('IMAP', `${emailAccount.email} Incremental ${config.folderLabel} sync: ${messageUids.length} messages (UID >= ${storedUidNext})`);
-    } else {
-      // No stored uidNext yet — scan recent messages by sequence number and
-      // filter by internalDate. This bypasses IMAP SEARCH SINCE entirely.
-      messageUids = await fetchRecentMessageUids(client, sinceDate, config.folderLabel, emailAccount.email);
-      logger.info('IMAP', `${emailAccount.email} Incremental ${config.folderLabel} sync: ${messageUids.length} messages since ${sinceDate.toISOString()} (scanned recent messages)`);
-    }
 
-    if (messageUids.length === 0) {
-      // Still store uidNext even when nothing new so future syncs use UID path
-      await storeUidNext(client, imapSettings, config);
-      return;
-    }
-
-    const totalToProcess = messageUids.length;
-
-    for (let i = 0; i < messageUids.length; i += BATCH_SIZE) {
-      if (!(await shouldContinueSync(imapSettings, syncId, syncType))) {
-        logger.info('IMAP', `${syncType} sync ${syncId} cancelled`);
-        result.cancelled = true;
-        break;
-      }
-
-      const batchUids = messageUids.slice(i, i + BATCH_SIZE);
-
-      if (config.reportProgress) {
-        const progress = Math.round((i / totalToProcess) * 100);
-        const progressMsg = `Processing batch ${Math.floor(i / BATCH_SIZE) + 1}...`;
-        await imapSettings.update({
-          [fields.progressField]: Math.min(99, progress),
-          [fields.statusField]: progressMsg,
-        });
-      }
-
-      const now = Date.now();
-      if (now - expirationTracker.lastUpdate > SYNC_EXPIRATION_UPDATE_INTERVAL * 1000) {
-        await updateSyncExpiration(imapSettings, syncId, syncType);
-        expirationTracker.lastUpdate = now;
-      }
-
-      const batchResult = await processBatchByUids(
-        client,
-        emailAccount.id,
-        batchUids,
-        config.folder,
-        emailAccount.userId,
-      );
-
-      result.synced += batchResult.synced;
-      result.skipped += batchResult.skipped;
-      result.errors.push(...batchResult.errors);
-
-      logger.debug('IMAP', `${emailAccount.email} ${config.folderLabel} batch ${Math.floor(i / BATCH_SIZE) + 1}: ${batchResult.synced} new, ${batchResult.skipped} skipped`);
-    }
-
-    if (!result.cancelled) {
-      await storeUidNext(client, imapSettings, config);
-    }
-  }
-
-  logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} sync complete`);
+      setActiveSpanAttributes({
+        'sync.folder.result.synced': result.synced,
+        'sync.folder.result.skipped': result.skipped,
+        'sync.folder.cancelled': result.cancelled,
+      });
+      logger.info('IMAP', `${emailAccount.email} ${config.folderLabel} sync complete`);
+    },
+    {},
+    {
+      operation: 'sync.folder',
+      sync_type: syncType,
+      folder: config.folderLabel,
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -634,69 +712,92 @@ async function processBatch(
   folder: EmailFolder = EmailFolder.INBOX,
   userId?: string,
 ): Promise<{ synced: number; skipped: number; errors: string[] }> {
-  const batchResult = { synced: 0, skipped: 0, errors: [] as string[] };
-  const emailsWithAttachments: EmailWithAttachments[] = [];
-  const messageIdsInBatch: string[] = [];
+  return withObservedSpan(
+    'sync.batch',
+    async () => {
+      const batchResult = { synced: 0, skipped: 0, errors: [] as string[] };
+      const emailsWithAttachments: EmailWithAttachments[] = [];
+      const messageIdsInBatch: string[] = [];
 
-  const fetchOptions = {
-    envelope: true,
-    source: true,
-    uid: true,
-    internalDate: true,
-    flags: true,
-  };
+      const fetchOptions = {
+        envelope: true,
+        source: true,
+        uid: true,
+        internalDate: true,
+        flags: true,
+      };
 
-  try {
-    const messages = client.fetch(range, fetchOptions, { uid: useUid });
-
-    for await (const message of messages) {
       try {
-        if (!message.source) {
-          logger.warn('IMAP', `No source data for message UID ${message.uid}`);
-          continue;
+        const messages = client.fetch(range, fetchOptions, { uid: useUid });
+
+        for await (const message of messages) {
+          try {
+            if (!message.source) {
+              logger.warn('IMAP', `No source data for message UID ${message.uid}`);
+              continue;
+            }
+
+            const envelope = message.envelope;
+            const envelopeMessageId = envelope?.messageId || `uid-${message.uid}`;
+            messageIdsInBatch.push(envelopeMessageId);
+
+            const parsed = await simpleParser(message.source);
+            const attachments = await uploadAttachmentsImmediately(parsed, emailAccountId);
+
+            const emailData = createEmailDataFromParsed(
+              emailAccountId,
+              envelopeMessageId,
+              parsed,
+              folder,
+              message,
+            );
+
+            emailsWithAttachments.push({ emailData, attachments });
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+            batchResult.errors.push(
+              `Failed to process message UID ${message.uid}: ${errorMsg}`,
+            );
+            logger.error('IMAP', `Error processing message UID ${message.uid}`, { error: errorMsg });
+          }
         }
 
-        const envelope = message.envelope;
-        const envelopeMessageId = envelope?.messageId || `uid-${message.uid}`;
-        messageIdsInBatch.push(envelopeMessageId);
-
-        const parsed = await simpleParser(message.source);
-        const attachments = await uploadAttachmentsImmediately(parsed, emailAccountId);
-
-        const emailData = createEmailDataFromParsed(
+        const insertResult = await insertEmailBatch(
           emailAccountId,
-          envelopeMessageId,
-          parsed,
-          folder,
-          message,
+          emailsWithAttachments,
+          messageIdsInBatch,
+          userId,
         );
-
-        emailsWithAttachments.push({ emailData, attachments });
+        batchResult.synced = insertResult.synced;
+        batchResult.skipped = insertResult.skipped;
+        batchResult.errors.push(...insertResult.errors);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        batchResult.errors.push(
-          `Failed to process message UID ${message.uid}: ${errorMsg}`,
-        );
-        logger.error('IMAP', `Error processing message UID ${message.uid}`, { error: errorMsg });
+        batchResult.errors.push(`Failed to fetch messages: ${errorMsg}`);
+        logger.error('IMAP', 'Fetch failed in processBatch', { error: errorMsg });
       }
-    }
 
-    const insertResult = await insertEmailBatch(
-      emailAccountId,
-      emailsWithAttachments,
-      messageIdsInBatch,
-      userId,
-    );
-    batchResult.synced = insertResult.synced;
-    batchResult.skipped = insertResult.skipped;
-    batchResult.errors.push(...insertResult.errors);
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-    batchResult.errors.push(`Failed to fetch messages: ${errorMsg}`);
-    logger.error('IMAP', 'Fetch failed in processBatch', { error: errorMsg });
-  }
+      setActiveSpanAttributes({
+        'sync.batch.size':
+          Array.isArray(range) ? range.length : String(range).length,
+        'sync.batch.result.synced': batchResult.synced,
+        'sync.batch.result.skipped': batchResult.skipped,
+        'sync.errors.count': batchResult.errors.length,
+      });
 
-  return batchResult;
+      return batchResult;
+    },
+    {
+      attributes: {
+        'sync.folder': folder,
+        'email.account.hash': hashIdentifier(emailAccountId),
+      },
+    },
+    {
+      operation: 'sync.batch',
+      folder,
+    },
+  );
 }
 
 function processBatchByUids(
@@ -724,104 +825,132 @@ async function insertEmailBatch(
   errors: string[];
   newEmailIds: string[];
 }> {
-  const result = {
-    synced: 0,
-    skipped: 0,
-    errors: [] as string[],
-    newEmailIds: [] as string[],
-  };
+  return withObservedSpan(
+    'sync.insert_batch',
+    async () => {
+      const result = {
+        synced: 0,
+        skipped: 0,
+        errors: [] as string[],
+        newEmailIds: [] as string[],
+      };
 
-  if (messageIdsInBatch.length === 0) {
-    return result;
-  }
+      if (messageIdsInBatch.length === 0) {
+        return result;
+      }
 
-  const existingEmails = await Email.findAll({
-    where: {
-      emailAccountId,
-      messageId: { [Op.in]: messageIdsInBatch },
-    },
-    attributes: ['messageId'],
-  });
-  const existingIds = new Set(existingEmails.map((e) => e.messageId));
+      const existingEmails = await Email.findAll({
+        where: {
+          emailAccountId,
+          messageId: { [Op.in]: messageIdsInBatch },
+        },
+        attributes: ['messageId'],
+      });
+      const existingIds = new Set(existingEmails.map((e) => e.messageId));
 
-  const newEmailsData: EmailWithAttachments[] = [];
-  for (const emailWithAtt of emailsWithAttachments) {
-    if (!existingIds.has(emailWithAtt.emailData.messageId as string)) {
-      newEmailsData.push(emailWithAtt);
-    }
-  }
-  result.skipped = emailsWithAttachments.length - newEmailsData.length;
+      const newEmailsData: EmailWithAttachments[] = [];
+      for (const emailWithAtt of emailsWithAttachments) {
+        if (!existingIds.has(emailWithAtt.emailData.messageId as string)) {
+          newEmailsData.push(emailWithAtt);
+        }
+      }
+      result.skipped = emailsWithAttachments.length - newEmailsData.length;
 
-  if (newEmailsData.length > 0) {
-    for (let j = 0; j < newEmailsData.length; j += DB_BATCH_SIZE) {
-      const dbBatch = newEmailsData.slice(j, j + DB_BATCH_SIZE);
-      try {
-        // Extract bodies before DB insert (bodies go to S3, not PG)
-        const bodyData = dbBatch.map((d) => {
-          const textBody = d.emailData.textBody as string | null;
-          const htmlBody = d.emailData.htmlBody as string | null;
-          const id = crypto.randomUUID();
-
-          d.emailData.id = id;
-          d.emailData.bodyStorageKey = `${emailAccountId}/${id}`;
-          d.emailData.bodyPreview = generateBodyPreview(textBody, htmlBody);
-          delete d.emailData.textBody;
-          delete d.emailData.htmlBody;
-
-          return { id, textBody, htmlBody };
-        });
-
-        const createdEmails = await Email.bulkCreate(
-          dbBatch.map((d) => d.emailData) as any,
-        );
-        result.synced += dbBatch.length;
-        result.newEmailIds.push(...createdEmails.map((e) => e.id));
-
-        // Store bodies in S3 and create search index entries in parallel
-        for (let k = 0; k < createdEmails.length; k++) {
-          const email = createdEmails[k];
-          const { textBody, htmlBody } = bodyData[k];
-          const attachments = dbBatch[k].attachments;
-
+      if (newEmailsData.length > 0) {
+        for (let j = 0; j < newEmailsData.length; j += DB_BATCH_SIZE) {
+          const dbBatch = newEmailsData.slice(j, j + DB_BATCH_SIZE);
           try {
-            await Promise.all([
-              storeEmailBody(emailAccountId, email.id, textBody, htmlBody),
-              createAttachmentRecords(email.id, attachments),
-              upsertSearchIndex({
-                emailId: email.id,
-                emailAccountId,
-                subject: email.subject,
-                textBody,
-                fromAddress: email.fromAddress,
-                toAddresses: email.toAddresses,
-                bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
-              }),
-            ]);
+            // Extract bodies before DB insert (bodies go to S3, not PG)
+            const bodyData = dbBatch.map((d) => {
+              const textBody = d.emailData.textBody as string | null;
+              const htmlBody = d.emailData.htmlBody as string | null;
+              const id = crypto.randomUUID();
+
+              d.emailData.id = id;
+              d.emailData.bodyStorageKey = `${emailAccountId}/${id}`;
+              d.emailData.bodyPreview = generateBodyPreview(textBody, htmlBody);
+              delete d.emailData.textBody;
+              delete d.emailData.htmlBody;
+
+              return { id, textBody, htmlBody };
+            });
+
+            const createdEmails = await Email.bulkCreate(
+              dbBatch.map((d) => d.emailData) as any,
+            );
+            result.synced += dbBatch.length;
+            result.newEmailIds.push(...createdEmails.map((e) => e.id));
+
+            // Store bodies in S3 and create search index entries in parallel
+            for (let k = 0; k < createdEmails.length; k++) {
+              const email = createdEmails[k];
+              const { textBody, htmlBody } = bodyData[k];
+              const attachments = dbBatch[k].attachments;
+
+              try {
+                await Promise.all([
+                  storeEmailBody(emailAccountId, email.id, textBody, htmlBody),
+                  createAttachmentRecords(email.id, attachments),
+                  upsertSearchIndex({
+                    emailId: email.id,
+                    emailAccountId,
+                    subject: email.subject,
+                    textBody,
+                    fromAddress: email.fromAddress,
+                    toAddresses: email.toAddresses,
+                    bodySize: (textBody?.length ?? 0) + (htmlBody?.length ?? 0),
+                  }),
+                ]);
+              } catch (err) {
+                logger.error('IMAP', `Failed post-create tasks for email ${email.id}`, { error: err instanceof Error ? err.message : err });
+              }
+            }
           } catch (err) {
-            logger.error('IMAP', `Failed post-create tasks for email ${email.id}`, { error: err instanceof Error ? err.message : err });
+            const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+            result.errors.push(`Failed to insert batch: ${errorMsg}`);
+            logger.error('IMAP', 'Batch insert failed', { error: err instanceof Error ? err.message : err });
           }
         }
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        result.errors.push(`Failed to insert batch: ${errorMsg}`);
-        logger.error('IMAP', 'Batch insert failed', { error: err instanceof Error ? err.message : err });
       }
-    }
-  }
 
-  if (result.newEmailIds.length > 0 && userId) {
-    try {
-      const { applyRulesToEmail } = await import('./rule-matcher.js');
-      const newlyCreatedEmails = await Email.findAll({
-        where: { id: { [Op.in]: result.newEmailIds } },
+      if (result.newEmailIds.length > 0 && userId) {
+        try {
+          const { applyRulesToEmail } = await import('./rule-matcher.js');
+          const newlyCreatedEmails = await Email.findAll({
+            where: { id: { [Op.in]: result.newEmailIds } },
+          });
+          for (const email of newlyCreatedEmails) {
+            await applyRulesToEmail(email, userId);
+          }
+        } catch (err) {
+          logger.error('IMAP', 'Error applying rules to new emails', { error: err instanceof Error ? err.message : err });
+        }
+      }
+
+      const firstBodySize =
+        emailsWithAttachments[0]
+          ? ((emailsWithAttachments[0].emailData.textBody as string | null)?.length ?? 0) +
+            ((emailsWithAttachments[0].emailData.htmlBody as string | null)?.length ?? 0)
+          : 0;
+
+      setActiveSpanAttributes({
+        'sync.insert_batch.input_size': emailsWithAttachments.length,
+        'sync.insert_batch.result.synced': result.synced,
+        'sync.insert_batch.result.skipped': result.skipped,
+        'sync.errors.count': result.errors.length,
+        'body.size.bucket': bucketBodySize(firstBodySize),
       });
-      for (const email of newlyCreatedEmails) {
-        await applyRulesToEmail(email, userId);
-      }
-    } catch (err) {
-      logger.error('IMAP', 'Error applying rules to new emails', { error: err instanceof Error ? err.message : err });
-    }
-  }
 
-  return result;
+      return result;
+    },
+    {
+      attributes: {
+        'email.account.hash': hashIdentifier(emailAccountId),
+        'sync.insert_batch.message_count': messageIdsInBatch.length,
+      },
+    },
+    {
+      operation: 'sync.insert_batch',
+    },
+  );
 }

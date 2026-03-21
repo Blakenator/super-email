@@ -11,7 +11,9 @@ dotenvConfig({ path: resolve(__dirname, '..', '.env') });
 // Then load backend-specific .env (values here will override project root)
 dotenvConfig({ path: resolve(__dirname, '.env'), override: true });
 
-// Now load reflect-metadata and the main application using dynamic imports
-// This ensures dotenv has already populated process.env
+// Now load observability, reflect-metadata, and the main application using dynamic imports.
+// This ensures dotenv has already populated process.env before any app imports run.
+const { initObservability } = await import('./helpers/observability.js');
+await initObservability();
 await import('reflect-metadata');
 await import('./index.js');
