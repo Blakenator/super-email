@@ -53,7 +53,12 @@ export async function setupNotificationChannels(): Promise<void> {
         vibrationPattern: [0],
       });
       
-      // Default channel for general notifications
+      await Notifications.setNotificationChannelAsync('downloads', {
+        name: 'Downloads',
+        importance: Notifications.AndroidImportance.LOW,
+        vibrationPattern: [0],
+      });
+
       await Notifications.setNotificationChannelAsync('default', {
         name: 'General',
         importance: Notifications.AndroidImportance.DEFAULT,
@@ -278,4 +283,54 @@ export async function setBadgeCount(count: number): Promise<void> {
  */
 export async function getBadgeCount(): Promise<number> {
   return Notifications.getBadgeCountAsync();
+}
+
+/**
+ * Show a silent notification indicating a download has started
+ */
+export async function showDownloadStartNotification(
+  filename: string,
+): Promise<string> {
+  return Notifications.scheduleNotificationAsync({
+    content: {
+      title: `Downloading ${filename}...`,
+      body: 'Your file is being saved.',
+      data: { type: 'download-progress' },
+      sound: false,
+    },
+    trigger: null,
+    ...(Platform.OS === 'android' && { channelId: 'downloads' }),
+  });
+}
+
+/**
+ * Replace the in-progress notification with a "Download complete" notification.
+ * The data payload contains file info so the tap handler can open the file.
+ */
+export async function showDownloadCompleteNotification(
+  filename: string,
+  savedUri: string,
+  mimeType: string,
+  progressNotificationId?: string,
+): Promise<string> {
+  if (progressNotificationId) {
+    await Notifications.dismissNotificationAsync(progressNotificationId);
+  }
+  return Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Download complete',
+      body: filename,
+      data: { type: 'download-complete', fileUri: savedUri, mimeType, filename },
+      sound: false,
+    },
+    trigger: null,
+    ...(Platform.OS === 'android' && { channelId: 'downloads' }),
+  });
+}
+
+/**
+ * Dismiss a notification by its identifier
+ */
+export async function dismissNotification(id: string): Promise<void> {
+  await Notifications.dismissNotificationAsync(id);
 }

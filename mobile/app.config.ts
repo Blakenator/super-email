@@ -30,7 +30,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: getIcon(),
   scheme: IS_DEV ? "supermail-dev" : "supermail",
   userInterfaceStyle: "automatic",
-  newArchEnabled: true,
   splash: {
     image: "./assets/splash-icon.png",
     resizeMode: "contain",
@@ -73,6 +72,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     "expo-secure-store",
+    "expo-sharing",
+    ["expo-file-system", { enableFileSharing: true }],
     [
       "expo-local-authentication",
       {

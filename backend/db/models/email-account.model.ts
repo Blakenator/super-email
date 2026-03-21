@@ -14,18 +14,14 @@ import { SendProfile } from './send-profile.model.js';
 import type { SendProfile as SendProfileType } from './send-profile.model.js';
 import { ImapAccountSettings } from './imap-account-settings.model.js';
 import type { ImapAccountSettings as ImapAccountSettingsType } from './imap-account-settings.model.js';
+import { AuthMethod } from './auth-method.js';
 
 export enum EmailAccountType {
   IMAP = 'IMAP',
   CUSTOM_DOMAIN = 'CUSTOM_DOMAIN',
 }
 
-export enum AuthMethod {
-  PASSWORD = 'PASSWORD',
-  OAUTH_GOOGLE = 'OAUTH_GOOGLE',
-  OAUTH_YAHOO = 'OAUTH_YAHOO',
-  OAUTH_OUTLOOK = 'OAUTH_OUTLOOK',
-}
+export { AuthMethod };
 
 @Table({
   timestamps: true,

@@ -132,6 +132,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           await clearAllCaches();
         }
         startCacheSweepListener();
+
+        // Pre-populate inbox from cache so it's ready before InboxScreen mounts
+        try {
+          await useEmailStore.getState().loadCachedData();
+        } catch (e) {
+          console.warn('[AuthStore] Failed to pre-load inbox cache:', e);
+        }
       } catch (e) {
         console.error('[AuthStore] Encryption init failed:', e);
       }

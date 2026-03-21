@@ -191,7 +191,7 @@ export const useEmailStore = create<EmailState>((set, get) => ({
   totalCount: 0,
   page: 1,
   pageSize: 25,
-  isLoading: false,
+  isLoading: true,
   isSyncing: false,
   searchQuery: '',
   filterIsRead: null,
@@ -237,13 +237,10 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     
     // Load cached data first for instant display (stale-while-revalidate)
     await get().loadCachedData();
-    
-    // Only show loading spinner if we have no cached data to display
-    const hasCachedEmails = get().emails.length > 0;
-    if (!hasCachedEmails) {
-      set({ isLoading: true });
-    }
-    
+
+    // Always show loading while the network request runs (filters/search can leave stale rows in state).
+    set({ isLoading: true });
+
     try {
       const { data } = await apolloClient.query({
         query: GET_EMAILS_QUERY,
@@ -467,7 +464,8 @@ export const useEmailStore = create<EmailState>((set, get) => ({
     } else if (currentFolder === 'INBOX') {
       // Fall back to the dedicated inbox page 1 cache
       const inboxCached = await inboxPageCache.get('page1');
-      if (inboxCached && inboxCached.accountId === currentAccountId) {
+      const accountMatches = currentAccountId === null || inboxCached?.accountId === currentAccountId;
+      if (inboxCached && accountMatches) {
         set({
           emails: inboxCached.emails as Email[],
           totalCount: inboxCached.totalCount,

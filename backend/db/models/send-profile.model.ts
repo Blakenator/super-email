@@ -11,8 +11,9 @@ import { User } from './user.model.js';
 import type { User as UserType } from './user.model.js';
 import { SmtpAccountSettings } from './smtp-account-settings.model.js';
 import type { SmtpAccountSettings as SmtpAccountSettingsType } from './smtp-account-settings.model.js';
-import { EmailAccount, AuthMethod } from './email-account.model.js';
+import { EmailAccount } from './email-account.model.js';
 import type { EmailAccount as EmailAccountType } from './email-account.model.js';
+import { AuthMethod } from './auth-method.js';
 
 export { AuthMethod };
 

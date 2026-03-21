@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Alert, Platform } from 'react-native';
 import { AppLogo } from './src/components/ui';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -26,6 +26,8 @@ import {
 } from './src/services/notifications';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
+import * as IntentLauncher from 'expo-intent-launcher';
+import * as Sharing from 'expo-sharing';
 
 // Keep splash screen visible while we initialize
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -172,6 +174,38 @@ function MainApp() {
       }
     }
 
+    async function handleDownloadNotificationTap(data: Record<string, unknown>) {
+      const fileUri = data.fileUri as string;
+      const mimeType = data.mimeType as string;
+      if (!fileUri || !mimeType) return;
+
+      try {
+        if (Platform.OS === 'android') {
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: fileUri,
+            flags: 1,
+            type: mimeType,
+          });
+        } else {
+          await Sharing.shareAsync(fileUri, {
+            mimeType,
+            dialogTitle: data.filename as string,
+          });
+        }
+      } catch (err) {
+        console.warn('[App] Failed to open downloaded file:', err);
+      }
+    }
+
+    function handleNotificationResponse(data: Record<string, unknown> | undefined) {
+      if (!data) return;
+      if (data.type === 'download-complete') {
+        handleDownloadNotificationTap(data);
+        return;
+      }
+      handleNotificationNavigation(data);
+    }
+
     const notificationSubscription = addNotificationReceivedListener(
       (notification) => {
         console.log('[App] Notification received:', notification.request.content.title);
@@ -180,13 +214,13 @@ function MainApp() {
 
     const responseSubscription = addNotificationResponseListener((response) => {
       const data = response.notification.request.content.data;
-      handleNotificationNavigation(data);
+      handleNotificationResponse(data);
     });
 
     Notifications.getLastNotificationResponseAsync().then((response) => {
       if (response) {
         const data = response.notification.request.content.data;
-        handleNotificationNavigation(data);
+        handleNotificationResponse(data);
       }
     });
 

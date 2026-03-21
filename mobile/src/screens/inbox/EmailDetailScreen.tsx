@@ -16,6 +16,7 @@ import {
   useWindowDimensions,
   Modal,
   Pressable,
+  Platform,
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,8 +31,16 @@ import { useAuthStore } from '../../stores/authStore';
 import { viewedEmailCache } from '../../services/emailCache';
 import { refreshSession } from '../../services/supabase';
 import { secureGet, secureSet, STORAGE_KEYS } from '../../services/secureStorage';
-import * as FileSystem from 'expo-file-system';
+import { File as FSFile, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import * as IntentLauncher from 'expo-intent-launcher';
+import { Toast } from 'toastify-react-native';
+import { saveToDownloads } from '../../../modules/downloads-saver';
+import {
+  showDownloadStartNotification,
+  showDownloadCompleteNotification,
+  dismissNotification,
+} from '../../services/notifications';
 import type { ViewedEmailData } from '../../services/emailCache';
 import type { IconName } from '../../components/ui/Icon';
 
@@ -583,6 +592,12 @@ export function EmailDetailScreen({
     }
   };
 
+  const saveFileToDevice = useCallback(async (
+    sourceUri: string, filename: string, mimeType: string,
+  ): Promise<string> => {
+    return saveToDownloads(sourceUri, filename, mimeType);
+  }, []);
+
   const handleDownloadAttachment = useCallback(async (attachment: {
     id: string;
     filename: string;
@@ -590,7 +605,10 @@ export function EmailDetailScreen({
     size: number;
   }) => {
     setDownloading(attachment.id);
+    let progressNotifId: string | undefined;
     try {
+      progressNotifId = await showDownloadStartNotification(attachment.filename);
+
       const url = await getAttachmentDownloadUrl(attachment.id);
       if (!url) {
         Alert.alert('Error', 'Failed to get download URL');
@@ -600,32 +618,41 @@ export function EmailDetailScreen({
       const token = await secureGet(STORAGE_KEYS.AUTH_TOKEN);
       const isS3 = url.includes('X-Amz-Algorithm');
 
-      const fileUri = `${FileSystem.cacheDirectory}${attachment.filename}`;
-      const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
+      const destination = new FSFile(Paths.cache, attachment.filename);
+      const downloadedFile = await FSFile.downloadFileAsync(url, destination, {
         headers: isS3 ? {} : { Authorization: `Bearer ${token}` },
+        idempotent: true,
       });
 
-      if (downloadResult.status !== 200) {
-        Alert.alert('Error', 'Failed to download attachment');
-        return;
-      }
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(downloadResult.uri, {
-          mimeType: attachment.mimeType,
-          dialogTitle: attachment.filename,
-        });
-      } else {
-        Alert.alert('Success', 'File downloaded to cache');
+      try {
+        const savedUri = await saveFileToDevice(
+          downloadedFile.uri, attachment.filename, attachment.mimeType,
+        );
+        Toast.success(`Saved "${attachment.filename}"`);
+        await showDownloadCompleteNotification(
+          attachment.filename, savedUri, attachment.mimeType, progressNotifId,
+        );
+        progressNotifId = undefined;
+      } catch (saveErr: any) {
+        console.error('[EmailDetail] Save error, falling back to share:', saveErr);
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(downloadedFile.uri, {
+            mimeType: attachment.mimeType,
+            dialogTitle: attachment.filename,
+          });
+        }
       }
     } catch (err: any) {
       console.error('[EmailDetail] Download error:', err);
       Alert.alert('Error', err.message || 'Failed to download attachment');
     } finally {
+      if (progressNotifId) {
+        await dismissNotification(progressNotifId);
+      }
       setDownloading(null);
     }
-  }, []);
+  }, [saveFileToDevice]);
 
   const canPreviewAttachment = (mimeType: string): boolean => {
     return (
@@ -649,8 +676,6 @@ export function EmailDetailScreen({
     mimeType: string;
     size: number;
   }) => {
-    setPreviewAttachment(attachment);
-    setPreviewUrl(null);
     setPreviewLoading(true);
 
     try {
@@ -663,14 +688,31 @@ export function EmailDetailScreen({
       const token = await secureGet(STORAGE_KEYS.AUTH_TOKEN);
       const isS3 = url.includes('X-Amz-Algorithm');
 
-      const fileUri = `${FileSystem.cacheDirectory}preview_${attachment.filename}`;
-      const downloadResult = await FileSystem.downloadAsync(url, fileUri, {
+      const destination = new FSFile(Paths.cache, `preview_${attachment.filename}`);
+      const downloadedFile = await FSFile.downloadFileAsync(url, destination, {
         headers: isS3 ? {} : { Authorization: `Bearer ${token}` },
+        idempotent: true,
       });
 
-      if (downloadResult.status === 200) {
-        setPreviewUrl(downloadResult.uri);
+      if (attachment.mimeType.includes('pdf')) {
+        setPreviewLoading(false);
+        if (Platform.OS === 'android') {
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: downloadedFile.contentUri,
+            flags: 1,
+            type: attachment.mimeType,
+          });
+        } else {
+          await Sharing.shareAsync(downloadedFile.uri, {
+            mimeType: attachment.mimeType,
+            dialogTitle: attachment.filename,
+          });
+        }
+        return;
       }
+
+      setPreviewAttachment(attachment);
+      setPreviewUrl(downloadedFile.uri);
     } catch (err) {
       console.error('[EmailDetail] Preview fetch error:', err);
     } finally {
@@ -1324,6 +1366,9 @@ export function EmailDetailScreen({
                       {threadEmail.subject || '(No Subject)'}
                     </Text>
                   </View>
+                  {threadEmail.hasAttachments && (
+                    <Icon name="paperclip" size="sm" color={theme.colors.textMuted} />
+                  )}
                   <Icon
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
                     size="md"
@@ -1414,6 +1459,56 @@ export function EmailDetailScreen({
                   originWhitelist={['*']}
                   javaScriptEnabled
                 />
+                {isExpanded && threadEmail.attachments && threadEmail.attachments.length > 0 && (
+                  <View style={[styles.threadAttachmentsCard, { backgroundColor: theme.colors.surface }]}>
+                    <Text style={[styles.attachmentsTitle, { color: theme.colors.text }]}>
+                      <Icon name="paperclip" size="sm" color={theme.colors.textMuted} />{' '}
+                      {threadEmail.attachments.length} Attachment{threadEmail.attachments.length !== 1 ? 's' : ''}
+                    </Text>
+                    {threadEmail.attachments.map((attachment) => {
+                      const previewable = canPreviewAttachment(attachment.mimeType);
+                      return (
+                        <TouchableOpacity
+                          key={attachment.id}
+                          style={[styles.attachmentItem, { borderColor: theme.colors.border }]}
+                          onPress={() => previewable && handlePreviewAttachment(attachment)}
+                          activeOpacity={previewable ? 0.7 : 1}
+                        >
+                          <Icon
+                            name={getAttachmentIconName(attachment.mimeType)}
+                            size="md"
+                            color={theme.colors.textMuted}
+                          />
+                          <View style={styles.attachmentInfo}>
+                            <Text
+                              style={[styles.attachmentName, { color: theme.colors.text }]}
+                              numberOfLines={1}
+                            >
+                              {attachment.filename}
+                            </Text>
+                            <Text style={[styles.attachmentSize, { color: theme.colors.textMuted }]}>
+                              {formatFileSize(attachment.size)}
+                            </Text>
+                          </View>
+                          {previewable && (
+                            <Icon name="eye" size="sm" color={theme.colors.textMuted} />
+                          )}
+                          <TouchableOpacity
+                            onPress={() => handleDownloadAttachment(attachment)}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            disabled={downloading === attachment.id}
+                          >
+                            {downloading === attachment.id ? (
+                              <ActivityIndicator size="small" color={theme.colors.primary} />
+                            ) : (
+                              <Icon name="download" size="md" color={theme.colors.primary} />
+                            )}
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
               </View>
             );
           }}
@@ -1802,14 +1897,6 @@ export function EmailDetailScreen({
                     source={{ html: `<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh"><img src="${previewUrl}" style="max-width:100%;max-height:100%;object-fit:contain" /></body></html>` }}
                     style={{ flex: 1 }}
                     scrollEnabled={true}
-                    originWhitelist={['*']}
-                    allowFileAccess={true}
-                    allowFileAccessFromFileURLs={true}
-                  />
-                ) : previewAttachment.mimeType.includes('pdf') ? (
-                  <WebView
-                    source={{ uri: previewUrl }}
-                    style={{ flex: 1 }}
                     originWhitelist={['*']}
                     allowFileAccess={true}
                     allowFileAccessFromFileURLs={true}
@@ -2295,6 +2382,12 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.xs,
     marginBottom: SPACING.xs,
     paddingHorizontal: SPACING.md,
+  },
+  threadAttachmentsCard: {
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: RADIUS.lg,
   },
   threadSeparator: {
     height: SPACING.md,

@@ -328,7 +328,7 @@ export interface ViewedEmailData {
 
 export const inboxPageCache = new EncryptedCache<InboxCacheData>({
   prefix: CachePrefix.Inbox,
-  ttlMs: 24 * 60 * 60 * 1000, // 24 hours
+  ttlMs: 7 * 24 * 60 * 60 * 1000, // 7 days
 });
 
 export const folderCache = new EncryptedCache<FolderCacheData>({

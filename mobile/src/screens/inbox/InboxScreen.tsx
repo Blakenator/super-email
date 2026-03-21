@@ -538,6 +538,7 @@ export function InboxScreen({
             contentContainerStyle={[
               styles.listContent,
               filteredEmails.length === 0 && styles.listContentEmpty,
+              { paddingBottom: insets.bottom },
             ]}
             stickySectionHeadersEnabled={true}
           />
@@ -615,6 +616,7 @@ export function InboxScreen({
             contentContainerStyle={[
               styles.listContent,
               filteredEmails.length === 0 && styles.listContentEmpty,
+              { paddingBottom: insets.bottom },
             ]}
           />
         )}
@@ -627,6 +629,7 @@ export function InboxScreen({
               {
                 backgroundColor: theme.colors.surface,
                 borderTopColor: theme.colors.border,
+                paddingBottom: Math.max(insets.bottom, SPACING.sm),
               },
             ]}
           >
