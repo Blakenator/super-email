@@ -46,15 +46,6 @@ COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/common/dist ./common/dist
 COPY --from=builder /app/common/schema.graphql ./common/
 
-# Pre-download the embedding model (Xenova/all-MiniLM-L6-v2, ~25 MB) into the
-# image cache so startup has no network download and no CPU spike from ONNX init.
-RUN node -e "import('@huggingface/transformers').then(async({pipeline})=>{\
-  console.log('Pre-caching Xenova/all-MiniLM-L6-v2...');\
-  await pipeline('feature-extraction','Xenova/all-MiniLM-L6-v2',{dtype:'fp32'});\
-  console.log('Model cached successfully');\
-  process.exit(0);\
-}).catch(e=>{console.error(e.message);process.exit(1);})"
-
 # Set working directory to backend
 WORKDIR /app/backend
 

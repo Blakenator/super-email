@@ -15,7 +15,7 @@ export const semanticSearch = makeQuery(
 
     const embedding = await generateEmbedding(buildEmbeddingText(query, null));
     if (!embedding) {
-      throw new Error('Semantic search is unavailable (embedding model not loaded)');
+      return [];
     }
 
     // Get account IDs for authorization

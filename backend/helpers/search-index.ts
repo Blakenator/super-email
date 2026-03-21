@@ -25,7 +25,7 @@ export async function upsertSearchIndex(params: {
     fromAddress,
     toAddresses,
     bodySize,
-    skipEmbedding = false,
+    skipEmbedding = true,
   } = params;
 
   try {
@@ -35,7 +35,9 @@ export async function upsertSearchIndex(params: {
 
     let embedding: number[] | null = null;
     if (!skipEmbedding) {
-      embedding = await generateEmbedding(buildEmbeddingText(subject, textBody));
+      embedding = await generateEmbedding(
+        buildEmbeddingText(subject, textBody),
+      );
     }
 
     const embeddingLiteral = embedding
@@ -70,13 +72,17 @@ export function generateBodyPreview(
   htmlBody: string | null,
 ): string | null {
   const text = textBody || stripHtml(htmlBody);
-  if (!text) return null;
+  if (!text) {
+    return null;
+  }
   const cleaned = text.replace(/\s+/g, ' ').trim();
   return cleaned.length > 200 ? cleaned.slice(0, 200) : cleaned;
 }
 
 function stripHtml(html: string | null): string | null {
-  if (!html) return null;
+  if (!html) {
+    return null;
+  }
   return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')

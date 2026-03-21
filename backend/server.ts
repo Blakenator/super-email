@@ -43,7 +43,7 @@ import {
   runBackgroundSyncCycle,
 } from './helpers/background-sync.js';
 import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
-import { preWarmEmbeddingModel } from './helpers/embedding.js';
+
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
 import { parseAndStoreCustomEmail } from './helpers/custom-email-parser.js';
 import {
@@ -1210,8 +1210,6 @@ export async function createServer(
           `📧 Email Client API ready at http://localhost:${port}${API_ROUTES.GRAPHQL}`,
         );
       }
-      // Pre-warm embedding model so first semantic search has no cold-start
-      preWarmEmbeddingModel();
       // Start background sync for stale email accounts (unless disabled)
       if (!deps.skipBackgroundSync) {
         startBackgroundSync();

@@ -3,7 +3,7 @@ import { logger } from './logger.js';
 let pipeline: any = null;
 let extractor: any = null;
 let loadingPromise: Promise<void> | null = null;
-let loadFailed = false;
+let loadFailed = true;
 
 const MODEL_NAME = 'Xenova/all-MiniLM-L6-v2';
 const MAX_TOKENS = 256;
