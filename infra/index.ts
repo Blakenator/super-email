@@ -1457,7 +1457,7 @@ const backendTaskDefinition = new aws.ecs.TaskDefinition(
                 interval: 30,
                 timeout: 5,
                 retries: 3,
-                startPeriod: 60,
+                startPeriod: 120,
               },
             },
           ]);
