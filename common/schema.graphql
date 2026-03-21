@@ -2744,8 +2744,11 @@ type Mutation {
   # Billing
   """
   Create or update a subscription.
-  If the user already has an active subscription, updates it in-place and returns null.
-  If this is the first subscription, creates a Stripe Checkout session and returns the URL to redirect to.
+  Syncs with Stripe first. If the Stripe subscription is still active, trialing, or past due,
+  updates line items in place and/or clears a scheduled cancellation (cancel_at_period_end);
+  returns null when no redirect is needed.
+  If the subscription has fully ended or there is no usable Stripe subscription, creates a
+  new Stripe Checkout session and returns its URL.
   Requires Stripe to be configured on the server.
   """
   createCheckoutSession(

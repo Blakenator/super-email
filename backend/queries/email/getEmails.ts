@@ -1,5 +1,9 @@
 import { makeQuery } from '../../types.js';
-import { Email, EmailAccount, ImapAccountSettings } from '../../db/models/index.js';
+import {
+  Email,
+  EmailAccount,
+  ImapAccountSettings,
+} from '../../db/models/index.js';
 import { requireAuth } from '../../helpers/auth.js';
 import { startAsyncEmailSync } from '../../helpers/email.js';
 import { buildEmailWhereClause } from '../../helpers/email-filters.js';
@@ -41,7 +45,9 @@ export const getEmails = makeQuery(
       if (accountsNeedingSync.length > 0) {
         accountsNeedingSync.forEach((account) => {
           startAsyncEmailSync(account).catch((err) => {
-            logger.error('getEmails', `Auto-sync failed for ${account.email}`, { error: err instanceof Error ? err.message : err });
+            logger.error('getEmails', `Auto-sync failed for ${account.email}`, {
+              error: err instanceof Error ? err.message : err,
+            });
           });
         });
       }

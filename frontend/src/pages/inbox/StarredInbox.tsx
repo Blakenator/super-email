@@ -25,6 +25,7 @@ import {
   Preview,
   StarButton,
 } from './StarredInbox.wrappers';
+import { getEmailPreviewText } from '../../utils/emailPreview';
 
 export function StarredInbox() {
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
@@ -170,7 +171,12 @@ export function StarredInbox() {
                 </EmailMeta>
                 <Subject>{email.subject}</Subject>
                 <Preview>
-                  {email.textBody?.substring(0, 100) || '(No content)'}
+                  {getEmailPreviewText(
+                    undefined,
+                    undefined,
+                    100,
+                    email.bodyPreview,
+                  )}
                 </Preview>
               </EmailItem>
             ))}

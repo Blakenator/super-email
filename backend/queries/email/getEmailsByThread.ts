@@ -43,6 +43,9 @@ export const getEmailsByThread = makeQuery(
           if (body) {
             (email as any).dataValues.textBody = body.textBody;
             (email as any).dataValues.htmlBody = body.htmlBody;
+          } else if (email.bodyPreview?.trim()) {
+            (email as any).dataValues.textBody = email.bodyPreview;
+            (email as any).dataValues.htmlBody = null;
           } else {
             (email as any).dataValues.textBody = null;
             (email as any).dataValues.htmlBody = null;

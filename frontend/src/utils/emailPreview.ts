@@ -15,19 +15,23 @@ export function extractTextFromHtml(html: string): string {
 
 /**
  * Gets the preview text for an email.
- * Uses textBody if available, otherwise extracts text from htmlBody.
+ * Uses textBody if available, then bodyPreview (DB snippet for list queries),
+ * otherwise extracts text from htmlBody.
  */
 export function getEmailPreviewText(
   textBody: string | null | undefined,
   htmlBody: string | null | undefined,
-  maxLength: number = 100
+  maxLength: number = 100,
+  bodyPreview?: string | null | undefined,
 ): string {
-  // Try textBody first
   if (textBody && textBody.trim()) {
     return textBody.substring(0, maxLength);
   }
-  
-  // Fall back to extracting text from HTML
+
+  if (bodyPreview && bodyPreview.trim()) {
+    return bodyPreview.substring(0, maxLength);
+  }
+
   if (htmlBody) {
     const extracted = extractTextFromHtml(htmlBody);
     if (extracted) {

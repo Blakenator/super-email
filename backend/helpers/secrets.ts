@@ -9,6 +9,7 @@
  */
 
 import { config } from '../config/env.js';
+import { resolveBackendDataPath } from '../config/paths.js';
 import { logger } from './logger.js';
 import fs from 'fs/promises';
 import path from 'path';
@@ -73,7 +74,7 @@ function getSecretPath(type: 'imap' | 'smtp', id: string): string {
  * Get the local secrets file path
  */
 function getLocalSecretsPath(): string {
-  return path.join(process.cwd(), config.secrets.localSecretsFile);
+  return resolveBackendDataPath(config.secrets.localSecretsFile);
 }
 
 /**

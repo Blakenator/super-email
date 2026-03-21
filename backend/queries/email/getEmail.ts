@@ -29,12 +29,20 @@ export const getEmail = makeQuery(
         (email as any).dataValues.textBody = body.textBody;
         (email as any).dataValues.htmlBody = body.htmlBody;
       } catch (err) {
-        logger.error('getEmail', 'Failed to fetch email body from S3', {
+        logger.error('getEmail', 'Failed to fetch email body from storage', {
           emailId: email.id,
           error: err instanceof Error ? err.message : err,
         });
-        (email as any).dataValues.textBody = null;
-        (email as any).dataValues.htmlBody = null;
+        if (email.bodyPreview?.trim()) {
+          logger.warn('getEmail', 'Serving bodyPreview only (full body unavailable)', {
+            emailId: email.id,
+          });
+          (email as any).dataValues.textBody = email.bodyPreview;
+          (email as any).dataValues.htmlBody = null;
+        } else {
+          (email as any).dataValues.textBody = null;
+          (email as any).dataValues.htmlBody = null;
+        }
       }
     }
 

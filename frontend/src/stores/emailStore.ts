@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
+import type { EmailFolder } from '../__generated__/graphql';
 
 /**
  * Email cache store using Zustand
@@ -85,12 +86,13 @@ const safeLocalStorage: StateStorage = {
 export interface CachedEmail {
   id: string;
   messageId: string;
-  folder: string;
+  folder: EmailFolder;
   fromAddress: string;
   fromName?: string | null;
   subject: string;
   textBody?: string | null;
   htmlBody?: string | null;
+  bodyPreview?: string | null;
   receivedAt: string;
   isRead: boolean;
   isStarred: boolean;
@@ -101,6 +103,8 @@ export interface CachedEmail {
   inReplyTo?: string | null;
   threadId?: string | null;
   threadCount?: number | null;
+  hasAttachments?: boolean;
+  attachmentCount?: number;
   tags?: Array<{ id: string; name: string; color: string }> | null;
 }
 
@@ -284,13 +288,14 @@ export const useEmailStore = create<EmailStoreState>()(
             console.log(`[EmailStore] Auto-pruned emails from ${emailEntries.length} to ${sortedEmails.length}`);
             return {
               emails: Object.fromEntries(sortedEmails),
-              lastUpdate: new Date().toISOString(),
             };
           }
-          
+
+          // Do not bump lastUpdate here: Apollo list sync would trigger refetch loops in
+          // useInboxEmails / EmailView (they watch lastUpdate). Real-time bumps come from
+          // handleMailboxUpdate and updateEmail/removeEmail.
           return {
             emails: newEmails,
-            lastUpdate: new Date().toISOString(),
           };
         });
       },
@@ -505,9 +510,8 @@ export const useEmailStore = create<EmailStoreState>()(
 
         set({
           emails: Object.fromEntries(sortedEmails),
-          lastUpdate: new Date().toISOString(),
         });
-        
+
         console.log(`[EmailStore] Pruned emails from ${emailEntries.length} to ${sortedEmails.length}`);
       },
     }),

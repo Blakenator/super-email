@@ -5,8 +5,8 @@
  * The server is started once before all integration tests and stopped after.
  */
 
-import path from 'node:path';
 import { createServer, type ServerInstance, type ServerDependencies } from '../../server.js';
+import { GRAPHQL_SCHEMA_PATH } from '../../config/paths.js';
 import { sequelize } from '../../db/database.js';
 import type { BackendContext } from '../../types.js';
 
@@ -47,7 +47,7 @@ export function getTestDependencies(
   overrides: Partial<ServerDependencies> = {},
 ): Partial<ServerDependencies> {
   return {
-    schemaPath: path.join(process.cwd(), '..', 'common', 'schema.graphql'),
+    schemaPath: GRAPHQL_SCHEMA_PATH,
     verifyToken: mockVerifyToken,
     skipWebSocket: true,       // Skip WebSocket for faster tests
     skipDbSync: false,         // We do want DB sync for integration tests

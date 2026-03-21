@@ -11,12 +11,10 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { logger } from './logger.js';
 import { config } from '../config/env.js';
+import { resolveBackendDataPath } from '../config/paths.js';
 import { deleteS3ObjectsByPrefix } from './body-storage.js';
 
-const LOCAL_ATTACHMENTS_DIR = path.join(
-  process.cwd(),
-  config.attachments.localDir,
-);
+const LOCAL_ATTACHMENTS_DIR = resolveBackendDataPath(config.attachments.localDir);
 
 let s3Client: S3Client | null = null;
 if (config.isProduction) {

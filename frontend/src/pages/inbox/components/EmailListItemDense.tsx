@@ -61,6 +61,7 @@ interface Email {
   subject: string;
   textBody?: string | null;
   htmlBody?: string | null;
+  bodyPreview?: string | null;
   receivedAt: string;
   isRead: boolean;
   isStarred: boolean;
@@ -234,7 +235,12 @@ export function EmailListItemDense({
           )}
         </SubjectCell>
         <PreviewCell>
-          {getEmailPreviewText(email.textBody, email.htmlBody, 60)}
+          {getEmailPreviewText(
+            email.textBody,
+            email.htmlBody,
+            60,
+            email.bodyPreview,
+          )}
         </PreviewCell>
         <DateCell>{formatDate(email.receivedAt)}</DateCell>
 

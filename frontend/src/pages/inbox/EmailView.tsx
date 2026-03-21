@@ -755,6 +755,7 @@ export function EmailView({
                             threadEmail.textBody,
                             threadEmail.htmlBody,
                             100,
+                            threadEmail.bodyPreview,
                           )}
                         </CollapsedPreview>
                       )}

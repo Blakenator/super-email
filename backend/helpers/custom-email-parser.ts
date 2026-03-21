@@ -12,6 +12,7 @@
 import { simpleParser } from 'mailparser';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config/env.js';
+import { resolveBackendDataPath } from '../config/paths.js';
 import { Email, EmailFolder } from '../db/models/email.model.js';
 import { storeEmailBody } from './body-storage.js';
 import { upsertSearchIndex, generateBodyPreview } from './search-index.js';
@@ -60,7 +61,10 @@ export async function archiveRawEmail(
     );
     logger.info('CustomEmailParser', `Archived raw email to s3://${config.rawEmails.s3Bucket}/${storageKey}`);
   } else {
-    const localPath = path.join(process.cwd(), config.rawEmails.localDir, storageKey);
+    const localPath = path.join(
+      resolveBackendDataPath(config.rawEmails.localDir),
+      storageKey,
+    );
     await fs.mkdir(path.dirname(localPath), { recursive: true });
     await fs.writeFile(localPath, rawEmail);
     logger.info('CustomEmailParser', `Archived raw email locally: ${localPath}`);

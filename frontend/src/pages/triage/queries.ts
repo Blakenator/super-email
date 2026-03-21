@@ -20,7 +20,7 @@ export const GET_EMAILS_FOR_TRIAGE_QUERY = gql(`
       fromName
       toAddresses
       subject
-      textBody
+      bodyPreview
       receivedAt
       isRead
       isStarred

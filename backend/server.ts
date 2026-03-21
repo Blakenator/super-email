@@ -27,7 +27,11 @@ import { QueryResolvers } from './queries/index.js';
 import { MutationResolvers } from './mutations/index.js';
 import { logger } from './helpers/logger.js';
 import { verifyToken } from './helpers/auth.js';
-import { pubSub, MAILBOX_UPDATES, publishMailboxUpdate } from './helpers/pubsub.js';
+import {
+  pubSub,
+  MAILBOX_UPDATES,
+  publishMailboxUpdate,
+} from './helpers/pubsub.js';
 import {
   startIdleForUser,
   stopIdleForUser,
@@ -42,12 +46,45 @@ import { startUsageDaemon, stopUsageDaemon } from './helpers/usage-daemon.js';
 import { preWarmEmbeddingModel } from './helpers/embedding.js';
 import { handleStripeWebhook, isStripeConfigured } from './helpers/stripe.js';
 import { parseAndStoreCustomEmail } from './helpers/custom-email-parser.js';
-import { sendNewEmailNotifications, type NewEmailInfo } from './helpers/push-notifications.js';
+import {
+  sendNewEmailNotifications,
+  type NewEmailInfo,
+} from './helpers/push-notifications.js';
 import { EmailAccountType } from './db/models/email-account.model.js';
 import type { Email } from './db/models/email.model.js';
 import { setupBillingDatabase } from './db/setup-billing.js';
 import { runMigrations } from './db/migrations/migrator.js';
 import { API_ROUTES } from '@main/common';
+import { GRAPHQL_SCHEMA_PATH } from './config/paths.js';
+
+/** Loaded bodies attach to Sequelize dataValues; GraphQL's default resolver reads parent.textBody, which is undefined for non-columns. */
+function emailGraphqlBodyField(
+  parent: unknown,
+  field: 'textBody' | 'htmlBody',
+): string | null {
+  if (parent == null || typeof parent !== 'object') {
+    return null;
+  }
+  const p = parent as {
+    get?: (key: string) => unknown;
+    dataValues?: Record<string, unknown>;
+  };
+  if (typeof p.get === 'function') {
+    const v = p.get(field);
+    if (v !== undefined) {
+      return (v as string | null) ?? null;
+    }
+  }
+  const direct = (parent as Record<string, unknown>)[field];
+  if (direct !== undefined) {
+    return (direct as string | null) ?? null;
+  }
+  const fromDv = p.dataValues?.[field];
+  if (fromDv !== undefined) {
+    return (fromDv as string | null) ?? null;
+  }
+  return null;
+}
 
 // Default models - imported from db
 import {
@@ -112,7 +149,7 @@ export function getDefaultDependencies(): ServerDependencies {
       Attachment: DefaultAttachment,
     },
     verifyToken,
-    schemaPath: path.join(process.cwd(), '..', 'common', 'schema.graphql'),
+    schemaPath: GRAPHQL_SCHEMA_PATH,
     skipDbSync: false,
     skipWebSocket: false,
     skipBackgroundSync: false,
@@ -270,6 +307,8 @@ function buildResolvers(deps: ServerDependencies): AllBackendResolvers {
       isUpdateSyncing: (parent: any) => !!parent.updateSyncId,
     },
     Email: {
+      textBody: (parent: unknown) => emailGraphqlBodyField(parent, 'textBody'),
+      htmlBody: (parent: unknown) => emailGraphqlBodyField(parent, 'htmlBody'),
       threadCount: async (parent: any) => {
         if (!parent.threadId) {
           return 1;
@@ -449,9 +488,7 @@ export async function createServer(
   const httpServer = http.createServer(app);
 
   // Load GraphQL schema
-  const schemaPath =
-    deps.schemaPath ||
-    path.join(process.cwd(), '..', 'common', 'schema.graphql');
+  const schemaPath = deps.schemaPath || GRAPHQL_SCHEMA_PATH;
   const typeDefs = readFileSync(schemaPath, { encoding: 'utf-8' });
 
   // Build resolvers with injected dependencies
@@ -665,70 +702,93 @@ export async function createServer(
   });
 
   // Internal endpoint for Lambda callback when a new custom domain email arrives
-  app.post('/api/internal/new-custom-email', express.json({ limit: '25mb' }), async (req, res) => {
-    const internalToken = req.headers['x-internal-token'];
-    const expectedToken = config.internalApiToken;
+  app.post(
+    '/api/internal/new-custom-email',
+    express.json({ limit: '25mb' }),
+    async (req, res) => {
+      const internalToken = req.headers['x-internal-token'];
+      const expectedToken = config.internalApiToken;
 
-    if (!expectedToken) {
-      return res.status(503).json({ error: 'Internal API not configured' });
-    }
-    if (internalToken !== expectedToken) {
-      return res.status(401).json({ error: 'Invalid internal token' });
-    }
+      if (!expectedToken) {
+        return res.status(503).json({ error: 'Internal API not configured' });
+      }
+      if (internalToken !== expectedToken) {
+        return res.status(401).json({ error: 'Invalid internal token' });
+      }
 
-    const {
-      rawEmail,
-      emailAccountId: providedAccountId,
-      recipientAddress,
-      userId: providedUserId,
-    } = req.body;
+      const {
+        rawEmail,
+        emailAccountId: providedAccountId,
+        recipientAddress,
+        userId: providedUserId,
+      } = req.body;
 
-    if (!rawEmail || !recipientAddress) {
-      return res.status(400).json({
-        error: 'Missing required fields: rawEmail (base64), recipientAddress',
-      });
-    }
-
-    try {
-      let emailAccountId = providedAccountId as string | undefined;
-      let userId = providedUserId as string | undefined;
-
-      // Look up the account by recipient address if not explicitly provided
-      if (!emailAccountId || !userId) {
-        const account = await DefaultEmailAccount.findOne({
-          where: { email: recipientAddress, type: EmailAccountType.CUSTOM_DOMAIN },
+      if (!rawEmail || !recipientAddress) {
+        return res.status(400).json({
+          error: 'Missing required fields: rawEmail (base64), recipientAddress',
         });
-        if (!account) {
-          return res.status(404).json({
-            error: `No custom domain account found for ${recipientAddress}`,
+      }
+
+      try {
+        let emailAccountId = providedAccountId as string | undefined;
+        let userId = providedUserId as string | undefined;
+
+        // Look up the account by recipient address if not explicitly provided
+        if (!emailAccountId || !userId) {
+          const account = await DefaultEmailAccount.findOne({
+            where: {
+              email: recipientAddress,
+              type: EmailAccountType.CUSTOM_DOMAIN,
+            },
+          });
+          if (!account) {
+            return res.status(404).json({
+              error: `No custom domain account found for ${recipientAddress}`,
+            });
+          }
+          emailAccountId = (account as any).id;
+          userId = (account as any).userId;
+        }
+
+        const rawBuffer = Buffer.from(rawEmail, 'base64');
+        const result = await parseAndStoreCustomEmail(
+          rawBuffer,
+          emailAccountId!,
+          recipientAddress,
+        );
+
+        const savedEmail = (await deps.models.Email.findByPk(
+          result.emailId,
+        )) as Email | null;
+        if (savedEmail) {
+          await sendNewEmailNotifications(
+            userId!,
+            [savedEmail as NewEmailInfo],
+            recipientAddress,
+          );
+
+          publishMailboxUpdate(userId!, {
+            type: 'NEW_EMAILS',
+            emailAccountId: emailAccountId!,
+            emails: [savedEmail],
+            message: `New email from ${result.fromAddress}`,
           });
         }
-        emailAccountId = (account as any).id;
-        userId = (account as any).userId;
+
+        logger.info(
+          'Internal API',
+          `Custom email processed: ${result.emailId} for ${recipientAddress}`,
+        );
+        res.json({ success: true, ...result });
+      } catch (error: any) {
+        logger.error(
+          'Internal API',
+          `Custom email processing failed: ${error.message}`,
+        );
+        res.status(500).json({ error: error.message });
       }
-
-      const rawBuffer = Buffer.from(rawEmail, 'base64');
-      const result = await parseAndStoreCustomEmail(rawBuffer, emailAccountId!, recipientAddress);
-
-      const savedEmail = await deps.models.Email.findByPk(result.emailId) as Email | null;
-      if (savedEmail) {
-        await sendNewEmailNotifications(userId!, [savedEmail as NewEmailInfo], recipientAddress);
-
-        publishMailboxUpdate(userId!, {
-          type: 'NEW_EMAILS',
-          emailAccountId: emailAccountId!,
-          emails: [savedEmail],
-          message: `New email from ${result.fromAddress}`,
-        });
-      }
-
-      logger.info('Internal API', `Custom email processed: ${result.emailId} for ${recipientAddress}`);
-      res.json({ success: true, ...result });
-    } catch (error: any) {
-      logger.error('Internal API', `Custom email processing failed: ${error.message}`);
-      res.status(500).json({ error: error.message });
-    }
-  });
+    },
+  );
 
   // Attachment download endpoint
   app.get(`${API_ROUTES.ATTACHMENTS.BASE}/download/:id`, async (req, res) => {
@@ -768,8 +828,9 @@ export async function createServer(
       const attachmentData = attachment.get({ plain: true });
 
       if (process.env.NODE_ENV !== 'production') {
-        const { getLocalAttachmentPath } =
-          await import('./helpers/attachment-storage.js');
+        const { getLocalAttachmentPath } = await import(
+          './helpers/attachment-storage.js'
+        );
         const filePath = getLocalAttachmentPath(attachmentData.storageKey);
 
         res.setHeader('Content-Type', attachmentData.mimeType);
@@ -783,8 +844,9 @@ export async function createServer(
         const stream = createReadStream(filePath);
         stream.pipe(res);
       } else {
-        const { getAttachmentDownloadUrl } =
-          await import('./helpers/attachment-storage.js');
+        const { getAttachmentDownloadUrl } = await import(
+          './helpers/attachment-storage.js'
+        );
         const url = await getAttachmentDownloadUrl(attachmentData.storageKey);
         res.redirect(url);
       }
@@ -809,22 +871,40 @@ export async function createServer(
       exchangeOutlookCode,
       revokeToken,
     } = await import('./helpers/oauth-tokens.js');
-    const { storeImapCredentials, storeSmtpCredentials } = await import('./helpers/secrets.js');
-    const { EmailAccount, AuthMethod } = await import('./db/models/email-account.model.js');
-    const { ImapAccountSettings, ImapAccountType } = await import('./db/models/imap-account-settings.model.js');
-    const { SendProfile, SendProfileType } = await import('./db/models/send-profile.model.js');
-    const { SmtpAccountSettings } = await import('./db/models/smtp-account-settings.model.js');
+    const { storeImapCredentials, storeSmtpCredentials } = await import(
+      './helpers/secrets.js'
+    );
+    const { EmailAccount, AuthMethod } = await import(
+      './db/models/email-account.model.js'
+    );
+    const { ImapAccountSettings, ImapAccountType } = await import(
+      './db/models/imap-account-settings.model.js'
+    );
+    const { SendProfile, SendProfileType } = await import(
+      './db/models/send-profile.model.js'
+    );
+    const { SmtpAccountSettings } = await import(
+      './db/models/smtp-account-settings.model.js'
+    );
 
     type OAuthProviderKey = 'google' | 'yahoo' | 'outlook';
 
-    const providerConfig: Record<OAuthProviderKey, {
-      buildAuthUrl: (state: string) => string;
-      exchangeCode: (code: string) => Promise<{ accessToken: string; refreshToken: string; expiresAt: number; email: string }>;
-      authMethod: string;
-      providerId: string;
-      imap: { host: string; port: number; useSsl: boolean };
-      smtp: { host: string; port: number; useSsl: boolean };
-    }> = {
+    const providerConfig: Record<
+      OAuthProviderKey,
+      {
+        buildAuthUrl: (state: string) => string;
+        exchangeCode: (code: string) => Promise<{
+          accessToken: string;
+          refreshToken: string;
+          expiresAt: number;
+          email: string;
+        }>;
+        authMethod: string;
+        providerId: string;
+        imap: { host: string; port: number; useSsl: boolean };
+        smtp: { host: string; port: number; useSsl: boolean };
+      }
+    > = {
       google: {
         buildAuthUrl: buildGoogleAuthUrl,
         exchangeCode: exchangeGoogleCode,
@@ -854,19 +934,26 @@ export async function createServer(
     const OAUTH_STATE_EXPIRY = '10m';
     const frontendSettingsUrl = `${config.frontendUrl}/settings/accounts`;
 
-    for (const [provider, pConfig] of Object.entries(providerConfig) as [OAuthProviderKey, typeof providerConfig[OAuthProviderKey]][]) {
+    for (const [provider, pConfig] of Object.entries(providerConfig) as [
+      OAuthProviderKey,
+      (typeof providerConfig)[OAuthProviderKey],
+    ][]) {
       // Start: validate user token, redirect to provider consent screen
       app.get(`/api/oauth/${provider}/start`, async (req, res) => {
         try {
           const token = req.query.token as string;
           const accountId = req.query.accountId as string | undefined;
           if (!token) {
-            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=missing_token`);
+            return res.redirect(
+              `${frontendSettingsUrl}?oauth=error&reason=missing_token`,
+            );
           }
 
           const payload = await verifyAuthToken(token);
           if (!payload?.userId) {
-            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=invalid_token`);
+            return res.redirect(
+              `${frontendSettingsUrl}?oauth=error&reason=invalid_token`,
+            );
           }
 
           const statePayload = {
@@ -882,35 +969,59 @@ export async function createServer(
           const authUrl = pConfig.buildAuthUrl(stateJwt);
           res.redirect(authUrl);
         } catch (err: any) {
-          logger.error('OAuth', `${provider} start failed`, { error: err.message });
-          res.redirect(`${frontendSettingsUrl}?oauth=error&reason=start_failed`);
+          logger.error('OAuth', `${provider} start failed`, {
+            error: err.message,
+          });
+          res.redirect(
+            `${frontendSettingsUrl}?oauth=error&reason=start_failed`,
+          );
         }
       });
 
       // Callback: exchange code for tokens, create account + send profile
       app.get(`/api/oauth/${provider}/callback`, async (req, res) => {
         try {
-          const { code, state, error: oauthError } = req.query as Record<string, string>;
+          const {
+            code,
+            state,
+            error: oauthError,
+          } = req.query as Record<string, string>;
 
           if (oauthError) {
-            logger.warn('OAuth', `${provider} callback received error: ${oauthError}`);
-            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=${encodeURIComponent(oauthError)}`);
+            logger.warn(
+              'OAuth',
+              `${provider} callback received error: ${oauthError}`,
+            );
+            return res.redirect(
+              `${frontendSettingsUrl}?oauth=error&reason=${encodeURIComponent(oauthError)}`,
+            );
           }
 
           if (!code || !state) {
-            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=missing_params`);
+            return res.redirect(
+              `${frontendSettingsUrl}?oauth=error&reason=missing_params`,
+            );
           }
 
           // Verify the state JWT
-          let statePayload: { userId: string; provider: string; accountId?: string; csrf: string };
+          let statePayload: {
+            userId: string;
+            provider: string;
+            accountId?: string;
+            csrf: string;
+          };
           try {
             statePayload = jwt.default.verify(state, config.jwt.secret) as any;
           } catch {
-            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=invalid_state`);
+            return res.redirect(
+              `${frontendSettingsUrl}?oauth=error&reason=invalid_state`,
+            );
           }
 
           if (statePayload.provider !== provider) {
-            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=provider_mismatch`);
+            return res.redirect(
+              `${frontendSettingsUrl}?oauth=error&reason=provider_mismatch`,
+            );
           }
 
           // Exchange code for tokens
@@ -921,13 +1032,16 @@ export async function createServer(
             refreshToken: tokenResult.refreshToken,
             expiresAt: tokenResult.expiresAt,
             email: tokenResult.email,
-            provider: provider as OAuthProviderKey,
+            provider: provider,
           };
 
           // Re-auth flow: update existing account
           if (statePayload.accountId) {
             const existing = await EmailAccount.findOne({
-              where: { id: statePayload.accountId, userId: statePayload.userId },
+              where: {
+                id: statePayload.accountId,
+                userId: statePayload.userId,
+              },
             });
             if (existing) {
               await storeImapCredentials(existing.id, oauthCreds);
@@ -938,8 +1052,13 @@ export async function createServer(
                 await storeSmtpCredentials(linkedProfile.id, oauthCreds);
               }
               await existing.update({ needsReauth: false });
-              logger.info('OAuth', `Re-authenticated ${provider} account ${existing.id} for user ${statePayload.userId}`);
-              return res.redirect(`${frontendSettingsUrl}?oauth=success&reauth=true`);
+              logger.info(
+                'OAuth',
+                `Re-authenticated ${provider} account ${existing.id} for user ${statePayload.userId}`,
+              );
+              return res.redirect(
+                `${frontendSettingsUrl}?oauth=success&reauth=true`,
+              );
             }
           }
 
@@ -952,48 +1071,68 @@ export async function createServer(
             },
           });
           if (existingDuplicate) {
-            logger.warn('OAuth', `Duplicate ${provider} account for ${tokenResult.email} blocked for user ${statePayload.userId}`);
-            return res.redirect(`${frontendSettingsUrl}?oauth=error&reason=account_already_connected`);
+            logger.warn(
+              'OAuth',
+              `Duplicate ${provider} account for ${tokenResult.email} blocked for user ${statePayload.userId}`,
+            );
+            return res.redirect(
+              `${frontendSettingsUrl}?oauth=error&reason=account_already_connected`,
+            );
           }
 
           // Create new account + send profile in a transaction
           const transaction = await deps.sequelize.transaction();
           try {
-            const emailAccount = await EmailAccount.create({
-              userId: statePayload.userId,
-              name: tokenResult.email,
-              email: tokenResult.email,
-              type: 'IMAP',
-              providerId: pConfig.providerId,
-              authMethod: pConfig.authMethod,
-            }, { transaction });
+            const emailAccount = await EmailAccount.create(
+              {
+                userId: statePayload.userId,
+                name: tokenResult.email,
+                email: tokenResult.email,
+                type: 'IMAP',
+                providerId: pConfig.providerId,
+                authMethod: pConfig.authMethod,
+              },
+              { transaction },
+            );
 
-            const sendProfile = await SendProfile.create({
-              userId: statePayload.userId,
-              name: tokenResult.email,
-              email: tokenResult.email,
-              type: SendProfileType.SMTP,
-              providerId: pConfig.providerId,
-              authMethod: pConfig.authMethod,
-              emailAccountId: emailAccount.id,
-            }, { transaction });
+            const sendProfile = await SendProfile.create(
+              {
+                userId: statePayload.userId,
+                name: tokenResult.email,
+                email: tokenResult.email,
+                type: SendProfileType.SMTP,
+                providerId: pConfig.providerId,
+                authMethod: pConfig.authMethod,
+                emailAccountId: emailAccount.id,
+              },
+              { transaction },
+            );
 
-            await emailAccount.update({ defaultSendProfileId: sendProfile.id }, { transaction });
+            await emailAccount.update(
+              { defaultSendProfileId: sendProfile.id },
+              { transaction },
+            );
 
-            await SmtpAccountSettings.create({
-              sendProfileId: sendProfile.id,
-              host: pConfig.smtp.host,
-              port: pConfig.smtp.port,
-              useSsl: pConfig.smtp.useSsl,
-            }, { transaction });
+            await SmtpAccountSettings.create(
+              {
+                sendProfileId: sendProfile.id,
+                host: pConfig.smtp.host,
+                port: pConfig.smtp.port,
+                useSsl: pConfig.smtp.useSsl,
+              },
+              { transaction },
+            );
 
-            await ImapAccountSettings.create({
-              emailAccountId: emailAccount.id,
-              host: pConfig.imap.host,
-              port: pConfig.imap.port,
-              accountType: ImapAccountType.IMAP,
-              useSsl: pConfig.imap.useSsl,
-            }, { transaction });
+            await ImapAccountSettings.create(
+              {
+                emailAccountId: emailAccount.id,
+                host: pConfig.imap.host,
+                port: pConfig.imap.port,
+                accountType: ImapAccountType.IMAP,
+                useSsl: pConfig.imap.useSsl,
+              },
+              { transaction },
+            );
 
             await transaction.commit();
 
@@ -1001,15 +1140,22 @@ export async function createServer(
             await storeImapCredentials(emailAccount.id, oauthCreds);
             await storeSmtpCredentials(sendProfile.id, oauthCreds);
 
-            logger.info('OAuth', `Created ${provider} account ${emailAccount.id} for user ${statePayload.userId}`);
+            logger.info(
+              'OAuth',
+              `Created ${provider} account ${emailAccount.id} for user ${statePayload.userId}`,
+            );
             res.redirect(`${frontendSettingsUrl}?oauth=success`);
           } catch (txErr) {
             await transaction.rollback();
             throw txErr;
           }
         } catch (err: any) {
-          logger.error('OAuth', `${provider} callback failed`, { error: err.message });
-          res.redirect(`${frontendSettingsUrl}?oauth=error&reason=callback_failed`);
+          logger.error('OAuth', `${provider} callback failed`, {
+            error: err.message,
+          });
+          res.redirect(
+            `${frontendSettingsUrl}?oauth=error&reason=callback_failed`,
+          );
         }
       });
     }

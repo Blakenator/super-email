@@ -147,10 +147,12 @@ export function EmailListItem({
   };
   
   const getPreview = () => {
-    if (email.textBody) {
-      return email.textBody.substring(0, 100).replace(/\n/g, ' ');
-    }
-    return '';
+    const raw =
+      (email.textBody && email.textBody.trim()) ||
+      (email.bodyPreview && email.bodyPreview.trim()) ||
+      '';
+    if (!raw) return '';
+    return raw.substring(0, 100).replace(/\n/g, ' ');
   };
   
   return (

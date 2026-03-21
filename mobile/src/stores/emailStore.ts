@@ -29,6 +29,7 @@ const GET_EMAILS_QUERY = gql`
       subject
       textBody
       htmlBody
+      bodyPreview
       receivedAt
       isRead
       isStarred
@@ -108,6 +109,7 @@ export interface Email {
   subject: string;
   textBody?: string | null;
   htmlBody?: string | null;
+  bodyPreview?: string | null;
   receivedAt: string;
   isRead: boolean;
   isStarred: boolean;

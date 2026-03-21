@@ -23,7 +23,6 @@ const MAILBOX_UPDATES_SUBSCRIPTION = gql`
         fromAddress
         fromName
         subject
-        textBody
         receivedAt
         isRead
         isStarred

@@ -12,8 +12,7 @@ export const GET_EMAILS_QUERY = gql(`
       ccAddresses
       bccAddresses
       subject
-      textBody
-      htmlBody
+      bodyPreview
       receivedAt
       isRead
       isStarred
@@ -46,6 +45,7 @@ export const GET_EMAILS_BY_THREAD_QUERY = gql(`
       subject
       textBody
       htmlBody
+      bodyPreview
       receivedAt
       isRead
       isStarred
@@ -130,7 +130,7 @@ export const GET_STARRED_EMAILS_QUERY = gql(`
       fromName
       toAddresses
       subject
-      textBody
+      bodyPreview
       receivedAt
       isRead
       isStarred

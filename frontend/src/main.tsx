@@ -42,10 +42,7 @@ const wsLink = new GraphQLWsLink(
         } = await Promise.race([
           supabase.auth.getSession(),
           new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error('WS session timeout')),
-              3000,
-            ),
+            setTimeout(() => reject(new Error('WS session timeout')), 3000),
           ),
         ]);
         token = session?.access_token;
@@ -86,10 +83,7 @@ const authLink = setContext(async (_, prevContext) => {
     } = await Promise.race([
       supabase.auth.getSession(),
       new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Auth link session timeout')),
-          3000,
-        ),
+        setTimeout(() => reject(new Error('Auth link session timeout')), 3000),
       ),
     ]);
     token = session?.access_token;
@@ -130,9 +124,32 @@ const splitLink = split(
   authLink.concat(httpLink),
 );
 
+/** Avoid clobbering full bodies with null when another op (e.g. legacy writes) still sends null. */
+function mergeEmailBodyField(
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+): string | null | undefined {
+  if (incoming === undefined) return existing;
+  if (incoming === null && existing != null) return existing;
+  return incoming;
+}
+
 const client = new ApolloClient({
   link: ApolloLink.from([errorLink, splitLink]),
-  cache: new InMemoryCache(),
+  cache: new InMemoryCache({
+    typePolicies: {
+      Email: {
+        fields: {
+          textBody: {
+            merge: mergeEmailBodyField,
+          },
+          htmlBody: {
+            merge: mergeEmailBodyField,
+          },
+        },
+      },
+    },
+  }),
   defaultOptions: {
     watchQuery: {
       // Return cached data even if network request fails

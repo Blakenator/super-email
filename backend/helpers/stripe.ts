@@ -179,17 +179,29 @@ function collectPriceItems(
 }
 
 /**
- * Update an existing Stripe subscription's line items in-place.
- * Replaces all current items with the desired tier items.
- * Stripe automatically prorates the changes.
+ * For Stripe subscriptions still in active, trialing, or past_due: apply tier line-item
+ * changes and/or clear cancel_at_period_end (resume). Single API call when both apply.
+ *
+ * @returns true if handled in Stripe (caller should sync local DB and return null).
+ * @returns false if the subscription is ended or not updatable in place — use Checkout.
  */
-export async function updateExistingSubscription(
+export async function tryResumeOrUpdateStripeSubscription(
   stripeSubscriptionId: string,
   storageTier: StorageTier,
   accountTier: AccountTier,
   domainTier: DomainTier,
-): Promise<void> {
+): Promise<boolean> {
   const stripeClient = getStripeClient();
+  const stripeSub = await stripeClient.subscriptions.retrieve(
+    stripeSubscriptionId,
+    { expand: ['items'] },
+  );
+
+  const status = stripeSub.status;
+  if (status !== 'active' && status !== 'trialing' && status !== 'past_due') {
+    return false;
+  }
+
   const desired = collectPriceItems(storageTier, accountTier, domainTier);
 
   if (desired.length === 0) {
@@ -199,18 +211,11 @@ export async function updateExistingSubscription(
     );
   }
 
-  const stripeSub = await stripeClient.subscriptions.retrieve(
-    stripeSubscriptionId,
-    { expand: ['items'] },
-  );
-
   const currentItems = stripeSub.items?.data ?? [];
-  const currentPriceIds = new Set(currentItems.map((i) => i.price.id));
   const desiredPriceIds = new Set(desired.map((d) => d.priceId));
 
   const updateItems: Stripe.SubscriptionUpdateParams.Item[] = [];
 
-  // Keep existing items whose price is still desired, delete the rest
   for (const item of currentItems) {
     if (desiredPriceIds.has(item.price.id)) {
       desiredPriceIds.delete(item.price.id);
@@ -219,27 +224,40 @@ export async function updateExistingSubscription(
     }
   }
 
-  // Add new items that don't already exist on the subscription
   for (const priceId of desiredPriceIds) {
     updateItems.push({ price: priceId, quantity: 1 });
   }
 
-  if (updateItems.length === 0) {
-    logger.info('Stripe', `Subscription ${stripeSubscriptionId} already matches desired tiers`);
-    return;
+  const needsResume = !!stripeSub.cancel_at_period_end;
+
+  if (!needsResume && updateItems.length === 0) {
+    logger.info(
+      'Stripe',
+      `Subscription ${stripeSubscriptionId} already matches desired tiers; no Stripe update`,
+    );
+    return true;
   }
 
-  await stripeClient.subscriptions.update(stripeSubscriptionId, {
-    items: updateItems,
-    proration_behavior: 'create_prorations',
-  });
+  const updateParams: Stripe.SubscriptionUpdateParams = {};
+  if (needsResume) {
+    updateParams.cancel_at_period_end = false;
+  }
+  if (updateItems.length > 0) {
+    updateParams.items = updateItems;
+    updateParams.proration_behavior = 'create_prorations';
+  }
+
+  await stripeClient.subscriptions.update(stripeSubscriptionId, updateParams);
 
   logger.info(
     'Stripe',
     `Updated subscription ${stripeSubscriptionId} in-place: ` +
-      `storage=${storageTier}, accounts=${accountTier}, domains=${domainTier} ` +
-      `(${updateItems.length} item change(s))`,
+      `storage=${storageTier}, accounts=${accountTier}, domains=${domainTier}` +
+      `${needsResume ? ', resumed (cleared cancel_at_period_end)' : ''}` +
+      `${updateItems.length > 0 ? ` (${updateItems.length} item change(s))` : ''}`,
   );
+
+  return true;
 }
 
 export interface SubscriptionPreview {
@@ -285,8 +303,8 @@ export async function previewSubscriptionUpdate(
 
   for (const item of currentItems) {
     if (desiredPriceIds.has(item.price.id)) {
-      // Item stays — keep it as-is
-      previewItems.push({ id: item.id, price: item.price.id });
+      // Item stays — reference by id only (matches subscriptions.update semantics)
+      previewItems.push({ id: item.id });
       desiredPriceIds.delete(item.price.id);
     } else {
       // Item removed
@@ -303,29 +321,51 @@ export async function previewSubscriptionUpdate(
     customer: stripeCustomerId,
     subscription_details: {
       items: previewItems,
+      proration_behavior: 'create_prorations',
     },
     subscription: stripeSubscriptionId,
   });
 
   const allLines = preview.lines?.data ?? [];
 
-  const lineItems = allLines.map((line) => ({
+  const invoiceLineIsProration = (l: Stripe.InvoiceLineItem): boolean => {
+    const p = l.parent;
+    if (!p) return false;
+    if (
+      p.type === 'subscription_item_details' &&
+      p.subscription_item_details?.proration
+    ) {
+      return true;
+    }
+    if (p.type === 'invoice_item_details' && p.invoice_item_details?.proration) {
+      return true;
+    }
+    const details = p.subscription_item_details ?? p.invoice_item_details;
+    return details?.proration ?? false;
+  };
+
+  const prorationLines = allLines.filter(invoiceLineIsProration);
+  const nonProrationLines = allLines.filter((l) => !invoiceLineIsProration(l));
+
+  // Default preview_mode is "next": amount_due includes the *next* full invoice (recurring +
+  // prorations). For the confirm modal we only want proration adjustments as "due now".
+  const prorationSubtotal = prorationLines.reduce((sum, l) => sum + l.amount, 0);
+  const immediateAmount =
+    prorationLines.length > 0 ? prorationSubtotal : (preview.amount_due ?? 0);
+
+  const lineItemsForDisplay =
+    prorationLines.length > 0 ? prorationLines : allLines;
+
+  const lineItems = lineItemsForDisplay.map((line) => ({
     description: line.description || 'Subscription change',
     amount: line.amount,
   }));
 
-  const isProration = (l: Stripe.InvoiceLineItem) => {
-    const details = l.parent?.subscription_item_details ?? l.parent?.invoice_item_details;
-    return details?.proration ?? false;
-  };
-
-  // Recurring amount = sum of non-proration line items (the full-period charges)
-  const recurringAmount = allLines
-    .filter((l) => !isProration(l))
-    .reduce((sum, l) => sum + l.amount, 0);
+  // Recurring total = full-period subscription lines on the preview (excludes prorations)
+  const recurringAmount = nonProrationLines.reduce((sum, l) => sum + l.amount, 0);
 
   let interval = 'month';
-  const recurringLine = allLines.find((l) => {
+  const recurringLine = nonProrationLines.find((l) => {
     const price = l.pricing?.price_details?.price;
     return typeof price === 'object' && price?.recurring;
   });
@@ -335,7 +375,7 @@ export async function previewSubscriptionUpdate(
   }
 
   return {
-    immediateAmount: preview.amount_due ?? 0,
+    immediateAmount,
     recurringAmount,
     currency: preview.currency || 'usd',
     interval,

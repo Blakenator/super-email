@@ -1,17 +1,14 @@
 import { makeMutation } from '../../types.js';
 import {
   createCheckoutSession as stripeCreateCheckoutSession,
-  updateExistingSubscription,
+  tryResumeOrUpdateStripeSubscription,
   isStripeConfigured,
   getOrCreateSubscription,
   syncSubscriptionFromStripe,
 } from '../../helpers/stripe.js';
 import { User } from '../../db/models/user.model.js';
 import { StorageTier, AccountTier } from '../../db/models/subscription.model.js';
-import {
-  DomainTier,
-  SubscriptionStatus,
-} from '../../db/models/subscription.constants.js';
+import { DomainTier } from '../../db/models/subscription.constants.js';
 import { config } from '../../config/env.js';
 import { requireAuth } from '../../helpers/auth.js';
 
@@ -33,25 +30,23 @@ export const createCheckoutSession = makeMutation(
     const accountTier = args.accountTier.toLowerCase() as AccountTier;
     const domainTier = args.domainTier.toLowerCase() as DomainTier;
 
-    // If the user already has an active Stripe subscription, update it
-    // in-place instead of creating a new checkout session.
-    const subscription = await getOrCreateSubscription(userId);
-    if (
-      subscription.stripeSubscriptionId &&
-      subscription.status === SubscriptionStatus.ACTIVE
-    ) {
-      await updateExistingSubscription(
+    let subscription = await getOrCreateSubscription(userId);
+    subscription = await syncSubscriptionFromStripe(subscription);
+
+    if (subscription.stripeSubscriptionId) {
+      const handledInPlace = await tryResumeOrUpdateStripeSubscription(
         subscription.stripeSubscriptionId,
         storageTier,
         accountTier,
         domainTier,
       );
-      // Sync the updated subscription back to our database
-      await syncSubscriptionFromStripe(subscription);
-      return null;
+      if (handledInPlace) {
+        await syncSubscriptionFromStripe(subscription);
+        return null;
+      }
     }
 
-    // No existing subscription — create a Stripe Checkout session
+    // No in-place subscription (ended, missing, etc.) — new Checkout session
     const baseUrl = config.frontendUrl;
     if (!baseUrl) {
       throw new Error('FRONTEND_URL environment variable is not configured');

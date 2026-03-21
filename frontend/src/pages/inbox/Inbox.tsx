@@ -65,9 +65,15 @@ import {
   GET_TAGS_FOR_INBOX_QUERY,
   ADD_TAGS_TO_EMAILS_MUTATION,
 } from './queries';
-import type { NukeOldEmailsMutation } from '../../__generated__/graphql';
+import type {
+  GetEmailsQuery,
+  NukeOldEmailsMutation,
+} from '../../__generated__/graphql';
+import type { CachedEmail } from '../../stores/emailStore';
 
 import { RECENCY_GROUP_LABELS, groupEmailsByRecency } from './utils';
+
+type InboxListEmailRow = GetEmailsQuery['getEmails'][number] | CachedEmail;
 
 import { PageWrapper, PageToolbar, PageTitle } from '../../core/components';
 import {
@@ -877,7 +883,7 @@ export function Inbox({ folder = EmailFolder.Inbox }: InboxProps) {
         ) : groupByRecency ? (
           // Grouped by recency with cards
           <div style={{ padding: '1rem' }}>
-            {groupEmailsByRecency(emails).map((group) => (
+            {groupEmailsByRecency<InboxListEmailRow>(emails).map((group) => (
               <GroupCard key={group.group} className="card">
                 <GroupCardHeader className="card-header">
                   <GroupTitle>

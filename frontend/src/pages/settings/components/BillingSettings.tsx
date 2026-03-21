@@ -25,7 +25,12 @@ import {
   CREATE_CHECKOUT_SESSION_MUTATION,
   PREVIEW_SUBSCRIPTION_CHANGE_QUERY,
 } from '../queries';
-import { StorageTier, AccountTier, DomainTier } from '../../../__generated__/graphql';
+import {
+  StorageTier,
+  AccountTier,
+  DomainTier,
+  BillingSubscriptionStatus,
+} from '../../../__generated__/graphql';
 import {
   BillingContainer,
   BillingCard,
@@ -408,6 +413,31 @@ export function BillingSettings() {
     }
   };
 
+  /** Same mutation as plan changes: in-place resume/update or Checkout for a new subscription. */
+  const runCheckoutSessionWithTiers = async (
+    storageTier: StorageTier,
+    accountTier: AccountTier,
+    domainTier: DomainTier,
+    inPlaceSuccessMessage: string,
+  ) => {
+    try {
+      const result = await createCheckoutSession({
+        variables: { storageTier, accountTier, domainTier },
+      });
+      const url = result.data?.createCheckoutSession;
+      if (url) {
+        window.location.href = url;
+      } else {
+        await refetch();
+        toast.success(inPlaceSuccessMessage);
+      }
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update subscription',
+      );
+    }
+  };
+
   const handleRefreshUsage = async () => {
     try {
       await refreshUsage();
@@ -553,9 +583,18 @@ export function BillingSettings() {
   const usage = billing?.usage;
   const hasStripeCustomer = billing?.hasStripeCustomer;
 
-  const currentStorageTier = subscription?.storageTier ?? 'FREE';
-  const currentAccountTier = subscription?.accountTier ?? 'FREE';
-  const currentDomainTier = subscription?.domainTier ?? 'FREE';
+  const currentStorageTier = subscription?.storageTier ?? StorageTier.Free;
+  const currentAccountTier = subscription?.accountTier ?? AccountTier.Free;
+  const currentDomainTier = subscription?.domainTier ?? DomainTier.Free;
+
+  const hasAnyPaidTier =
+    !!subscription &&
+    (subscription.storageTier !== StorageTier.Free ||
+      subscription.accountTier !== AccountTier.Free ||
+      subscription.domainTier !== DomainTier.Free);
+
+  const showResubscribe =
+    subscription?.status === BillingSubscriptionStatus.Canceled && hasAnyPaidTier;
   const effectiveStorageTier = pendingStorageTier || currentStorageTier;
   const effectiveAccountTier = pendingAccountTier || currentAccountTier;
   const effectiveDomainTier = pendingDomainTier || currentDomainTier;
@@ -665,31 +704,98 @@ export function BillingSettings() {
                 )}
               </SubscriptionGrid>
 
-              {subscription?.cancelAtPeriodEnd && (
-                <WarningBox>
-                  <FontAwesomeIcon icon={faExclamationTriangle} />
-                  <div>
-                    Your subscription will be canceled at the end of the current
-                    billing period. You'll be downgraded to the Free plan.
+              {subscription?.cancelAtPeriodEnd && subscription?.isValid && (
+                <>
+                  <WarningBox>
+                    <FontAwesomeIcon icon={faExclamationTriangle} />
+                    <div>
+                      Your subscription will be canceled at the end of the
+                      current billing period. You'll be downgraded to the Free
+                      plan.
+                    </div>
+                  </WarningBox>
+                  <div className="d-flex flex-wrap align-items-center gap-2 mt-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={creatingCheckout}
+                      onClick={() =>
+                        runCheckoutSessionWithTiers(
+                          currentStorageTier,
+                          currentAccountTier,
+                          currentDomainTier,
+                          'Your subscription will continue — billing resumes as normal.',
+                        )
+                      }
+                    >
+                      {creatingCheckout ? (
+                        <Spinner animation="border" size="sm" className="me-1" />
+                      ) : (
+                        <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+                      )}
+                      Resume subscription
+                    </Button>
+                    <small className="text-muted">
+                      Payment methods and invoices are still available in Manage
+                      Billing.
+                    </small>
                   </div>
-                </WarningBox>
+                </>
               )}
             </div>
 
-            {billing?.isStripeConfigured && hasStripeCustomer && (
-              <Button
-                variant="outline-primary"
-                onClick={handleManageBilling}
-                disabled={creatingPortal}
-              >
-                {creatingPortal ? (
-                  <Spinner animation="border" size="sm" className="me-2" />
-                ) : (
-                  <FontAwesomeIcon icon={faExternalLinkAlt} className="me-2" />
-                )}
-                Manage Billing
-              </Button>
-            )}
+            {billing?.isStripeConfigured &&
+              (hasStripeCustomer || showResubscribe) && (
+                <div className="d-flex flex-column align-items-stretch align-items-md-end gap-2">
+                  {showResubscribe && (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={() =>
+                          runCheckoutSessionWithTiers(
+                            currentStorageTier,
+                            currentAccountTier,
+                            currentDomainTier,
+                            'Welcome back — your subscription is active again.',
+                          )
+                        }
+                        disabled={creatingCheckout}
+                      >
+                        {creatingCheckout ? (
+                          <Spinner
+                            animation="border"
+                            size="sm"
+                            className="me-2"
+                          />
+                        ) : (
+                          <FontAwesomeIcon icon={faCreditCard} className="me-2" />
+                        )}
+                        Resubscribe
+                      </Button>
+                      <small className="text-muted text-md-end">
+                        Completes checkout on Stripe to start a new subscription.
+                      </small>
+                    </>
+                  )}
+                  {hasStripeCustomer && (
+                    <Button
+                      variant="outline-primary"
+                      onClick={handleManageBilling}
+                      disabled={creatingPortal}
+                    >
+                      {creatingPortal ? (
+                        <Spinner animation="border" size="sm" className="me-2" />
+                      ) : (
+                        <FontAwesomeIcon
+                          icon={faExternalLinkAlt}
+                          className="me-2"
+                        />
+                      )}
+                      Manage Billing
+                    </Button>
+                  )}
+                </div>
+              )}
           </div>
 
           {!billing?.isStripeConfigured && (

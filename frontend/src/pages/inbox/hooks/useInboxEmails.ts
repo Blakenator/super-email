@@ -204,8 +204,7 @@ export function useInboxEmails({
         fromAddress: email.fromAddress,
         fromName: email.fromName,
         subject: email.subject,
-        textBody: email.textBody,
-        htmlBody: email.htmlBody,
+        bodyPreview: email.bodyPreview,
         receivedAt: email.receivedAt,
         isRead: email.isRead,
         isStarred: email.isStarred,
@@ -216,6 +215,8 @@ export function useInboxEmails({
         inReplyTo: email.inReplyTo,
         threadId: email.threadId,
         threadCount: email.threadCount,
+        hasAttachments: email.hasAttachments,
+        attachmentCount: email.attachmentCount,
         tags: email.tags?.map((t) => ({
           id: t.id,
           name: t.name,
@@ -506,7 +507,9 @@ export function useInboxEmails({
           const query = searchQuery.toLowerCase();
           const matchesSubject = email.subject?.toLowerCase().includes(query);
           const matchesFrom = email.fromAddress?.toLowerCase().includes(query);
-          const matchesBody = email.textBody?.toLowerCase().includes(query);
+          const matchesBody =
+            email.textBody?.toLowerCase().includes(query) ||
+            email.bodyPreview?.toLowerCase().includes(query);
           if (!matchesSubject && !matchesFrom && !matchesBody) return false;
         }
         return true;

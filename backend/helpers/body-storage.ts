@@ -10,8 +10,19 @@ import {
 } from '@aws-sdk/client-s3';
 import { logger } from './logger.js';
 import { config } from '../config/env.js';
+import { resolveBackendDataPath } from '../config/paths.js';
 
-const LOCAL_BODIES_DIR = path.join(process.cwd(), config.emailBodies.localDir);
+function localEmailBodiesRoot(): string {
+  return resolveBackendDataPath(config.emailBodies.localDir);
+}
+
+function localBodyFilePath(emailAccountId: string, emailId: string): string {
+  return path.join(
+    localEmailBodiesRoot(),
+    emailAccountId,
+    `${emailId}.json`,
+  );
+}
 
 let s3Client: S3Client | null = null;
 if (config.isProduction) {
@@ -24,10 +35,6 @@ async function ensureLocalDirectory(dirPath: string) {
 
 function getStorageKey(emailAccountId: string, emailId: string): string {
   return `${emailAccountId}/${emailId}`;
-}
-
-function getLocalPath(emailAccountId: string, emailId: string): string {
-  return path.join(LOCAL_BODIES_DIR, emailAccountId, `${emailId}.json`);
 }
 
 export interface EmailBodyData {
@@ -59,7 +66,7 @@ export async function storeEmailBody(
     );
     logger.debug('BodyStorage', 'Stored email body in S3', { storageKey });
   } else {
-    const filePath = getLocalPath(emailAccountId, emailId);
+    const filePath = localBodyFilePath(emailAccountId, emailId);
     await ensureLocalDirectory(path.dirname(filePath));
     await fs.writeFile(filePath, body, 'utf-8');
     logger.debug('BodyStorage', 'Stored email body to local disk', { storageKey });
@@ -90,7 +97,7 @@ export async function getEmailBody(
     }
     return JSON.parse(raw) as EmailBodyData;
   } else {
-    const filePath = getLocalPath(emailAccountId, emailId);
+    const filePath = localBodyFilePath(emailAccountId, emailId);
     const raw = await fs.readFile(filePath, 'utf-8');
     return JSON.parse(raw) as EmailBodyData;
   }
@@ -142,12 +149,23 @@ export async function deleteEmailBody(
     );
     logger.debug('BodyStorage', 'Deleted email body from S3', { storageKey });
   } else {
-    const filePath = getLocalPath(emailAccountId, emailId);
+    const filePath = localBodyFilePath(emailAccountId, emailId);
     try {
       await fs.unlink(filePath);
-      logger.debug('BodyStorage', 'Deleted email body from local disk', { storageKey });
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') throw err;
+      logger.debug('BodyStorage', 'Deleted email body from local disk', {
+        storageKey,
+        filePath,
+      });
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        return;
+      }
+      throw err;
     }
   }
 }
@@ -197,19 +215,30 @@ export async function deleteS3ObjectsByPrefix(
       prefix,
     });
   } else {
-    const localBase =
-      bucket === config.emailBodies.s3Bucket
-        ? path.join(process.cwd(), config.emailBodies.localDir)
-        : bucket === config.attachments.s3Bucket
-          ? path.join(process.cwd(), config.attachments.localDir)
-          : path.join(process.cwd(), 'data', bucket);
+    let localBase: string;
+    if (bucket === config.emailBodies.s3Bucket) {
+      localBase = localEmailBodiesRoot();
+    } else if (bucket === config.attachments.s3Bucket) {
+      localBase = resolveBackendDataPath(config.attachments.localDir);
+    } else {
+      localBase = resolveBackendDataPath(path.join('data', bucket));
+    }
 
     const dirPath = path.join(localBase, prefix);
     try {
       await fs.rm(dirPath, { recursive: true, force: true });
       logger.info('BodyStorage', `Deleted local directory ${dirPath}`);
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') throw err;
+    } catch (err: unknown) {
+      if (
+        err &&
+        typeof err === 'object' &&
+        'code' in err &&
+        (err as NodeJS.ErrnoException).code === 'ENOENT'
+      ) {
+        // ignore
+      } else {
+        throw err;
+      }
     }
   }
 

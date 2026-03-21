@@ -63,6 +63,7 @@ interface Email {
   subject: string;
   textBody?: string | null;
   htmlBody?: string | null;
+  bodyPreview?: string | null;
   receivedAt: string;
   isRead: boolean;
   isStarred: boolean;
@@ -240,7 +241,12 @@ export function EmailListItem({
             )}
           </Subject>
           <Preview>
-            {getEmailPreviewText(email.textBody, email.htmlBody, 100)}
+            {getEmailPreviewText(
+              email.textBody,
+              email.htmlBody,
+              100,
+              email.bodyPreview,
+            )}
           </Preview>
           {showTags && email.tags && email.tags.length > 0 && (
             <TagsRow>
