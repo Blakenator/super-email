@@ -828,9 +828,8 @@ export async function createServer(
       const attachmentData = attachment.get({ plain: true });
 
       if (process.env.NODE_ENV !== 'production') {
-        const { getLocalAttachmentPath } = await import(
-          './helpers/attachment-storage.js'
-        );
+        const { getLocalAttachmentPath } =
+          await import('./helpers/attachment-storage.js');
         const filePath = getLocalAttachmentPath(attachmentData.storageKey);
 
         res.setHeader('Content-Type', attachmentData.mimeType);
@@ -844,9 +843,8 @@ export async function createServer(
         const stream = createReadStream(filePath);
         stream.pipe(res);
       } else {
-        const { getAttachmentDownloadUrl } = await import(
-          './helpers/attachment-storage.js'
-        );
+        const { getAttachmentDownloadUrl } =
+          await import('./helpers/attachment-storage.js');
         const url = await getAttachmentDownloadUrl(attachmentData.storageKey);
         res.redirect(url);
       }
@@ -871,23 +869,18 @@ export async function createServer(
       exchangeOutlookCode,
       revokeToken,
     } = await import('./helpers/oauth-tokens.js');
-    const { storeImapCredentials, storeSmtpCredentials } = await import(
-      './helpers/secrets.js'
-    );
-    const { EmailAccount, AuthMethod } = await import(
-      './db/models/email-account.model.js'
-    );
-    const { ImapAccountSettings, ImapAccountType } = await import(
-      './db/models/imap-account-settings.model.js'
-    );
-    const { SendProfile, SendProfileType } = await import(
-      './db/models/send-profile.model.js'
-    );
-    const { SmtpAccountSettings } = await import(
-      './db/models/smtp-account-settings.model.js'
-    );
+    const { storeImapCredentials, storeSmtpCredentials } =
+      await import('./helpers/secrets.js');
+    const { EmailAccount, AuthMethod } =
+      await import('./db/models/email-account.model.js');
+    const { ImapAccountSettings, ImapAccountType } =
+      await import('./db/models/imap-account-settings.model.js');
+    const { SendProfile, SendProfileType } =
+      await import('./db/models/send-profile.model.js');
+    const { SmtpAccountSettings } =
+      await import('./db/models/smtp-account-settings.model.js');
 
-    type OAuthProviderKey = 'google' | 'yahoo' | 'outlook';
+    type OAuthProviderKey = 'google'; //| 'yahoo' | 'outlook';
 
     const providerConfig: Record<
       OAuthProviderKey,
@@ -958,16 +951,12 @@ export async function createServer(
           const appUrl = oauthAppUrl(returnPath);
 
           if (!token) {
-            return res.redirect(
-              `${appUrl}?oauth=error&reason=missing_token`,
-            );
+            return res.redirect(`${appUrl}?oauth=error&reason=missing_token`);
           }
 
           const payload = await verifyAuthToken(token);
           if (!payload?.userId) {
-            return res.redirect(
-              `${appUrl}?oauth=error&reason=invalid_token`,
-            );
+            return res.redirect(`${appUrl}?oauth=error&reason=invalid_token`);
           }
 
           const statePayload = {
@@ -987,9 +976,7 @@ export async function createServer(
           logger.error('OAuth', `${provider} start failed`, {
             error: err.message,
           });
-          res.redirect(
-            `${defaultOAuthAppUrl}?oauth=error&reason=start_failed`,
-          );
+          res.redirect(`${defaultOAuthAppUrl}?oauth=error&reason=start_failed`);
         }
       });
 
@@ -1074,9 +1061,7 @@ export async function createServer(
                 'OAuth',
                 `Re-authenticated ${provider} account ${existing.id} for user ${statePayload.userId}`,
               );
-              return res.redirect(
-                `${appUrl}?oauth=success&reauth=true`,
-              );
+              return res.redirect(`${appUrl}?oauth=success&reauth=true`);
             }
           }
 
